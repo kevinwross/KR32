@@ -55,10 +55,10 @@ Notes:
   Use a Developer PowerShell, a helper script, or the full paths.
 - WSL currently has no `pkg-config` and no SDL2 development package. Install them
   per §2 before enabling `KR32_BUILD_UI=ON` in WSL.
+- WSL is available with full local access; Linux builds run directly in Ubuntu.
+  This machine is the reference Windows/WSL development host.
 - The repository is local and uses the global Git identity. No remote is
   configured yet; checkpoints are local commits and tags.
-- The machine has full local file access for development; there is no sandbox
-  limitation to work around.
 
 ## 2. Dependencies and installation
 
@@ -620,6 +620,8 @@ Newest entries at the bottom. Use the local time zone.
   `implementation.md`, `.gitignore`, and `.gitattributes`.
 - **2026-11-02 00:35 -08:00** — M0 started. The repository, checklists, and
   dependency notes are in place; CMake scaffold is next.
+- **2026-11-02 00:35 -08:00** — Repository checkpoint `5d601cd` records the
+  checklist environment notes. WSL full-access note added.
 
 ## 10. Updating this file
 
