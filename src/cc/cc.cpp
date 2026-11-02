@@ -608,6 +608,7 @@ struct Type {
 
     Kind kind = Kind::Int;
     TypePtr base;
+    std::weak_ptr<Type> pointer_base;
     int count = 0;
     std::vector<Member> members;
     std::string tag;
@@ -655,6 +656,12 @@ struct Type {
     }
 
     [[nodiscard]] TypePtr element() const {
+        if (kind == Kind::Pointer) {
+            TypePtr pointed = pointer_base.lock();
+            if (pointed) {
+                return pointed;
+            }
+        }
         return base;
     }
 };
@@ -666,7 +673,14 @@ TypePtr type_float() { return std::make_shared<Type>(Type{Type::Kind::Float, nul
 TypePtr type_double() { return std::make_shared<Type>(Type{Type::Kind::Double, nullptr, 0}); }
 TypePtr type_void() { return std::make_shared<Type>(Type{Type::Kind::Void, nullptr, 0}); }
 TypePtr type_pointer(TypePtr base) {
-    return std::make_shared<Type>(Type{Type::Kind::Pointer, std::move(base), 0});
+    auto pointer = std::make_shared<Type>();
+    pointer->kind = Type::Kind::Pointer;
+    if (base != nullptr && !base->tag.empty()) {
+        pointer->pointer_base = base;
+    } else {
+        pointer->base = std::move(base);
+    }
+    return pointer;
 }
 TypePtr type_array(TypePtr base, int count) {
     return std::make_shared<Type>(Type{Type::Kind::Array, std::move(base), count});

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 13:02 -08:00
+> **Last updated:** 2026-11-02 13:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -977,6 +977,11 @@ Newest entries at the bottom. Use the local time zone.
       `strrchr`, `strstr`, `strtok`, `strdup`, `memmove`, `memcmp`, and
       `memchr`, with `<string.h>` prototypes, unit coverage, and
       `examples/strings.c`.
+- **2026-11-02 13:09 -08:00** — Added `examples/binarytree.c`, a KR32 C AVL
+      tree of 30 engineer surnames using `malloc`, `strdup`, `strcmp`, and
+      `printf`; validated balance at height 6 and added a CTest. Also broke
+      self-referential C struct type cycles in the compiler with weak pointer
+      element types.
 
 ## 10. Updating this file
 

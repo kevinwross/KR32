@@ -135,6 +135,14 @@ add_test(NAME build_c_strings
 set_tests_properties(build_c_strings PROPERTIES
     PASS_REGULAR_EXPRESSION "memmove: ababcd")
 
+add_test(NAME build_c_binarytree
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/binarytree.c
+        -o ${CMAKE_BINARY_DIR}/binarytree-c.k32 --run)
+set_tests_properties(build_c_binarytree PROPERTIES
+    PASS_REGULAR_EXPRESSION "AVL tree of engineers \\(height 6, 30 names\\)")
+
+
 
 
 

@@ -83,6 +83,7 @@ kr32 build examples/floats.c -o floats-c.k32 --run
 kr32 build examples/varargs.c -o varargs-c.k32 --run
 kr32 build examples/libc.c -o libc-c.k32 --run
 kr32 build examples/strings.c -o strings-c.k32 --run
+kr32 build examples/binarytree.c -o binarytree-c.k32 --run
 kr32 gui examples/libc.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
