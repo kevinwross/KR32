@@ -689,7 +689,8 @@ private:
             static const std::map<std::string, std::uint32_t> alu = {
                 {"add", 0x20}, {"sub", 0x21}, {"and", 0x2A}, {"or", 0x2B},
                 {"xor", 0x2C}, {"slt", 0x18}, {"sltu", 0x19}, {"mul", 0x22},
-                {"div", 0x25}, {"mod", 0x27},
+                {"div", 0x25}, {"mod", 0x27}, {"shl", 0x30}, {"shr", 0x31},
+                {"sar", 0x32},
             };
             const auto operation = alu.find(mnemonic);
             if (operation != alu.end()) {
@@ -874,6 +875,37 @@ private:
                 return false;
             }
             instruction.opcode = 0x3E;
+            instruction.literal = true;
+            return set_payload(value, value.symbolic || value.value < -1024 ||
+                                         value.value > 1023,
+                               instruction, relocation, addend, statement.line);
+        }
+
+        if (mnemonic == "not" || mnemonic == "neg") {
+            if (operands.size() != 2) {
+                return fail_operands("Rd, Rs");
+            }
+            int destination = 0;
+            int source = 0;
+            if (!parse_register(operands[0], destination) ||
+                !parse_register(operands[1], source)) {
+                return fail(statement.line, "expected registers");
+            }
+            set_destination(destination);
+            set_source(source);
+            instruction.opcode = mnemonic == "not" ? 0x2D : 0x2E;
+            return true;
+        }
+
+        if (mnemonic == "int" || mnemonic == "syscall") {
+            if (operands.size() != 1) {
+                return fail_operands("#vector");
+            }
+            Expr value;
+            if (!parse_immediate(operands[0], value)) {
+                return false;
+            }
+            instruction.opcode = mnemonic == "int" ? 0x40 : 0x41;
             instruction.literal = true;
             return set_payload(value, value.symbolic || value.value < -1024 ||
                                          value.value > 1023,

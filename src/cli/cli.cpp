@@ -2,6 +2,7 @@
 
 #include "kr32/asm/assembler.h"
 #include "kr32/asm/object_assembler.h"
+#include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
 #include "kr32/dis/disassembler.h"
@@ -123,6 +124,11 @@ bool is_container(const std::string& path) {
     return dot != std::string::npos && lower(path.substr(dot + 1)) == "k32";
 }
 
+bool is_c_source(const std::string& path) {
+    const std::size_t dot = path.find_last_of('.');
+    return dot != std::string::npos && lower(path.substr(dot + 1)) == "c";
+}
+
 std::string fault_name(core::FaultKind kind);
 void print_machine(const core::Machine& machine);
 
@@ -187,6 +193,18 @@ int run_machine(core::Machine& machine,
                 std::uint64_t max_steps,
                 bool trace,
                 bool stats) {
+    machine.set_syscall_handler([](core::Machine& current, std::uint32_t vector) {
+        if (vector == 33) {
+            std::putchar(static_cast<int>(current.reg(0) & 0xFFU));
+            return true;
+        }
+        if (vector == 32) {
+            current.halt(current.reg(0));
+            return true;
+        }
+        return false;
+    });
+
     bool halted = false;
     for (std::uint64_t step = 0; step < max_steps; ++step) {
         if (trace) {
@@ -219,7 +237,9 @@ int run_machine(core::Machine& machine,
     }
 
     print_machine(machine);
-    const int exit_code = static_cast<int>(machine.reg(0) & 0xFFU);
+    const int exit_code = machine.exit_code_set()
+                              ? static_cast<int>(machine.exit_code() & 0xFFU)
+                              : static_cast<int>(machine.reg(0) & 0xFFU);
     std::printf("HALTED exit=%d\n", exit_code);
     if (stats) {
         std::printf("ticks=%llu\n", static_cast<unsigned long long>(machine.ticks()));
@@ -257,7 +277,7 @@ void print_machine(const core::Machine& machine) {
 }
 
 void print_version() {
-    std::printf("kr32 %s (ISA %s, container %s, M3 toolchain)\n",
+    std::printf("kr32 %s (ISA %s, container %s, M4 C bootstrap)\n",
                 kr32::kVersion, kr32::kIsaVersion, kr32::kContainerVersion);
 }
 
@@ -308,7 +328,7 @@ void print_vm_usage() {
 }
 
 int not_implemented(std::string_view command) {
-    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M3 toolchain).\n",
+    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M4 C bootstrap).\n",
                  static_cast<int>(command.size()), command.data());
     return 2;
 }
@@ -680,18 +700,45 @@ int command_build(int argc, char** argv) {
         return 1;
     }
     const std::string text(source_bytes.begin(), source_bytes.end());
-    container::Image object;
+    std::vector<container::Image> objects;
     assembler::Error assembly_error;
-    if (!assembler::assemble_object(text, object, assembly_error)) {
-        std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), assembly_error.line,
-                     assembly_error.message.c_str());
-        return 1;
+    if (is_c_source(source)) {
+        const cc::Result compiled = cc::compile(text, source);
+        if (!compiled.ok) {
+            for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
+                std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
+                             diagnostic.column, diagnostic.message.c_str());
+            }
+            return 1;
+        }
+        container::Image user;
+        if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
+            std::fprintf(stderr, "kr32 build: %s:%d: %s\n", source.c_str(),
+                         assembly_error.line, assembly_error.message.c_str());
+            return 1;
+        }
+        objects.push_back(std::move(user));
+        container::Image runtime;
+        if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
+            std::fprintf(stderr, "kr32 build: runtime: %s\n",
+                         assembly_error.message.c_str());
+            return 1;
+        }
+        objects.push_back(std::move(runtime));
+    } else {
+        container::Image object;
+        if (!assembler::assemble_object(text, object, assembly_error)) {
+            std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), assembly_error.line,
+                         assembly_error.message.c_str());
+            return 1;
+        }
+        objects.push_back(std::move(object));
     }
 
     container::Image image;
     linker::Map map;
     linker::Error link_error;
-    if (!linker::link({object}, options, image, map, link_error)) {
+    if (!linker::link(objects, options, image, map, link_error)) {
         std::fprintf(stderr, "kr32 build: %s\n", link_error.message.c_str());
         return 1;
     }
@@ -726,6 +773,94 @@ int command_build(int argc, char** argv) {
         return 1;
     }
     return run_machine(machine, kDefaultMaxSteps, false, false);
+}
+
+void print_cc_usage() {
+    std::printf("Usage: kr32 cc <file.c> [-S] [-o <path>]\n");
+}
+
+int command_cc(int argc, char** argv) {
+    std::string source;
+    std::string output;
+    bool assembly_only = false;
+
+    for (int index = 2; index < argc; ++index) {
+        const std::string_view argument(argv[index]);
+        if (argument == "--help" || argument == "-h") {
+            print_cc_usage();
+            return 0;
+        }
+        if (argument == "-S") {
+            assembly_only = true;
+            continue;
+        }
+        if (argument == "-o") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 cc: -o needs a path\n");
+                return 2;
+            }
+            output = argv[++index];
+            continue;
+        }
+        if (!source.empty()) {
+            std::fprintf(stderr, "kr32 cc: unexpected argument\n");
+            return 2;
+        }
+        source = std::string(argument);
+    }
+
+    if (source.empty()) {
+        print_cc_usage();
+        return 2;
+    }
+    if (output.empty()) {
+        output = assembly_only ? "a.s" : "a.o";
+    }
+
+    std::vector<std::uint8_t> bytes;
+    std::string error;
+    if (!read_file(source, bytes, error)) {
+        std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
+        return 1;
+    }
+    const std::string text(bytes.begin(), bytes.end());
+    const cc::Result compiled = cc::compile(text, source);
+    if (!compiled.ok) {
+        for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
+            std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
+                         diagnostic.column, diagnostic.message.c_str());
+        }
+        return 1;
+    }
+
+    if (assembly_only) {
+        if (!write_text(output, compiled.assembly, error)) {
+            std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
+            return 1;
+        }
+        std::printf("wrote assembly to %s\n", output.c_str());
+        return 0;
+    }
+
+    container::Image object;
+    assembler::Error assembly_error;
+    if (!assembler::assemble_object(compiled.assembly, object, assembly_error)) {
+        std::fprintf(stderr, "kr32 cc: %s:%d: %s\n", source.c_str(), assembly_error.line,
+                     assembly_error.message.c_str());
+        return 1;
+    }
+    std::vector<std::uint8_t> object_bytes;
+    container::Error container_error;
+    if (!container::write(object, object_bytes, container_error)) {
+        std::fprintf(stderr, "kr32 cc: %s\n", container_error.message.c_str());
+        return 1;
+    }
+    if (!write_file(output, object_bytes, error)) {
+        std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
+        return 1;
+    }
+    std::printf("wrote object to %s\n", output.c_str());
+    return 0;
 }
 
 int command_vm(int argc, char** argv) {
@@ -887,9 +1022,12 @@ int run(int argc, char** argv) {
     if (command == "size") {
         return command_size(argc, argv);
     }
+    if (command == "cc") {
+        return command_cc(argc, argv);
+    }
 
     for (const std::string_view candidate :
-         {"cc", "cxx", "debug", "dap", "shell"}) {
+         {"cxx", "debug", "dap", "shell"}) {
         if (command == candidate) {
             return not_implemented(command);
         }

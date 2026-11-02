@@ -8,10 +8,12 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M3 complete (2026-11-02). The toolchain now emits `.k32`
-relocatable objects, links them into executables, reports section sizes, and can
-build and run `.s` programs through one command. The container format is
-documented in [docs/container.md](docs/container.md). The C compiler is next.
+**Status:** M4 in progress (2026-11-02). The bootstrap C compiler handles
+integers, chars, pointers, arrays, functions, control flow, strings, and
+recursion; `kr32 cc` emits assembly or an object, and `kr32 build file.c --run`
+links the `_start`/`putchar`/`exit` runtime and runs the result. Structs,
+`switch`/`goto`, the full preprocessor, and the remaining M4 gate are still
+being completed.
 
 ## Build
 
@@ -63,6 +65,8 @@ kr32 as examples/hello.s --object -o hello.o
 kr32 ld hello.o -o hello.k32 --map hello.map
 kr32 size hello.k32
 kr32 build examples/hello.s -o hello.k32 --run
+kr32 cc examples/hello.c -S -o hello.s
+kr32 build examples/hello.c -o hello-c.k32 --run
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm
@@ -78,10 +82,10 @@ kr32 gui            # M6 placeholder for the windowed debugger
 
 `as` writes a raw image or, with `--object`, a relocatable `.k32` object. `ld`
 merges objects, resolves symbols and relocations, and writes an executable
-`.k32`; `--map` writes the section/symbol map. `build` runs assemble, link, and
-optional `--run` in one command. `size` reports `.k32` sections. The remaining
-tool commands (`cc`, `cxx`, `debug`, `dap`, `shell`) are stubs for later
-milestones.
+`.k32`; `--map` writes the section/symbol map. `cc` compiles C to assembly or an
+object. `build` runs compile/assemble, link, and optional `--run` in one
+command. `size` reports `.k32` sections. The remaining tool commands (`cxx`,
+`debug`, `dap`, `shell`) are stubs for later milestones.
 
 ## Layout
 

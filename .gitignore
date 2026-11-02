@@ -4,6 +4,8 @@
 /dist/
 /a.bin
 /a.k32
+/a.o
+/a.s
 
 # CMake and build system generated files
 CMakeFiles/

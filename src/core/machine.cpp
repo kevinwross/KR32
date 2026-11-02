@@ -6,6 +6,7 @@
 #include <cstdint>
 #include <iterator>
 #include <limits>
+#include <utility>
 
 namespace kr32::core {
 namespace {
@@ -67,7 +68,8 @@ Machine::Machine()
 Machine::Machine(Options options)
     : rom_(kRomSize, 0),
       core_id_(options.core_id),
-      exceptions_enabled_(options.exceptions_enabled) {
+      exceptions_enabled_(options.exceptions_enabled),
+      syscall_handler_(std::move(options.syscall_handler)) {
     if (options.ram_size == 0) {
         options.ram_size = kDefaultRamSize;
     }
@@ -100,6 +102,8 @@ void Machine::reset() {
     tsp_ = 0;
     reservation_valid_ = false;
     reservation_address_ = 0;
+    exit_code_set_ = false;
+    exit_code_ = 0;
 
     std::uint32_t boot_pc = 0;
     if (read_physical32(kRomBase, boot_pc)) {
@@ -130,6 +134,8 @@ void Machine::reset(std::uint32_t pc, std::uint32_t sp) {
     tsp_ = 0;
     reservation_valid_ = false;
     reservation_address_ = 0;
+    exit_code_set_ = false;
+    exit_code_ = 0;
 }
 
 bool Machine::load_image(std::uint32_t address,
@@ -522,6 +528,16 @@ void Machine::raise_interrupt(std::uint32_t line) {
     if (line < 16) {
         irq_ |= (1U << line);
     }
+}
+
+void Machine::set_syscall_handler(SyscallHandler handler) {
+    syscall_handler_ = std::move(handler);
+}
+
+void Machine::halt(std::uint32_t exit_code) {
+    halted_ = true;
+    exit_code_set_ = true;
+    exit_code_ = exit_code;
 }
 
 void Machine::set_reg(std::size_t index, std::uint32_t value) {
@@ -1394,6 +1410,9 @@ StepResult Machine::execute(const isa::Instruction& instruction,
         const std::uint32_t vector = payload(instruction);
         if (vector < 32 || vector > 255) {
             return fail_gp(instruction_pc);
+        }
+        if (syscall_handler_ && syscall_handler_(*this, vector)) {
+            return finish_next();
         }
         pc_ = next_pc;
         return raise(FaultKind::SoftwareInterrupt, vector, instruction_pc, 0);

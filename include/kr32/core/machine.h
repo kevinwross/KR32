@@ -2,6 +2,7 @@
 
 #include <cstddef>
 #include <cstdint>
+#include <functional>
 #include <vector>
 
 #include "kr32/isa/encoding.h"
@@ -84,6 +85,11 @@ public:
         std::uint32_t ram_size = kDefaultRamSize;
         std::uint32_t core_id = 0;
         bool exceptions_enabled = true;
+        std::function<bool(Machine&, std::uint32_t)> syscall_handler;
+
+        Options() = default;
+        Options(std::uint32_t ram, std::uint32_t core = 0, bool exceptions = true)
+            : ram_size(ram), core_id(core), exceptions_enabled(exceptions) {}
     };
 
     Machine();
@@ -123,6 +129,12 @@ public:
     [[nodiscard]] bool paging_enabled() const { return (mctl_ & kMctlPaging) != 0; }
     [[nodiscard]] bool kernel_mode() const { return flag(kFlagK); }
     [[nodiscard]] std::uint32_t core_id() const { return core_id_; }
+
+    using SyscallHandler = std::function<bool(Machine&, std::uint32_t)>;
+    void set_syscall_handler(SyscallHandler handler);
+    void halt(std::uint32_t exit_code);
+    [[nodiscard]] bool exit_code_set() const { return exit_code_set_; }
+    [[nodiscard]] std::uint32_t exit_code() const { return exit_code_; }
 
     [[nodiscard]] std::uint64_t fpr(std::size_t index) const;
     void set_fpr(std::size_t index, std::uint64_t value);
@@ -247,6 +259,9 @@ private:
     std::uint32_t core_id_ = 0;
     std::uint32_t tsp_ = 0;
     bool exceptions_enabled_ = true;
+    SyscallHandler syscall_handler_;
+    bool exit_code_set_ = false;
+    std::uint32_t exit_code_ = 0;
 
     std::uint64_t fpr_[16] = {};
     float tiles_[16][16] = {};
