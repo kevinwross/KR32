@@ -3,6 +3,7 @@
 #include <cstddef>
 #include <cstdint>
 #include <functional>
+#include <memory>
 #include <vector>
 
 #include "kr32/isa/encoding.h"
@@ -60,6 +61,8 @@ enum class FaultKind {
     Limit,
 };
 
+class DeviceBus;
+
 struct Fault {
     FaultKind kind = FaultKind::None;
     std::uint32_t vector = 0;
@@ -85,6 +88,7 @@ public:
         std::uint32_t ram_size = kDefaultRamSize;
         std::uint32_t core_id = 0;
         bool exceptions_enabled = true;
+        std::shared_ptr<std::vector<std::uint8_t>> shared_ram;
         std::function<bool(Machine&, std::uint32_t)> syscall_handler;
 
         Options() = default;
@@ -106,6 +110,10 @@ public:
                                   std::size_t size);
     [[nodiscard]] bool load_image(std::uint32_t address,
                                   const std::vector<std::uint8_t>& data);
+    void attach_devices(DeviceBus* devices, bool tick_devices = true);
+    [[nodiscard]] DeviceBus* devices() const { return devices_; }
+    void invalidate_reservation();
+    [[nodiscard]] std::uint64_t write_generation() const { return write_generation_; }
 
     [[nodiscard]] StepResult step();
     [[nodiscard]] StepResult run(std::uint64_t max_steps);
@@ -147,7 +155,9 @@ public:
     void raise_interrupt(std::uint32_t line);
 
     [[nodiscard]] std::uint32_t ram_base() const { return kRamBase; }
-    [[nodiscard]] std::uint32_t ram_size() const { return static_cast<std::uint32_t>(ram_.size()); }
+    [[nodiscard]] std::uint32_t ram_size() const {
+        return static_cast<std::uint32_t>(ram_->size());
+    }
     [[nodiscard]] std::uint32_t stack_top() const { return (kRamBase + ram_size()) & ~15U; }
 
     // Virtual accesses use the current mode and page tables.
@@ -238,7 +248,7 @@ private:
                                      std::uint32_t address,
                                      std::uint32_t code) const;
 
-    std::vector<std::uint8_t> ram_;
+    std::shared_ptr<std::vector<std::uint8_t>> ram_;
     std::vector<std::uint8_t> rom_;
     std::uint32_t regs_[16] = {};
     std::uint32_t pc_ = kRomBase;
@@ -260,6 +270,9 @@ private:
     std::uint32_t tsp_ = 0;
     bool exceptions_enabled_ = true;
     SyscallHandler syscall_handler_;
+    DeviceBus* devices_ = nullptr;
+    bool tick_devices_ = true;
+    std::uint64_t write_generation_ = 0;
     bool exit_code_set_ = false;
     std::uint32_t exit_code_ = 0;
 

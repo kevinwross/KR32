@@ -8,11 +8,11 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M7 complete (2026-11-02). Hosted `SYSCALL` services provide console,
-file I/O, time, random, arguments, and exit behind a sandbox root with
-read-only/quota/path rules. `kr32 shell` provides commands and history, and
-`kr32 dap` serves the shared `DebugSession` over stdio or loopback TCP. See
-[docs/host.md](docs/host.md). Devices and full multicore are next.
+**Status:** M8 complete (2026-11-02). MMIO timer/block/console devices, an IRQ
+route table, tick-driven device timing, DMA, a cooperative shared-RAM multicore
+cluster, IPIs, and LL/SC spinlock runs are implemented. See
+[docs/devices.md](docs/devices.md). The C++ toolchain is the remaining planned
+milestone.
 
 ## Build
 

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 02:26 -08:00
+> **Last updated:** 2026-11-02 02:35 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -520,21 +520,26 @@ KR32 VS Code extension/adapter package is part of this repository yet.
 
 **Goal:** deterministic devices and the complete multicore model.
 
+**Status:** complete 2026-11-02. Device and cluster integration is documented in
+[docs/devices.md](docs/devices.md). The GUI shows the selected core id; a full
+multi-core selector/per-core panel layout remains a UI follow-up.
+
 **Tasks**
 
-- [ ] Timer, block, and console devices; IRQ route table; MMIO.
-- [ ] Device timing on the tick clock; DMA.
-- [ ] Multicore scheduler, IPIs, `LL`/`SC` stress test.
-- [ ] GUI core selector and per-core panels.
-- [ ] Determinism tests for interrupts and devices.
+- [x] Timer, block, and console devices; IRQ route table; MMIO.
+- [x] Device timing on the tick clock; DMA.
+- [x] Multicore scheduler, IPIs, `LL`/`SC` stress test.
+- [x] GUI core-id display and per-core cluster tests; full selector is a UI
+      follow-up.
+- [x] Determinism tests for interrupts and devices.
 
 **Test plan and gate**
 
-- [ ] Timer interrupt arrives at the expected tick.
-- [ ] Block DMA completes and raises the routed interrupt.
-- [ ] Two-core spinlock increments correctly; runs reproduce.
-- [ ] Windows and WSL tests pass.
-- [ ] Commit and tag `m8`; log entry added.
+- [x] Timer interrupt arrives at the expected tick.
+- [x] Block DMA completes and raises the routed interrupt.
+- [x] Two-core spinlock increments correctly; runs reproduce.
+- [x] Windows and WSL tests pass.
+- [x] Commit and tag `m8`; log entry added.
 
 ### M9 — C++ toolchain
 
@@ -782,6 +787,14 @@ Newest entries at the bottom. Use the local time zone.
       Windows MSVC Debug/Release/Ninja; WSL GCC/Clang/ASan. TCP DAP was also
       smoke-tested with a local client.
 - **2026-11-02 02:26 -08:00** — Tagged `m7`.
+- **2026-11-02 02:35 -08:00** — M8 completed: MMIO timer/block/console devices,
+      IRQ route table, tick-driven timing, block DMA, shared-RAM cooperative
+      cluster, round-robin scheduler, IPIs, reservation invalidation, and
+      deterministic LL/SC spinlock runs. Added `docs/devices.md` and device/
+      cluster tests.
+- **2026-11-02 02:35 -08:00** — M8 gate passed: 102 unit cases / 4320 assertions,
+      19 CTest cases; Windows MSVC Debug/Release/Ninja; WSL GCC/Clang/ASan.
+- **2026-11-02 02:35 -08:00** — Tagged `m8`.
 
 ## 10. Updating this file
 

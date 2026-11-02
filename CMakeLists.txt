@@ -44,7 +44,7 @@ function(kr32_add_library name)
     target_compile_features(${name} PUBLIC cxx_std_20)
 endfunction()
 
-kr32_add_library(kr32_core src/core/encoding.cpp src/core/machine.cpp)
+kr32_add_library(kr32_core src/core/encoding.cpp src/core/machine.cpp src/core/devices.cpp)
 
 kr32_add_library(kr32_asm src/asm/assembler.cpp src/asm/object_assembler.cpp)
 target_link_libraries(kr32_asm PUBLIC kr32_core kr32_container)

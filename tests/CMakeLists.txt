@@ -7,6 +7,7 @@ add_executable(kr32_tests
     unit/test_boot.cpp
     unit/test_fp.cpp
     unit/test_matrix.cpp
+    unit/test_devices.cpp
     unit/test_container.cpp
     unit/test_object_assembler.cpp
     unit/test_linker.cpp

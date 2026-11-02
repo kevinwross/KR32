@@ -1,5 +1,7 @@
 #include "kr32/core/machine.h"
 
+#include "kr32/core/devices.h"
+
 #include <algorithm>
 #include <bit>
 #include <cmath>
@@ -75,7 +77,11 @@ Machine::Machine(Options options)
     }
     const std::uint32_t max_ram = kRomBase - kRamBase;
     options.ram_size = std::min(options.ram_size, max_ram);
-    ram_.assign(options.ram_size, 0);
+    if (options.shared_ram != nullptr) {
+        ram_ = std::move(options.shared_ram);
+    } else {
+        ram_ = std::make_shared<std::vector<std::uint8_t>>(options.ram_size, std::uint8_t{0});
+    }
     reset();
 }
 
@@ -151,8 +157,8 @@ bool Machine::load_image(std::uint32_t address,
     const std::uint64_t begin = address;
     const std::uint64_t end = begin + size;
 
-    if (begin >= kRamBase && end <= static_cast<std::uint64_t>(kRamBase) + ram_.size()) {
-        std::copy(data, data + size, ram_.begin() + static_cast<std::ptrdiff_t>(begin - kRamBase));
+    if (begin >= kRamBase && end <= static_cast<std::uint64_t>(kRamBase) + ram_->size()) {
+        std::copy(data, data + size, ram_->begin() + static_cast<std::ptrdiff_t>(begin - kRamBase));
         return true;
     }
     if (begin >= kRomBase && end <= static_cast<std::uint64_t>(kRomBase) + rom_.size()) {
@@ -167,10 +173,34 @@ bool Machine::load_image(std::uint32_t address,
     return load_image(address, data.data(), data.size());
 }
 
+void Machine::attach_devices(DeviceBus* devices, bool tick_devices) {
+    devices_ = devices;
+    tick_devices_ = tick_devices;
+    if (devices_ != nullptr) {
+        devices_->attach_machine(*this);
+        if (!devices_->has_irq_handler()) {
+            devices_->set_irq_handler([this](std::uint32_t line) { raise_interrupt(line); });
+        }
+    }
+}
+
+void Machine::invalidate_reservation() {
+    reservation_valid_ = false;
+    reservation_address_ = 0;
+}
+
 bool Machine::read_physical8(std::uint32_t address, std::uint8_t& value) const {
     const std::uint64_t wide = address;
-    if (wide >= kRamBase && wide < static_cast<std::uint64_t>(kRamBase) + ram_.size()) {
-        value = ram_[address - kRamBase];
+    if (devices_ != nullptr && devices_->contains(address)) {
+        std::uint32_t word = 0;
+        if (!devices_->read32(address & ~3U, word)) {
+            return false;
+        }
+        value = static_cast<std::uint8_t>((word >> ((address & 3U) * 8U)) & 0xFFU);
+        return true;
+    }
+    if (wide >= kRamBase && wide < static_cast<std::uint64_t>(kRamBase) + ram_->size()) {
+        value = (*ram_)[address - kRamBase];
         return true;
     }
     if (wide >= kRomBase && wide < static_cast<std::uint64_t>(kRomBase) + rom_.size()) {
@@ -182,11 +212,21 @@ bool Machine::read_physical8(std::uint32_t address, std::uint8_t& value) const {
 
 bool Machine::write_physical8(std::uint32_t address, std::uint8_t value) {
     const std::uint64_t wide = address;
-    if (wide >= kRamBase && wide < static_cast<std::uint64_t>(kRamBase) + ram_.size()) {
+    if (devices_ != nullptr && devices_->contains(address)) {
+        std::uint32_t word = 0;
+        if (!devices_->read32(address & ~3U, word)) {
+            return false;
+        }
+        const std::uint32_t shift = (address & 3U) * 8U;
+        word = (word & ~(0xFFU << shift)) | (static_cast<std::uint32_t>(value) << shift);
+        return devices_->write32(address & ~3U, word);
+    }
+    if (wide >= kRamBase && wide < static_cast<std::uint64_t>(kRamBase) + ram_->size()) {
         if (reservation_valid_ && (address & ~3U) == reservation_address_) {
             reservation_valid_ = false;
         }
-        ram_[address - kRamBase] = value;
+        (*ram_)[address - kRamBase] = value;
+        ++write_generation_;
         return true;
     }
     return false;
@@ -209,6 +249,9 @@ bool Machine::write_physical16(std::uint32_t address, std::uint16_t value) {
 }
 
 bool Machine::read_physical32(std::uint32_t address, std::uint32_t& value) const {
+    if (devices_ != nullptr && devices_->contains(address)) {
+        return devices_->read32(address, value);
+    }
     std::uint8_t b0 = 0;
     std::uint8_t b1 = 0;
     std::uint8_t b2 = 0;
@@ -225,6 +268,9 @@ bool Machine::read_physical32(std::uint32_t address, std::uint32_t& value) const
 }
 
 bool Machine::write_physical32(std::uint32_t address, std::uint32_t value) {
+    if (devices_ != nullptr && devices_->contains(address)) {
+        return devices_->write32(address, value);
+    }
     return write_physical8(address, static_cast<std::uint8_t>(value & 0xFFU)) &&
            write_physical8(address + 1, static_cast<std::uint8_t>((value >> 8) & 0xFFU)) &&
            write_physical8(address + 2, static_cast<std::uint8_t>((value >> 16) & 0xFFU)) &&
@@ -263,7 +309,7 @@ bool Machine::translate(std::uint32_t virtual_address,
         }
         if (virtual_address >= kRamBase &&
             static_cast<std::uint64_t>(virtual_address) <
-                static_cast<std::uint64_t>(kRamBase) + ram_.size()) {
+                static_cast<std::uint64_t>(kRamBase) + ram_->size()) {
             physical_address = virtual_address;
             return true;
         }
@@ -343,7 +389,7 @@ bool Machine::translate(std::uint32_t virtual_address,
 
     physical_address = (leaf_entry & kPageFrameMask) | (virtual_address & kPageOffsetMask);
     const std::uint64_t wide = physical_address;
-    if (wide >= kRamBase && wide < static_cast<std::uint64_t>(kRamBase) + ram_.size()) {
+    if (wide >= kRamBase && wide < static_cast<std::uint64_t>(kRamBase) + ram_->size()) {
         return true;
     }
     if (wide >= kRomBase && wide < static_cast<std::uint64_t>(kRomBase) + rom_.size()) {
@@ -879,6 +925,9 @@ StepResult Machine::step() {
         ++ticks_;
     } else if (result.kind == StepResult::Kind::Raised) {
         return handle_fault(fault_, pc_);
+    }
+    if (devices_ != nullptr && tick_devices_) {
+        devices_->tick();
     }
     return result;
 }
@@ -1475,7 +1524,7 @@ StepResult Machine::execute(const isa::Instruction& instruction,
             return fail_fault(fault);
         }
         if (physical < kRamBase ||
-            physical >= static_cast<std::uint32_t>(kRamBase + ram_.size())) {
+            physical >= static_cast<std::uint32_t>(kRamBase + ram_->size())) {
             return fail_gp(address);
         }
         regs_[rd] = value;
@@ -1498,7 +1547,7 @@ StepResult Machine::execute(const isa::Instruction& instruction,
             return fail_fault(fault);
         }
         if (physical < kRamBase ||
-            physical >= static_cast<std::uint32_t>(kRamBase + ram_.size())) {
+            physical >= static_cast<std::uint32_t>(kRamBase + ram_->size())) {
             return fail_gp(address);
         }
         const bool success =
