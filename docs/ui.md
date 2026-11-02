@@ -10,6 +10,8 @@ directly.
 
 ![KR32 gutter menu](screenshots/m6-gutter-menu.png)
 
+![KR32 disassembly gutter menu](screenshots/m6-disasm-gutter-menu.png)
+
 ![KR32 run to line](screenshots/m6-run-to.png)
 
 ## Architecture
@@ -41,9 +43,8 @@ directly.
 
 ## Gutter behavior
 
-- Source gutter: breakpoint square, right-aligned line number, separator; source
-  text starts after the gutter.
-- Disassembly gutter: breakpoint square, right-aligned address, separator.
+- Source gutter: breakpoint square column, right-aligned line-number column, separators; source text starts after the gutter.
+- Disassembly gutter: breakpoint square column, right-aligned address column, separators; the instruction column starts after the gutter.
 - Left-click a gutter row toggles a breakpoint at that line/instruction.
 - Right-click a source or disassembly gutter row opens the KR16-style menu:
   **Toggle breakpoint** and **Run to line N** / **Run to 0xADDR**.

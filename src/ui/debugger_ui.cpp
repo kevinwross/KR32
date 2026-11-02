@@ -29,8 +29,10 @@ constexpr Color kAccent{76, 170, 255, 255};
 constexpr Color kBad{255, 104, 104, 255};
 
 constexpr int kToolbarHeight = 30;
-constexpr int kSourceGutter = 54;
+constexpr int kSourceGutter = 58;
+constexpr int kSourceBreakGutter = 18;
 constexpr int kAsmGutter = 90;
+constexpr int kAsmBreakGutter = 18;
 
 std::string hex(std::uint32_t value, int digits) {
     char buffer[24] = {};
@@ -397,12 +399,16 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
             canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height},
                         Color{38, 66, 92, 255});
         }
+        canvas.fill(Rect{rect.x + 1, y - 1, kSourceGutter - 1, line_height},
+                    hover_source_ && hover_row_ == row ? Color{32, 46, 58, 255} : kPanelAlt);
+        canvas.fill(Rect{rect.x + kSourceBreakGutter, y - 1, 1, line_height}, kBorder);
+        canvas.fill(Rect{rect.x + kSourceGutter, y - 1, 1, line_height}, kBorder);
         std::uint32_t address = 0;
         const bool has_breakpoint =
             source_line_to_address(line_number, address) &&
             session_.breakpoints().find(address) != session_.breakpoints().end();
         if (has_breakpoint) {
-            canvas.fill(Rect{rect.x + 8, y + 5, 7, 8}, kBad);
+            canvas.fill(Rect{rect.x + 7, y + 5, 7, 8}, kBad);
         }
         const std::string number = std::to_string(line_number);
         const int number_width = Canvas::text_width(number, FontRole::Mono);
@@ -450,6 +456,11 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
             canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height},
                         Color{38, 66, 92, 255});
         }
+        canvas.fill(Rect{rect.x + 1, y - 1, kAsmGutter - 1, line_height},
+                    !hover_source_ && hover_row_ == row ? Color{32, 46, 58, 255}
+                                                        : kPanelAlt);
+        canvas.fill(Rect{rect.x + kAsmBreakGutter, y - 1, 1, line_height}, kBorder);
+        canvas.fill(Rect{rect.x + kAsmGutter, y - 1, 1, line_height}, kBorder);
         std::uint8_t bytes[8] = {};
         bool read_ok = true;
         for (int index = 0; index < 8; ++index) {
@@ -497,8 +508,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
             canvas.fill(Rect{rect.x + 6, y + 5, 7, 8}, kBad);
         }
         canvas.text(rect.x + kAsmGutter - 8 - address_width, y, hex(address, 8),
-                    address == pc ? kAccent : kDim, FontRole::Mono);
-        canvas.text(instruction_x, y,
+                    address == pc ? kAccent : kDim, FontRole::Mono);        canvas.text(instruction_x, y,
                     trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
                     address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);
     }

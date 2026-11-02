@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 07:16 -08:00
+> **Last updated:** 2026-11-02 08:05 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -817,6 +817,11 @@ Newest entries at the bottom. Use the local time zone.
       line/address. Run-to uses a temporary breakpoint and preserves existing
       user breakpoints. Verified live against `examples/hello.c` (line 5
       breakpoint and Run to line 8).
+- **2026-11-02 08:05 -08:00** — Gave the disassembly pane the same two-column
+      gutter treatment as the source pane: a dedicated breakpoint column plus a
+      right-aligned address column with separators, gutter hover, left-click
+      breakpoint toggling, and the same right-click Toggle/Run-to menu. Verified
+      live with a disassembly gutter right-click and Run to address menu.
 
 ## 10. Updating this file
 
