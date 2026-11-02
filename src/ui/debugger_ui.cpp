@@ -134,6 +134,20 @@ std::string DebuggerUI::format_fpr(std::uint64_t value, bool scientific) const {
     return out.str();
 }
 
+std::string DebuggerUI::format_fpr_float(std::uint32_t value, bool scientific) const {
+    const float number = std::bit_cast<float>(value);
+    if (std::isnan(number)) return "nan";
+    if (std::isinf(number)) return std::signbit(number) ? "-inf" : "+inf";
+    std::ostringstream out;
+    out << std::showpos;
+    if (scientific) {
+        out << std::scientific << std::setprecision(6) << number;
+    } else {
+        out << std::defaultfloat << std::setprecision(8) << number;
+    }
+    return out.str();
+}
+
 bool DebuggerUI::load(const std::string& path, std::string& error) {
     std::string source_path;
     if (has_c_extension(path)) {
@@ -721,22 +735,36 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
     canvas.fill(Rect{rect.x, y + 2, rect.width, 1}, kBorder);
     y += 8;
     canvas.text(rect.x, y, "FPR", kDim, FontRole::MonoSmall);
+    fpr_view_rect_ = Rect{rect.x + rect.width - 62, y - 3, 58, 17};
+    canvas.fill(fpr_view_rect_, kPanelAlt);
+    canvas.frame(fpr_view_rect_, kBorder);
+    canvas.text(fpr_view_rect_.x + 6, fpr_view_rect_.y + 2,
+                fpr_float_view_ ? "FLOAT" : "DOUBLE", kText, FontRole::MonoSmall);
     y += 17;
-    for (int index = 0; index < 16; ++index) {
-        const int x = rect.x;
-        const std::uint64_t bits = machine.fpr(static_cast<std::size_t>(index));
-        std::string display = format_fpr(bits, false);
-        if (Canvas::text_width(display, FontRole::MonoSmall) > rect.width - 42) {
-            display = format_fpr(bits, true);
+    for (int row = 0; row < 8; ++row) {
+        for (int column = 0; column < 2; ++column) {
+            const int index = row + column * 8;
+            const int x = rect.x + column * column_width;
+            const std::uint64_t bits = machine.fpr(static_cast<std::size_t>(index));
+            std::string display =
+                fpr_float_view_
+                    ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), false)
+                    : format_fpr(bits, false);
+            if (Canvas::text_width(display, FontRole::MonoSmall) > column_width - 36) {
+                display =
+                    fpr_float_view_
+                        ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), true)
+                        : format_fpr(bits, true);
+            }
+            const Rect cell{x - 2, y - 2, column_width - 4, 16};
+            fpr_cells_.push_back(cell);
+            if (hover_fpr_ == index) {
+                canvas.fill(cell, Color{42, 58, 74, 255});
+                canvas.frame(cell, kAccent);
+            }
+            canvas.text(x, y, "F" + std::to_string(index), kDim, FontRole::MonoSmall);
+            canvas.text(x + 28, y, display, kText, FontRole::MonoSmall);
         }
-        const Rect cell{x - 2, y - 2, rect.width - 4, 16};
-        fpr_cells_.push_back(cell);
-        if (hover_fpr_ == index) {
-            canvas.fill(cell, Color{42, 58, 74, 255});
-            canvas.frame(cell, kAccent);
-        }
-        canvas.text(x, y, "F" + std::to_string(index), kDim, FontRole::MonoSmall);
-        canvas.text(x + 28, y, display, kText, FontRole::MonoSmall);
         y += 17;
     }
 
@@ -902,8 +930,11 @@ void DebuggerUI::finish_register_edit(bool commit) {
 void DebuggerUI::begin_fpr_edit(int index) {
     if (index < 0 || index > 15) return;
     editing_fpr_ = index;
-    fpr_edit_ = format_fpr(session_.core(selected_core_).fpr(static_cast<std::size_t>(index)),
-                           false);
+    const std::uint64_t bits =
+        session_.core(selected_core_).fpr(static_cast<std::size_t>(index));
+    fpr_edit_ = fpr_float_view_
+                    ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), false)
+                    : format_fpr(bits, false);
     fpr_edit_fresh_ = true;
 }
 
@@ -911,14 +942,27 @@ void DebuggerUI::finish_fpr_edit(bool commit) {
     if (editing_fpr_ < 0) return;
     if (commit && !fpr_edit_.empty()) {
         char* end = nullptr;
-        const double value = std::strtod(fpr_edit_.c_str(), &end);
-        if (end != nullptr && *end == '\0') {
-            session_.core(selected_core_)
-                .set_fpr(static_cast<std::size_t>(editing_fpr_),
-                         std::bit_cast<std::uint64_t>(value));
-            status_ = "F" + std::to_string(editing_fpr_) + " updated";
+        if (fpr_float_view_) {
+            const float value = std::strtof(fpr_edit_.c_str(), &end);
+            if (end != nullptr && *end == '\0') {
+                session_.core(selected_core_)
+                    .set_fpr(static_cast<std::size_t>(editing_fpr_),
+                             static_cast<std::uint64_t>(
+                                 std::bit_cast<std::uint32_t>(value)));
+                status_ = "F" + std::to_string(editing_fpr_) + " updated (float)";
+            } else {
+                status_ = "invalid floating-point value";
+            }
         } else {
-            status_ = "invalid floating-point value";
+            const double value = std::strtod(fpr_edit_.c_str(), &end);
+            if (end != nullptr && *end == '\0') {
+                session_.core(selected_core_)
+                    .set_fpr(static_cast<std::size_t>(editing_fpr_),
+                             std::bit_cast<std::uint64_t>(value));
+                status_ = "F" + std::to_string(editing_fpr_) + " updated (double)";
+            } else {
+                status_ = "invalid floating-point value";
+            }
         }
     }
     editing_fpr_ = -1;
@@ -938,8 +982,10 @@ void DebuggerUI::draw_fpr_popup(Canvas& canvas) {
     fpr_cancel_rect_ = Rect{x + width - 100, y + height - 40, 84, 24};
     canvas.fill(fpr_popup_, Color{18, 26, 34, 255});
     canvas.frame(fpr_popup_, kAccent, 2);
-    canvas.text(x + 16, y + 14, "Edit F" + std::to_string(editing_fpr_), kAccent,
-                FontRole::UiBold);
+    canvas.text(x + 16, y + 14,
+                "Edit F" + std::to_string(editing_fpr_) +
+                    (fpr_float_view_ ? "  (float)" : "  (double)"),
+                kAccent, FontRole::UiBold);
     canvas.text(x + 16, y + 28,
                 "Formats: 3.14152   100.00   100   1E2",
                 kDim, FontRole::MonoSmall);
@@ -947,24 +993,19 @@ void DebuggerUI::draw_fpr_popup(Canvas& canvas) {
     canvas.frame(fpr_input_rect_, kAccent);
     canvas.text(fpr_input_rect_.x + 6, fpr_input_rect_.y + 4, fpr_edit_ + "_", kText,
                 FontRole::MonoSmall);
-    canvas.text(x + 16, y + 76,
-                "Decimal: " + this->format_fpr(std::bit_cast<std::uint64_t>(
-                                              [&] {
-                                                  char* end = nullptr;
-                                                  const double v = std::strtod(fpr_edit_.c_str(), &end);
-                                                  return end != nullptr && *end == '\0' ? v : 0.0;
-                                              }()),
-                                          false),
-                kDim, FontRole::MonoSmall);
-    canvas.text(x + 16, y + 92,
-                "Scientific: " + this->format_fpr(std::bit_cast<std::uint64_t>(
-                                                 [&] {
-                                                     char* end = nullptr;
-                                                     const double v = std::strtod(fpr_edit_.c_str(), &end);
-                                                     return end != nullptr && *end == '\0' ? v : 0.0;
-                                                 }()),
-                                             true),
-                kDim, FontRole::MonoSmall);
+    const auto preview = [&](bool scientific) {
+        char* end = nullptr;
+        if (fpr_float_view_) {
+            const float value = std::strtof(fpr_edit_.c_str(), &end);
+            if (end == nullptr || *end != '\0') return std::string("invalid");
+            return format_fpr_float(std::bit_cast<std::uint32_t>(value), scientific);
+        }
+        const double value = std::strtod(fpr_edit_.c_str(), &end);
+        if (end == nullptr || *end != '\0') return std::string("invalid");
+        return format_fpr(std::bit_cast<std::uint64_t>(value), scientific);
+    };
+    canvas.text(x + 16, y + 76, "Decimal: " + preview(false), kDim, FontRole::MonoSmall);
+    canvas.text(x + 16, y + 92, "Scientific: " + preview(true), kDim, FontRole::MonoSmall);
     canvas.fill(fpr_ok_rect_, kPanelAlt);
     canvas.frame(fpr_ok_rect_, kBorder);
     canvas.text(fpr_ok_rect_.x + 26, fpr_ok_rect_.y + 4, "OK", kText, FontRole::MonoSmall);
@@ -978,10 +1019,16 @@ void DebuggerUI::draw_fpr_tooltip(Canvas& canvas) {
     if (hover_fpr_ < 0 || hover_fpr_ > 15 || editing_fpr_ >= 0 || menu_.open) return;
     const std::uint64_t bits =
         session_.core(selected_core_).fpr(static_cast<std::size_t>(hover_fpr_));
+    const std::string decimal_text =
+        fpr_float_view_ ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), false)
+                        : format_fpr(bits, false);
+    const std::string scientific_text =
+        fpr_float_view_ ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), true)
+                        : format_fpr(bits, true);
     const std::vector<std::string> lines{
-        "F" + std::to_string(hover_fpr_),
-        "decimal: " + this->format_fpr(bits, false),
-        "scientific: " + this->format_fpr(bits, true),
+        "F" + std::to_string(hover_fpr_) + (fpr_float_view_ ? "  (float)" : "  (double)"),
+        "decimal: " + decimal_text,
+        "scientific: " + scientific_text,
         "hex: 0x" + hex(static_cast<std::uint32_t>(bits >> 32), 8) +
             hex(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), 8),
     };
@@ -1179,7 +1226,7 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
 }
 
 DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
-    const int right_width = std::clamp(width * 23 / 100, 230, 360);
+    const int right_width = std::clamp(width * 28 / 100, 270, 420);
     int source_width = std::clamp(width * 42 / 100, 240, width - right_width - 300);
     int disassembly_width = width - source_width - right_width;
     if (disassembly_width < 300) {
@@ -1600,6 +1647,10 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         if (!register_cells_[index].contains(x, y)) continue;
         finish_memory_address_edit(true);
         begin_register_edit(static_cast<int>(index));
+        return true;
+    }
+    if (fpr_view_rect_.contains(x, y)) {
+        fpr_float_view_ = !fpr_float_view_;
         return true;
     }
     for (std::size_t index = 0; index < fpr_cells_.size(); ++index) {

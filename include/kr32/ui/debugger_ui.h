@@ -80,6 +80,7 @@ private:
     void draw_fpr_popup(Canvas& canvas);
     void draw_fpr_tooltip(Canvas& canvas);
     [[nodiscard]] std::string format_fpr(std::uint64_t value, bool scientific) const;
+    [[nodiscard]] std::string format_fpr_float(std::uint32_t value, bool scientific) const;
     void draw_variable_tooltip(Canvas& canvas);
     void draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total, int visible,
                         Rect& track, Rect& thumb);
@@ -145,8 +146,10 @@ private:
     int hover_flag_ = -1;
     int hover_fpr_ = -1;
     int editing_fpr_ = -1;
+    bool fpr_float_view_ = false;
     std::string fpr_edit_;
     bool fpr_edit_fresh_ = true;
+    Rect fpr_view_rect_{};
     Rect fpr_popup_{};
     Rect fpr_input_rect_{};
     Rect fpr_ok_rect_{};
