@@ -17,6 +17,9 @@ committed.
 - CMake: `find_package(SDL2 CONFIG REQUIRED)` and link `SDL2::SDL2`. Define
   `SDL_MAIN_HANDLED` when the application supplies a normal `main`; otherwise
   the Windows SDL2main path expects `SDL_main`.
+- Headers are flat in this VC package: use `#include <SDL.h>`. The CMake target
+  adds the include directory; on Linux the same include works because
+  pkg-config adds `-I/usr/include/SDL2`.
 - License: zlib. See `third_party/SDL2/LICENSE.txt`.
 - The DLL must be next to the executable at run time; the CMake build will copy
   it in a post-build step.

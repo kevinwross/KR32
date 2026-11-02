@@ -106,6 +106,8 @@ CMake link/run test succeeds.
      with `${sourceDir}/third_party/SDL2/cmake`.
    - Define `SDL_MAIN_HANDLED` for the normal `main` entry point and link
      `SDL2::SDL2`; the DLL must be next to the executable at run time.
+   - Include `<SDL.h>`; this VC package has a flat include directory. The CMake
+     target adds it, and Linux works the same through pkg-config.
 4. Confirm:
    ```powershell
    & "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --version
