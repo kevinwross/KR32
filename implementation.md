@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 09:18 -08:00
+> **Last updated:** 2026-11-02 09:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -549,9 +549,11 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 
 **Status:** planning/draft. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the standalone API and `kr32-cxx` driver
-skeleton are in place. The front end is intentionally still a diagnostic stub
-until the plan is reviewed and approved. `cpp-impl.md` will be created after
-approval.
+skeleton are in place. Major decisions confirmed 2026-11-02: custom C++11 subset,
+one thread per core with cooperative oversubscription, `R11` TP, library
+matrices plus intrinsics, `double` align 8/16-byte call boundaries, and explicit
+per-thread transform stacks. The front end remains a diagnostic stub until the
+remaining review items are settled; `cpp-impl.md` will follow approval.
 
 **Tasks**
 
@@ -565,16 +567,21 @@ approval.
       merge.
 - [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
       RTTI, `new`/`delete`, static initialization.
+- [ ] Scalar `float`/`double` codegen, FP calls/spills, and ABI alignment.
+- [ ] Matrix library and intrinsics: `mat4`/`vec4`, tile allocation,
+      `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, transform-stack push/pop.
 - [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
       condition variables, `std::thread` subset.
 - [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
 - [ ] `kr32 cxx`, `kr32 build file.cpp`.
-- [ ] Tests: classes, templates, virtual calls, exceptions, threads, and
-      standard-library subset.
+- [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
+      and standard-library subset.
 
 **Test plan and gate**
 
 - [ ] C++ hello world and a class/template demo run.
+- [ ] Float/double arithmetic and calls match ISA semantics.
+- [ ] Matrix multiply/transform/dot and transform-stack tests pass.
 - [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
@@ -874,6 +881,13 @@ Newest entries at the bottom. Use the local time zone.
       standalone driver, and phase gates. Added `include/kr32/cxx/cxx.h`, the
       `kr32-cxx` driver skeleton, and the `cxx_tool_help` CTest; the compiler
       itself remains a diagnostic stub pending plan review.
+- **2026-11-02 09:27 -08:00** — Reviewed the M9 choices: custom C++11 subset,
+      one thread per core with cooperative oversubscription, `R11` as TP,
+      library matrix types plus intrinsics, `double` align 8/16-byte call
+      boundaries, and explicit per-thread transform stacks. Added `float`/
+      `double`, FP ABI, `mat4`/`vec4` intrinsics, transform-stack rules, and
+      FP/matrix test gates to the plan and checklist. Remaining decisions are
+      listed in `docs/cpp-plan.md` section 15.
 
 ## 10. Updating this file
 

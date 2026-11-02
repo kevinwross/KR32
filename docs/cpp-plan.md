@@ -1,7 +1,12 @@
 # KR32 C++ toolchain (M9) plan
 
-**Status:** draft for review, 2026-11-02. This document is the design contract for
-`kr32_cxx`; the milestone checklist remains in `implementation.md`.
+**Status:** draft for review, 2026-11-02. The major architecture decisions were
+confirmed in review: custom C++11 subset front end, one thread per core with
+cooperative oversubscription, `R11` as the thread pointer, library matrix types
+plus compiler intrinsics, 8-byte `double` alignment with 16-byte public call
+boundaries, and explicit per-thread transform-stack discipline. Remaining review
+items are listed in section 15. `implementation.md` remains the milestone
+checklist.
 
 ## 1. Goals
 
@@ -33,18 +38,22 @@ need to be ABI-compatible with MSVC, GCC, Clang, or the host standard library.
 - Binary compatibility with any existing C++ ABI.
 - Self-hosting the compiler.
 
-## 3. Proposed decisions for review
+## 3. Confirmed decisions
 
-These are defaults the implementation should follow unless review changes them.
+These decisions were confirmed during the 2026-11-02 review.
 
-| Area | Proposed decision |
+| Area | Decision |
 | --- | --- |
 | Front end | Custom recursive-descent C++ subset front end; no EDG/Clang dependency |
 | Language level | C++11-flavoured subset, not full standard conformance |
-| ABI | Documented KR32 C++ ABI, Itanium-like name mangling where practical |
+| ABI | Documented KR32 C++ ABI, Itanium-like name mangling where practical (mangling still to confirm) |
 | Object model | Extend the existing object/debug model; C and C++ share `.k32` |
 | Exceptions | Table-driven cleanup/landing pads, introduced after basic classes |
-| Threads | Guest threads mapped to KR32 cores; no host OS threads |
+| Threads | Guest threads mapped to KR32 cores; one thread per core with cooperative oversubscription; no host OS threads |
+| TLS | `R11` is the C++ thread pointer |
+| FP layout | `float` align 4; `double` align 8; 16-byte public call boundaries |
+| Matrices | `kr32::mat4`/`vec4` library types plus compiler intrinsics; `T0..T15` caller-saved |
+| Transform stack | Explicit library push/pop/drop; TSP owned by the current thread |
 | Standard library | Freestanding runtime plus a small selected `std::` subset |
 | Driver | `kr32-cxx` standalone executable plus a library API |
 | Integration | Library target first, CLI wiring last |
@@ -56,6 +65,9 @@ These are defaults the implementation should follow unless review changes them.
 
 - Fundamental types already supported by the C compiler: `bool`, `char`, `int`,
   pointers, arrays, references.
+- `float` (32-bit) and `double` (64-bit), including literals, arithmetic,
+  comparisons, conversions, NaN/infinity, and `long double` as a documented
+  alias for `double` initially.
 - Namespaces, nested names, `using` declarations.
 - Function and operator overloading.
 - Default arguments and `const` member functions.
@@ -71,9 +83,12 @@ These are defaults the implementation should follow unless review changes them.
 - Exceptions: `throw`, `try`, `catch`, destructor cleanup, rethrow.
 - `static_assert`, `nullptr`, `auto`, range-for over arrays, lambdas without
   captures first, then simple captures.
+- Matrix/transform support through the `kr32::mat4`, `kr32::vec4`, and
+  `kr32::transform` library plus compiler intrinsics (section 4.5).
 - A selected `std::` subset: `std::atomic`, `std::mutex`, `std::condition_variable`,
   `std::thread`, `std::this_thread`, `std::size_t`, `std::move`, `std::forward`,
-  `std::unique_ptr`/`shared_ptr` if runtime time permits.
+  `std::numeric_limits<float/double>` basics, `std::unique_ptr`/`shared_ptr` if
+  runtime time permits.
 
 ### 4.2 Deliberately deferred
 
@@ -93,6 +108,81 @@ These are defaults the implementation should follow unless review changes them.
 - `char` is 1 byte, `int`/pointers 4 bytes, little-endian; existing
   `docs/abi.md` data model remains the base.
 
+### 4.4 Floating-point model
+
+- `float` is IEEE-754 binary32 in FPR bits 31..0; upper 32 bits are zero.
+- `double` is IEEE-754 binary64 occupying all 64 FPR bits.
+- `long double` is initially an alias for `double`; no x87-style 80-bit format.
+- Arithmetic lowers to `FADD.S/D`, `FSUB.S/D`, `FMUL.S/D`, `FDIV.S/D`,
+  `FSQRT.S/D`, `FMIN/FMAX`, and the corresponding compares.
+- Conversion lowers to `FCVT.*.S/D` and `FCVT.S/D.*`.
+- Match the ISA semantics: round to nearest, ties to even; no FP traps; NaN
+  results are canonical; denormals supported; saturating integer conversions.
+- Float and double literals must be parsed and rounded identically by the
+  compiler and runtime.
+- FPR allocation uses `F0..F15`; spills use `FLOAD`/`FSTORE`.
+- `alignof(float) == 4`; `alignof(double) == 8`, with public call boundaries
+  aligned to 16 bytes. Aggregate layout follows these alignments.
+
+### 4.5 Matrix and transform-stack support
+
+The ISA already has what a useful matrix layer needs: sixteen 4x4 `f32` tiles
+(`T0..T15`), `MMUL`, `MMAC`, `MVEC`, `MTRANS`, `VDOT`, and a 64-byte-entry
+transform stack (`TSP` + `MPUSH`/`MPOP`/`MDROP`). The C++ layer should expose
+that without making every C++ program depend on matrix-specific syntax.
+
+The confirmed first layer is library types plus compiler intrinsics: ordinary
+C++ aggregates stored in memory, with inline functions that lower to tile
+instructions. Matrices do not become a core language type in M9.
+
+```cpp
+namespace kr32 {
+struct alignas(16) vec4 { float x, y, z, w; };
+struct alignas(16) mat4 { /* 64 bytes, row-major 4x4 f32 */ };
+
+mat4 matrix_mul(const mat4& a, const mat4& b);   // MMUL
+mat4 matrix_mul_add(const mat4& a, const mat4& b, const mat4& c); // MMAC
+vec4 transform(const mat4& m, const vec4& v);    // MVEC / VDOT
+mat4 transpose(const mat4& m);                   // MTRANS
+float dot(const vec4& a, const vec4& b);         // VDOT
+void push(const mat4& m);                        // MPUSH
+void pop(mat4& m);                               // MPOP
+void drop();                                     // MDROP
+}
+```
+
+Implementation strategy:
+
+1. **Library + intrinsics first.** `kr32::mat4` and `kr32::vec4` are ordinary
+   aggregates stored in memory; inline functions call compiler intrinsics.
+   This keeps matrix support optional and avoids changing C++ grammar.
+2. **Intrinsic codegen.** Builtins such as
+   `__builtin_kr32_mat4_mul`, `__builtin_kr32_mat4_transform`,
+   `__builtin_kr32_mat4_transpose`, `__builtin_kr32_vec4_dot`,
+   `__builtin_kr32_mat4_push/pop/drop` lower directly to tile instructions.
+3. **Tile register allocation.** Matrices are loaded into `T0..T15` only while
+   an expression is being evaluated. Tile registers are caller-saved; matrix
+   values crossing a call are passed by pointer/reference unless a future ABI
+   adds a tile-argument convention.
+4. **Transform stack discipline.** The transform stack is per thread/core.
+   `push`/`pop` are explicit in the library; the compiler does not silently
+   maintain a transform stack across a call. Temporary tile spills may use
+   `MPUSH`/`MPOP`, but the runtime must restore `TSP` on thread switch.
+5. **Pattern optimization.** Once correctness works, recognize:
+   - `mat4 C = A * B` -> `MMUL`
+   - `C += A * B` -> `MMAC`
+   - `transform(A, transform(B, v))` -> `MVEC` + `MMAC`/`MMUL` where legal
+   - `transpose(transpose(A))` -> identity
+   - transform-stack push/pop pairs that can be fused or dropped.
+6. **Constants and I/O.** Matrix constants use `MLOAD`/`VLOAD`; printing or
+   exposing matrix contents uses ordinary memory loads. No special debug type
+   is required for the first gate, but `mat4` should appear as a 4x4 value in
+   debug info later.
+
+This gives code generation a real target without making matrices part of the
+core C++ type system. A future explicit `tile` language type can be added if
+the library approach proves too limiting.
+
 ## 5. Threads and multicore model
 
 KR32 has a cooperative multicore cluster with shared RAM, IPIs, LL/SC, and a
@@ -102,13 +192,16 @@ host OS threads.
 ### 5.1 Thread model
 
 - A **guest thread** has a stack, a thread control block (TCB), an entry
-  function, a TLS block, and a lifecycle state.
+  function, a TLS block, an FP context, a transform-stack context, and a
+  lifecycle state.
 - The first implementation maps **one runnable thread per core**.
 - When there are more threads than cores, the runtime uses cooperative
   scheduling and `yield`; preemption is deferred until a timer-driven scheduler
   exists.
 - The host runner advances the cluster and handles thread-create/join services;
   there are no host `std::thread`s inside the guest.
+- A thread context switch saves/restores GPRs, FPRs, SP, and TSP. The transform
+  stack must be owned by one thread at a time, or copied/rebased on migration.
 - `Cluster` remains the scheduler authority; the compiler/runtime must not
   assume a particular core count.
 - Debugging treats threads as independent execution contexts; the UI/DAP
@@ -134,15 +227,15 @@ before implementation.
 
 ### 5.3 TLS and thread pointer
 
-`thread_local` needs a fast per-thread base. The proposed ABI extension is:
+`thread_local` needs a fast per-thread base. The confirmed ABI extension is:
 
 - **`R11` is the thread pointer (TP)** in C++ code. The C compiler currently
   uses only `R0-R7`, so reserving `R11` does not break existing C objects.
 - C code does not set or depend on `R11`; C++ entry/thunk setup does.
 - The TCB layout starts at TP and contains the TLS block, stack limits, thread
   id, and self pointer.
-- If review rejects a dedicated register, the fallback is a runtime
-  `COREID`-indexed TLS table with slower access.
+- If a future ABI revision rejects a dedicated register, the fallback is a
+  runtime `COREID`-indexed TLS table with slower access.
 
 This must be documented in `docs/abi.md` before codegen depends on it.
 
@@ -167,13 +260,19 @@ This must be documented in `docs/abi.md` before codegen depends on it.
 Extend `docs/abi.md` into one C/C++ ABI document covering:
 
 - Data layout, alignment, empty classes, padding, bit-fields if supported.
+- `float` (4-byte) and `double` (8-byte proposed) alignment and aggregate layout.
 - Name mangling grammar and examples.
 - `this` convention; member function calling convention.
+- Scalar FP arguments in `F0..F7`, FP returns in `F0`/`F1`, and `F8..F15`
+  callee-saved; mixed integer/FP argument assignment.
+- Tile registers `T0..T15` as caller-saved; matrix arguments by pointer/reference
+  in the first ABI; transform-stack (`TSP`) ownership.
 - Vtable layout, RTTI pointer, virtual destructor slots.
 - Constructor/destructor variants and return conventions.
 - Aggregate parameter/return convention.
 - Exception object layout, cleanup landing pads, and unwinding tables.
-- Thread control block, TP (`R11` proposed), and TLS layout.
+- Thread control block, TP (`R11` proposed), TLS layout, and per-thread FP/TSP
+  context save/restore.
 - Static initialization/destruction order and guard variables.
 - Weak/COMDAT symbol rules for inline functions, templates, vtables, and RTTI.
 
@@ -211,6 +310,8 @@ Freestanding runtime additions:
 - `type_info`, `dynamic_cast`/`typeid` helpers.
 - Exception allocation and cleanup runtime.
 - Thread runtime, `futex`, TLS setup, and thread entry thunk.
+- `kr32/matrix.hpp`: `mat4`, `vec4`, transform-stack helpers, and FP math
+  wrappers (`sqrtf`, `fabsf`, `fminf`, `fmaxf`, and double variants).
 - Minimal `std::` types listed in section 4.1.
 
 The initial library is intentionally small. Missing headers must produce a clear
@@ -325,6 +426,10 @@ tests/cxx/                       C++ compiler tests
 ### Integration
 
 - Compile, assemble, link, run C++ programs through the existing tools.
+- Float/double arithmetic, literals, conversions, comparisons, NaN/infinity, and
+  FP spills.
+- Matrix multiply, transform, transpose, dot product, and transform-stack
+  push/pop/drop against scalar reference results.
 - Multiple translation units, headers, inline functions, weak/COMDAT.
 - Classes, inheritance, virtual calls, constructors/destructors.
 - Templates and explicit specializations.
@@ -347,37 +452,41 @@ when available.
    diagnostics; no codegen yet.
 3. **Functions, namespaces, references, overloads.** Run C-style C++ through
    link/run.
-4. **Classes and objects.** Layout, constructors/destructors, `this`, single
+4. **Scalar float/double.** Literals, FPR allocation, arithmetic, conversions,
+   compares, calls, and spills.
+5. **Classes and objects.** Layout, constructors/destructors, `this`, single
    inheritance.
-5. **Virtual dispatch and RTTI.** Vtables, typeinfo, dynamic_cast.
-6. **Templates and static initialization.** COMDAT and init arrays.
-7. **`new`/`delete`, exceptions, cleanup.**
-8. **Thread runtime, TLS, atomics, mutex/condvar, `std::thread` subset.**
-9. **Debug info and GUI/DAP integration.**
-10. **CLI integration, `build file.cpp`, cross-platform gate, tag `m9`.**
+6. **Virtual dispatch and RTTI.** Vtables, typeinfo, dynamic_cast.
+7. **Matrix/transform intrinsics and library.** `T0..T15`, `MMUL`/`MMAC`/
+   `MVEC`/`MTRANS`/`VDOT`, and explicit transform-stack push/pop.
+8. **Templates and static initialization.** COMDAT and init arrays.
+9. **`new`/`delete`, exceptions, cleanup.**
+10. **Thread runtime, TLS, atomics, mutex/condvar, `std::thread` subset.**
+11. **Debug info and GUI/DAP integration.**
+12. **CLI integration, `build file.cpp`, cross-platform gate, tag `m9`.**
 
-Threads are phase 8 rather than an afterthought because TP/TLS and atomic
-lowering affect ABI and codegen decisions made earlier.
+Threads are late in the sequence but not an afterthought: TP/TLS, FP context
+save/restore, and transform-stack ownership are ABI decisions made before codegen
+begins.
 
 ## 15. Open questions for review
 
-1. **Front end:** custom subset (recommended) vs EDG/Clang?
-2. **Language scope:** is the section 4.1 subset the right M9 gate?
-3. **Threads:** one thread per core with cooperative oversubscription
-   (recommended), or a full preemptive scheduler first?
-4. **Thread pointer:** reserve `R11` as TP (recommended), or use a slower
-   `COREID` TLS table?
-5. **Exceptions:** table-driven cleanup (recommended), or a simpler
-   `setjmp`-style runtime initially?
-6. **Standard library:** is the minimal `std::` subset enough, or is a named
+1. **Language scope:** is the section 4.1 subset the right M9 gate, including
+   `float`/`double` and the listed matrix library surface?
+2. **Exceptions:** table-driven cleanup (confirmed direction) — do we require
+   destructor unwinding in the first exception gate, or can the first gate be
+   throw/catch without full cleanup?
+3. **Standard library:** is the minimal `std::` subset enough, or is a named
    container/string subset required for the gate?
-7. **Name mangling:** Itanium-like (recommended) or a smaller custom scheme?
-8. **Debug:** must class members/`this`/templates be in the first GUI gate, or
+4. **FP library:** is scalar `<cmath>`-style math plus `numeric_limits` enough,
+   or is formatted FP I/O required as well?
+5. **Name mangling:** Itanium-like (recommended) or a smaller custom scheme?
+6. **Debug:** must class members/`this`/templates be in the first GUI gate, or
    can they land after the core compiler?
-9. **Driver:** is `kr32-cxx` acceptable as the standalone name and root CMake
+7. **Driver:** is `kr32-cxx` acceptable as the standalone name and root CMake
    target?
-10. **Repository workflow:** separate worktree/branch for M9, or direct work in
-    the current tree?
+8. **Repository workflow:** separate worktree/branch for M9, or direct work in
+   the current tree?
 
 ## 16. Risks
 
@@ -385,6 +494,8 @@ lowering affect ABI and codegen decisions made earlier.
 | --- | --- | --- |
 | Full C++ scope | Never ships | Freeze subset; reject unsupported features clearly |
 | ABI churn | Rework codegen/runtime | Freeze layout/mangling/TLS before phase 3 |
+| Float/double layout mismatch | Broken structs/ABI | Freeze alignment and FP calling convention early |
+| Matrix abstraction leaks | Poor codegen | Library+intrinsics first; measure tile spills |
 | Thread model underspecified | Broken TLS/scheduler | Decide TP and thread services before phase 3 |
 | COMDAT/linker gaps | Duplicate template/vtable symbols | Audit before phase 6 |
 | Debug format too C-specific | GUI cannot inspect C++ | Extend records in phase 5/9 |
@@ -395,11 +506,12 @@ lowering affect ABI and codegen decisions made earlier.
 
 Before handing this to a subagent:
 
-- [ ] Confirm custom front end vs external front end.
-- [ ] Confirm language subset and thread/exception scope.
-- [ ] Confirm `R11` TP or alternative.
+- [x] Confirm custom front end vs external front end.
+- [ ] Confirm language subset, including float/double and the matrix surface,
+      and thread/exception scope.
+- [x] Confirm `R11` TP.
 - [ ] Confirm standalone driver name and directory layout.
-- [ ] Confirm `docs/cpp-plan.md` is the design source of truth.
+- [x] Confirm `docs/cpp-plan.md` is the design source of truth.
 - [ ] Confirm worktree/branch strategy.
 
 Once approved, create `cpp-impl.md` as the live task/status tracker and keep this
