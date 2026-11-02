@@ -57,8 +57,10 @@ expanded row shows that core's PC/SP/FLAGS, GPRs, F0-F15, TSP and T0 tile,
 paging registers, and control registers. F0-F15 are shown in two columns of
 eight. The FPR header has a **DOUBLE / FLOAT** toggle: DOUBLE interprets the full
 64-bit register, while FLOAT interprets the low 32 bits used by `.S`
-instructions. Click an FPR to open the floating-point editor. Click a core row
-to select it or collapse/expand its details. The **MEMORY** panel is docked
+instructions. In DOUBLE view, a register whose upper 32 bits are zero is also
+labelled with its float value (`f32`), since that is how `.W` loads and
+`.S` results appear. Click an FPR to open the floating-point editor. Click a core
+row to select it or collapse/expand its details. The **MEMORY** panel is docked
 beneath the source pane and shows four address/hex/ASCII lines. **VARIABLES**,
 **CALL STACK**, and **CONSOLE** remain visible along the bottom row.
 
@@ -81,8 +83,9 @@ one 16-byte row.
   `3.14152`, `100.00`, `100`, and `1E2`; Enter commits and Escape cancels.
   The **DOUBLE / FLOAT** toggle selects whether the value is interpreted as a
   64-bit double or the low 32-bit float from `.S` operations.
-  Hovering an FPR shows the signed decimal value, signed scientific value, and
-  the raw 64-bit hex encoding for the active view.
+  Hovering an FPR shows the signed decimal value, signed scientific value,
+  the float interpretation when the upper half is zero, and the raw 64-bit hex
+  encoding.
 - The core flag row shows **Z N C V I K**. Click Z/N/C/V/I to toggle the bit;
   K is the current privilege mode and is read-only.
 - Hovering a variable row shows a tooltip with its local/global kind, type,

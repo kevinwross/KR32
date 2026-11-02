@@ -743,18 +743,26 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
     y += 17;
     for (int row = 0; row < 8; ++row) {
         for (int column = 0; column < 2; ++column) {
-            const int index = row + column * 8;
+            const std::int32_t index = row + column * 8;
             const int x = rect.x + column * column_width;
             const std::uint64_t bits = machine.fpr(static_cast<std::size_t>(index));
+            const std::uint32_t low_bits = static_cast<std::uint32_t>(bits & 0xFFFFFFFFU);
+            const bool float_like = !fpr_float_view_ && (bits >> 32) == 0 && low_bits != 0;
             std::string display =
                 fpr_float_view_
-                    ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), false)
+                    ? format_fpr_float(low_bits, false)
                     : format_fpr(bits, false);
+            if (float_like) {
+                display = format_fpr_float(low_bits, false) + " f32";
+            }
             if (Canvas::text_width(display, FontRole::MonoSmall) > column_width - 36) {
-                display =
-                    fpr_float_view_
-                        ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), true)
-                        : format_fpr(bits, true);
+                if (float_like) {
+                    display = format_fpr_float(low_bits, true) + " f32";
+                } else {
+                    display =
+                        fpr_float_view_ ? format_fpr_float(low_bits, true)
+                                        : format_fpr(bits, true);
+                }
             }
             const Rect cell{x - 2, y - 2, column_width - 4, 16};
             fpr_cells_.push_back(cell);
@@ -1025,13 +1033,17 @@ void DebuggerUI::draw_fpr_tooltip(Canvas& canvas) {
     const std::string scientific_text =
         fpr_float_view_ ? format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), true)
                         : format_fpr(bits, true);
-    const std::vector<std::string> lines{
+    std::vector<std::string> lines{
         "F" + std::to_string(hover_fpr_) + (fpr_float_view_ ? "  (float)" : "  (double)"),
         "decimal: " + decimal_text,
         "scientific: " + scientific_text,
-        "hex: 0x" + hex(static_cast<std::uint32_t>(bits >> 32), 8) +
-            hex(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), 8),
     };
+    if ((bits >> 32) == 0) {
+        lines.push_back(
+            "float: " + format_fpr_float(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), false));
+    }
+    lines.push_back("hex: 0x" + hex(static_cast<std::uint32_t>(bits >> 32), 8) +
+                    hex(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU), 8));
     int width = 0;
     for (const std::string& line : lines) {
         width = std::max(width, Canvas::text_width(line, FontRole::MonoSmall));
