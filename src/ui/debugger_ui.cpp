@@ -716,6 +716,27 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             canvas.text(rect.x + 10, y, variable.name + " = " + (ok ? "0x" + hex(value, 8) : "?"),
                         ok ? kText : kBad, FontRole::MonoSmall);
             y += 14;
+            if (ok && !variable.type.empty() && variable.type.back() == '*') {
+                for (const debug::ClassInfo& klass : session_.info().classes) {
+                    if (variable.type.find(klass.name) == std::string::npos) {
+                        continue;
+                    }
+                    for (const debug::Member& member : klass.members) {
+                        if (y > rect.y + rect.height - 30) {
+                            break;
+                        }
+                        std::uint32_t member_value = 0;
+                        const bool member_ok = session_.read_memory(
+                            value + member.offset, member.size, member_value);
+                        canvas.text(rect.x + 20, y,
+                                    "." + member.name + " = " +
+                                        (member_ok ? "0x" + hex(member_value, 8) : "?"),
+                                    member_ok ? kDim : kBad, FontRole::MonoSmall);
+                        y += 14;
+                    }
+                    break;
+                }
+            }
         }
     }
     if (!session_.info().globals.empty() && y < rect.y + rect.height - 30) {

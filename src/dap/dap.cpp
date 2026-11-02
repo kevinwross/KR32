@@ -643,6 +643,8 @@ private:
                 send(response(request, false));
                 return;
             }
+            object_refs_.clear();
+            next_object_ref_ = 100;
             prepare_stop();
             send(response(request, true));
         } else if (command == "setBreakpoints") {
@@ -752,31 +754,66 @@ private:
                     ? arguments->get("variablesReference")->as_number()
                     : 1;
             Json variables = Json::array_value();
+            auto find_class = [&](std::string type) -> const debug::ClassInfo* {
+                while (!type.empty() && (type.back() == '*' || type.back() == '&')) {
+                    type.pop_back();
+                }
+                for (const debug::ClassInfo& klass : session_.info().classes) {
+                    if (klass.name == type ||
+                        (type.size() > klass.name.size() &&
+                         type.compare(type.size() - klass.name.size(),
+                                      klass.name.size(), klass.name) == 0)) {
+                        return &klass;
+                    }
+                }
+                return nullptr;
+            };
+            auto make_entry = [&](const std::string& name, const std::string& type,
+                                  std::uint32_t address) {
+                std::uint32_t value = 0;
+                (void)session_.read_memory(address, 4, value);
+                Json entry = Json::object_value();
+                entry.set("name", Json::string_value(name));
+                entry.set("value", Json::string_value("0x" + hex(value)));
+                entry.set("type", Json::string_value(type));
+                std::int64_t object_reference = 0;
+                bool pointer = !type.empty() && type.back() == '*';
+                const debug::ClassInfo* klass = find_class(type);
+                if (klass != nullptr) {
+                    object_reference = next_object_ref_++;
+                    object_refs_[object_reference] =
+                        ObjectRef{pointer ? value : address, klass->name};
+                }
+                entry.set("variablesReference", Json::number_value(object_reference));
+                return entry;
+            };
             if (reference == 1) {
                 const debug::Frame& frame = selected_.id == 0 && !frames_.empty()
                                                 ? frames_.front().frame
                                                 : selected_.frame;
                 for (const debug::Variable& variable : session_.info().variables) {
                     if (variable.function != frame.function) continue;
-                    std::uint32_t value = 0;
-                    (void)session_.read_memory(frame.frame_pointer + variable.offset,
-                                               variable.size, value);
-                    Json entry = Json::object_value();
-                    entry.set("name", Json::string_value(variable.name));
-                    entry.set("value", Json::string_value("0x" + hex(value)));
-                    entry.set("type", Json::string_value(variable.type));
-                    entry.set("variablesReference", Json::number_value(0));
-                    variables.array.push_back(std::move(entry));
+                    variables.array.push_back(make_entry(
+                        variable.name, variable.type,
+                        frame.frame_pointer + variable.offset));
+                }
+            } else if (reference == 2) {
+                for (const debug::Global& global : session_.info().globals) {
+                    variables.array.push_back(
+                        make_entry(global.name, global.type, global.address));
                 }
             } else {
-                for (const debug::Global& global : session_.info().globals) {
-                    std::uint32_t value = 0;
-                    (void)session_.read_global(global.name, value, error_);                    Json entry = Json::object_value();
-                    entry.set("name", Json::string_value(global.name));
-                    entry.set("value", Json::string_value("0x" + hex(value)));
-                    entry.set("type", Json::string_value(global.type));
-                    entry.set("variablesReference", Json::number_value(0));
-                    variables.array.push_back(std::move(entry));
+                const auto found = object_refs_.find(reference);
+                if (found != object_refs_.end()) {
+                    for (const debug::ClassInfo& klass : session_.info().classes) {
+                        if (klass.name != found->second.klass) continue;
+                        for (const debug::Member& member : klass.members) {
+                            variables.array.push_back(make_entry(
+                                member.name, member.type,
+                                found->second.address + member.offset));
+                        }
+                        break;
+                    }
                 }
             }
             Json body = Json::object_value();
@@ -881,6 +918,14 @@ private:
         debug::Frame frame;
         std::int64_t id = 0;
     };
+
+    struct ObjectRef {
+        std::uint32_t address = 0;
+        std::string klass;
+    };
+
+    std::map<std::int64_t, ObjectRef> object_refs_;
+    std::int64_t next_object_ref_ = 100;
 
     Channel& channel_;
     std::string image_path_;

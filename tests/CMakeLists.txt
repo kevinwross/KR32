@@ -78,6 +78,14 @@ set_tests_properties(cli_help PROPERTIES
 add_test(NAME cli_stub COMMAND $<TARGET_FILE:kr32> build)
 set_tests_properties(cli_stub PROPERTIES WILL_FAIL TRUE)
 
+add_test(NAME cli_cxx_help COMMAND $<TARGET_FILE:kr32> cxx --help)
+set_tests_properties(cli_cxx_help PROPERTIES PASS_REGULAR_EXPRESSION "kr32 cxx")
+
+add_test(NAME run_cxx_demo
+    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/hello.cpp --run
+            -o ${CMAKE_BINARY_DIR}/hello-cxx.k32)
+set_tests_properties(run_cxx_demo PROPERTIES PASS_REGULAR_EXPRESSION "HALTED exit=42")
+
 add_test(NAME run_demo
     COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)
 set_tests_properties(run_demo PROPERTIES

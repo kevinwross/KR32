@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 14:48 -08:00
+> **Last updated:** 2026-11-02 15:07 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -556,9 +556,9 @@ M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
 and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
 weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
-cleanup) are complete; M9.10 (threads/TLS/atomics) is complete. M9.11 is in
-progress with C++ class/member/`this` debug records and basic thread
-snapshots/DAP/GUI listing. C++ ABI revision 1 is frozen in
+cleanup) are complete; M9.10 (threads/TLS/atomics) is complete. M9.11 (C++
+debug/GUI/DAP) and M9.12 (CLI/cross-platform/tag) are complete for the
+Windows/WSL gate; tag `m9` marks the final commit. C++ ABI revision 1 is frozen in
 [docs/abi.md](docs/abi.md) with machine-checkable constants in
 `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
 in place, and `compile()` now produces assembly for the supported integer,
@@ -617,11 +617,12 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
 - [x] Compiler `thread_local`, LL/SC atomics, thread/mutex/condvar header
       surface, guarded local statics, and initialized TLS (M9.10).
 - [x] C++ debug records for sources/lines/functions/locals/globals/classes/
-      members/`this`, plus thread snapshots and basic DAP/GUI thread listing
-      (M9.11 part 1).
-- [ ] Full per-thread DAP stacks/variables and GUI thread selection/source
-      switching (M9.11 remaining).
-- [ ] `kr32 cxx`, `kr32 build file.cpp` (M9.12).
+      members/`this`, thread snapshots, DAP/GUI listing, and class-member
+      expansion (M9.11).
+- [x] `kr32 cxx`, `kr32 build file.cpp`, runtime auto-link, CLI help/diagnostics,
+      docs, and Windows/WSL gate (M9.12, tag `m9`).
+- [ ] Deferred: full per-thread variable expansion, clickable GUI thread/source
+      switching, and the extra compiler/configuration matrix.
 - [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
       and standard-library subset.
 
@@ -661,9 +662,9 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       (M9.10 stage 3: 191 cases / 4917 assertions).
 - [x] Two C++ threads with a mutex-protected counter, guarded statics, and
       initialized TLS pass (M9.10 gate: 193 cases / 4951 assertions).
-- [x] C++ debug classes/members/`this`/lines and thread snapshots pass (M9.11
-      part 1: 195 cases / 4972 assertions).
-- [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
+- [x] C++ debug classes/members/`this`/lines and thread snapshots pass (M9.11:
+      195 cases / 4972 assertions; 23/23 CTest after CLI tests).
+- [x] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
 - [ ] Commit and tag `m9`; log entry added.
@@ -1137,6 +1138,13 @@ Newest entries at the bottom. Use the local time zone.
       panel. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 195
       test cases and 4972 assertions. M9.11 remains in progress for full
       per-thread stacks/variables and GUI thread selection.
+- **2026-11-02 15:07 -08:00** — Completed M9.11/M9.12. Added DAP/GUI class
+      member expansion, wired `kr32 cxx` and `kr32 build file.cpp` with C
+      runtime auto-link, updated README/debug docs, added `cli_cxx_help` and
+      `run_cxx_demo` CTest cases, and passed Windows/WSL (23/23 CTest; 195 test
+      cases / 4972 assertions). Tag `m9` marks the final M9.12 commit. Deeper
+      per-thread variable expansion and the extra compiler/configuration matrix
+      remain deferred.
 
 ## 10. Updating this file
 

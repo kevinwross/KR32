@@ -15,6 +15,8 @@ The compiler emits NUL-terminated text records into `.debug_info`:
 | `V <function> <name> <offset> <type> <size>` | Local/parameter at `R7 + offset` |
 | `G <name> <label> <type> <size>` | Global at the address of `label` |
 | `T <name> <size>` | Type table entry |
+| `C <class> <size> <base>` | C++ class layout |
+| `M <class> <name> <offset> <type> <size>` | C++ member at a class offset |
 
 Labels are resolved against the linked image's symbol table when the debug info
 is loaded. This keeps the format relocatable without changing the object model;
@@ -52,7 +54,9 @@ future GUI and DAP layers consume the same `Session`.
 ## Current limits
 
 - Line records are emitted at statement boundaries, not every instruction.
-- Struct/union member debug records are not emitted yet; scalar/pointer/array
-  and aggregate size information is present.
+- C++ emits class/member and `this` records; template-instance and namespace
+  scope records are still deferred.
+- Thread snapshots (`ThreadInfo`) are exposed by `debug::Session`, DAP `threads`,
+  and the GUI call-stack panel; per-thread variable/stack expansion is partial.
 - Debug labels are resolved at load time rather than through linker
   relocations.

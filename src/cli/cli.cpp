@@ -5,6 +5,7 @@
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
+#include "kr32/cxx/cxx.h"
 #include "kr32/dap/dap.h"
 #include "kr32/debug/debug.h"
 #include "kr32/dis/disassembler.h"
@@ -137,6 +138,15 @@ bool is_container(const std::string& path) {
 bool is_c_source(const std::string& path) {
     const std::size_t dot = path.find_last_of('.');
     return dot != std::string::npos && lower(path.substr(dot + 1)) == "c";
+}
+
+bool is_cxx_source(const std::string& path) {
+    const std::size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos) {
+        return false;
+    }
+    const std::string extension = lower(path.substr(dot + 1));
+    return extension == "cpp" || extension == "cc" || extension == "cxx";
 }
 
 std::string fault_name(core::FaultKind kind);
@@ -331,12 +341,6 @@ void print_vm_usage() {
     std::printf("Usage: kr32 vm <file> [--bios <rom>] [--base <addr>] [--max-steps <n>] "
                 "[--ram-size <n>] [--trace] [--stats] [--fs-root <dir>] [--read-only] "
                 "[--quota <bytes>] [--arg <value>] [--input <text>]\n");
-}
-
-int not_implemented(std::string_view command) {
-    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M9 C++ toolchain).\n",
-                 static_cast<int>(command.size()), command.data());
-    return 2;
 }
 
 int command_as(int argc, char** argv) {
@@ -759,6 +763,31 @@ int command_build(int argc, char** argv) {
             return 1;
         }
         objects.push_back(std::move(runtime));
+    } else if (is_cxx_source(source)) {
+        cxx::Options cxx_options;
+        cxx_options.source_name = source;
+        const cxx::Result compiled = cxx::compile(text, cxx_options);
+        if (!compiled.ok) {
+            for (const cxx::Diagnostic& diagnostic : compiled.diagnostics) {
+                std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
+                             diagnostic.column, diagnostic.message.c_str());
+            }
+            return 1;
+        }
+        container::Image user;
+        if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
+            std::fprintf(stderr, "kr32 build: %s:%d: %s\n", source.c_str(),
+                         assembly_error.line, assembly_error.message.c_str());
+            return 1;
+        }
+        objects.push_back(std::move(user));
+        container::Image runtime;
+        if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
+            std::fprintf(stderr, "kr32 build: runtime: %s\n",
+                         assembly_error.message.c_str());
+            return 1;
+        }
+        objects.push_back(std::move(runtime));
     } else {
         container::Image object;
         if (!assembler::assemble_object(text, object, assembly_error)) {
@@ -891,6 +920,91 @@ int command_cc(int argc, char** argv) {
     }
     if (!write_file(output, object_bytes, error)) {
         std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
+        return 1;
+    }
+    std::printf("wrote object to %s\n", output.c_str());
+    return 0;
+}
+
+void print_cxx_usage() {
+    std::printf("Usage: kr32 cxx <file.cpp> [-S] [-o <path>]\n");
+}
+
+int command_cxx(int argc, char** argv) {
+    std::string source;
+    std::string output;
+    bool assembly_only = false;
+    for (int index = 2; index < argc; ++index) {
+        const std::string_view argument(argv[index]);
+        if (argument == "--help" || argument == "-h") {
+            print_cxx_usage();
+            return 0;
+        }
+        if (argument == "-S") {
+            assembly_only = true;
+            continue;
+        }
+        if (argument == "-o") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 cxx: -o needs a path\n");
+                return 2;
+            }
+            output = argv[++index];
+            continue;
+        }
+        if (!source.empty()) {
+            std::fprintf(stderr, "kr32 cxx: unexpected argument\n");
+            return 2;
+        }
+        source = std::string(argument);
+    }
+    if (source.empty()) {
+        print_cxx_usage();
+        return 2;
+    }
+    if (output.empty()) {
+        output = assembly_only ? "a.s" : "a.o";
+    }
+    std::vector<std::uint8_t> bytes;
+    std::string error;
+    if (!read_file(source, bytes, error)) {
+        std::fprintf(stderr, "kr32 cxx: %s\n", error.c_str());
+        return 1;
+    }
+    const std::string text(bytes.begin(), bytes.end());
+    cxx::Options options;
+    options.source_name = source;
+    const cxx::Result compiled = cxx::compile(text, options);
+    if (!compiled.ok) {
+        for (const cxx::Diagnostic& diagnostic : compiled.diagnostics) {
+            std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
+                         diagnostic.column, diagnostic.message.c_str());
+        }
+        return 1;
+    }
+    if (assembly_only) {
+        if (!write_text(output, compiled.assembly, error)) {
+            std::fprintf(stderr, "kr32 cxx: %s\n", error.c_str());
+            return 1;
+        }
+        std::printf("wrote assembly to %s\n", output.c_str());
+        return 0;
+    }
+    container::Image object;
+    assembler::Error assembly_error;
+    if (!assembler::assemble_object(compiled.assembly, object, assembly_error)) {
+        std::fprintf(stderr, "kr32 cxx: %s:%d: %s\n", source.c_str(), assembly_error.line,
+                     assembly_error.message.c_str());
+        return 1;
+    }
+    std::vector<std::uint8_t> object_bytes;
+    container::Error container_error;
+    if (!container::write(object, object_bytes, container_error)) {
+        std::fprintf(stderr, "kr32 cxx: %s\n", container_error.message.c_str());
+        return 1;
+    }
+    if (!write_file(output, object_bytes, error)) {
+        std::fprintf(stderr, "kr32 cxx: %s\n", error.c_str());
         return 1;
     }
     std::printf("wrote object to %s\n", output.c_str());
@@ -1272,6 +1386,9 @@ int run(int argc, char** argv) {
     if (command == "cc") {
         return command_cc(argc, argv);
     }
+    if (command == "cxx") {
+        return command_cxx(argc, argv);
+    }
     if (command == "debug") {
         return command_debug(argc, argv);
     }
@@ -1280,13 +1397,6 @@ int run(int argc, char** argv) {
     }
     if (command == "dap") {
         return command_dap(argc, argv);
-    }
-
-    for (const std::string_view candidate :
-         {"cxx"}) {
-        if (command == candidate) {
-            return not_implemented(command);
-        }
     }
 
     std::fprintf(stderr, "kr32: unknown command '%.*s'.\n",

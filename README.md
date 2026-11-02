@@ -18,8 +18,10 @@ disassembly hover help for instructions and addressing modes, an expandable
 CORES panel, a four-line memory dump docked under the source pane with an
 editable start address, and always-visible variables, call-stack, and console
 panels. See
-[docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++
-toolchain is the remaining planned milestone.
+[docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++ M9
+subset is implemented through exceptions, matrices, threads/TLS/atomics, and
+C++ debug records; see [cpp-impl.md](cpp-impl.md) for the remaining GUI/DAP
+thread polish and deferred features.
 
 ## Build
 
@@ -97,8 +99,9 @@ object. `build` runs compile/assemble, link, and optional `--run` in one
 command. `size` reports `.k32` sections and `debug` dumps the `.debug_info`
 records. `gui` opens the source/disassembly debugger or renders headless PPM
 screenshots. `shell` runs tool commands interactively or from piped input, and
-`dap` exposes the debugger to DAP clients. The `cxx` command remains a stub for
-M9.
+`dap` exposes the debugger to DAP clients. `cxx` compiles a C++ source to
+assembly or an object, and `build file.cpp` compiles, links the C++ runtime,
+and optionally runs the result.
 
 ## Layout
 

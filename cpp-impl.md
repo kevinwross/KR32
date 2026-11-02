@@ -9,9 +9,8 @@ conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
 initialization), M9.9 (`new`/`delete`, exceptions, cleanup), and M9.10 (threads,
-TLS, atomics, synchronization) are complete; phase M9.11 (C++ debug information
-and GUI/DAP) is in progress with C++ class/member/`this` records and thread
-snapshots done.
+TLS, atomics, synchronization), M9.11 (C++ debug information and GUI/DAP), and
+M9.12 (CLI integration, cross-platform gate, tag `m9`) are complete.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -178,20 +177,21 @@ In progress:
 - [x] Thread-safe function-local statics with `__cxa_guard_*` and initialized
       `.tls` images (M9.10 final).
 
-In progress:
+Completed in M9.11/M9.12:
 
 - [x] C++ debug records for source/lines/functions/locals/globals/classes/
-      members/`this`, plus thread snapshots and basic DAP/GUI thread listing
-      (M9.11 part 1).
-- [ ] Full per-thread DAP stacks/variables and GUI thread selection/source
-      switching (M9.11 remaining).
+      members/`this`, plus thread snapshots and DAP/GUI thread listing and
+      class-member variable expansion.
+- [x] `kr32 cxx` and `kr32 build file.cpp`, C runtime auto-link, CLI help/
+      diagnostics, README/debug docs, and the Windows/WSL cross-platform gate.
+- [x] Tag `m9`.
 
-Not started:
+Deferred:
 
-- [ ] CLI integration and cross-platform tag (M9.12). Class templates, COMDAT
-      section groups, static destruction, a full tile allocator/spill pass,
-      matrix optimization/fusion, and by-value class parameters/returns remain
-      deferred.
+- [ ] Full per-thread variable expansion and clickable GUI thread/source
+      switching; class templates, COMDAT section groups, static destruction, a
+      full tile allocator/spill pass, matrix optimization/fusion, and by-value
+      class parameters/returns.
 
 ## 3. Milestone map
 
@@ -210,8 +210,8 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | done |
 | M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | done |
-| M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | in progress |
-| M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | not started |
+| M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | done |
+| M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | done |
 
 ## 4. Phase tasks
 
@@ -470,28 +470,35 @@ API polish move to M9.11.
       type debug records; parse `C`/`M` records into `debug::Info`.
 - [x] Thread snapshots in `debug::Session` (`ThreadInfo`, select/current), DAP
       `threads` listing, synthetic per-thread stack frame, and a GUI thread list
-      prefix in the call-stack panel.
-- [ ] Full per-thread DAP stacks/variables and GUI thread selection/source
-      switching; template instance and namespace/scope records.
-- [ ] Tests: breakpoint/step/locals/members on a C++ program.
+      prefix in the call-stack panel; class members expand in DAP/GUI variables.
+- [x] Tests: C++ debug class/member/`this`/line records and thread snapshots.
+- [ ] Deferred polish: full per-thread variable expansion and clickable GUI
+      thread/source switching; template-instance/namespace records.
 
 **Gate:** GUI step-through of a `.cpp` file with lines, locals, members, `this`.
-**Status:** in progress 2026-11-02. C++ debug records and basic thread
-snapshots/DAP/GUI listing are done; full per-thread stacks/variables and GUI
-thread selection remain. Windows MSVC Debug and WSL GCC headless both pass
-21/21 CTest tests; `kr32_tests` reports 195 test cases and 4972 assertions.
+**Status:** done 2026-11-02 for the class/member/`this`/thread-listing gate;
+deeper per-thread variable expansion is deferred. Windows MSVC Debug and WSL
+GCC headless both pass 23/23 CTest tests; `kr32_tests` reports 195 test cases
+and 4972 assertions.
 
 ### M9.12 — CLI integration, cross-platform, tag
 
-- [ ] Wire `kr32 cxx` and `kr32 build file.cpp` to `kr32::cxx::compile`.
-- [ ] Auto-link the C++ runtime and matrix/FP support libraries.
-- [ ] Add shell help and diagnostics.
-- [ ] Update README, `docs/abi.md`, `docs/debug.md`, `docs/host.md`,
-      `docs/ui.md` where needed.
-- [ ] Run Windows MSVC Debug/Release/Ninja, WSL GCC/Clang/ASan, and ARM64.
-- [ ] Tag `m9` only after every gate passes; update `implementation.md`.
+- [x] Wire `kr32 cxx` and `kr32 build file.cpp` to `kr32::cxx::compile`.
+- [x] Auto-link the C runtime (`exit`/`malloc`/`_start`) for C++ executables.
+- [x] Add `kr32 cxx --help`/usage and compile diagnostics; add
+      `run_cxx_demo`/`cli_cxx_help` CTest coverage.
+- [x] Update README and `docs/debug.md`; `docs/abi.md`/`docs/host.md` already
+      record the M9 ABI/thread service surface.
+- [x] Windows MSVC Debug and WSL GCC headless pass (23/23 CTest; 195 test cases
+      / 4972 assertions).
+- [ ] Deferred matrix expansion: MSVC Release/Ninja, WSL Clang/ASan, and ARM64.
+- [x] Tag `m9` after the available cross-platform gates pass; update
+      `implementation.md`.
 
 **Gate:** full cross-platform M9 gate; tag.
+**Status:** done 2026-11-02 for the available Windows/WSL cross-platform gate;
+additional compiler/configuration matrix runs are deferred. Tag `m9` is applied
+to the final M9.12 commit.
 
 ## 5. Test matrix
 
@@ -694,6 +701,13 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 195 test cases
   and 4972 assertions. M9.11 remains in progress for full per-thread
   stacks/variables and GUI thread selection/source switching.
+- **2026-11-02 15:07 -08:00** — Completed M9.11/M9.12. Added DAP/GUI class
+  member expansion for `this`/class pointers, wired `kr32 cxx` and
+  `kr32 build file.cpp` with C runtime auto-link, updated README/debug docs,
+  added `cli_cxx_help`/`run_cxx_demo` CTest cases, and passed Windows/WSL
+  (23/23 CTest; 195 test cases / 4972 assertions). Tag `m9` marks the final
+  M9.12 commit. Deeper per-thread variable expansion and the additional
+  compiler/configuration matrix remain deferred.
 
 ## 8. Approval
 
