@@ -74,6 +74,11 @@ private:
     void finish_memory_address_edit(bool commit);
     void begin_register_edit(int index);
     void finish_register_edit(bool commit);
+    void begin_fpr_edit(int index);
+    void finish_fpr_edit(bool commit);
+    void draw_fpr_popup(Canvas& canvas);
+    void draw_fpr_tooltip(Canvas& canvas);
+    [[nodiscard]] std::string format_fpr(std::uint64_t value, bool scientific) const;
     void draw_variable_tooltip(Canvas& canvas);
     void draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total, int visible,
                         Rect& track, Rect& thumb);
@@ -128,11 +133,20 @@ private:
     std::string register_edit_;
     bool register_edit_fresh_ = true;
     std::vector<Rect> register_cells_;
+    std::vector<Rect> fpr_cells_;
     Rect pc_cell_{};
     Rect sp_cell_{};
     Rect flags_value_cell_{};
     std::vector<Rect> flag_cells_;
     int hover_flag_ = -1;
+    int hover_fpr_ = -1;
+    int editing_fpr_ = -1;
+    std::string fpr_edit_;
+    bool fpr_edit_fresh_ = true;
+    Rect fpr_popup_{};
+    Rect fpr_input_rect_{};
+    Rect fpr_ok_rect_{};
+    Rect fpr_cancel_rect_{};
 
     struct VarHoverRow {
         Rect row{};
