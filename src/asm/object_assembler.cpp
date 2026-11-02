@@ -41,6 +41,7 @@ struct Label {
     std::uint32_t section = 0;
     std::uint32_t offset = 0;
     bool global = false;
+    bool weak = false;
 };
 
 std::string trim(std::string_view text) {
@@ -571,11 +572,14 @@ private:
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
-        if (name == ".global" || name == ".globl") {
+        if (name == ".global" || name == ".globl" || name == ".weak") {
             if (statement.operands.size() != 1) {
-                return fail(statement.line, ".global expects one name");
+                return fail(statement.line, ".global/.weak expects one name");
             }
             globals_.insert(statement.operands[0]);
+            if (name == ".weak") {
+                weak_symbols_.insert(statement.operands[0]);
+            }
             externs_.erase(statement.operands[0]);
             return true;
         }
@@ -1298,9 +1302,14 @@ private:
         }
 
         for (const auto& [name, label] : labels_) {
-            image.symbols.push_back({name, label.offset, 0, static_cast<std::uint16_t>(label.section),
-                                     label.global ? container::SymbolBind::Global
-                                                  : container::SymbolBind::Local});
+            container::SymbolBind bind = container::SymbolBind::Local;
+            if (label.global) {
+                bind = weak_symbols_.find(name) != weak_symbols_.end()
+                           ? container::SymbolBind::Weak
+                           : container::SymbolBind::Global;
+            }
+            image.symbols.push_back({name, label.offset, 0,
+                                     static_cast<std::uint16_t>(label.section), bind});
         }
         for (const std::string& name : externs_) {
             if (labels_.find(name) == labels_.end()) {
@@ -1317,8 +1326,8 @@ private:
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
-        if (name == ".global" || name == ".globl" || name == ".extern" ||
-            name == ".equ" || name == ".set") {
+        if (name == ".global" || name == ".globl" || name == ".weak" ||
+            name == ".extern" || name == ".equ" || name == ".set") {
             return true;
         }
         if (name == ".word") {
@@ -1417,6 +1426,7 @@ private:
     std::map<std::string, std::int64_t> constants_;
     std::map<std::string, Label> labels_;
     std::set<std::string> globals_;
+    std::set<std::string> weak_symbols_;
     std::set<std::string> externs_;
     std::vector<container::Relocation> image_relocations_;
 };

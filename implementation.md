@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:26 -08:00
+> **Last updated:** 2026-11-02 12:31 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -554,17 +554,18 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (scalar `float`/`double`, FP calls, conversions, and stack varargs), M9.5
 (classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
-and RTTI), and M9.7 (matrix/transform-stack codegen) are complete, and M9.8
-(templates and static initialization) is next. C++ ABI revision 1 is frozen in
+and RTTI), M9.7 (matrix/transform-stack codegen), and M9.8 (function templates,
+weak symbols, and static initialization) are complete, and M9.9 (`new`/`delete`
+and exceptions) is next. C++ ABI revision 1 is frozen in
 [docs/abi.md](docs/abi.md) with machine-checkable constants in
 `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
 in place, and `compile()` now produces assembly for the supported integer,
-scalar-FP, class, virtual/RTTI, and matrix subset. Confirmed decisions include
-custom C++11 subset, one thread per core with cooperative oversubscription,
-`R11` TP, library matrices plus intrinsics, `double` align 8/16-byte call
-boundaries, explicit per-thread transform stacks, full destructor unwinding,
-scalar FP library, stack-based FP varargs, Itanium-like mangling, and
-class-member/`this` debug support.
+scalar-FP, class, virtual/RTTI, matrix, and function-template subset. Confirmed
+decisions include custom C++11 subset, one thread per core with cooperative
+oversubscription, `R11` TP, library matrices plus intrinsics, `double` align
+8/16-byte call boundaries, explicit per-thread transform stacks, full
+destructor unwinding, scalar FP library, stack-based FP varargs, Itanium-like
+mangling, and class-member/`this` debug support.
 
 **Tasks**
 
@@ -591,8 +592,10 @@ class-member/`this` debug support.
       members, single inheritance, and memberwise copy (M9.5).
 - [x] Vtables, virtual dispatch/overrides, abstract classes/pure virtuals,
       typeinfo/`typeid`, and pointer `dynamic_cast` (M9.6).
-- [ ] Templates, exceptions, `new`/`delete`, and static initialization
-      (M9.8-M9.9).
+- [x] Function templates, weak template/inline symbols, and static
+      initialization (M9.8). Class templates, COMDAT groups, static
+      destruction, and guarded local statics remain deferred.
+- [ ] Exceptions and `new`/`delete` (M9.9).
 - [x] Scalar `float`/`double` codegen, FP calls/spills, conversions, and ABI
       alignment (M9.4); `.float`/`.double` object-assembler support ported from
       main.
@@ -628,6 +631,8 @@ class-member/`this` debug support.
 - [x] Matrix multiply/add/transpose, vector transform, dot, aliasing, and
       transform-stack push/pop/drop pass (M9.7 gate: 165 cases / 4735
       assertions).
+- [x] Function templates, weak template/inline symbols across TUs, and static
+      initialization order pass (M9.8 gate: 169 cases / 4745 assertions).
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
@@ -1016,6 +1021,16 @@ Newest entries at the bottom. Use the local time zone.
       Added tile-encoding and matrix/aliasing/stack tests. Windows/WSL both pass
       21/21 CTest tests; `kr32_tests` reports 165 test cases and 4735
       assertions. M9.8 (templates and static initialization) is next.
+- **2026-11-02 12:31 -08:00** — Completed M9.8 for function templates, weak
+      symbols, and static initialization. Added explicit template-argument
+      capture, instantiation by explicit arguments/deduction with
+      deduplication, weak emission for template/inline symbols, `.weak`
+      object-assembler support, and pre-main initialization of non-constant
+      globals in declaration order. Added multi-TU template/inline and static
+      init tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports
+      169 test cases and 4745 assertions. Class templates, COMDAT groups, static
+      destruction, and guarded local statics remain deferred; M9.9
+      (`new`/`delete` and exceptions) is next.
 
 ## 10. Updating this file
 

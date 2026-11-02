@@ -707,8 +707,8 @@ private:
     bool pass1_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
         if (name == ".text" || name == ".data" || name == ".global" ||
-            name == ".extern" || name == ".file" || name == ".type" ||
-            name == ".size") {
+            name == ".weak" || name == ".extern" || name == ".file" ||
+            name == ".type" || name == ".size") {
             return true;
         }
         if (name == ".equ" || name == ".set") {
@@ -1489,8 +1489,9 @@ private:
     bool pass2_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
         if (name == ".text" || name == ".data" || name == ".global" ||
-            name == ".extern" || name == ".file" || name == ".type" ||
-            name == ".size" || name == ".equ" || name == ".set") {
+            name == ".weak" || name == ".extern" || name == ".file" ||
+            name == ".type" || name == ".size" || name == ".equ" ||
+            name == ".set") {
             return true;
         }
         if (name == ".org") {

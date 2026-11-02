@@ -541,6 +541,57 @@ TEST_CASE("matrix transpose, multiply-add, and transform stack run") {
     CHECK(alias.result == 42);
 }
 
+TEST_CASE("function templates instantiate explicitly and by deduction") {
+    const ProgramResult explicit_call = compile_and_run(
+        "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
+        "int main() { return maximum<int>(20, 42); }\n");
+    INFO(explicit_call.diagnostics);
+    REQUIRE(explicit_call.ok);
+    CHECK(explicit_call.result == 42);
+
+    const ProgramResult deduced = compile_and_run(
+        "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
+        "int main() { return (int)maximum(20.5, 42.5); }\n");
+    INFO(deduced.diagnostics);
+    REQUIRE(deduced.ok);
+    CHECK(deduced.result == 42);
+}
+
+TEST_CASE("template instantiations are weak across translation units") {
+    const ProgramResult program = compile_and_run_pair(
+        "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
+        "int helper(int value);\n"
+        "int main() { return helper(40); }\n",
+        "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
+        "int helper(int value) { return maximum<int>(value, 42); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("inline functions use weak symbols across translation units") {
+    const ProgramResult program = compile_and_run_pair(
+        "inline int twice(int value) { return value * 2; }\n"
+        "int other();\n"
+        "int main() { return twice(21); }\n",
+        "inline int twice(int value) { return value * 2; }\n"
+        "int other() { return twice(1); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("static initialization runs before main in declaration order") {
+    const ProgramResult program = compile_and_run(
+        "int compute() { return 40; }\n"
+        "int first = compute();\n"
+        "int second = first + 2;\n"
+        "int main() { return second; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("class copy construction and assignment are memberwise byte copies") {
     const ProgramResult program = compile_and_run(
         "class Pair {\n"

@@ -145,6 +145,7 @@ struct Expr {
     std::vector<DeclPtr> parameters; // lambda parameters
     StmtPtr body;              // lambda body
     std::vector<Name> template_arguments;
+    std::vector<TypePtr> template_type_arguments;
     bool is_arrow = false;     // Member access through `->`
     bool is_prefix = false;    // prefix unary/increment
     bool global_scope = false; // leading `::`

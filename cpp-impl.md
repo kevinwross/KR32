@@ -6,9 +6,10 @@ worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
 lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
 mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
 conversions, and stack varargs), M9.5 (classes, constructors/destructors,
-single inheritance), M9.6 (virtual dispatch and RTTI), and M9.7 (matrix and
-transform-stack codegen) are complete; phase M9.8 (templates and static
-initialization) is next.
+single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
+transform-stack codegen), and M9.8 (function templates, weak symbols, and
+static initialization) are complete; phase M9.9 (`new`/`delete` and exceptions)
+is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -137,12 +138,25 @@ Completed in M9.7:
 - [x] Tests: matrix multiply, multiply-add, transpose, transform, dot, aliasing,
       and transform-stack push/pop/drop.
 
+Completed in M9.8:
+
+- [x] Function template parsing (explicit arguments retained), instantiation by
+      explicit arguments or deduction, stable instantiated declarations, and
+      deduplication by mangled symbol.
+- [x] Weak symbol emission for template instantiations and inline functions,
+      with `.weak` object-assembler support; multi-TU duplicate definitions link
+      with first-definition resolution.
+- [x] Non-constant global initialization before `main` in declaration order.
+- [x] Tests: explicit/deduced function templates, weak template/inline symbols
+      across TUs, and static initialization order.
+
 Not started:
 
-- [ ] Templates, exceptions, threads, debug, and CLI integration
-      (M9.8-M9.12). A full tile register allocator/spill pass, matrix
-      optimization/fusion pass, weak/COMDAT merging, and by-value class
-      parameters/returns remain deferred.
+- [ ] `new`/`delete`, exceptions, threads, debug, and CLI integration
+      (M9.9-M9.12). Class templates, COMDAT section groups, static destruction,
+      guarded local statics, a full tile allocator/spill pass, matrix
+      optimization/fusion, and by-value class parameters/returns remain
+      deferred.
 
 ## 3. Milestone map
 
@@ -158,7 +172,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | done |
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | done |
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | done |
-| M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | not started |
+| M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | not started |
 | M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | not started |
 | M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | not started |
@@ -330,14 +344,28 @@ M9.8 (templates/static initialization) is next.
 
 ### M9.8 — Templates and static initialization
 
-- [ ] Parse template declarations and arguments for the supported subset.
-- [ ] Instantiate function/class templates and deduplicate instances.
-- [ ] Emit template symbols as weak/COMDAT; linker merging.
-- [ ] Static initialization and destruction; `.init_array` equivalent.
+- [x] Parse template declarations and explicit template arguments for the
+      supported function-template subset.
+- [x] Instantiate function templates with explicit arguments and argument
+      deduction, deduplicate by mangled symbol, and keep a stable declaration
+      store for instantiated bodies. Class templates are deferred with a clear
+      diagnostic.
+- [x] Emit template instantiations and inline functions as weak symbols, and
+      let the linker keep the first definition; COMDAT section-group merging is
+      deferred.
+- [x] Static initialization for non-constant globals before `main`, in
+      declaration order; `.init_array` section emission, static destruction,
+      and `__cxa_guard_*` local statics remain deferred.
 - [ ] Thread-safe local statics (`__cxa_guard_*`) once threads exist.
-- [ ] Tests: header-only templates across multiple TUs; static init order.
+- [x] Tests: explicit/deduced function templates, weak template/inline symbols
+      across TUs, and static initialization order.
 
 **Gate:** multi-TU template/static-init tests link and run.
+**Status:** done 2026-11-02 for the supported function-template/weak/static-init
+scope; class templates, COMDAT groups, static destruction, and guarded local
+statics are deferred and documented above. Windows MSVC Debug and WSL GCC
+headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
+4745 assertions. M9.9 (`new`/`delete` and exceptions) is next.
 
 ### M9.9 — `new`/`delete`, exceptions, cleanup
 
@@ -499,6 +527,15 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   reports 165 test cases and 4735 assertions. M9.8 (templates and static
   initialization) is next; a full tile allocator/spill and optimization pass
   remain deferred.
+- **2026-11-02 12:31 -08:00** — Completed M9.8 for function templates, weak
+  symbols, and static initialization. Added explicit template-argument capture,
+  template instantiation by explicit arguments/deduction with deduplication,
+  weak emission for template/inline symbols, `.weak` object-assembler support,
+  and pre-main initialization of non-constant globals in declaration order.
+  Added multi-TU template/inline and static-init tests. Windows/WSL both pass
+  21/21 CTest tests; `kr32_tests` reports 169 test cases and 4745 assertions.
+  Class templates, COMDAT section groups, static destruction, and guarded local
+  statics remain deferred; M9.9 (`new`/`delete` and exceptions) is next.
 
 ## 8. Approval
 

@@ -299,6 +299,25 @@ std::string mangle_member(std::string_view class_name, std::string_view name,
     return result;
 }
 
+std::string mangle_template_function(
+    std::string_view qualified_name, const std::vector<TypePtr>& template_arguments,
+    const std::vector<TypePtr>& parameter_types) {
+    const std::vector<std::string> parts = split_qualified(qualified_name);
+    std::string result = "_Z" + mangle_qualified(parts) + "I";
+    for (const TypePtr& argument : template_arguments) {
+        result += mangle_type(argument);
+    }
+    result += "E";
+    if (parameter_types.empty()) {
+        result += "v";
+    } else {
+        for (const TypePtr& parameter : parameter_types) {
+            result += mangle_type(decay(parameter));
+        }
+    }
+    return result;
+}
+
 namespace {
 
 class Generator {
@@ -325,12 +344,13 @@ public:
         if (!diagnostics_.empty()) {
             return {};
         }
-        for (const auto& function : function_storage_) {
-            if (function->defined) {
+        emit_globals();
+        for (std::size_t index = 0; index < function_storage_.size(); ++index) {
+            Function* function = function_storage_[index].get();
+            if (function->defined && emitted_functions_.insert(function).second) {
                 emit_function(*function);
             }
         }
-        emit_globals();
         emit_rtti();
         std::string result = text_;
         if (!rodata_.empty()) {
@@ -363,6 +383,7 @@ private:
         bool is_destructor = false;
         bool is_virtual = false;
         bool is_pure = false;
+        bool weak = false;
         int vtable_index = -1;
         std::string member_name;
         ClassInfo* owner = nullptr;
@@ -377,6 +398,7 @@ private:
         bool defined = false;
         bool is_static = false;
         const Expr* initializer = nullptr;
+        bool needs_init = false;
     };
 
     struct MemberInfo {
@@ -501,6 +523,12 @@ private:
                 continue;
             }
             if (declaration->kind != DeclKind::Class) {
+                continue;
+            }
+            if (declaration->is_template) {
+                error(*declaration,
+                      "class templates are not supported yet; function templates "
+                      "and weak instantiation are implemented");
                 continue;
             }
             auto info = std::make_unique<ClassInfo>();
@@ -726,7 +754,8 @@ private:
 
     Function* collect_function(const Decl& declaration, const std::string& prefix) {
         if (declaration.is_template) {
-            error(declaration, "function templates are not supported until M9.8");
+            template_functions_[qualify(prefix, declaration.name)].push_back(
+                &declaration);
             return nullptr;
         }
         ClassInfo* owner = nullptr;
@@ -778,6 +807,7 @@ private:
         function->is_destructor = destructor;
         function->is_virtual = declaration.is_virtual || declaration.is_override;
         function->is_pure = declaration.is_pure;
+        function->weak = declaration.is_inline;
         function->member_name = base_name;
         function->result = (constructor || destructor)
                                ? Type::make_builtin(BuiltinKind::Void)
@@ -1462,6 +1492,161 @@ private:
         return result;
     }
 
+    TypePtr substitute_type(const TypePtr& type,
+                            const std::map<std::string, TypePtr>& bindings) {
+        if (!type) {
+            return type;
+        }
+        if (type->kind == TypeKind::Named && type->name.parts.size() == 1) {
+            const auto found = bindings.find(type->name.parts[0]);
+            if (found != bindings.end()) {
+                return found->second->clone();
+            }
+        }
+        if (type->kind == TypeKind::Pointer || type->kind == TypeKind::LValueRef ||
+            type->kind == TypeKind::RValueRef || type->kind == TypeKind::Array ||
+            type->kind == TypeKind::Function) {
+            auto copy = std::make_shared<Type>(*type);
+            copy->element = substitute_type(type->element, bindings);
+            copy->parameters.clear();
+            for (const TypePtr& parameter : type->parameters) {
+                copy->parameters.push_back(substitute_type(parameter, bindings));
+            }
+            return copy;
+        }
+        return type;
+    }
+
+    bool deduce_template(std::map<std::string, TypePtr>& bindings,
+                         const TypePtr& pattern, const TypePtr& argument) {
+        const TypePtr arg = resolve_type(argument);
+        if (!pattern || !arg) {
+            return true;
+        }
+        if (pattern->kind == TypeKind::Named && pattern->name.parts.size() == 1) {
+            const std::string& name = pattern->name.parts[0];
+            const auto found = bindings.find(name);
+            if (found == bindings.end()) {
+                bindings[name] = arg;
+                return true;
+            }
+            return same_type(found->second, arg);
+        }
+        if ((pattern->kind == TypeKind::Pointer ||
+             pattern->kind == TypeKind::LValueRef ||
+             pattern->kind == TypeKind::RValueRef) &&
+            arg->kind == pattern->kind) {
+            return deduce_template(bindings, pattern->element, arg->element);
+        }
+        if (pattern->kind == TypeKind::Array && arg->kind == TypeKind::Array) {
+            return deduce_template(bindings, pattern->element, arg->element);
+        }
+        return true;
+    }
+
+    Function* instantiate_template(const Decl& declaration,
+                                   const std::string& qualified,
+                                   const std::vector<TypePtr>& explicit_arguments,
+                                   const std::vector<TypePtr>& argument_types) {
+        std::map<std::string, TypePtr> bindings;
+        std::vector<std::string> parameter_names;
+        for (const DeclPtr& parameter : declaration.template_parameters) {
+            if (parameter && !parameter->name.parts.empty()) {
+                parameter_names.push_back(parameter->name.parts[0]);
+            }
+        }
+        for (std::size_t index = 0;
+             index < explicit_arguments.size() && index < parameter_names.size();
+             ++index) {
+            bindings[parameter_names[index]] = explicit_arguments[index];
+        }
+        for (std::size_t index = 0;
+             index < declaration.parameters.size() && index < argument_types.size();
+             ++index) {
+            if (!deduce_template(bindings, declaration.parameters[index].type,
+                                 argument_types[index])) {
+                return nullptr;
+            }
+        }
+        std::vector<TypePtr> template_arguments;
+        for (const std::string& name : parameter_names) {
+            const auto found = bindings.find(name);
+            if (found == bindings.end()) {
+                return nullptr;
+            }
+            template_arguments.push_back(found->second);
+        }
+        auto clone = std::make_shared<Decl>();
+        clone->kind = DeclKind::Function;
+        clone->location = declaration.location;
+        clone->name = declaration.name;
+        clone->type = substitute_type(declaration.type, bindings);
+        clone->body = declaration.body;
+        clone->is_inline = declaration.is_inline;
+        clone->is_extern_c = declaration.is_extern_c;
+        clone->is_static = declaration.is_static;
+        clone->variadic = declaration.variadic;
+        for (const Param& parameter : declaration.parameters) {
+            Param copy;
+            copy.type = substitute_type(parameter.type, bindings);
+            copy.name = parameter.name;
+            copy.location = parameter.location;
+            copy.variadic = parameter.variadic;
+            clone->parameters.push_back(std::move(copy));
+        }
+        std::vector<TypePtr> parameter_types;
+        for (const Param& parameter : clone->parameters) {
+            parameter_types.push_back(decay(resolve_type(parameter.type)));
+        }
+        const std::string symbol =
+            mangle_template_function(qualified, template_arguments,
+                                     parameter_types);
+        for (const auto& existing : function_storage_) {
+            if (existing->symbol == symbol) {
+                return existing.get();
+            }
+        }
+        auto function = std::make_unique<Function>();
+        function->decl = clone.get();
+        function->qualified = qualified;
+        function->symbol = symbol;
+        function->parameters = parameter_types;
+        function->result = resolve_type(clone->type);
+        function->defined = clone->body != nullptr;
+        function->weak = true;
+        Function* raw = function.get();
+        template_instantiation_decls_.push_back(clone);
+        function_index_[qualified].push_back(raw);
+        function_storage_.push_back(std::move(function));
+        return raw;
+    }
+
+    Function* try_template_call(const Expr& call,
+                                const std::vector<TypePtr>& argument_types) {
+        if (call.children.empty() || call.children[0]->kind != ExprKind::Name) {
+            return nullptr;
+        }
+        const Name& name = call.children[0]->name;
+        std::vector<const Decl*> templates;
+        const std::vector<std::string> keys = candidate_keys(name, current_prefix_);
+        for (const std::string& key : keys) {
+            const auto found = template_functions_.find(key);
+            if (found != template_functions_.end()) {
+                templates.insert(templates.end(), found->second.begin(),
+                                 found->second.end());
+            }
+        }
+        for (const Decl* declaration : templates) {
+            const std::string qualified = qualify(current_prefix_, declaration->name);
+            if (Function* function = instantiate_template(
+                    *declaration, qualified,
+                    call.children[0]->template_type_arguments, argument_types)) {
+                return function;
+            }
+        }
+        return nullptr;
+    }
+
     Function* resolve_call(const Expr& call) {
         const auto cached = call_targets_.find(&call);
         if (cached != call_targets_.end()) {
@@ -1496,8 +1681,8 @@ private:
             return nullptr;
         }
         if (candidates.empty()) {
-            diagnose_once(call, "unknown function");
-            return nullptr;
+            // Template candidates are instantiated after argument types are
+            // known, below.
         }
         std::vector<TypePtr> argument_types;
         std::vector<bool> lvalues;
@@ -1509,6 +1694,15 @@ private:
             zeros.push_back(argument->kind == ExprKind::IntegerLiteral &&
                             argument->integer == 0);
             (void)value;
+        }
+        if (candidates.empty()) {
+            if (Function* instantiated = try_template_call(call, argument_types)) {
+                candidates.push_back(instantiated);
+            }
+        }
+        if (candidates.empty()) {
+            diagnose_once(call, "unknown function");
+            return nullptr;
         }
         Function* best = nullptr;
         int best_cost = 1000000;
@@ -3193,7 +3387,8 @@ private:
         return_label_ = new_label("return");
         if (!function.is_static) {
             emit(".text");
-            emit(".global " + function.symbol);
+            emit(function.weak ? ".weak " + function.symbol
+                               : ".global " + function.symbol);
         } else {
             emit(".text");
         }
@@ -3257,6 +3452,9 @@ private:
             } else if (function.is_destructor && function.owner != nullptr) {
                 set_vptr(*function.owner);
             }
+            if (function.qualified == "main") {
+                emit_static_initializers();
+            }
             gen_statement(*function.decl->body);
             if (function.is_destructor) {
                 emit_destructor_suffix(function);
@@ -3300,7 +3498,7 @@ private:
             const std::string vtable_symbol = "_ZTV" + mangled_name;
             const std::string typeinfo_symbol = "_ZTI" + mangled_name;
             const std::string typeinfo_name = "_ZTS" + mangled_name;
-            data_ += ".global " + typeinfo_symbol + "\n" + typeinfo_symbol + ":\n";
+            data_ += ".weak " + typeinfo_symbol + "\n" + typeinfo_symbol + ":\n";
             data_ += "    .word 0\n";
             data_ += "    .word " + typeinfo_name + "\n";
             if (info.base != nullptr) {
@@ -3315,7 +3513,7 @@ private:
             if (!info.polymorphic) {
                 continue;
             }
-            data_ += ".global " + vtable_symbol + "\n" + vtable_symbol + ":\n";
+            data_ += ".weak " + vtable_symbol + "\n" + vtable_symbol + ":\n";
             data_ += "    .word " + typeinfo_symbol + "\n";
             data_ += "    .word 0\n";
             for (Function* slot : info.vtable) {
@@ -3333,6 +3531,53 @@ private:
         }
     }
 
+    bool is_constant_global(const Global& global) {
+        if (global.initializer == nullptr) {
+            return true;
+        }
+        if (global.type && global.type->kind == TypeKind::Array &&
+            global.initializer->kind == ExprKind::InitializerList) {
+            for (const ExprPtr& element : global.initializer->children) {
+                if (is_fp(global.type->element)) {
+                    double value = 0.0;
+                    if (!eval_const_fp(*element, value)) {
+                        return false;
+                    }
+                } else {
+                    std::int64_t value = 0;
+                    if (!eval_const(*element, value)) {
+                        return false;
+                    }
+                }
+            }
+            return true;
+        }
+        if (is_fp(global.type)) {
+            double value = 0.0;
+            return eval_const_fp(*global.initializer, value);
+        }
+        std::int64_t value = 0;
+        return eval_const(*global.initializer, value);
+    }
+
+    void emit_static_initializers() {
+        for (const auto& global : global_storage_) {
+            if (!global->needs_init || !global->initializer) {
+                continue;
+            }
+            if (is_fp(global->type)) {
+                gen_as_fp(*global->initializer, global->type);
+                emit("    LEA R1, [" + global->symbol + "]");
+                emit(std::string("    FSTORE.") +
+                     (is_float32(global->type) ? "W" : "D") + " F0, [R1]");
+            } else {
+                gen_expr(*global->initializer);
+                emit("    LEA R1, [" + global->symbol + "]");
+                store_value(global->type);
+            }
+        }
+    }
+
     void emit_globals() {
         for (const auto& global : global_storage_) {
             if (!global->defined) {
@@ -3342,6 +3587,12 @@ private:
             std::string output;
             output += ".global " + global->symbol + "\n";
             output += global->symbol + ":\n";
+            if (global->initializer && !is_constant_global(*global)) {
+                global->needs_init = true;
+                output += "    .space " + std::to_string(size) + "\n";
+                bss_ += output;
+                continue;
+            }
             if (global->initializer) {
                 if (global->type && global->type->kind == TypeKind::Array &&
                     global->initializer->kind == ExprKind::InitializerList) {
@@ -3422,6 +3673,8 @@ private:
     std::vector<Diagnostic>& diagnostics_;
     std::vector<std::unique_ptr<Function>> function_storage_;
     std::map<std::string, std::vector<Function*>> function_index_;
+    std::map<std::string, std::vector<const Decl*>> template_functions_;
+    std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
     std::map<std::string, TypePtr> type_aliases_;
@@ -3435,6 +3688,7 @@ private:
     std::vector<std::string> continue_labels_;
     std::map<const Expr*, Function*> call_targets_;
     std::set<const Expr*> diagnosed_expressions_;
+    std::set<Function*> emitted_functions_;
     std::string current_prefix_;
     ClassInfo* current_class_ = nullptr;
     int this_offset_ = -1;

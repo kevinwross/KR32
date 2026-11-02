@@ -2015,9 +2015,8 @@ private:
             auto expression = make_expr(ExprKind::Name, token);
             expression->name = parse_qualified_name(false);
             if (at("<") && looks_like_template_arguments()) {
-                expression->template_arguments.clear();
-                auto arguments = parse_template_type_arguments();
-                (void)arguments;
+                expression->template_type_arguments =
+                    parse_template_type_arguments();
             }
             return expression;
         }
