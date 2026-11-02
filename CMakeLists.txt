@@ -94,7 +94,7 @@ if(KR32_BUILD_UI)
     target_link_libraries(kr32_platform PUBLIC ${KR32_SDL2_TARGET})
 
     kr32_add_library(kr32_ui src/ui/app.cpp src/ui/canvas.cpp src/ui/debugger_ui.cpp
-        src/resources/embedded_fonts.cpp)
+        src/ui/help.cpp src/resources/embedded_fonts.cpp)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
         kr32_core kr32_cc kr32_asm kr32_link)

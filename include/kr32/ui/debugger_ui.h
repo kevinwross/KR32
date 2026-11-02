@@ -63,6 +63,7 @@ private:
     void draw_memory(Canvas& canvas, Rect rect);
     void draw_machine(Canvas& canvas, Rect rect);
     void draw_console(Canvas& canvas, Rect rect);
+    void draw_asm_tooltip(Canvas& canvas);
     void draw_error(Canvas& canvas);
     [[nodiscard]] std::string format_hex(std::uint32_t value, int digits = 8) const;
     [[nodiscard]] std::string source_line(int line) const;
@@ -93,6 +94,19 @@ private:
     ContextMenu menu_;
     int hover_row_ = -1;
     bool hover_source_ = false;
+
+    struct AsmRow {
+        std::uint32_t address = 0;
+        Rect row{};
+        Rect mnemonic{};
+        Rect operand{};
+        std::string text;
+    };
+    std::vector<AsmRow> asm_rows_;
+    int hover_asm_index_ = -1;
+    bool hover_asm_operand_ = false;
+    int mouse_x_ = 0;
+    int mouse_y_ = 0;
 };
 
 // Renders one frame without opening a window. Returns the canvas hash and

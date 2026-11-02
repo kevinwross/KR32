@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 08:10 -08:00
+> **Last updated:** 2026-11-02 08:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -826,6 +826,11 @@ Newest entries at the bottom. Use the local time zone.
       padding between the breakpoint column and the address column so it mirrors
       the source gutter geometry instead of addresses touching the breakpoint
       separator. Screenshots and docs updated.
+- **2026-11-02 08:15 -08:00** — Added KR16-style disassembly hover help:
+      mnemonic hover highlights the mnemonic and shows an instruction
+      description; operand hover highlights the operand and describes every
+      operand's addressing mode. Added `help.cpp` and help unit tests; verified
+      live with PUSH and R7 hover tooltips.
 
 ## 10. Updating this file
 

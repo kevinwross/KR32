@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "kr32/ui/canvas.h"
+#include "kr32/ui/help.h"
 
 using namespace kr32;
 
@@ -35,4 +36,16 @@ TEST_CASE("the portable canvas clips drawing to its bounds") {
     canvas.pixel(-1, -1, ui::Color{255, 0, 0, 255});
     canvas.pixel(16, 16, ui::Color{255, 0, 0, 255});
     CHECK(canvas.pixel_at(0, 0) == 0xFFFFFFFFU);
+}
+
+TEST_CASE("instruction and addressing help describe KR32 operands") {
+    CHECK(ui::instruction_help("PUSH").find("SP") != std::string::npos);
+    CHECK(ui::instruction_help("LOAD8S").find("sign") != std::string::npos);
+    CHECK(ui::instruction_help("FADD.S").find("Floating") != std::string::npos);
+    CHECK(ui::addressing_help("LOAD R4, [R5 + 8]", "LOAD").find("base register") !=
+          std::string::npos);
+    CHECK(ui::addressing_help("MOV R1, #42", "MOV").find("immediate") !=
+          std::string::npos);
+    CHECK(ui::addressing_help("JMP 0x00010000", "JMP").find("branch target") !=
+          std::string::npos);
 }

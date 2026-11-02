@@ -15,6 +15,7 @@
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
 #include "kr32/platform/window.h"
+#include "kr32/ui/help.h"
 
 namespace kr32::ui {
 namespace {
@@ -443,6 +444,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     start = std::max(start, session_.machine().ram_base());
     const int address_width = Canvas::text_width("00000000", FontRole::Mono);
     const int instruction_x = rect.x + kAsmGutter + 6;
+    asm_rows_.clear();
     canvas.fill(Rect{rect.x + 1, rect.y + 24, kAsmGutter - 1, rect.height - 26}, kPanelAlt);
     canvas.fill(Rect{rect.x + kAsmGutter, rect.y + 24, 1, rect.height - 26}, kBorder);
     for (int row = 0; row < rows; ++row) {
@@ -507,6 +509,29 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         if (has_breakpoint) {
             canvas.fill(Rect{rect.x + 8, y + 5, 7, 8}, kBad);
         }
+        const std::size_t split = text.find(' ');
+        const std::string mnemonic =
+            split == std::string::npos ? text : text.substr(0, split);
+        const int mnemonic_width = Canvas::text_width(mnemonic, FontRole::Mono);
+        const int text_width = Canvas::text_width(text, FontRole::Mono);
+        const int space_width = Canvas::text_width(" ", FontRole::Mono);
+        const Rect mnemonic_rect{instruction_x, y, mnemonic_width, line_height};
+        Rect operand_rect{};
+        if (split != std::string::npos) {
+            operand_rect = Rect{instruction_x + mnemonic_width + space_width, y,
+                                std::max(0, text_width - mnemonic_width - space_width),
+                                line_height};
+        }
+        if (hover_asm_index_ == static_cast<int>(asm_rows_.size())) {
+            const Rect& highlight = hover_asm_operand_ ? operand_rect : mnemonic_rect;
+            if (highlight.width > 0 && highlight.height > 0) {
+                canvas.fill(highlight, Color{44, 64, 84, 255});
+                canvas.frame(highlight, kAccent);
+            }
+        }
+        asm_rows_.push_back(
+            AsmRow{address, Rect{rect.x, y - 1, rect.width, line_height}, mnemonic_rect,
+                   operand_rect, text});
         canvas.text(rect.x + kAsmGutter - 10 - address_width, y, hex(address, 8),
                     address == pc ? kAccent : kDim, FontRole::Mono);        canvas.text(instruction_x, y,
                     trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
@@ -826,6 +851,66 @@ void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
     menu_.hover = -1;
 }
 
+void DebuggerUI::draw_asm_tooltip(Canvas& canvas) {
+    if (menu_.open || hover_asm_index_ < 0 ||
+        hover_asm_index_ >= static_cast<int>(asm_rows_.size())) {
+        return;
+    }
+    const AsmRow& row = asm_rows_[static_cast<std::size_t>(hover_asm_index_)];
+    const std::size_t split = row.text.find(' ');
+    const std::string mnemonic =
+        split == std::string::npos ? row.text : row.text.substr(0, split);
+    const std::string title = hover_asm_operand_ ? "Addressing mode" : mnemonic;
+    const std::string body =
+        hover_asm_operand_ ? addressing_help(row.text, mnemonic)
+                           : instruction_help(mnemonic);
+
+    std::vector<std::string> lines;
+    lines.push_back(title);
+    const int max_width = 360;
+    std::string line;
+    std::size_t begin = 0;
+    while (begin < body.size()) {
+        const std::size_t end = body.find(' ', begin);
+        const std::string word =
+            body.substr(begin, end == std::string::npos ? std::string::npos : end - begin);
+        if (!word.empty()) {
+            const std::string candidate = line.empty() ? word : line + " " + word;
+            if (!line.empty() &&
+                Canvas::text_width(candidate, FontRole::MonoSmall) > max_width) {
+                lines.push_back(line);
+                line = word;
+            } else {
+                line = candidate;
+            }
+        }
+        if (end == std::string::npos) break;
+        begin = end + 1;
+    }
+    if (!line.empty()) lines.push_back(line);
+    if (lines.size() == 1) lines.push_back("No description available.");
+
+    int width = 0;
+    for (const std::string& value : lines) {
+        width = std::max(width, Canvas::text_width(value, FontRole::MonoSmall));
+    }
+    width += 20;
+    const int height = 8 + static_cast<int>(lines.size()) * 17;
+    int x = mouse_x_ + 16;
+    int y = mouse_y_ - height - 12;
+    if (y < 4) y = mouse_y_ + 22;
+    if (x + width > canvas.width() - 4) x = canvas.width() - width - 4;
+    x = std::max(4, x);
+    y = std::min(y, canvas.height() - height - 4);
+    y = std::max(4, y);
+    canvas.fill(Rect{x, y, width, height}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, height}, kAccent);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(x + 10, y + 4 + static_cast<int>(index) * 17, lines[index],
+                    index == 0 ? kText : kDim, FontRole::MonoSmall);
+    }
+}
+
 void DebuggerUI::draw_context_menu(Canvas& canvas) {
     if (!menu_.open) {
         return;
@@ -876,6 +961,8 @@ void DebuggerUI::activate_context_menu(bool run_to_address) {
 }
 
 void DebuggerUI::hover(int x, int y, int width, int height) {
+    mouse_x_ = x;
+    mouse_y_ = y;
     if (menu_.open) {
         const int hover = menu_.toggle_rect.contains(x, y)
                               ? 0
@@ -886,6 +973,8 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     const Layout areas = layout(width, height);
     hover_row_ = -1;
     hover_source_ = false;
+    hover_asm_index_ = -1;
+    hover_asm_operand_ = false;
     if (x >= areas.source.x && x < areas.source.x + kSourceGutter &&
         y >= areas.source.y + 24 && y < areas.source.y + areas.source.height) {
         hover_row_ = (y - (areas.source.y + 24)) / 18;
@@ -895,6 +984,16 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
                y < areas.disassembly.y + areas.disassembly.height) {
         hover_row_ = (y - (areas.disassembly.y + 24)) / 20;
         hover_source_ = false;
+    } else if (x >= areas.disassembly.x &&
+               x < areas.disassembly.x + areas.disassembly.width &&
+               y >= areas.disassembly.y + 24 &&
+               y < areas.disassembly.y + areas.disassembly.height) {
+        for (std::size_t index = 0; index < asm_rows_.size(); ++index) {
+            if (!asm_rows_[index].row.contains(x, y)) continue;
+            hover_asm_index_ = static_cast<int>(index);
+            hover_asm_operand_ = asm_rows_[index].operand.contains(x, y);
+            break;
+        }
     }
 }
 
@@ -921,6 +1020,7 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_variables(canvas, areas.variables);
     draw_bottom(canvas, areas.bottom);
     draw_error(canvas);
+    draw_asm_tooltip(canvas);
     draw_context_menu(canvas);
 }
 

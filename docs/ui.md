@@ -12,6 +12,10 @@ directly.
 
 ![KR32 disassembly gutter menu](screenshots/m6-disasm-gutter-menu.png)
 
+![KR32 instruction hover](screenshots/m6-hover-mnemonic.png)
+
+![KR32 operand hover](screenshots/m6-hover-operand.png)
+
 ![KR32 run to line](screenshots/m6-run-to.png)
 
 ## Architecture
@@ -51,6 +55,13 @@ directly.
 - Run-to uses a temporary breakpoint, runs the CPU, and removes the temporary
   breakpoint when it stops. Existing user breakpoints are preserved.
 - Hovering a gutter row highlights it.
+- Hovering a disassembly mnemonic highlights it and shows an instruction
+  description tooltip.
+- Hovering an operand highlights it and shows an addressing-mode tooltip for
+  each operand (register direct, `[Rn]`, `[Rn + displacement]`, immediate, and
+  branch targets).
+- The help text covers core integer, control, FP, and matrix instructions; the
+  tooltip wraps to a 360 px line width and stays inside the window.
 
 ## Controls
 
