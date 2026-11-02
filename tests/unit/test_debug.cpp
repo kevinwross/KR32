@@ -260,3 +260,23 @@ TEST_CASE("DebugSession steps over a call") {
     }
     CHECK(value == 42);
 }
+
+TEST_CASE("debug sessions expose and select thread snapshots") {
+    debug::Session session;
+    debug::ThreadInfo main;
+    main.id = 1;
+    main.name = "main";
+    main.pc = 0x1000;
+    main.current = true;
+    debug::ThreadInfo worker;
+    worker.id = 2;
+    worker.name = "worker";
+    worker.pc = 0x2000;
+    session.set_threads({main, worker});
+    REQUIRE(session.threads().size() == 2);
+    CHECK(session.selected_thread() == 1);
+    session.select_thread(2);
+    CHECK(session.selected_thread() == 2);
+    session.select_thread(99);
+    CHECK(session.selected_thread() == 2);
+}

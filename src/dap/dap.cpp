@@ -588,6 +588,22 @@ private:
 
     void build_frames() {
         frames_.clear();
+        const std::uint32_t selected = session_.selected_thread();
+        if (selected != 0) {
+            for (const debug::ThreadInfo& thread : session_.threads()) {
+                if (thread.id == selected && !thread.current) {
+                    debug::Frame frame;
+                    frame.function = thread.name;
+                    frame.pc = thread.pc;
+                    frame.frame_pointer = thread.frame_pointer;
+                    FrameInfo info;
+                    info.frame = frame;
+                    info.id = next_frame_id_++;
+                    frames_.push_back(info);
+                    return;
+                }
+            }
+        }
         std::vector<debug::Frame> stack = session_.call_stack();
         if (stack.empty()) {
             debug::Frame frame;
@@ -662,14 +678,28 @@ private:
             stopped(session_.at_breakpoint() ? "breakpoint" : "entry");
         } else if (command == "threads") {
             Json threads = Json::array_value();
-            Json thread = Json::object_value();
-            thread.set("id", Json::number_value(1));
-            thread.set("name", Json::string_value("main"));
-            threads.array.push_back(std::move(thread));
+            const std::vector<debug::ThreadInfo>& snapshot = session_.threads();
+            if (snapshot.empty()) {
+                Json thread = Json::object_value();
+                thread.set("id", Json::number_value(1));
+                thread.set("name", Json::string_value("main"));
+                threads.array.push_back(std::move(thread));
+            } else {
+                for (const debug::ThreadInfo& info : snapshot) {
+                    Json thread = Json::object_value();
+                    thread.set("id", Json::number_value(info.id));
+                    thread.set("name", Json::string_value(info.name));
+                    threads.array.push_back(std::move(thread));
+                }
+            }
             Json body = Json::object_value();
             body.set("threads", std::move(threads));
             send(response(request, true, std::move(body)));
         } else if (command == "stackTrace") {
+            if (arguments != nullptr && arguments->get("threadId") != nullptr) {
+                session_.select_thread(static_cast<std::uint32_t>(
+                    arguments->get("threadId")->as_number()));
+            }
             build_frames();
             Json frames = Json::array_value();
             for (const FrameInfo& info : frames_) {

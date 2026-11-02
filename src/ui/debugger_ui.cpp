@@ -736,8 +736,21 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
 }
 
 void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
-    draw_panel(canvas, rect, "CALL STACK");
+    draw_panel(canvas, rect, "THREADS / CALL STACK");
     int y = rect.y + 24;
+    const std::vector<debug::ThreadInfo>& threads = session_.threads();
+    for (const debug::ThreadInfo& thread : threads) {
+        if (y > rect.y + rect.height - 14) {
+            break;
+        }
+        canvas.text(rect.x + 6, y,
+                    "T" + std::to_string(thread.id) + " " +
+                        trim_to(thread.name + " " + hex(thread.pc, 8),
+                                static_cast<std::size_t>((rect.width - 16) / 7)),
+                    thread.id == session_.selected_thread() ? kAccent : kDim,
+                    FontRole::MonoSmall);
+        y += 14;
+    }
     const std::vector<debug::Frame> frames = session_.call_stack();
     if (frames.empty()) {
         canvas.text(rect.x + 6, y, "(no frames)", kDim, FontRole::MonoSmall);

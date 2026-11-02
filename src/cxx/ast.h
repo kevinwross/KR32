@@ -268,6 +268,7 @@ struct Decl {
 };
 
 struct TranslationUnit {
+    std::string source_name;
     std::vector<DeclPtr> declarations;
 };
 

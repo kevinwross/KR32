@@ -10,7 +10,8 @@ single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
 initialization), M9.9 (`new`/`delete`, exceptions, cleanup), and M9.10 (threads,
 TLS, atomics, synchronization) are complete; phase M9.11 (C++ debug information
-and GUI/DAP) is next.
+and GUI/DAP) is in progress with C++ class/member/`this` records and thread
+snapshots done.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -177,12 +178,20 @@ In progress:
 - [x] Thread-safe function-local statics with `__cxa_guard_*` and initialized
       `.tls` images (M9.10 final).
 
+In progress:
+
+- [x] C++ debug records for source/lines/functions/locals/globals/classes/
+      members/`this`, plus thread snapshots and basic DAP/GUI thread listing
+      (M9.11 part 1).
+- [ ] Full per-thread DAP stacks/variables and GUI thread selection/source
+      switching (M9.11 remaining).
+
 Not started:
 
-- [ ] Debug thread inspection and CLI integration (M9.11-M9.12). Class
-      templates, COMDAT section groups, static destruction, a full tile
-      allocator/spill pass, matrix optimization/fusion, and by-value class
-      parameters/returns remain deferred.
+- [ ] CLI integration and cross-platform tag (M9.12). Class templates, COMDAT
+      section groups, static destruction, a full tile allocator/spill pass,
+      matrix optimization/fusion, and by-value class parameters/returns remain
+      deferred.
 
 ## 3. Milestone map
 
@@ -201,7 +210,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | done |
 | M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | done |
-| M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | not started |
+| M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | in progress |
 | M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | not started |
 
 ## 4. Phase tasks
@@ -457,15 +466,20 @@ API polish move to M9.11.
 
 ### M9.11 — C++ debug information and GUI/DAP
 
-- [ ] Extend debug records for namespaces, classes/members, `this`,
-      template instances, lexical scopes, and function kinds.
-- [ ] Emit source lines for C++ constructs.
-- [ ] Update `DebugSession` variable/type/stack APIs.
-- [ ] GUI: source lines, locals, class members, `this`, call stack, threads.
-- [ ] DAP: variables/scopes/threads/stack for C++.
+- [x] Emit C++ source/line, function, local, global, class, member, `this`, and
+      type debug records; parse `C`/`M` records into `debug::Info`.
+- [x] Thread snapshots in `debug::Session` (`ThreadInfo`, select/current), DAP
+      `threads` listing, synthetic per-thread stack frame, and a GUI thread list
+      prefix in the call-stack panel.
+- [ ] Full per-thread DAP stacks/variables and GUI thread selection/source
+      switching; template instance and namespace/scope records.
 - [ ] Tests: breakpoint/step/locals/members on a C++ program.
 
 **Gate:** GUI step-through of a `.cpp` file with lines, locals, members, `this`.
+**Status:** in progress 2026-11-02. C++ debug records and basic thread
+snapshots/DAP/GUI listing are done; full per-thread stacks/variables and GUI
+thread selection remain. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 195 test cases and 4972 assertions.
 
 ### M9.12 — CLI integration, cross-platform, tag
 
@@ -672,6 +686,14 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   reservation invalidation. Windows/WSL both pass 21/21 CTest tests;
   `kr32_tests` reports 193 test cases and 4951 assertions. M9.11 (C++ debug
   information and GUI/DAP) is next.
+- **2026-11-02 14:48 -08:00** — Started M9.11. Added C++ `.debug_info` records
+  for sources, lines, functions, locals, globals, classes, members, `this`, and
+  types; extended `debug::Info`/parser with `C`/`M` class/member records. Added
+  `debug::ThreadInfo` snapshots/selection, DAP `threads` listing and synthetic
+  per-thread frames, and GUI thread-prefix listing in the call-stack panel.
+  Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 195 test cases
+  and 4972 assertions. M9.11 remains in progress for full per-thread
+  stacks/variables and GUI thread selection/source switching.
 
 ## 8. Approval
 

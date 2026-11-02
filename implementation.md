@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 14:27 -08:00
+> **Last updated:** 2026-11-02 14:48 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -556,10 +556,9 @@ M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
 and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
 weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
-cleanup) are complete; M9.10 is in progress with stage-1 host thread/futex
-services over `core::Cluster`, stage-2 TCB/TLS/context, and stage-3 compiler
-`thread_local`/LL-SC atomics plus thread/mutex headers, guards, and initialized
-TLS done. M9.11 (C++ debug information and GUI/DAP) is next. C++ ABI revision 1 is frozen in
+cleanup) are complete; M9.10 (threads/TLS/atomics) is complete. M9.11 is in
+progress with C++ class/member/`this` debug records and basic thread
+snapshots/DAP/GUI listing. C++ ABI revision 1 is frozen in
 [docs/abi.md](docs/abi.md) with machine-checkable constants in
 `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
 in place, and `compile()` now produces assembly for the supported integer,
@@ -617,10 +616,12 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       and FPR/TSP context save/restore (M9.10 stage 2).
 - [x] Compiler `thread_local`, LL/SC atomics, thread/mutex/condvar header
       surface, guarded local statics, and initialized TLS (M9.10).
-- [ ] Debug thread inspection and the broader `std::thread` API polish
-      (M9.11).
-- [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
-- [ ] `kr32 cxx`, `kr32 build file.cpp`.
+- [x] C++ debug records for sources/lines/functions/locals/globals/classes/
+      members/`this`, plus thread snapshots and basic DAP/GUI thread listing
+      (M9.11 part 1).
+- [ ] Full per-thread DAP stacks/variables and GUI thread selection/source
+      switching (M9.11 remaining).
+- [ ] `kr32 cxx`, `kr32 build file.cpp` (M9.12).
 - [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
       and standard-library subset.
 
@@ -660,6 +661,8 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       (M9.10 stage 3: 191 cases / 4917 assertions).
 - [x] Two C++ threads with a mutex-protected counter, guarded statics, and
       initialized TLS pass (M9.10 gate: 193 cases / 4951 assertions).
+- [x] C++ debug classes/members/`this`/lines and thread snapshots pass (M9.11
+      part 1: 195 cases / 4972 assertions).
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
@@ -1126,6 +1129,14 @@ Newest entries at the bottom. Use the local time zone.
       initializers, `!` codegen, and cluster LL/SC reservation invalidation.
       Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 193 test
       cases and 4951 assertions. M9.11 (C++ debug/GUI/DAP) is next.
+- **2026-11-02 14:48 -08:00** — Started M9.11. Added C++ debug records for
+      sources, lines, functions, locals, globals, classes, members, `this`, and
+      types; extended `debug::Info` with class/member records. Added
+      `debug::ThreadInfo` snapshots/selection, DAP `threads` listing and
+      synthetic per-thread frames, and a GUI thread prefix in the call-stack
+      panel. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 195
+      test cases and 4972 assertions. M9.11 remains in progress for full
+      per-thread stacks/variables and GUI thread selection.
 
 ## 10. Updating this file
 

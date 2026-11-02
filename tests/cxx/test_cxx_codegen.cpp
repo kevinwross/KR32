@@ -6,6 +6,7 @@
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
 #include "kr32/cxx/cxx.h"
+#include "kr32/debug/debug.h"
 #include "kr32/link/linker.h"
 
 #include <cstdint>
@@ -795,6 +796,58 @@ TEST_CASE("delete runs the destructor") {
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);
+}
+
+TEST_CASE("C++ debug info records classes, members, this, and lines") {
+    const cxx::Result compiled = cxx::compile(
+        "class Point {\n"
+        "public:\n"
+        "    int x;\n"
+        "    int y;\n"
+        "    int sum() { return x + y; }\n"
+        "};\n"
+        "int main() { Point point; point.x = 20; point.y = 22; return point.sum(); }\n");
+    REQUIRE(compiled.ok);
+    container::Image user;
+    assembler::Error assembly_error;
+    INFO(assembly_error.message);
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE(assembler::assemble_object(cc::runtime_assembly(), runtime,
+                                       assembly_error));
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE(linker::link({user, runtime}, linker::Options{}, image, map,
+                         link_error));
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    REQUIRE_FALSE(info.classes.empty());
+    const debug::ClassInfo* point = nullptr;
+    for (const debug::ClassInfo& candidate : info.classes) {
+        if (candidate.name.find("Point") != std::string::npos) {
+            point = &candidate;
+        }
+    }
+    REQUIRE(point != nullptr);
+    CHECK(point->size == 8);
+    REQUIRE(point->members.size() == 2);
+    CHECK(point->members[0].name == "x");
+    CHECK(point->members[0].offset == 0);
+    CHECK(point->members[1].name == "y");
+    CHECK(point->members[1].offset == 4);
+    bool found_this = false;
+    for (const debug::Variable& variable : info.variables) {
+        if (variable.name == "this") {
+            found_this = true;
+            CHECK(variable.type.find("Point") != std::string::npos);
+        }
+    }
+    CHECK(found_this);
+    CHECK_FALSE(info.lines.empty());
+    CHECK_FALSE(info.functions.empty());
 }
 
 TEST_CASE("function-local statics initialize once behind a guard") {

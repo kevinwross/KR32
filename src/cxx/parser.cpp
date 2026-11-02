@@ -79,8 +79,8 @@ class Parser {
 public:
     Parser(std::vector<Token> tokens, std::string_view source_name,
            std::vector<Diagnostic>& diagnostics)
-        : tokens_(std::move(tokens)), diagnostics_(diagnostics) {
-        (void)source_name;
+        : tokens_(std::move(tokens)), source_name_(source_name),
+          diagnostics_(diagnostics) {
         known_types_.insert("size_t");
         known_types_.insert("va_list");
         known_types_.insert("int8_t");
@@ -94,6 +94,7 @@ public:
 
     std::shared_ptr<TranslationUnit> run() {
         auto unit = std::make_shared<TranslationUnit>();
+        unit->source_name = source_name_;
         while (!at_end()) {
             if (consume(";")) {
                 continue;
@@ -2138,6 +2139,7 @@ private:
     }
 
     std::vector<Token> tokens_;
+    std::string source_name_;
     std::vector<Diagnostic>& diagnostics_;
     std::size_t position_ = 0;
     std::vector<std::string> class_stack_;

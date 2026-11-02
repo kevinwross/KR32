@@ -338,6 +338,7 @@ public:
     }
 
     std::string run(const TranslationUnit& unit) {
+        debug_record("S 0 " + unit.source_name);
         collect_classes(unit.declarations, "");
         layout_classes();
         collect(unit.declarations, "");
@@ -382,6 +383,9 @@ public:
             for (const std::uint8_t byte : tls_image_) {
                 result += "    .byte " + std::to_string(byte) + "\n";
             }
+        }
+        if (!debug_.empty()) {
+            result += ".debug_info\n" + debug_;
         }
         return result;
     }
@@ -1953,6 +1957,43 @@ private:
 
     std::string new_label(std::string_view prefix) {
         return ".L" + std::string(prefix) + "_" + std::to_string(label_counter_++);
+    }
+
+    void debug_record(const std::string& record) {
+        debug_ += "    .asciz \"" + escape_asm(record) + "\"\n";
+    }
+
+    std::string debug_type(const TypePtr& raw) {
+        const TypePtr type = resolve_type(raw);
+        if (!type) {
+            return "void";
+        }
+        if (type->kind == TypeKind::Pointer) {
+            return debug_type(type->element) + "*";
+        }
+        if (type->kind == TypeKind::LValueRef || type->kind == TypeKind::RValueRef) {
+            return debug_type(type->element) + "&";
+        }
+        if (type->kind == TypeKind::Array) {
+            return debug_type(type->element) + "[]";
+        }
+        if (type->kind == TypeKind::Function) {
+            return "function";
+        }
+        if (type->kind == TypeKind::Named) {
+            return type->name.to_string();
+        }
+        if (type->kind == TypeKind::Builtin) {
+            switch (type->builtin) {
+            case BuiltinKind::Void: return "void";
+            case BuiltinKind::Bool: return "bool";
+            case BuiltinKind::Char: return "char";
+            case BuiltinKind::Float: return "float";
+            case BuiltinKind::Double: return "double";
+            default: return "int";
+            }
+        }
+        return "int";
     }
 
     std::string intern_string(const std::string& value) {
@@ -3549,6 +3590,13 @@ private:
     }
 
     void gen_statement(const Stmt& statement) {
+        if (current_function_ != nullptr && statement.location.line > 0) {
+            const std::string label = new_label("line");
+            emit(label + ":");
+            debug_record("L " + label + " 0 " +
+                         std::to_string(statement.location.line) + " " +
+                         std::to_string(statement.location.column));
+        }
         switch (statement.kind) {
         case StmtKind::Empty:
             return;
@@ -3968,6 +4016,12 @@ private:
         local.is_reference = type && (type->kind == TypeKind::LValueRef ||
                                       type->kind == TypeKind::RValueRef);
         local.offset = allocate_local(type);
+        if (current_function_ != nullptr && !declaration.name.parts.empty()) {
+            debug_record("V " + current_function_->qualified + " " +
+                         declaration.name.parts.back() + " " +
+                         std::to_string(local.offset) + " " + debug_type(type) + " " +
+                         std::to_string(std::max(1, type_size(type))));
+        }
         if (!declaration.name.parts.empty()) {
             local_scopes_.back()[declaration.name.parts.back()] = local;
         }
@@ -4214,6 +4268,20 @@ private:
 
         const std::string function_end = new_label("func_end");
         emit(function_end + ":");
+        debug_record("F " + function.qualified + " " + function.symbol + " " +
+                     function_end + " " + std::to_string(frame_size_) + " " +
+                     debug_type(function.result));
+        if (function.is_member && function.owner != nullptr && this_offset_ >= 0) {
+            debug_record("V " + function.qualified + " this " +
+                         std::to_string(this_offset_) + " " +
+                         debug_type(Type::make_pointer(Type::make_named(
+                             [&]() {
+                                 Name name;
+                                 name.parts = split_qualified(function.owner->qualified);
+                                 return name;
+                             }()))) +
+                         " 4");
+        }
         const std::string sites_label = new_label("func_sites");
         const std::string descriptor_label = new_label("func_eh");
         std::string descriptor = descriptor_label + ":\n";
@@ -4249,6 +4317,15 @@ private:
         bool needs_pure_virtual = false;
         for (auto& entry : class_index_) {
             ClassInfo& info = *entry.second;
+            debug_record("C " + info.qualified + " " +
+                         std::to_string(std::max(1, info.size)) + " " +
+                         (info.base != nullptr ? info.base->qualified : "-"));
+            for (const MemberInfo& member : info.members) {
+                debug_record("M " + info.qualified + " " + member.name + " " +
+                             std::to_string(member.offset) + " " +
+                             debug_type(member.type) + " " +
+                             std::to_string(std::max(1, type_size(member.type))));
+            }
             const std::vector<std::string> parts = split_qualified(info.qualified);
             const std::string mangled_name = mangle_qualified(parts);
             const std::string vtable_symbol = "_ZTV" + mangled_name;
@@ -4654,6 +4731,8 @@ private:
                 continue;
             }
             const int size = std::max(1, type_size(global->type));
+            debug_record("G " + global->qualified + " " + global->symbol + " " +
+                         debug_type(global->type) + " " + std::to_string(size));
             std::string output;
             output += ".global " + global->symbol + "\n";
             output += global->symbol + ":\n";
@@ -4760,6 +4839,7 @@ private:
     std::map<std::string, Global*> global_index_;
     int tls_cursor_ = 32;
     std::vector<std::uint8_t> tls_image_;
+    std::string debug_;
     std::vector<Global*> static_destructors_;
     std::map<std::string, TypePtr> type_aliases_;
     std::map<std::string, std::set<std::string>> imports_;
