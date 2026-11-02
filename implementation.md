@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 01:55 -08:00
+> **Last updated:** 2026-11-02 02:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -432,25 +432,29 @@ M9 C++ work.
 
 **Goal:** the shared debug model that the GUI, DAP, CLI, and tests will use.
 
+**Status:** complete 2026-11-02. The format and API are documented in
+[docs/debug.md](docs/debug.md). Line records are statement-granular; debug
+labels are resolved against the linked symbol table at load time.
+
 **Tasks**
 
-- [ ] Debug sections: lines, sources, variables, frames, types, globals,
+- [x] Debug sections: lines, sources, variables, frames, types, globals,
       strings.
-- [ ] Compiler emits `.loc` rows, variable/frame/type/global records; assembler
-      and linker relocate them.
-- [ ] `DebugSession` API: load, breakpoints, step in/over/out, registers,
+- [x] Compiler emits line rows, variable/frame/type/global records; the object
+      assembler and linker preserve `.debug_info`.
+- [x] `DebugSession` API: load, breakpoints, step in/over/out, registers,
       memory, variables, call stack, console.
-- [ ] CLI `kr32 debug` dumps debug records; `vm --trace` remains.
-- [ ] Tests: line mapping, variable lookup, frames, breakpoints, stepping.
+- [x] CLI `kr32 debug` dumps debug records; `vm --trace` remains.
+- [x] Tests: line mapping, variable lookup, frames, breakpoints, stepping.
 
 **Test plan and gate**
 
-- [ ] Source line lookup matches the compiled program.
-- [ ] Variables and frames are correct at a breakpoint.
-- [ ] Step over/in/out behave on a small C program.
-- [ ] Debug dump identifies files, functions, and types.
-- [ ] Windows and WSL tests pass.
-- [ ] Commit and tag `m5`; log entry added.
+- [x] Source line lookup matches the compiled program.
+- [x] Variables and frames are correct at a breakpoint.
+- [x] Step over/in/out behave on a small C program.
+- [x] Debug dump identifies files, functions, and types.
+- [x] Windows and WSL tests pass.
+- [x] Commit and tag `m5`; log entry added.
 
 ### M6 — Windowed debugger
 
@@ -740,6 +744,14 @@ Newest entries at the bottom. Use the local time zone.
       14 CTest cases including `build_c_hello`; Windows MSVC Debug/Release and
       Ninja; WSL GCC/Clang/ASan.
 - **2026-11-02 01:55 -08:00** — Tagged `m4`.
+- **2026-11-02 02:02 -08:00** — M5 completed: `.debug_info` line/source/function/
+      variable/global/type records; `DebugSession` load, breakpoints, stepping,
+      call stack, variable/memory access, and console capture; `kr32 debug`
+      dump; debug and stepping tests; format/API note in `docs/debug.md`.
+- **2026-11-02 02:02 -08:00** — M5 gate passed: 92 unit cases / 4222 assertions,
+      15 CTest cases including `debug_dump`; Windows MSVC Debug, Release, Ninja;
+      WSL GCC/Clang/ASan.
+- **2026-11-02 02:02 -08:00** — Tagged `m5`.
 
 ## 10. Updating this file
 

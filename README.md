@@ -8,12 +8,11 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M4 complete (2026-11-02). The bootstrap C compiler handles the M4
-scalar and aggregate subset, the preprocessor and built-in headers, structs,
-unions, enums, typedefs, arrays, recursion, `switch`, and `goto`. `kr32 cc`
-emits assembly or an object; `kr32 build file.c --run` links the runtime and
-runs the program. The ABI is documented in [docs/abi.md](docs/abi.md). The
-debugger and full host services are next.
+**Status:** M5 complete (2026-11-02). The compiler emits `.debug_info`, and
+`DebugSession` provides breakpoints, stepping, call stacks, variables, memory,
+and console capture. `kr32 debug app.k32` dumps source/function/type records;
+the format and API are documented in [docs/debug.md](docs/debug.md). The
+windowed debugger is next.
 
 ## Build
 
@@ -84,8 +83,9 @@ kr32 gui            # M6 placeholder for the windowed debugger
 merges objects, resolves symbols and relocations, and writes an executable
 `.k32`; `--map` writes the section/symbol map. `cc` compiles C to assembly or an
 object. `build` runs compile/assemble, link, and optional `--run` in one
-command. `size` reports `.k32` sections. The remaining tool commands (`cxx`,
-`debug`, `dap`, `shell`) are stubs for later milestones.
+command. `size` reports `.k32` sections and `debug` dumps the `.debug_info`
+records. The remaining tool commands (`cxx`, `dap`, `shell`) are stubs for later
+milestones.
 
 ## Layout
 

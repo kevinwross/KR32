@@ -5,6 +5,7 @@
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
+#include "kr32/debug/debug.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/link/linker.h"
 #include "kr32/version.h"
@@ -863,6 +864,30 @@ int command_cc(int argc, char** argv) {
     return 0;
 }
 
+int command_debug(int argc, char** argv) {
+    if (argc != 3) {
+        std::printf("Usage: kr32 debug <image.k32>\n");
+        return 2;
+    }
+    container::Image image;
+    std::string error;
+    if (!read_container_file(argv[2], image, error)) {
+        std::fprintf(stderr, "kr32 debug: %s\n", error.c_str());
+        return 1;
+    }
+    if (image.type != container::ImageType::Executable) {
+        std::fprintf(stderr, "kr32 debug: input is a relocatable object, not an executable\n");
+        return 1;
+    }
+    debug::Session session;
+    if (!session.load(image, error)) {
+        std::fprintf(stderr, "kr32 debug: %s\n", error.c_str());
+        return 1;
+    }
+    std::printf("%s", session.dump().c_str());
+    return 0;
+}
+
 int command_vm(int argc, char** argv) {
     std::string program;
     std::string bios;
@@ -1025,9 +1050,12 @@ int run(int argc, char** argv) {
     if (command == "cc") {
         return command_cc(argc, argv);
     }
+    if (command == "debug") {
+        return command_debug(argc, argv);
+    }
 
     for (const std::string_view candidate :
-         {"cxx", "debug", "dap", "shell"}) {
+         {"cxx", "dap", "shell"}) {
         if (command == candidate) {
             return not_implemented(command);
         }

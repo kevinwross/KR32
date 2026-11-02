@@ -1,0 +1,58 @@
+# Debug information and `DebugSession`
+
+M5 adds a debug section to the `.k32` container and a shared debug model used by
+the CLI today and by the GUI/DAP in later milestones.
+
+## `.debug_info`
+
+The compiler emits NUL-terminated text records into `.debug_info`:
+
+| Record | Meaning |
+| --- | --- |
+| `S <id> <path>` | Source file id and path |
+| `L <label> <source> <line> <column>` | Source line starts at the address of `label` |
+| `F <name> <start> <end> <frame> <type>` | Function range, frame size, result type |
+| `V <function> <name> <offset> <type> <size>` | Local/parameter at `R7 + offset` |
+| `G <name> <label> <type> <size>` | Global at the address of `label` |
+| `T <name> <size>` | Type table entry |
+
+Labels are resolved against the linked image's symbol table when the debug info
+is loaded. This keeps the format relocatable without changing the object model;
+the linker already preserves the local labels unless `--strip` is used.
+
+The object assembler accepts `.debug_info` as a non-alloc debug section. The
+linker concatenates debug payloads at address zero; they are never loaded into
+guest memory.
+
+## `DebugSession`
+
+`kr32::debug::Session` owns a `core::Machine`, the parsed `Info`, breakpoints,
+and captured console output. It exposes:
+
+- `load`, `machine`, `info`, `dump`
+- `set_breakpoint`, `clear_breakpoint`, `clear_breakpoints`, `at_breakpoint`
+- `step`, `run`, `step_over`, `step_out`
+- `line_at`, `function_at`, `call_stack`
+- `read_variable`, `read_global`, `read_memory`
+- `console`, `clear_console`
+
+`step_over` decodes the current instruction and runs through a `CALL` to its
+return address. `step_out` reads the return address from the current frame at
+`R7 + frame + 4`. Call frames unwind through the saved `R7` at `R7 + frame`.
+
+## CLI
+
+```text
+kr32 debug app.k32
+```
+
+prints the source, functions, globals, variables, types, and line map. The
+future GUI and DAP layers consume the same `Session`.
+
+## Current limits
+
+- Line records are emitted at statement boundaries, not every instruction.
+- Struct/union member debug records are not emitted yet; scalar/pointer/array
+  and aggregate size information is present.
+- Debug labels are resolved at load time rather than through linker
+  relocations.

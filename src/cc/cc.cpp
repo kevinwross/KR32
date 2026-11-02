@@ -585,6 +585,7 @@ public:
         Result result;
         try {
             emit(".text");
+            debug_record("S 0 " + source_name_);
             while (!at_end()) {
                 parse_top_level();
             }
@@ -597,6 +598,9 @@ public:
             }
             if (!bss_.empty()) {
                 result.assembly += ".bss\n" + bss_;
+            }
+            if (!debug_.empty()) {
+                result.assembly += ".debug_info\n" + debug_;
             }
             result.ok = true;
         } catch (const CompileError& error) {
@@ -661,6 +665,31 @@ private:
 
     std::string new_label(std::string_view prefix) {
         return ".L" + std::string(prefix) + "_" + std::to_string(label_counter_++);
+    }
+
+    std::string type_name(const TypePtr& type) const {
+        if (type == nullptr) {
+            return "int";
+        }
+        switch (type->kind) {
+        case Type::Kind::Void: return "void";
+        case Type::Kind::Char: return "char";
+        case Type::Kind::Int: return "int";
+        case Type::Kind::Bool: return "_Bool";
+        case Type::Kind::Pointer: return "ptr";
+        case Type::Kind::Array: return "array";
+        case Type::Kind::Struct: return "struct:" + type->tag;
+        case Type::Kind::Union: return "union:" + type->tag;
+        }
+        return "int";
+    }
+
+    void debug_record(const std::string& record) {
+        debug_ += "    .asciz \"" + escape_string(record) + "\"\n";
+    }
+
+    void debug_type(const TypePtr& type) {
+        debug_record("T " + type_name(type) + " " + std::to_string(type->size()));
     }
 
     bool is_type_start() const {
@@ -871,6 +900,9 @@ private:
             bss_ += "    .space " + std::to_string(actual->size()) + "\n";
         }
         globals_.emplace(name, Variable{name, actual, 0, name, true});
+        debug_type(actual);
+        debug_record("G " + name + " " + name + " " + type_name(actual) + " " +
+                     std::to_string(actual->size()));
     }
 
     int allocate_local(const TypePtr& type) {
@@ -940,6 +972,10 @@ private:
                             Variable{parameter_names[index], parameters[index], offset, "", false});
             emit("    STORE R" + std::to_string(index) + ", [R7 + " +
                  std::to_string(offset) + "]");
+            debug_type(parameters[index]);
+            debug_record("V " + name + " " + parameter_names[index] + " " +
+                         std::to_string(offset) + " " + type_name(parameters[index]) + " " +
+                         std::to_string(parameters[index]->size()));
         }
 
         parse_block_contents();
@@ -948,6 +984,9 @@ private:
         emit("    ADJSP #__FRAME_" + name + "__");
         emit("    POP R7");
         emit("    RET");
+        emit(".Lend_" + name + ":");
+        debug_record("F " + name + " " + name + " .Lend_" + name + " " +
+                     std::to_string(frame_size_) + " " + type_name(result_type));
         replace_all("__FRAME_" + name + "__", std::to_string(frame_size_));
     }
 
@@ -959,6 +998,13 @@ private:
     }
 
     void parse_statement() {
+        if (!current_function_.empty()) {
+            const std::string line_label =
+                ".Lline_" + current_function_ + "_" + std::to_string(line_counter_++);
+            emit(line_label + ":");
+            debug_record("L " + line_label + " 0 " + std::to_string(peek().line) + " " +
+                         std::to_string(peek().column));
+        }
         if (peek().kind == TokenKind::Identifier && peek(1).text == ":") {
             const std::string label = take().text;
             take();
@@ -1154,6 +1200,9 @@ private:
         }
         const int offset = allocate_local(actual);
         locals_[name] = Variable{name, actual, offset, "", false};
+        debug_type(actual);
+        debug_record("V " + current_function_ + " " + name + " " + std::to_string(offset) +
+                     " " + type_name(actual) + " " + std::to_string(actual->size()));
         if (match("=")) {
             gen_lvalue_address(name);
             emit("    PUSH R0");
@@ -1721,8 +1770,10 @@ private:
     std::vector<std::string> continue_labels_;
     std::string current_function_;
     std::string return_label_;
+    std::string debug_;
     std::string* output_ = nullptr;
     int frame_size_ = 0;
+    int line_counter_ = 0;
     int label_counter_ = 0;
     int string_counter_ = 0;
 };

@@ -11,6 +11,7 @@ add_executable(kr32_tests
     unit/test_object_assembler.cpp
     unit/test_linker.cpp
     unit/test_cc.cpp
+    unit/test_debug.cpp
     unit/test_assembler.cpp
     unit/test_disassembler.cpp)
 
@@ -21,6 +22,7 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_container
     kr32_link
     kr32_cc
+    kr32_debug
     kr32_warnings)
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
@@ -83,6 +85,12 @@ add_test(NAME build_c_hello
         -o ${CMAKE_BINARY_DIR}/hello-c.k32 --run)
 set_tests_properties(build_c_hello PROPERTIES
     PASS_REGULAR_EXPRESSION "Hello, KR32!")
+
+add_test(NAME debug_dump
+    COMMAND $<TARGET_FILE:kr32> debug ${CMAKE_BINARY_DIR}/hello-c.k32)
+set_tests_properties(debug_dump PROPERTIES
+    DEPENDS build_c_hello
+    PASS_REGULAR_EXPRESSION "function main")
 
 if(KR32_BUILD_UI)
     add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)

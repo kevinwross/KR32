@@ -390,6 +390,7 @@ public:
                     container::Alloc | container::Write);
         add_section(".bss", container::SectionType::Bss,
                     container::Alloc | container::Write);
+        add_section(".debug_info", container::SectionType::Debug, 0);
     }
 
     bool run(std::string_view source, container::Image& image) {
@@ -510,7 +511,8 @@ private:
 
     bool pass1_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
-        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss") {
+        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss" ||
+            name == ".debug_info") {
             return switch_section(name, statement.line);
         }
         if (name == ".global" || name == ".globl") {
@@ -1018,7 +1020,8 @@ private:
 
     bool pass2_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
-        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss") {
+        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss" ||
+            name == ".debug_info") {
             return switch_section(name, statement.line);
         }
         if (name == ".global" || name == ".globl" || name == ".extern" ||
