@@ -1794,13 +1794,15 @@ private:
         }
         if (consume("typeid")) {
             auto expression = make_expr(ExprKind::Typeid, token);
-            expect("(", "after typeid");
-            if (looks_like_type_inside_parentheses()) {
+            if (at("(") && looks_like_type_inside_parentheses()) {
+                advance();
                 expression->type = parse_type_id();
+                expect(")", "after typeid type");
             } else {
+                expect("(", "after typeid");
                 expression->children.push_back(parse_expression());
+                expect(")", "after typeid operand");
             }
-            expect(")", "after typeid operand");
             return expression;
         }
         if (at("static_cast") || at("dynamic_cast") || at("reinterpret_cast") ||

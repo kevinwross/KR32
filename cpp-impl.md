@@ -5,8 +5,9 @@
 worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
 lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
 mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
-conversions, and stack varargs), and M9.5 (classes, constructors/destructors,
-single inheritance) are complete; phase M9.6 (virtual dispatch and RTTI) is next.
+conversions, and stack varargs), M9.5 (classes, constructors/destructors,
+single inheritance), and M9.6 (virtual dispatch and RTTI) are complete; phase
+M9.7 (matrix and transform-stack codegen) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -111,11 +112,23 @@ Completed in M9.5:
 - [x] Tests: layout/member access, constructors/`this`, destructors,
       inheritance, pointer/FP members, static members, and copy.
 
+Completed in M9.6:
+
+- [x] Vtable address-point layout, vptr initialization in constructors and
+      destructors, inherited/overridden slot assignment, and virtual destructor
+      slots.
+- [x] Virtual member calls through pointers/references, abstract-class
+      rejection, and `__cxa_pure_virtual` stubs.
+- [x] `_ZTI`/`_ZTS` typeinfo emission, `typeid` expressions, and pointer
+      `dynamic_cast` using the single-inheritance typeinfo chain.
+- [x] Tests: virtual override dispatch, successful/failed `dynamic_cast`,
+      `typeid` comparison, and abstract-class diagnostics.
+
 Not started:
 
-- [ ] Virtual dispatch/RTTI, matrices, templates, exceptions, threads, debug,
-      and CLI integration (M9.6-M9.12). By-value class parameters/returns and
-      debug member/`this` records remain deferred.
+- [ ] Matrices, templates, exceptions, threads, debug, and CLI integration
+      (M9.7-M9.12). Weak/COMDAT vtable merging, by-value class parameters/
+      returns, and reference `dynamic_cast` remain deferred.
 
 ## 3. Milestone map
 
@@ -129,7 +142,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | done |
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | done |
 | M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | done |
-| M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | not started |
+| M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | done |
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | not started |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | not started |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | not started |
@@ -260,13 +273,22 @@ dispatch/RTTI) is next.
 
 ### M9.6 — Virtual dispatch and RTTI
 
-- [ ] Vtable layout, virtual destructor slots, vptr placement.
-- [ ] Virtual calls and overrides; abstract classes/pure virtuals.
-- [ ] `type_info`, `typeid`, `dynamic_cast` for supported hierarchies.
-- [ ] COMDAT/weak vtables and typeinfo.
-- [ ] Tests: virtual calls, dynamic_cast, destructor dispatch.
+- [x] Vtable layout, virtual destructor slots, vptr placement. (Address point at
+      `_ZTV+8`, typeinfo at `vptr-8`, offset-to-top at `vptr-4`; both virtual
+      destructor slots currently use the D1 symbol until `new`/`delete` needs
+      D0.)
+- [x] Virtual calls and overrides; abstract classes/pure virtuals.
+- [x] `type_info`, `typeid`, and pointer `dynamic_cast` for single inheritance;
+      reference `dynamic_cast` remains tied to exception support in M9.9.
+- [ ] COMDAT/weak vtables and typeinfo move to the M9.8 COMDAT work.
+- [x] Tests: virtual calls, failed/successful `dynamic_cast`, `typeid`
+      comparison, and abstract-class rejection.
 
 **Gate:** virtual/RTTI tests link and run; no duplicate-symbol failures.
+**Status:** done 2026-11-02 for the single-TU codegen gate; weak/COMDAT vtable
+merging is tracked in M9.8. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 162 test cases and 4711 assertions.
+M9.7 (matrix/transform codegen) is next.
 
 ### M9.7 — Matrix and transform-stack codegen
 
@@ -437,6 +459,13 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   21/21 CTest tests; `kr32_tests` reports 159 test cases and 4702 assertions.
   M9.6 (virtual dispatch and RTTI) is next; by-value class parameters/returns
   and debug member/`this` records remain deferred.
+- **2026-11-02 12:20 -08:00** — Completed M9.6. Added vtable address-point
+  layout, vptr installation in constructors/destructors, inherited/overridden
+  virtual slots, virtual calls through pointers, abstract-class rejection/pure
+  virtual stubs, `_ZTI`/`_ZTS` typeinfo, `typeid`, and pointer `dynamic_cast`.
+  Added virtual/RTTI codegen tests. Windows/WSL both pass 21/21 CTest tests;
+  `kr32_tests` reports 162 test cases and 4711 assertions. Weak/COMDAT vtable
+  merging moves to M9.8; M9.7 (matrices/transform codegen) is next.
 
 ## 8. Approval
 

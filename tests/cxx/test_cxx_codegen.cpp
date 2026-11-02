@@ -376,6 +376,81 @@ TEST_CASE("long double is a double alias and NaN comparisons run") {
     CHECK(nan.result == 42);
 }
 
+TEST_CASE("virtual dispatch and RTTI run through vtables") {
+    const ProgramResult dispatch = compile_and_run(
+        "class Base {\n"
+        "public:\n"
+        "    Base() { }\n"
+        "    virtual int value() { return 1; }\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    Derived() { }\n"
+        "    int value() override { return 42; }\n"
+        "};\n"
+        "int main() { Derived object; Base* pointer = &object; return pointer->value(); }\n");
+    INFO(dispatch.diagnostics);
+    REQUIRE(dispatch.ok);
+    CHECK(dispatch.result == 42);
+
+    const ProgramResult cast = compile_and_run(
+        "class Base {\n"
+        "public:\n"
+        "    Base() { }\n"
+        "    virtual int value() { return 1; }\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    Derived() { }\n"
+        "    int value() override { return 42; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Derived object;\n"
+        "    Base* base = &object;\n"
+        "    Derived* down = dynamic_cast<Derived*>(base);\n"
+        "    if (down == 0) { return 1; }\n"
+        "    if (typeid(base) != typeid(Derived*)) { return 2; }\n"
+        "    return down->value();\n"
+        "}\n");
+    INFO(cast.diagnostics);
+    REQUIRE(cast.ok);
+    CHECK(cast.result == 42);
+}
+
+TEST_CASE("failed dynamic_cast returns null") {
+    const ProgramResult program = compile_and_run(
+        "class Base {\n"
+        "public:\n"
+        "    Base() { }\n"
+        "    virtual int value() { return 1; }\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    Derived() { }\n"
+        "    int value() override { return 42; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Base object;\n"
+        "    Derived* down = dynamic_cast<Derived*>(&object);\n"
+        "    return down == 0 ? 42 : 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("abstract classes cannot be instantiated") {
+    const cxx::Result result = cxx::compile(
+        "class Abstract {\n"
+        "public:\n"
+        "    virtual int value() = 0;\n"
+        "};\n"
+        "int main() { Abstract value; return 0; }\n");
+    CHECK_FALSE(result.ok);
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.front().message.find("abstract") != std::string::npos);
+}
+
 TEST_CASE("class copy construction and assignment are memberwise byte copies") {
     const ProgramResult program = compile_and_run(
         "class Pair {\n"

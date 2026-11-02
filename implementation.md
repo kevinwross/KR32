@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:15 -08:00
+> **Last updated:** 2026-11-02 12:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -552,18 +552,18 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 [cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phases M9.1
 (ABI/API/test harness), M9.2 (preprocessor, lexer, AST, parser, diagnostics),
 M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
-(scalar `float`/`double`, FP calls, conversions, and stack varargs), and M9.5
-(classes, constructors/destructors, single inheritance) are complete, and M9.6
-(virtual dispatch and RTTI) is next. C++ ABI revision 1 is frozen in
-[docs/abi.md](docs/abi.md) with machine-checkable constants in
-`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
-in place, and `compile()` now produces assembly for the supported integer,
-scalar-FP, and class subset. Confirmed decisions include custom C++11 subset,
-one thread per core with cooperative oversubscription, `R11` TP, library
-matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
-per-thread transform stacks, full destructor unwinding, scalar FP library,
-stack-based FP varargs, Itanium-like mangling, and class-member/`this` debug
-support.
+(scalar `float`/`double`, FP calls, conversions, and stack varargs), M9.5
+(classes, constructors/destructors, single inheritance), and M9.6 (virtual
+dispatch and RTTI) are complete, and M9.7 (matrix/transform codegen) is next.
+C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with
+machine-checkable constants in `include/kr32/cxx/abi.h`. The standalone API and
+`kr32-cxx` driver skeleton are in place, and `compile()` now produces assembly
+for the supported integer, scalar-FP, class, and virtual/RTTI subset. Confirmed
+decisions include custom C++11 subset, one thread per core with cooperative
+oversubscription, `R11` TP, library matrices plus intrinsics, `double` align
+8/16-byte call boundaries, explicit per-thread transform stacks, full
+destructor unwinding, scalar FP library, stack-based FP varargs, Itanium-like
+mangling, and class-member/`this` debug support.
 
 **Tasks**
 
@@ -588,8 +588,10 @@ support.
       merge.
 - [x] Classes, constructors/destructors, `this`, member access/mangling, static
       members, single inheritance, and memberwise copy (M9.5).
-- [ ] Virtual dispatch/RTTI, templates, exceptions, `new`/`delete`, and static
-      initialization (M9.6-M9.9).
+- [x] Vtables, virtual dispatch/overrides, abstract classes/pure virtuals,
+      typeinfo/`typeid`, and pointer `dynamic_cast` (M9.6).
+- [ ] Templates, exceptions, `new`/`delete`, and static initialization
+      (M9.8-M9.9).
 - [x] Scalar `float`/`double` codegen, FP calls/spills, conversions, and ABI
       alignment (M9.4); `.float`/`.double` object-assembler support ported from
       main.
@@ -619,6 +621,8 @@ support.
 - [x] Class layout, constructors/destructors, `this`, member access, single
       inheritance, static members, FP members, and copy pass (M9.5 gate: 159
       cases / 4702 assertions).
+- [x] Virtual override dispatch, `typeid`, pointer `dynamic_cast`, and
+      abstract-class rejection pass (M9.6 gate: 162 cases / 4711 assertions).
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Matrix multiply/transform/dot and transform-stack tests pass.
 - [ ] Exceptions unwind correctly.
@@ -993,6 +997,13 @@ Newest entries at the bottom. Use the local time zone.
       copy construction/assignment. Windows/WSL both pass 21/21 CTest tests;
       `kr32_tests` reports 159 test cases and 4702 assertions. M9.6 (virtual
       dispatch and RTTI) is next.
+- **2026-11-02 12:20 -08:00** — Completed M9.6. Added vtable address-point
+      layout, vptr installation in constructors/destructors, inherited and
+      overridden virtual slots, virtual calls through pointers, abstract-class
+      rejection/pure-virtual stubs, typeinfo (`_ZTI`/`_ZTS`), `typeid`, and
+      pointer `dynamic_cast`. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 162 test cases and 4711 assertions. M9.7
+      (matrix/transform codegen) is next.
 
 ## 10. Updating this file
 

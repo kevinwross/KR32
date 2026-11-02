@@ -321,6 +321,7 @@ public:
         collect_classes(unit.declarations, "");
         layout_classes();
         collect(unit.declarations, "");
+        build_vtables();
         if (!diagnostics_.empty()) {
             return {};
         }
@@ -330,6 +331,7 @@ public:
             }
         }
         emit_globals();
+        emit_rtti();
         std::string result = text_;
         if (!rodata_.empty()) {
             result += ".rodata\n" + rodata_;
@@ -359,6 +361,10 @@ private:
         bool is_member = false;
         bool is_constructor = false;
         bool is_destructor = false;
+        bool is_virtual = false;
+        bool is_pure = false;
+        int vtable_index = -1;
+        std::string member_name;
         ClassInfo* owner = nullptr;
     };
 
@@ -392,6 +398,11 @@ private:
         std::vector<Function*> constructors;
         Function* destructor = nullptr;
         std::map<std::string, Global*> static_globals;
+        std::vector<Function*> vtable;
+        std::map<std::string, int> virtual_slots;
+        bool polymorphic = false;
+        bool abstract = false;
+        bool vtables_built = false;
         bool laid_out = false;
     };
 
@@ -516,6 +527,11 @@ private:
             return;
         }
         info.laid_out = true;
+        for (const DeclPtr& child : info.decl->children) {
+            if (child && child->kind == DeclKind::Function && child->is_virtual) {
+                info.polymorphic = true;
+            }
+        }
         if (!info.decl->base_names.empty()) {
             ClassInfo* base = find_class(info.decl->base_names.front());
             if (!base) {
@@ -526,7 +542,18 @@ private:
                 info.base = base;
                 info.align = base->align;
                 info.size = base->size;
+                if (base->polymorphic) {
+                    info.polymorphic = true;
+                } else if (info.polymorphic) {
+                    error(*info.decl,
+                          "polymorphic class derived from a non-polymorphic base "
+                          "is not supported yet");
+                }
             }
+        }
+        if (info.polymorphic && info.base == nullptr) {
+            info.size = 4;
+            info.align = 4;
         }
         for (const DeclPtr& member : info.decl->children) {
             if (!member || member->kind != DeclKind::Variable || member->is_static) {
@@ -742,6 +769,9 @@ private:
         function->is_member = owner != nullptr && !declaration.is_static;
         function->is_constructor = constructor;
         function->is_destructor = destructor;
+        function->is_virtual = declaration.is_virtual || declaration.is_override;
+        function->is_pure = declaration.is_pure;
+        function->member_name = base_name;
         function->result = (constructor || destructor)
                                ? Type::make_builtin(BuiltinKind::Void)
                                : resolve_type(declaration.type);
@@ -790,6 +820,64 @@ private:
         }
         function_storage_.push_back(std::move(function));
         return raw;
+    }
+
+    void build_vtables() {
+        for (auto& entry : class_index_) {
+            build_vtable(*entry.second);
+        }
+    }
+
+    void build_vtable(ClassInfo& info) {
+        if (info.vtables_built) {
+            return;
+        }
+        info.vtables_built = true;
+        if (info.base != nullptr) {
+            build_vtable(*info.base);
+            info.vtable = info.base->vtable;
+            info.virtual_slots = info.base->virtual_slots;
+            info.polymorphic = info.polymorphic || info.base->polymorphic;
+        }
+        for (auto& entry : info.methods) {
+            for (Function* function : entry.second) {
+                if (!function->is_virtual || function->is_constructor ||
+                    function->is_destructor) {
+                    continue;
+                }
+                const auto slot = info.virtual_slots.find(function->member_name);
+                if (slot != info.virtual_slots.end()) {
+                    info.vtable[static_cast<std::size_t>(slot->second)] = function;
+                    function->vtable_index = slot->second;
+                } else {
+                    info.virtual_slots[function->member_name] =
+                        static_cast<int>(info.vtable.size());
+                    function->vtable_index =
+                        static_cast<int>(info.vtable.size());
+                    info.vtable.push_back(function);
+                }
+            }
+        }
+        if (info.destructor != nullptr && info.destructor->is_virtual) {
+            const auto slot = info.virtual_slots.find("@dtor");
+            if (slot != info.virtual_slots.end()) {
+                info.vtable[static_cast<std::size_t>(slot->second)] = info.destructor;
+                info.vtable[static_cast<std::size_t>(slot->second) + 1] =
+                    info.destructor;
+            } else {
+                info.virtual_slots["@dtor"] = static_cast<int>(info.vtable.size());
+                info.vtable.push_back(info.destructor);
+                info.vtable.push_back(info.destructor);
+            }
+        }
+        if (!info.vtable.empty()) {
+            info.polymorphic = true;
+        }
+        for (Function* slot : info.vtable) {
+            if (slot != nullptr && slot->is_pure) {
+                info.abstract = true;
+            }
+        }
     }
 
     void collect_class_members(const Decl& declaration, const std::string& prefix) {
@@ -1111,6 +1199,8 @@ private:
         case ExprKind::Sizeof:
         case ExprKind::Alignof:
             return Type::make_builtin(BuiltinKind::Int);
+        case ExprKind::Typeid:
+            return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
         case ExprKind::This: {
             TypePtr type = Type::make_builtin(BuiltinKind::Void);
             if (current_class_ != nullptr) {
@@ -1154,7 +1244,6 @@ private:
         case ExprKind::Scope:
         case ExprKind::New:
         case ExprKind::Delete:
-        case ExprKind::Typeid:
         case ExprKind::Lambda:
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
@@ -1649,6 +1738,45 @@ private:
         emit("    MOV R0, #0");
     }
 
+    TypePtr gen_dynamic_cast(const Expr& expression, const TypePtr& target) {
+        if (!target || target->kind != TypeKind::Pointer) {
+            diagnose_once(expression,
+                          "reference dynamic_cast requires exception support (M9.9)");
+            emit("    MOV R0, #0");
+            return target;
+        }
+        ClassInfo* target_class = class_of(target->element);
+        if (!target_class) {
+            diagnose_once(expression, "dynamic_cast target must be a class pointer");
+            emit("    MOV R0, #0");
+            return target;
+        }
+        gen_expr(*expression.children[0]);
+        const std::string null_label = new_label("dcast_null");
+        const std::string loop_label = new_label("dcast_loop");
+        const std::string success_label = new_label("dcast_ok");
+        const std::string end_label = new_label("dcast_end");
+        emit("    CMP R0, #0");
+        emit("    JZ " + null_label);
+        emit("    MOV R1, R0");
+        emit("    LOAD R2, [R1]");
+        emit("    LOAD R2, [R2 - 8]");
+        emit("    LEA R3, [" + typeinfo_symbol(target_class) + "]");
+        emit(loop_label + ":");
+        emit("    CMP R2, R3");
+        emit("    JZ " + success_label);
+        emit("    LOAD R2, [R2 + 8]");
+        emit("    CMP R2, #0");
+        emit("    JNZ " + loop_label);
+        emit(null_label + ":");
+        emit("    MOV R0, #0");
+        emit("    JMP " + end_label);
+        emit(success_label + ":");
+        emit("    MOV R0, R1");
+        emit(end_label + ":");
+        return target;
+    }
+
     TypePtr gen_expr(const Expr& expression) {
         switch (expression.kind) {
         case ExprKind::IntegerLiteral:
@@ -1753,6 +1881,9 @@ private:
         }
         case ExprKind::Cast: {
             const TypePtr target = resolve_type(expression.type);
+            if (expression.text == "dynamic_cast") {
+                return gen_dynamic_cast(expression, target);
+            }
             const TypePtr source = type_of(*expression.children[0]);
             gen_expr(*expression.children[0]);
             if (is_fp(target) && !is_fp(source)) {
@@ -1785,6 +1916,49 @@ private:
         case ExprKind::Alignof:
             emit("    MOV R0, #4");
             return Type::make_builtin(BuiltinKind::Int);
+        case ExprKind::Typeid: {
+            if (expression.type) {
+                TypePtr type = resolve_type(expression.type);
+                if (type && (type->kind == TypeKind::Pointer ||
+                             type->kind == TypeKind::LValueRef ||
+                             type->kind == TypeKind::RValueRef)) {
+                    type = type->element;
+                }
+                ClassInfo* info = class_of(type);
+                if (info == nullptr) {
+                    emit("    MOV R0, #0");
+                } else {
+                    emit("    LEA R0, [" + typeinfo_symbol(info) + "]");
+                }
+                return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
+            }
+            TypePtr type = type_of(*expression.children[0], false);
+            TypePtr object = type;
+            if (object && (object->kind == TypeKind::Pointer ||
+                           object->kind == TypeKind::LValueRef ||
+                           object->kind == TypeKind::RValueRef)) {
+                object = object->element;
+            }
+            ClassInfo* info = class_of(object);
+            if (info == nullptr) {
+                emit("    MOV R0, #0");
+                return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
+            }
+            if (info->polymorphic) {
+                if (type && (type->kind == TypeKind::Pointer ||
+                             type->kind == TypeKind::LValueRef ||
+                             type->kind == TypeKind::RValueRef)) {
+                    gen_expr(*expression.children[0]);
+                } else {
+                    gen_address(*expression.children[0]);
+                }
+                emit("    LOAD R1, [R0]");
+                emit("    LOAD R0, [R1 - 8]");
+            } else {
+                emit("    LEA R0, [" + typeinfo_symbol(info) + "]");
+            }
+            return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
+        }
         case ExprKind::This:
             gen_address(expression);
             return type_of(expression);
@@ -1804,7 +1978,6 @@ private:
         case ExprKind::Scope:
         case ExprKind::New:
         case ExprKind::Delete:
-        case ExprKind::Typeid:
         case ExprKind::Lambda:
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
@@ -2219,6 +2392,23 @@ private:
             return Type::make_builtin(BuiltinKind::Int);
         }
         const bool member_call = function->is_member;
+        bool virtual_dispatch = false;
+        if (function->is_virtual && function->vtable_index >= 0) {
+            if (expression.children[0]->kind == ExprKind::Member) {
+                const Expr& member = *expression.children[0];
+                if (member.is_arrow) {
+                    virtual_dispatch = true;
+                } else {
+                    const TypePtr object_type = type_of(*member.children[0], false);
+                    virtual_dispatch =
+                        object_type && (object_type->kind == TypeKind::Pointer ||
+                                        object_type->kind == TypeKind::LValueRef ||
+                                        object_type->kind == TypeKind::RValueRef);
+                }
+            } else if (current_class_ != nullptr) {
+                virtual_dispatch = true;
+            }
+        }
         int this_temp = -1;
         if (member_call) {
             this_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -2331,7 +2521,14 @@ private:
                 ++integer_register;
             }
         }
-        emit("    CALL " + function->symbol);
+        if (virtual_dispatch) {
+            emit("    LOAD R4, [R0]");
+            emit("    LOAD R4, [R4 + " +
+                 std::to_string(function->vtable_index * 4) + "]");
+            emit("    CALL R4");
+        } else {
+            emit("    CALL " + function->symbol);
+        }
         if (stack_bytes != 0) {
             emit("    ADJSP #" + std::to_string(stack_bytes));
         }
@@ -2527,6 +2724,10 @@ private:
 
     void construct_object(ClassInfo* info, int offset,
                           const std::vector<ExprPtr>& arguments) {
+        if (info->abstract) {
+            error(*info->decl, "cannot instantiate abstract class: " + info->qualified);
+            return;
+        }
         Function* constructor = find_constructor(info, arguments.size());
         if (!constructor) {
             if (arguments.empty()) {
@@ -2593,6 +2794,25 @@ private:
         return nullptr;
     }
 
+    std::string typeinfo_symbol(ClassInfo* info) {
+        if (info == nullptr) {
+            return "0";
+        }
+        return "_ZTI" + mangle_qualified(split_qualified(info->qualified));
+    }
+
+    void set_vptr(ClassInfo& info) {
+        if (!info.polymorphic) {
+            return;
+        }
+        const std::vector<std::string> parts = split_qualified(info.qualified);
+        const std::string vtable_symbol = "_ZTV" + mangle_qualified(parts);
+        emit("    LOAD R1, [R7 + " + std::to_string(this_offset_) + "]");
+        emit("    LEA R0, [" + vtable_symbol + "]");
+        emit("    ADD R0, R0, #8");
+        emit("    STORE R0, [R1]");
+    }
+
     void emit_constructor_prefix(Function& function) {
         ClassInfo* info = function.owner;
         if (!info) {
@@ -2604,6 +2824,7 @@ private:
                 emit("    CALL " + base_constructor->symbol);
             }
         }
+        set_vptr(*info);
         for (const DeclPtr& child : info->decl->children) {
             if (!child || child->kind != DeclKind::Variable || child->is_static) {
                 continue;
@@ -2873,6 +3094,8 @@ private:
         if (function.decl->body) {
             if (function.is_constructor) {
                 emit_constructor_prefix(function);
+            } else if (function.is_destructor && function.owner != nullptr) {
+                set_vptr(*function.owner);
             }
             gen_statement(*function.decl->body);
             if (function.is_destructor) {
@@ -2905,6 +3128,48 @@ private:
                std::string::npos) {
             text_.replace(position, va_base_placeholder_.size(), va_base);
             position += va_base.size();
+        }
+    }
+
+    void emit_rtti() {
+        bool needs_pure_virtual = false;
+        for (auto& entry : class_index_) {
+            ClassInfo& info = *entry.second;
+            const std::vector<std::string> parts = split_qualified(info.qualified);
+            const std::string mangled_name = mangle_qualified(parts);
+            const std::string vtable_symbol = "_ZTV" + mangled_name;
+            const std::string typeinfo_symbol = "_ZTI" + mangled_name;
+            const std::string typeinfo_name = "_ZTS" + mangled_name;
+            data_ += ".global " + typeinfo_symbol + "\n" + typeinfo_symbol + ":\n";
+            data_ += "    .word 0\n";
+            data_ += "    .word " + typeinfo_name + "\n";
+            if (info.base != nullptr) {
+                const std::vector<std::string> base_parts =
+                    split_qualified(info.base->qualified);
+                data_ += "    .word _ZTI" + mangle_qualified(base_parts) + "\n";
+            } else {
+                data_ += "    .word 0\n";
+            }
+            rodata_ += typeinfo_name + ":\n    .asciz \"" +
+                       escape_asm(info.qualified) + "\"\n";
+            if (!info.polymorphic) {
+                continue;
+            }
+            data_ += ".global " + vtable_symbol + "\n" + vtable_symbol + ":\n";
+            data_ += "    .word " + typeinfo_symbol + "\n";
+            data_ += "    .word 0\n";
+            for (Function* slot : info.vtable) {
+                if (slot == nullptr || slot->is_pure || !slot->defined) {
+                    needs_pure_virtual = true;
+                    data_ += "    .word __cxa_pure_virtual\n";
+                } else {
+                    data_ += "    .word " + slot->symbol + "\n";
+                }
+            }
+        }
+        if (needs_pure_virtual) {
+            text_ += ".text\n.global __cxa_pure_virtual\n__cxa_pure_virtual:\n";
+            text_ += "    JMP __cxa_pure_virtual\n";
         }
     }
 
