@@ -6,8 +6,9 @@ worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
 lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
 mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
 conversions, and stack varargs), M9.5 (classes, constructors/destructors,
-single inheritance), and M9.6 (virtual dispatch and RTTI) are complete; phase
-M9.7 (matrix and transform-stack codegen) is next.
+single inheritance), M9.6 (virtual dispatch and RTTI), and M9.7 (matrix and
+transform-stack codegen) are complete; phase M9.8 (templates and static
+initialization) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -124,11 +125,24 @@ Completed in M9.6:
 - [x] Tests: virtual override dispatch, successful/failed `dynamic_cast`,
       `typeid` comparison, and abstract-class diagnostics.
 
+Completed in M9.7:
+
+- [x] Ported tile/transform-stack instruction encoding into the object
+      assembler (`MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`/`MLOAD`/`MSTORE`/
+      `MPUSH`/`MPOP`/`MDROP`), with encoding tests.
+- [x] `include/kr32/matrix.hpp` plus freestanding preprocessor injection for
+      `kr32::vec4`/`kr32::mat4` and the matrix/transform functions.
+- [x] Lowered matrix/transform calls to tile instructions, including
+      `MVEC`+`MTRANS` handling for the column-vector result convention.
+- [x] Tests: matrix multiply, multiply-add, transpose, transform, dot, aliasing,
+      and transform-stack push/pop/drop.
+
 Not started:
 
-- [ ] Matrices, templates, exceptions, threads, debug, and CLI integration
-      (M9.7-M9.12). Weak/COMDAT vtable merging, by-value class parameters/
-      returns, and reference `dynamic_cast` remain deferred.
+- [ ] Templates, exceptions, threads, debug, and CLI integration
+      (M9.8-M9.12). A full tile register allocator/spill pass, matrix
+      optimization/fusion pass, weak/COMDAT merging, and by-value class
+      parameters/returns remain deferred.
 
 ## 3. Milestone map
 
@@ -143,7 +157,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | done |
 | M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | done |
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | done |
-| M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | not started |
+| M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | done |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | not started |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | not started |
 | M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | not started |
@@ -292,18 +306,27 @@ M9.7 (matrix/transform codegen) is next.
 
 ### M9.7 — Matrix and transform-stack codegen
 
-- [ ] Add `kr32/matrix.hpp`: `vec4`, `mat4`, `matrix_mul`,
-      `matrix_mul_add`, `transform`, `transpose`, `dot`, `push`, `pop`, `drop`.
-- [ ] Register/define compiler intrinsics for `MMUL`, `MMAC`, `MVEC`,
-      `MTRANS`, `VDOT`, `MPUSH`, `MPOP`, `MDROP`.
-- [ ] Tile register allocator and spills; caller-saved `T0-T15`.
-- [ ] Explicit per-thread transform-stack discipline and TSP context handling.
-- [ ] Matrix constants via `MLOAD`/`VLOAD`; memory layout/alignment 16.
+- [x] Add `include/kr32/matrix.hpp`: `vec4`, `mat4`, `matrix_mul`,
+      `matrix_mul_add`, `transform`, `transpose`, `dot`, `push`, `pop`, `drop`;
+      the freestanding preprocessor injects the same declarations.
+- [x] Lower the library calls to `MMUL`, `MMAC`, `MVEC`, `MTRANS`, `VDOT`,
+      `MPUSH`, `MPOP`, and `MDROP`; the object assembler now encodes all tile
+      and transform-stack instructions.
+- [x] Tile scratch discipline uses caller-saved `T0-T3`; a full tile register
+      allocator and spill pass remain deferred.
+- [x] Explicit per-thread transform-stack discipline and TSP handling; the VM
+      supplies TSP and native thread context restore is M9.10.
+- [x] Matrix/vector memory layout with 16-byte alignment and `MLOAD`/`VLOAD`
+      constants via runtime loads.
 - [ ] Optimization pass: multiply/accumulate fusion, nested transform folding,
-      transpose elimination.
-- [ ] Tests: compare against scalar reference matrices; aliasing; stack push/pop.
+      transpose elimination (correctness-first lowering is in place).
+- [x] Tests: tile object encodings, matrix multiply/add/transpose, transform,
+      dot, aliasing, and transform-stack push/pop/drop.
 
 **Gate:** matrix/transform tests pass on Windows/WSL.
+**Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 165 test cases and 4735 assertions.
+M9.8 (templates/static initialization) is next.
 
 ### M9.8 — Templates and static initialization
 
@@ -466,6 +489,16 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   Added virtual/RTTI codegen tests. Windows/WSL both pass 21/21 CTest tests;
   `kr32_tests` reports 162 test cases and 4711 assertions. Weak/COMDAT vtable
   merging moves to M9.8; M9.7 (matrices/transform codegen) is next.
+- **2026-11-02 12:26 -08:00** — Completed M9.7. Ported tile and
+  transform-stack instruction encoding into the object assembler, added
+  `include/kr32/matrix.hpp` and freestanding preprocessor injection for
+  `kr32::vec4`/`mat4`, and lowered matrix multiply/add/transpose, vector
+  transform, dot product, and transform-stack push/pop/drop to tile
+  instructions. Tests cover tile encodings, matrix operations, aliasing, and
+  stack discipline. Windows/WSL both pass 21/21 CTest tests; `kr32_tests`
+  reports 165 test cases and 4735 assertions. M9.8 (templates and static
+  initialization) is next; a full tile allocator/spill and optimization pass
+  remain deferred.
 
 ## 8. Approval
 

@@ -578,6 +578,13 @@ private:
         } else {
             info.size = (info.size + info.align - 1) / info.align * info.align;
         }
+        if (info.qualified == "kr32::vec4") {
+            info.size = 16;
+            info.align = 16;
+        } else if (info.qualified == "kr32::mat4") {
+            info.size = 64;
+            info.align = 16;
+        }
         for (MemberInfo& member : info.members) {
             info.member_index[member.name] = &member;
         }
@@ -1183,6 +1190,10 @@ private:
                 if (name == "__builtin_va_arg") {
                     return resolve_type(expression.type);
                 }
+                std::string intrinsic;
+                if (matrix_intrinsic_name(expression, intrinsic)) {
+                    return matrix_intrinsic_type(intrinsic);
+                }
             }
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
@@ -1320,6 +1331,135 @@ private:
             }
         }
         return {};
+    }
+
+    bool matrix_intrinsic_name(const Expr& call, std::string& name) {
+        if (call.children.empty() || call.children[0]->kind != ExprKind::Name) {
+            return false;
+        }
+        const std::vector<std::string> parts =
+            split_qualified(call.children[0]->name.to_string());
+        if (parts.empty()) {
+            return false;
+        }
+        name = parts.back();
+        static const std::set<std::string> names = {
+            "matrix_mul", "matrix_mul_add", "transpose", "transform",
+            "dot", "push", "pop", "drop"};
+        return names.find(name) != names.end();
+    }
+
+    TypePtr matrix_intrinsic_type(const std::string& name) {
+        if (name == "transform") {
+            ClassInfo* info = find_class("kr32::vec4");
+            if (info) {
+                Name type_name;
+                type_name.parts = split_qualified(info->qualified);
+                return Type::make_named(type_name);
+            }
+        }
+        if (name == "dot") {
+            return Type::make_builtin(BuiltinKind::Float);
+        }
+        if (name == "push" || name == "pop" || name == "drop") {
+            return Type::make_builtin(BuiltinKind::Void);
+        }
+        ClassInfo* info = find_class("kr32::mat4");
+        if (info) {
+            Name type_name;
+            type_name.parts = split_qualified(info->qualified);
+            return Type::make_named(type_name);
+        }
+        return Type::make_builtin(BuiltinKind::Int);
+    }
+
+    int matrix_argument_address(const Expr& expression) {
+        gen_address(expression);
+        const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+        emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+        return temp;
+    }
+
+    TypePtr emit_matrix_intrinsic(const Expr& call, const std::string& name) {
+        const TypePtr result = matrix_intrinsic_type(name);
+        if (name == "drop") {
+            emit("    MDROP");
+            emit("    MOV R0, #0");
+            return result;
+        }
+        if (name == "push") {
+            const int argument = matrix_argument_address(*call.arguments[0]);
+            emit("    LOAD R0, [R7 + " + std::to_string(argument) + "]");
+            emit("    MLOAD T0, [R0]");
+            emit("    MPUSH T0");
+            emit("    MOV R0, #0");
+            return result;
+        }
+        if (name == "pop") {
+            const int argument = matrix_argument_address(*call.arguments[0]);
+            emit("    MPOP T0");
+            emit("    LOAD R0, [R7 + " + std::to_string(argument) + "]");
+            emit("    MSTORE T0, [R0]");
+            emit("    MOV R0, #0");
+            return result;
+        }
+        if (name == "dot") {
+            const int left = matrix_argument_address(*call.arguments[0]);
+            const int right = matrix_argument_address(*call.arguments[1]);
+            emit("    LOAD R0, [R7 + " + std::to_string(left) + "]");
+            emit("    MLOAD T0, [R0]");
+            emit("    LOAD R0, [R7 + " + std::to_string(right) + "]");
+            emit("    VLOAD T1, [R0]");
+            emit("    VDOT F0, T0, T1");
+            return result;
+        }
+        const int result_offset = allocate_local(result);
+        if (name == "matrix_mul") {
+            const int left = matrix_argument_address(*call.arguments[0]);
+            const int right = matrix_argument_address(*call.arguments[1]);
+            emit("    LOAD R0, [R7 + " + std::to_string(left) + "]");
+            emit("    MLOAD T1, [R0]");
+            emit("    LOAD R0, [R7 + " + std::to_string(right) + "]");
+            emit("    MLOAD T2, [R0]");
+            emit("    MMUL T0, T1, T2");
+        } else if (name == "matrix_mul_add") {
+            const int left = matrix_argument_address(*call.arguments[0]);
+            const int right = matrix_argument_address(*call.arguments[1]);
+            const int addend = matrix_argument_address(*call.arguments[2]);
+            emit("    LOAD R0, [R7 + " + std::to_string(addend) + "]");
+            emit("    MLOAD T0, [R0]");
+            emit("    LOAD R0, [R7 + " + std::to_string(left) + "]");
+            emit("    MLOAD T1, [R0]");
+            emit("    LOAD R0, [R7 + " + std::to_string(right) + "]");
+            emit("    MLOAD T2, [R0]");
+            emit("    MMAC T0, T1, T2");
+        } else if (name == "transpose") {
+            const int argument = matrix_argument_address(*call.arguments[0]);
+            emit("    LOAD R0, [R7 + " + std::to_string(argument) + "]");
+            emit("    MLOAD T1, [R0]");
+            emit("    MTRANS T0, T1");
+        } else if (name == "transform") {
+            const int matrix = matrix_argument_address(*call.arguments[0]);
+            const int vector = matrix_argument_address(*call.arguments[1]);
+            emit("    LOAD R0, [R7 + " + std::to_string(matrix) + "]");
+            emit("    MLOAD T1, [R0]");
+            emit("    LOAD R0, [R7 + " + std::to_string(vector) + "]");
+            emit("    VLOAD T2, [R0]");
+            emit("    MTRANS T3, T2");
+            emit("    MVEC T0, T1, T3");
+        } else {
+            diagnose_once(call, "unsupported matrix intrinsic: " + name);
+            return result;
+        }
+        emit("    LEA R1, [R7 + " + std::to_string(result_offset) + "]");
+        if (name == "transform") {
+            emit("    MTRANS T3, T0");
+            emit("    VSTORE T3, [R1]");
+        } else {
+            emit("    MSTORE T0, [R1]");
+        }
+        emit("    LEA R0, [R7 + " + std::to_string(result_offset) + "]");
+        return result;
     }
 
     Function* resolve_call(const Expr& call) {
@@ -2273,7 +2413,11 @@ private:
             const int destination =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(destination) + "]");
-            gen_address(*expression.children[1]);
+            if (expression.children[1]->kind == ExprKind::Call) {
+                gen_expr(*expression.children[1]);
+            } else {
+                gen_address(*expression.children[1]);
+            }
             emit("    MOV R1, R0");
             emit("    LOAD R0, [R7 + " + std::to_string(destination) + "]");
             emit("    MOV R2, #" + std::to_string(info->size));
@@ -2331,6 +2475,10 @@ private:
     }
 
     TypePtr gen_call(const Expr& expression) {
+        std::string intrinsic;
+        if (matrix_intrinsic_name(expression, intrinsic)) {
+            return emit_matrix_intrinsic(expression, intrinsic);
+        }
         if (!expression.children.empty() &&
             expression.children[0]->kind == ExprKind::Name) {
             const std::string name = expression.children[0]->name.to_string();
@@ -2913,6 +3061,18 @@ private:
         if (ClassInfo* info = class_of(type)) {
             const std::vector<ExprPtr> empty;
             const std::vector<ExprPtr>* arguments = &empty;
+            if (declaration.initializer &&
+                declaration.initializer->kind == ExprKind::Call) {
+                std::string intrinsic;
+                if (matrix_intrinsic_name(*declaration.initializer, intrinsic)) {
+                    gen_expr(*declaration.initializer);
+                    emit("    MOV R1, R0");
+                    emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    MOV R2, #" + std::to_string(info->size));
+                    emit("    CALL memcpy");
+                    return;
+                }
+            }
             if (declaration.initializer) {
                 if (declaration.initializer->kind == ExprKind::Call) {
                     arguments = &declaration.initializer->arguments;

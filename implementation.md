@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:20 -08:00
+> **Last updated:** 2026-11-02 12:26 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -553,17 +553,18 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 (ABI/API/test harness), M9.2 (preprocessor, lexer, AST, parser, diagnostics),
 M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (scalar `float`/`double`, FP calls, conversions, and stack varargs), M9.5
-(classes, constructors/destructors, single inheritance), and M9.6 (virtual
-dispatch and RTTI) are complete, and M9.7 (matrix/transform codegen) is next.
-C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with
-machine-checkable constants in `include/kr32/cxx/abi.h`. The standalone API and
-`kr32-cxx` driver skeleton are in place, and `compile()` now produces assembly
-for the supported integer, scalar-FP, class, and virtual/RTTI subset. Confirmed
-decisions include custom C++11 subset, one thread per core with cooperative
-oversubscription, `R11` TP, library matrices plus intrinsics, `double` align
-8/16-byte call boundaries, explicit per-thread transform stacks, full
-destructor unwinding, scalar FP library, stack-based FP varargs, Itanium-like
-mangling, and class-member/`this` debug support.
+(classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
+and RTTI), and M9.7 (matrix/transform-stack codegen) are complete, and M9.8
+(templates and static initialization) is next. C++ ABI revision 1 is frozen in
+[docs/abi.md](docs/abi.md) with machine-checkable constants in
+`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
+in place, and `compile()` now produces assembly for the supported integer,
+scalar-FP, class, virtual/RTTI, and matrix subset. Confirmed decisions include
+custom C++11 subset, one thread per core with cooperative oversubscription,
+`R11` TP, library matrices plus intrinsics, `double` align 8/16-byte call
+boundaries, explicit per-thread transform stacks, full destructor unwinding,
+scalar FP library, stack-based FP varargs, Itanium-like mangling, and
+class-member/`this` debug support.
 
 **Tasks**
 
@@ -597,8 +598,9 @@ mangling, and class-member/`this` debug support.
       main.
 - [x] Variadic functions with promoted `float`/`double` arguments and `va_list`
       (M9.4 stack slots and builtins).
-- [ ] Matrix library and intrinsics: `mat4`/`vec4`, tile allocation,
-      `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, transform-stack push/pop.
+- [x] Matrix library and intrinsics: `mat4`/`vec4`, object-assembler tile
+      encoding, `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, and transform-stack
+      push/pop/drop (M9.7).
 - [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
       condition variables, `std::thread` subset.
 - [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
@@ -623,8 +625,10 @@ mangling, and class-member/`this` debug support.
       cases / 4702 assertions).
 - [x] Virtual override dispatch, `typeid`, pointer `dynamic_cast`, and
       abstract-class rejection pass (M9.6 gate: 162 cases / 4711 assertions).
+- [x] Matrix multiply/add/transpose, vector transform, dot, aliasing, and
+      transform-stack push/pop/drop pass (M9.7 gate: 165 cases / 4735
+      assertions).
 - [ ] C++ hello world and a class/template demo run.
-- [ ] Matrix multiply/transform/dot and transform-stack tests pass.
 - [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
@@ -1004,6 +1008,14 @@ Newest entries at the bottom. Use the local time zone.
       pointer `dynamic_cast`. Windows/WSL both pass 21/21 CTest tests;
       `kr32_tests` reports 162 test cases and 4711 assertions. M9.7
       (matrix/transform codegen) is next.
+- **2026-11-02 12:26 -08:00** — Completed M9.7. Ported tile and
+      transform-stack instruction encoding into the object assembler, added
+      `include/kr32/matrix.hpp` and freestanding preprocessor injection for
+      `kr32::vec4`/`mat4`, and lowered matrix multiply/add/transpose, vector
+      transform, dot, and transform-stack push/pop/drop to tile instructions.
+      Added tile-encoding and matrix/aliasing/stack tests. Windows/WSL both pass
+      21/21 CTest tests; `kr32_tests` reports 165 test cases and 4735
+      assertions. M9.8 (templates and static initialization) is next.
 
 ## 10. Updating this file
 

@@ -221,6 +221,26 @@ bool parse_fpr(std::string_view text, int& reg) {
     return true;
 }
 
+bool parse_tile(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 2 || (value[0] != 't' && value[0] != 'T')) {
+        return false;
+    }
+    std::size_t index = 1;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 1) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 1);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
 bool eval_expr(std::string_view raw,
                const std::map<std::string, std::int64_t>& constants,
                Expr& result,
@@ -1095,6 +1115,108 @@ private:
                 instruction.rs1 = static_cast<std::uint8_t>(source);
                 return true;
             }
+        }
+
+        {
+            static const std::map<std::string, std::uint32_t> matrix_ops = {
+                {"mmul", 0x000}, {"mmac", 0x001}, {"mvec", 0x002},
+                {"mtrans", 0x003}, {"vdot", 0x004}, {"mpush", 0x005},
+                {"mpop", 0x006}, {"mdrop", 0x007},
+            };
+            const auto operation = matrix_ops.find(mnemonic);
+            if (operation != matrix_ops.end()) {
+                instruction.opcode = 0x61;
+                instruction.immediate = static_cast<std::int16_t>(operation->second);
+                if (mnemonic == "mdrop") {
+                    if (!operands.empty()) {
+                        return fail_operands("no operands");
+                    }
+                    return true;
+                }
+                if (mnemonic == "mpush" || mnemonic == "mpop") {
+                    if (operands.size() != 1) {
+                        return fail_operands("Td");
+                    }
+                    int tile = 0;
+                    if (!parse_tile(operands[0], tile)) {
+                        return fail(statement.line, "expected a tile register");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(tile);
+                    return true;
+                }
+                if (operands.size() < 2 || operands.size() > 3) {
+                    return fail_operands("Td, Ta, Tb");
+                }
+                int destination = 0;
+                int left = 0;
+                int right = 0;
+                if (mnemonic == "vdot") {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_tile(operands[1], left) ||
+                        !parse_tile(operands[2], right)) {
+                        return fail(statement.line, "expected Fd, Ta, Tb");
+                    }
+                } else {
+                    if (!parse_tile(operands[0], destination) ||
+                        !parse_tile(operands[1], left) ||
+                        (operands.size() == 3 && !parse_tile(operands[2], right))) {
+                        return fail(statement.line, "expected Td, Ta, Tb");
+                    }
+                }
+                instruction.rd = static_cast<std::uint8_t>(destination);
+                instruction.rs1 = static_cast<std::uint8_t>(left);
+                instruction.field = static_cast<std::uint8_t>(right);
+                return true;
+            }
+        }
+
+        if (mnemonic == "mload" || mnemonic == "mstore" ||
+            mnemonic == "vload" || mnemonic == "vstore") {
+            if (operands.size() < 2 || operands.size() > 3) {
+                return fail_operands("Td, [addr], optional #stride");
+            }
+            int tile = 0;
+            if (!parse_tile(operands[0], tile)) {
+                return fail(statement.line, "expected a tile register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            const bool vector = mnemonic == "vload" || mnemonic == "vstore";
+            instruction.opcode = (mnemonic == "mload" || mnemonic == "vload") ? 0x52 : 0x53;
+            instruction.rd = static_cast<std::uint8_t>(tile);
+            instruction.literal = vector;
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            if (operands.size() == 3) {
+                if (vector) {
+                    return fail(statement.line, "strided VLOAD/VSTORE is reserved");
+                }
+                Expr stride;
+                std::string stride_text = trim(operands[2]);
+                if (!stride_text.empty() && stride_text.front() == '#') {
+                    stride_text = trim(std::string_view(stride_text).substr(1));
+                }
+                if (!eval_expr(stride_text, constants_, stride, error_, statement.line)) {
+                    return false;
+                }
+                if (memory.displacement.value != 0 || memory.displacement.symbolic) {
+                    return fail(statement.line,
+                                "strided MLOAD/MSTORE requires a zero displacement");
+                }
+                instruction.extension = true;
+                instruction.extension_word = static_cast<std::uint32_t>(stride.value);
+                instruction.immediate = 0;
+                return true;
+            }
+            return set_payload(memory.displacement,
+                               memory.displacement.symbolic ||
+                                   memory.displacement.value < -1024 ||
+                                   memory.displacement.value > 1023,
+                               instruction, relocation, addend, statement.line);
         }
 
         return fail(statement.line, "unsupported instruction: " + mnemonic);

@@ -63,6 +63,7 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
         }
     }
     machine.reset(image.entry);
+    machine.set_tsp(machine.ram_base() + 512U * 1024U);
     machine.set_syscall_handler([&](core::Machine& current, std::uint32_t vector) {
         if (vector == 33) {
             program.output.push_back(static_cast<char>(current.reg(0) & 0xFFU));
@@ -449,6 +450,95 @@ TEST_CASE("abstract classes cannot be instantiated") {
     CHECK_FALSE(result.ok);
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.front().message.find("abstract") != std::string::npos);
+}
+
+TEST_CASE("matrix intrinsics lower to tile instructions") {
+    const ProgramResult product = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 2.0; a.m[5] = 2.0; a.m[10] = 2.0; a.m[15] = 2.0;\n"
+        "    kr32::mat4 b; b.m[0] = 3.0; b.m[5] = 3.0; b.m[10] = 3.0; b.m[15] = 3.0;\n"
+        "    kr32::mat4 c = kr32::matrix_mul(a, b);\n"
+        "    return c.m[0] == 6.0 && c.m[5] == 6.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(product.diagnostics);
+    REQUIRE(product.ok);
+    CHECK(product.result == 42);
+
+    const ProgramResult transform = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 m; m.m[0] = 1.0; m.m[5] = 1.0; m.m[10] = 1.0; m.m[15] = 1.0;\n"
+        "    kr32::vec4 v; v.x = 2.0; v.y = 3.0; v.z = 4.0; v.w = 1.0;\n"
+        "    kr32::vec4 r = kr32::transform(m, v);\n"
+        "    return r.x == 2.0 && r.y == 3.0 && r.z == 4.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(transform.diagnostics);
+    REQUIRE(transform.ok);
+    CHECK(transform.result == 42);
+
+    const ProgramResult dot = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::vec4 a; a.x = 1.0; a.y = 2.0; a.z = 3.0; a.w = 4.0;\n"
+        "    kr32::vec4 b; b.x = 1.0; b.y = 1.0; b.z = 1.0; b.w = 1.0;\n"
+        "    return kr32::dot(a, b) == 10.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(dot.diagnostics);
+    REQUIRE(dot.ok);
+    CHECK(dot.result == 42);
+}
+
+TEST_CASE("matrix transpose, multiply-add, and transform stack run") {
+    const ProgramResult transpose = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 1.0; a.m[1] = 7.0; a.m[15] = 1.0;\n"
+        "    kr32::mat4 b = kr32::transpose(a);\n"
+        "    return b.m[4] == 7.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(transpose.diagnostics);
+    REQUIRE(transpose.ok);
+    CHECK(transpose.result == 42);
+
+    const ProgramResult add = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 2.0; a.m[15] = 1.0;\n"
+        "    kr32::mat4 b; b.m[0] = 3.0; b.m[15] = 1.0;\n"
+        "    kr32::mat4 c; c.m[0] = 4.0;\n"
+        "    kr32::mat4 r = kr32::matrix_mul_add(a, b, c);\n"
+        "    return r.m[0] == 10.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(add.diagnostics);
+    REQUIRE(add.ok);
+    CHECK(add.result == 42);
+
+    const ProgramResult stack = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 5.0;\n"
+        "    kr32::push(a);\n"
+        "    kr32::mat4 b;\n"
+        "    kr32::pop(b);\n"
+        "    kr32::drop();\n"
+        "    return b.m[0] == 5.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(stack.diagnostics);
+    REQUIRE(stack.ok);
+    CHECK(stack.result == 42);
+
+    const ProgramResult alias = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 2.0; a.m[15] = 1.0;\n"
+        "    kr32::mat4 b = kr32::matrix_mul(a, a);\n"
+        "    a = kr32::matrix_mul(a, b);\n"
+        "    return a.m[0] == 8.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(alias.diagnostics);
+    REQUIRE(alias.ok);
+    CHECK(alias.result == 42);
 }
 
 TEST_CASE("class copy construction and assignment are memberwise byte copies") {

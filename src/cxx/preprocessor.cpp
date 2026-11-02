@@ -500,6 +500,23 @@ private:
         }
         if (directive == "include") {
             const std::string header(trim(rest));
+            if (header.find("kr32/matrix.hpp") != std::string::npos ||
+                header.find("matrix.hpp") != std::string::npos) {
+                append_line(
+                    "namespace kr32 {\n"
+                    "struct vec4 { float x; float y; float z; float w; };\n"
+                    "struct mat4 { float m[16]; };\n"
+                    "mat4 matrix_mul(const mat4& a, const mat4& b);\n"
+                    "mat4 matrix_mul_add(const mat4& a, const mat4& b, const mat4& c);\n"
+                    "mat4 transpose(const mat4& a);\n"
+                    "vec4 transform(const mat4& m, const vec4& v);\n"
+                    "float dot(const vec4& a, const vec4& b);\n"
+                    "void push(const mat4& m);\n"
+                    "void pop(mat4& m);\n"
+                    "void drop();\n"
+                    "}\n");
+                return;
+            }
             error(line_number, 1,
                   "freestanding C++ header set is not implemented yet: " + header);
             return;
