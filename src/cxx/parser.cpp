@@ -82,6 +82,7 @@ public:
         : tokens_(std::move(tokens)), diagnostics_(diagnostics) {
         (void)source_name;
         known_types_.insert("size_t");
+        known_types_.insert("va_list");
         known_types_.insert("int8_t");
         known_types_.insert("int16_t");
         known_types_.insert("int32_t");
@@ -1845,6 +1846,20 @@ private:
         ExprPtr expression = parse_primary_expression();
         while (!at_end()) {
             if (at("(")) {
+                if (expression->kind == ExprKind::Name &&
+                    expression->name.to_string() == "__builtin_va_arg") {
+                    auto call = std::make_unique<Expr>();
+                    call->kind = ExprKind::Call;
+                    call->location = {peek().line, peek().column};
+                    call->children.push_back(std::move(expression));
+                    expect("(", "in va_arg");
+                    call->arguments.push_back(parse_assignment_expression());
+                    expect(",", "in va_arg");
+                    call->type = parse_type_id();
+                    expect(")", "after va_arg type");
+                    expression = std::move(call);
+                    continue;
+                }
                 auto call = std::make_unique<Expr>();
                 call->kind = ExprKind::Call;
                 call->location = {peek().line, peek().column};

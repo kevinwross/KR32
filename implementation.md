@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 11:25 -08:00
+> **Last updated:** 2026-11-02 11:32 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -550,17 +550,19 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 **Status:** implementation started 2026-11-02. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the implementation/task tracker is
 [cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phases M9.1
-(ABI/API/test harness), M9.2 (preprocessor, lexer, AST, parser, diagnostics), and
-M9.3 (scopes, name lookup, overloads, mangling, integer code generation) are
-complete, and M9.4 (scalar `float`/`double`) is next. C++ ABI revision 1 is
-frozen in [docs/abi.md](docs/abi.md) with machine-checkable constants in
-`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
-in place, and `compile()` now produces assembly for the supported integer
-subset. Confirmed decisions include custom C++11 subset, one thread per core
-with cooperative oversubscription, `R11` TP, library matrices plus intrinsics,
-`double` align 8/16-byte call boundaries, explicit per-thread transform stacks,
-full destructor unwinding, scalar FP library, stack-based FP varargs,
-Itanium-like mangling, and class-member/`this` debug support.
+(ABI/API/test harness), M9.2 (preprocessor, lexer, AST, parser, diagnostics),
+M9.3 (scopes, name lookup, overloads, mangling, integer code generation), and
+M9.4 (scalar `float`/`double`, FP calls, conversions, and stack varargs) are
+complete, and M9.5 (classes, constructors/destructors, single inheritance) is
+next. C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with
+machine-checkable constants in `include/kr32/cxx/abi.h`. The standalone API and
+`kr32-cxx` driver skeleton are in place, and `compile()` now produces assembly
+for the supported integer and scalar-FP subset. Confirmed decisions include
+custom C++11 subset, one thread per core with cooperative oversubscription,
+`R11` TP, library matrices plus intrinsics, `double` align 8/16-byte call
+boundaries, explicit per-thread transform stacks, full destructor unwinding,
+scalar FP library, stack-based FP varargs, Itanium-like mangling, and
+class-member/`this` debug support.
 
 **Tasks**
 
@@ -585,8 +587,11 @@ Itanium-like mangling, and class-member/`this` debug support.
       merge.
 - [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
       RTTI, `new`/`delete`, static initialization.
-- [ ] Scalar `float`/`double` codegen, FP calls/spills, and ABI alignment.
-- [ ] Variadic functions with promoted `float`/`double` arguments and `va_list`.
+- [x] Scalar `float`/`double` codegen, FP calls/spills, conversions, and ABI
+      alignment (M9.4); `.float`/`.double` object-assembler support ported from
+      main.
+- [x] Variadic functions with promoted `float`/`double` arguments and `va_list`
+      (M9.4 stack slots and builtins).
 - [ ] Matrix library and intrinsics: `mat4`/`vec4`, tile allocation,
       `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, transform-stack push/pop.
 - [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
@@ -605,9 +610,10 @@ Itanium-like mangling, and class-member/`this` debug support.
 - [x] Integer C++ functions, overloads, references, arrays, globals, `extern "C"`,
       and cross-TU linking compile, link, and run (M9.3 gate: 142 cases / 4646
       assertions).
+- [x] Float/double arithmetic, calls, conversions, globals, `long double` alias,
+      NaN comparison, and promoted stack varargs pass (M9.4 gate: 153 cases /
+      4689 assertions).
 - [ ] C++ hello world and a class/template demo run.
-- [ ] Float/double arithmetic and calls match ISA semantics.
-- [ ] Variadic `double`/`va_list` tests pass.
 - [ ] Matrix multiply/transform/dot and transform-stack tests pass.
 - [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
@@ -963,6 +969,16 @@ Newest entries at the bottom. Use the local time zone.
       reports 142 test cases and 4646 assertions. M9.4 (scalar `float`/`double`)
       is next; the main-branch `.float`/`.double` data directives and FP
       instruction support are available for that phase.
+- **2026-11-02 11:32 -08:00** — Completed M9.4. Ported the main-branch
+      object-assembler FP support (`.float`/`.double`, `FLOAD`/`FSTORE`, FP
+      arithmetic/compare, `FCVT`) and added scalar `float`/`double` codegen:
+      literals, mixed int/FP arithmetic and conversions, FP arguments in
+      `F0-F7`, results in `F0`, frame spills, FP globals, references to
+      `double`, `long double` as a `double` alias, NaN comparisons, and
+      stack-passed variadic arguments with promoted doubles plus `va_list`
+      builtins. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports
+      153 test cases and 4689 assertions. M9.5 (classes,
+      constructors/destructors, single inheritance) is next.
 
 ## 10. Updating this file
 

@@ -3,9 +3,10 @@
 **Status:** approved and started 2026-11-02. Design approved in
 [docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
 worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
-lexer, parser, AST, diagnostics), and M9.3 (scopes, name lookup, overloads,
-mangling, integer code generation) are complete; phase M9.4 (scalar
-`float`/`double`) is next.
+lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
+mangling, integer code generation), and M9.4 (scalar `float`/`double`, FP calls,
+conversions, and stack varargs) are complete; phase M9.5 (classes, constructors
+and destructors, single inheritance) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -80,10 +81,27 @@ Completed in M9.3:
       arrays/loops, globals, `extern "C"`, cross-TU linking, and unsupported
       class diagnostics.
 
+Completed in M9.4:
+
+- [x] Ported the main-branch `.float`/`.double` data directives and
+      object-assembler FP instruction support (`FLOAD`/`FSTORE`, FP arithmetic,
+      compare, and `FCVT`), with assembler tests.
+- [x] Scalar `float`/`double` literals, usual arithmetic conversions, mixed
+      int/FP expressions, comparisons, casts, and `FCVT` conversions.
+- [x] FPR staging and spills through the frame; FP arguments in `F0..F7`,
+      results in `F0`, and no use of callee-saved `F8..F15` yet.
+- [x] `long double` follows the `double` alias path and mangles as `d`.
+- [x] Stack-passed variadic arguments with `float` promoted to `double`, plus
+      `va_list`/`__builtin_va_start`/`__builtin_va_arg`/`__builtin_va_end`.
+- [x] FP codegen tests: calls, mixed argument banks, local spills, globals,
+      conversions, references to `double`, `float` returns, and integer/double
+      varargs.
+
 Not started:
 
-- [ ] Scalar FP, classes, virtual dispatch/RTTI, matrices, templates, exceptions,
-      threads, debug, and CLI integration (M9.4-M9.12).
+- [ ] Classes, structs, virtual dispatch/RTTI, matrices, templates, exceptions,
+      threads, debug, and CLI integration (M9.5-M9.12). Struct fields containing
+      FP values follow the M9.5 aggregate-layout work.
 
 ## 3. Milestone map
 
@@ -95,7 +113,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | done |
 | M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | done |
 | M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | done |
-| M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | not started |
+| M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | done |
 | M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | not started |
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | not started |
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | not started |
@@ -184,18 +202,25 @@ M9.4 (scalar `float`/`double`) is next.
 
 ### M9.4 — Scalar float and double
 
-- [ ] Lex/parse float and double literals; implement round-to-nearest literal
+- [x] Lex/parse float and double literals; implement round-to-nearest literal
       conversion.
-- [ ] Type rules, usual arithmetic conversions, comparisons, casts.
-- [ ] FPR allocation and spills via `FLOAD`/`FSTORE`.
-- [ ] Lower arithmetic to `.S`/`.D` instructions.
-- [ ] Implement `FCVT` conversions and NaN/infinity behavior.
-- [ ] FP arguments `F0-F7`, returns `F0/F1`, callee-saved `F8-F15`.
-- [ ] Stack-passed varargs with promoted doubles and `va_list`.
-- [ ] `long double` alias for `double`.
-- [ ] Tests: ABI calls, structs containing FP, spills, conversions, varargs.
+- [x] Type rules, usual arithmetic conversions, comparisons, casts.
+- [x] FPR staging and spills via `FLOAD`/`FSTORE`.
+- [x] Lower arithmetic to `.S`/`.D` instructions.
+- [x] Implement `FCVT` conversions and NaN/infinity behavior. (ISA semantics;
+      NaN comparison and zero-division NaN are covered by a codegen test.)
+- [x] FP arguments `F0-F7`, returns `F0` (`F1` reserved), no callee-saved
+      `F8-F15` allocation yet.
+- [x] Stack-passed varargs with promoted doubles and `va_list`.
+- [x] `long double` alias for `double` (including mangling as `d`).
+- [x] Tests: ABI calls, spills, conversions, varargs, `long double`, NaN.
+- [ ] Structs containing FP fields move to M9.5 with aggregate layout and member
+      access.
 
 **Gate:** FP ABI/varargs tests plus existing suite green.
+**Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 153 test cases and 4689 assertions.
+M9.5 (classes, constructors/destructors, single inheritance) is next.
 
 ### M9.5 — Classes, constructors/destructors, single inheritance
 
@@ -369,6 +394,16 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   `kr32_tests` reports 142 test cases and 4646 assertions. M9.4 (scalar
   `float`/`double`) is next; the main-branch `.float`/`.double` assembler
   directives and FP instruction support are available for it.
+- **2026-11-02 11:32 -08:00** — Completed M9.4. Ported the main-branch
+  object-assembler FP support (`.float`/`.double`, `FLOAD`/`FSTORE`, FP
+  arithmetic/compare, `FCVT`) and added scalar `float`/`double` codegen:
+  literals, mixed arithmetic/conversions, FP arguments in `F0-F7`, results in
+  `F0`, frame spills, FP globals, references to `double`, `long double` as a
+  `double` alias, NaN comparisons, and stack-passed variadic arguments with
+  promoted doubles plus `va_list` builtins. Added assembler and codegen tests.
+  Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 153 test cases
+  and 4689 assertions. M9.5 (classes, constructors/destructors, single
+  inheritance) is next; FP struct fields follow the M9.5 aggregate layout.
 
 ## 8. Approval
 

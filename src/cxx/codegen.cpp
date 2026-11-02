@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <iomanip>
 #include <map>
 #include <memory>
 #include <set>
@@ -171,6 +172,49 @@ TypePtr promote(const TypePtr& type) {
     return type;
 }
 
+bool is_fp(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           (type->builtin == BuiltinKind::Float ||
+            type->builtin == BuiltinKind::Double ||
+            type->builtin == BuiltinKind::LongDouble);
+}
+
+bool is_float32(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           type->builtin == BuiltinKind::Float;
+}
+
+bool is_float64(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           (type->builtin == BuiltinKind::Double ||
+            type->builtin == BuiltinKind::LongDouble);
+}
+
+TypePtr arithmetic_type(const TypePtr& left, const TypePtr& right) {
+    if (is_float64(left) || is_float64(right)) {
+        return Type::make_builtin(BuiltinKind::Double);
+    }
+    if (is_float32(left) || is_float32(right)) {
+        return Type::make_builtin(BuiltinKind::Float);
+    }
+    return Type::make_builtin(BuiltinKind::Int);
+}
+
+std::string fp_literal_text(double value, bool single) {
+    std::ostringstream out;
+    out << std::setprecision(single ? 9 : 17) << value;
+    std::string text = out.str();
+    const bool has_separator = text.find('.') != std::string::npos ||
+                               text.find('e') != std::string::npos ||
+                               text.find('E') != std::string::npos ||
+                               text.find("inf") != std::string::npos ||
+                               text.find("nan") != std::string::npos;
+    if (!has_separator) {
+        text += ".0";
+    }
+    return text;
+}
+
 std::string escape_asm(const std::string& text) {
     std::string result;
     for (const char c : text) {
@@ -236,6 +280,8 @@ public:
     explicit Generator(std::vector<Diagnostic>& diagnostics)
         : diagnostics_(diagnostics) {
         type_aliases_["size_t"] = Type::make_builtin(BuiltinKind::UnsignedInt);
+        type_aliases_["va_list"] =
+            Type::make_pointer(Type::make_builtin(BuiltinKind::Char));
         type_aliases_["ptrdiff_t"] = Type::make_builtin(BuiltinKind::Int);
         type_aliases_["int8_t"] = Type::make_builtin(BuiltinKind::Char);
         type_aliases_["int16_t"] = Type::make_builtin(BuiltinKind::Int);
@@ -651,7 +697,10 @@ private:
         case ExprKind::BoolLiteral:
             return Type::make_builtin(BuiltinKind::Bool);
         case ExprKind::FloatLiteral:
-            return Type::make_builtin(BuiltinKind::Double);
+            return expression.text.find('f') != std::string::npos ||
+                           expression.text.find('F') != std::string::npos
+                       ? Type::make_builtin(BuiltinKind::Float)
+                       : Type::make_builtin(BuiltinKind::Double);
         case ExprKind::StringLiteral:
             return Type::make_pointer(Type::make_builtin(BuiltinKind::Char));
         case ExprKind::NullptrLiteral:
@@ -719,28 +768,34 @@ private:
                 left->builtin == BuiltinKind::Double) {
                 return left;
             }
-            if (right && right->kind == TypeKind::Builtin &&
-                right->builtin == BuiltinKind::Double) {
-                return right;
-            }
-            if (left && left->kind == TypeKind::Builtin &&
-                left->builtin == BuiltinKind::Float) {
-                return left;
-            }
-            if (right && right->kind == TypeKind::Builtin &&
-                right->builtin == BuiltinKind::Float) {
-                return right;
-            }
-            return Type::make_builtin(BuiltinKind::Int);
+            return arithmetic_type(left, right);
         }
         case ExprKind::Assign:
             return type_of(*expression.children[0], false);
         case ExprKind::Conditional: {
             const TypePtr left = type_of(*expression.children[1]);
             const TypePtr right = type_of(*expression.children[2]);
-            return same_type(left, right) ? left : promote(left);
+            if (same_type(left, right)) {
+                return left;
+            }
+            if (is_fp(left) || is_fp(right) || is_integer(left) ||
+                is_integer(right)) {
+                return arithmetic_type(left, right);
+            }
+            return promote(left);
         }
         case ExprKind::Call: {
+            if (!expression.children.empty() &&
+                expression.children[0]->kind == ExprKind::Name) {
+                const std::string name =
+                    expression.children[0]->name.to_string();
+                if (name == "__builtin_va_start" || name == "__builtin_va_end") {
+                    return Type::make_builtin(BuiltinKind::Void);
+                }
+                if (name == "__builtin_va_arg") {
+                    return resolve_type(expression.type);
+                }
+            }
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
             }
@@ -804,6 +859,15 @@ private:
         if (is_integer(arg) && is_integer(param)) {
             return 1;
         }
+        if (is_fp(arg) && is_fp(param)) {
+            return same_type(decay(arg), param) ? 0 : 1;
+        }
+        if (is_integer(arg) && is_fp(param)) {
+            return 1;
+        }
+        if (is_fp(arg) && is_integer(param)) {
+            return 2;
+        }
         if (is_pointer(arg) && is_pointer(param)) {
             if (same_type(decay(arg), param)) {
                 return 0;
@@ -851,12 +915,17 @@ private:
         int best_cost = 1000000;
         bool ambiguous = false;
         for (Function* candidate : candidates) {
-            if (candidate->parameters.size() != argument_types.size()) {
+            if (candidate->variadic) {
+                if (argument_types.size() < candidate->parameters.size()) {
+                    continue;
+                }
+            } else if (candidate->parameters.size() != argument_types.size()) {
                 continue;
             }
             int cost = 0;
             bool viable = true;
-            for (std::size_t index = 0; index < argument_types.size(); ++index) {
+            const std::size_t named = candidate->parameters.size();
+            for (std::size_t index = 0; index < named; ++index) {
                 const int argument_cost =
                     conversion_cost(argument_types[index], candidate->parameters[index],
                                     lvalues[index], zeros[index]);
@@ -975,6 +1044,50 @@ private:
         }
     }
 
+    bool eval_const_fp(const Expr& expression, double& value) {
+        switch (expression.kind) {
+        case ExprKind::FloatLiteral:
+            value = expression.floating;
+            return true;
+        case ExprKind::IntegerLiteral:
+        case ExprKind::CharacterLiteral:
+        case ExprKind::BoolLiteral:
+            value = static_cast<double>(expression.integer);
+            return true;
+        case ExprKind::Unary: {
+            double operand = 0.0;
+            if (expression.children.empty() ||
+                !eval_const_fp(*expression.children[0], operand)) {
+                return false;
+            }
+            if (expression.text == "-") {
+                value = -operand;
+            } else if (expression.text == "+") {
+                value = operand;
+            } else {
+                return false;
+            }
+            return true;
+        }
+        case ExprKind::Binary: {
+            double left = 0.0;
+            double right = 0.0;
+            if (!eval_const_fp(*expression.children[0], left) ||
+                !eval_const_fp(*expression.children[1], right)) {
+                return false;
+            }
+            if (expression.text == "+") value = left + right;
+            else if (expression.text == "-") value = left - right;
+            else if (expression.text == "*") value = left * right;
+            else if (expression.text == "/") value = right == 0.0 ? 0.0 : left / right;
+            else return false;
+            return true;
+        }
+        default:
+            return false;
+        }
+    }
+
     int allocate_local(const TypePtr& type) {
         const int size = std::max(1, type_size(type));
         const int alignment = std::max(4, type_align(type));
@@ -997,6 +1110,44 @@ private:
         const std::string label = ".Lstr_" + std::to_string(string_counter_++);
         rodata_ += label + ":\n    .asciz \"" + escape_asm(value) + "\"\n";
         return label;
+    }
+
+    std::string intern_fp_constant(double value, bool single) {
+        const std::string label = ".Lfp_" + std::to_string(fp_counter_++);
+        rodata_ += label + ":\n    ." + std::string(single ? "float " : "double ") +
+                   fp_literal_text(value, single) + "\n";
+        return label;
+    }
+
+    void load_fp(const TypePtr& type) {
+        emit(std::string("    FLOAD.") + (is_float32(type) ? "W" : "D") + " F0, [R0]");
+    }
+
+    void store_fp(const TypePtr& type) {
+        emit(std::string("    FSTORE.") + (is_float32(type) ? "W" : "D") +
+             " F0, [R1]");
+    }
+
+    void convert_fp(const TypePtr& from, const TypePtr& to) {
+        if (!is_fp(from) || !is_fp(to)) {
+            return;
+        }
+        if (is_float32(from) && is_float64(to)) {
+            emit("    FCVT.D.S F0, F0");
+        } else if (is_float64(from) && is_float32(to)) {
+            emit("    FCVT.S.D F0, F0");
+        }
+    }
+
+    void gen_as_fp(const Expr& expression, const TypePtr& target) {
+        const TypePtr source = type_of(expression);
+        gen_expr(expression);
+        if (!is_fp(source)) {
+            emit(std::string("    FCVT.") + (is_float32(target) ? "S" : "D") +
+                 ".W F0, R0");
+        } else {
+            convert_fp(source, target);
+        }
     }
 
     void load_value(const TypePtr& type) {
@@ -1072,10 +1223,18 @@ private:
             return expression.kind == ExprKind::BoolLiteral
                        ? Type::make_builtin(BuiltinKind::Bool)
                        : Type::make_builtin(BuiltinKind::Int);
-        case ExprKind::FloatLiteral:
-            diagnose_once(expression, "floating-point code generation arrives in M9.4");
-            emit("    MOV R0, #0");
-            return Type::make_builtin(BuiltinKind::Double);
+        case ExprKind::FloatLiteral: {
+            const TypePtr type =
+                expression.text.find('f') != std::string::npos ||
+                        expression.text.find('F') != std::string::npos
+                    ? Type::make_builtin(BuiltinKind::Float)
+                    : Type::make_builtin(BuiltinKind::Double);
+            const std::string label =
+                intern_fp_constant(expression.floating, is_float32(type));
+            emit(std::string("    FLOAD.") + (is_float32(type) ? "W" : "D") +
+                 " F0, [" + label + "]");
+            return type;
+        }
         case ExprKind::StringLiteral:
             emit("    LEA R0, [" + intern_string(expression.text) + "]");
             return Type::make_pointer(Type::make_builtin(BuiltinKind::Char));
@@ -1092,6 +1251,10 @@ private:
                 if (type && type->kind == TypeKind::Array) {
                     return type;
                 }
+                if (is_fp(type)) {
+                    load_fp(type);
+                    return type;
+                }
                 load_value(type);
                 return type;
             }
@@ -1099,6 +1262,10 @@ private:
                 emit("    LEA R0, [" + global->symbol + "]");
                 TypePtr type = resolve_type(global->type);
                 if (type && type->kind == TypeKind::Array) {
+                    return type;
+                }
+                if (is_fp(type)) {
+                    load_fp(type);
                     return type;
                 }
                 load_value(type);
@@ -1127,14 +1294,27 @@ private:
         case ExprKind::Index: {
             gen_address(expression);
             const TypePtr type = type_of(expression);
-            load_value(type);
+            if (is_fp(type)) {
+                load_fp(type);
+            } else {
+                load_value(type);
+            }
             return type;
         }
         case ExprKind::Cast: {
-            gen_expr(*expression.children[0]);
             const TypePtr target = resolve_type(expression.type);
-            if (target && target->kind == TypeKind::Builtin &&
-                target->builtin == BuiltinKind::Bool) {
+            const TypePtr source = type_of(*expression.children[0]);
+            gen_expr(*expression.children[0]);
+            if (is_fp(target) && !is_fp(source)) {
+                emit(std::string("    FCVT.") + (is_float32(target) ? "S" : "D") +
+                     ".W F0, R0");
+            } else if (is_fp(target) && is_fp(source)) {
+                convert_fp(source, target);
+            } else if (!is_fp(target) && is_fp(source)) {
+                emit(std::string("    FCVT.W.") + (is_float32(source) ? "S" : "D") +
+                     " R0, F0");
+            } else if (target && target->kind == TypeKind::Builtin &&
+                       target->builtin == BuiltinKind::Bool) {
                 emit("    CMP R0, #0");
                 emit("    MOV R0, #0");
                 const std::string done = new_label("bool");
@@ -1180,7 +1360,11 @@ private:
         if (op == "*") {
             gen_expr(*expression.children[0]);
             const TypePtr type = type_of(expression);
-            load_value(type);
+            if (is_fp(type)) {
+                load_fp(type);
+            } else {
+                load_value(type);
+            }
             return type;
         }
         if (op == "++" || op == "--") {
@@ -1218,6 +1402,23 @@ private:
             return type;
         }
         gen_expr(*expression.children[0]);
+        const TypePtr operand_type = type_of(*expression.children[0]);
+        const TypePtr type = type_of(expression);
+        if (is_fp(operand_type)) {
+            if (op == "-") {
+                emit(std::string("    FNEG.") + (is_float32(operand_type) ? "S" : "D") +
+                     " F0, F0");
+            } else if (op == "!") {
+                const std::string zero =
+                    intern_fp_constant(0.0, is_float32(operand_type));
+                emit(std::string("    FLOAD.") +
+                     (is_float32(operand_type) ? "W" : "D") + " F1, [" + zero + "]");
+                emit("    FEQ R0, F0, F1");
+                emit("    XOR R0, R0, #1");
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
+            return operand_type;
+        }
         if (op == "-") {
             emit("    NEG R0, R0");
         } else if (op == "~") {
@@ -1230,7 +1431,71 @@ private:
             emit("    MOV R0, #1");
             emit(done + ":");
         }
-        return promote(type_of(expression));
+        return promote(type);
+    }
+
+    void gen_condition(const Expr& expression) {
+        const TypePtr type = type_of(expression);
+        if (is_fp(type)) {
+            gen_expr(expression);
+            const std::string zero = intern_fp_constant(0.0, is_float32(type));
+            emit(std::string("    FLOAD.") + (is_float32(type) ? "W" : "D") +
+                 " F1, [" + zero + "]");
+            emit("    FEQ R0, F0, F1");
+            emit("    XOR R0, R0, #1");
+            return;
+        }
+        gen_expr(expression);
+    }
+
+    TypePtr gen_fp_binary(const Expr& expression, const TypePtr& left_type,
+                          const TypePtr& right_type) {
+        const std::string& op = expression.text;
+        const TypePtr result_type = arithmetic_type(left_type, right_type);
+        const std::string suffix = is_float32(result_type) ? ".S" : ".D";
+        const bool compare = op == "==" || op == "!=" || op == "<" ||
+                             op == "<=" || op == ">" || op == ">=";
+        gen_as_fp(*expression.children[0], result_type);
+        const int left_temp = allocate_local(result_type);
+        emit(std::string("    FSTORE.") + (is_float32(result_type) ? "W" : "D") +
+             " F0, [R7 + " + std::to_string(left_temp) + "]");
+        gen_as_fp(*expression.children[1], result_type);
+        const int right_temp = allocate_local(result_type);
+        emit(std::string("    FSTORE.") + (is_float32(result_type) ? "W" : "D") +
+             " F0, [R7 + " + std::to_string(right_temp) + "]");
+        emit(std::string("    FLOAD.") + (is_float32(result_type) ? "W" : "D") +
+             " F1, [R7 + " + std::to_string(left_temp) + "]");
+        emit(std::string("    FLOAD.") + (is_float32(result_type) ? "W" : "D") +
+             " F2, [R7 + " + std::to_string(right_temp) + "]");
+        if (compare) {
+            if (op == "==") {
+                emit("    FEQ" + suffix + " R0, F1, F2");
+            } else if (op == "!=") {
+                emit("    FEQ" + suffix + " R0, F1, F2");
+                emit("    XOR R0, R0, #1");
+            } else if (op == "<") {
+                emit("    FLT" + suffix + " R0, F1, F2");
+            } else if (op == "<=") {
+                emit("    FLE" + suffix + " R0, F1, F2");
+            } else if (op == ">") {
+                emit("    FLT" + suffix + " R0, F2, F1");
+            } else {
+                emit("    FLE" + suffix + " R0, F2, F1");
+            }
+            return Type::make_builtin(BuiltinKind::Bool);
+        }
+        if (op == "+") {
+            emit("    FADD" + suffix + " F0, F1, F2");
+        } else if (op == "-") {
+            emit("    FSUB" + suffix + " F0, F1, F2");
+        } else if (op == "*") {
+            emit("    FMUL" + suffix + " F0, F1, F2");
+        } else if (op == "/") {
+            emit("    FDIV" + suffix + " F0, F1, F2");
+        } else {
+            diagnose_once(expression, "unsupported floating-point operator: " + op);
+        }
+        return result_type;
     }
 
     TypePtr gen_binary(const Expr& expression) {
@@ -1238,14 +1503,14 @@ private:
         if (op == "&&" || op == "||") {
             const std::string short_label = new_label(op == "&&" ? "andfalse" : "ortrue");
             const std::string end_label = new_label("logicend");
-            gen_expr(*expression.children[0]);
+            gen_condition(*expression.children[0]);
             emit("    CMP R0, #0");
             if (op == "&&") {
                 emit("    JZ " + short_label);
             } else {
                 emit("    JNZ " + short_label);
             }
-            gen_expr(*expression.children[1]);
+            gen_condition(*expression.children[1]);
             emit("    CMP R0, #0");
             emit("    MOV R0, #0");
             emit("    JZ " + end_label);
@@ -1258,10 +1523,13 @@ private:
         }
 
         const TypePtr left_type = type_of(*expression.children[0]);
+        const TypePtr right_type = type_of(*expression.children[1]);
+        if (is_fp(left_type) || is_fp(right_type)) {
+            return gen_fp_binary(expression, left_type, right_type);
+        }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
         emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
-        const TypePtr right_type = type_of(*expression.children[1]);
         gen_expr(*expression.children[1]);
         emit("    MOV R1, R0");
         emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
@@ -1320,8 +1588,52 @@ private:
         return type_of(expression);
     }
 
+    TypePtr gen_fp_assignment(const Expr& expression, const TypePtr& lhs_type) {
+        const std::string suffix = is_float32(lhs_type) ? ".S" : ".D";
+        const std::string width = is_float32(lhs_type) ? "W" : "D";
+        gen_address(*expression.children[0]);
+        const int address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+        emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+        if (expression.text == "=") {
+            gen_as_fp(*expression.children[1], lhs_type);
+        } else {
+            const std::string op =
+                expression.text.substr(0, expression.text.size() - 1);
+            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    FLOAD." + width + " F0, [R1]");
+            const int left_temp = allocate_local(lhs_type);
+            emit("    FSTORE." + width + " F0, [R7 + " +
+                 std::to_string(left_temp) + "]");
+            gen_as_fp(*expression.children[1], lhs_type);
+            const int right_temp = allocate_local(lhs_type);
+            emit("    FSTORE." + width + " F0, [R7 + " +
+                 std::to_string(right_temp) + "]");
+            emit("    FLOAD." + width + " F1, [R7 + " +
+                 std::to_string(left_temp) + "]");
+            emit("    FLOAD." + width + " F2, [R7 + " +
+                 std::to_string(right_temp) + "]");
+            if (op == "+") {
+                emit("    FADD" + suffix + " F0, F1, F2");
+            } else if (op == "-") {
+                emit("    FSUB" + suffix + " F0, F1, F2");
+            } else if (op == "*") {
+                emit("    FMUL" + suffix + " F0, F1, F2");
+            } else if (op == "/") {
+                emit("    FDIV" + suffix + " F0, F1, F2");
+            } else {
+                diagnose_once(expression, "unsupported floating-point assignment");
+            }
+        }
+        emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+        emit("    FSTORE." + width + " F0, [R1]");
+        return lhs_type;
+    }
+
     TypePtr gen_assignment(const Expr& expression) {
         const TypePtr lhs_type = type_of(*expression.children[0], false);
+        if (is_fp(lhs_type)) {
+            return gen_fp_assignment(expression, lhs_type);
+        }
         gen_address(*expression.children[0]);
         const int address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
         emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
@@ -1358,7 +1670,7 @@ private:
         const TypePtr type = type_of(expression);
         const std::string else_label = new_label("else");
         const std::string end_label = new_label("condend");
-        gen_expr(*expression.children[0]);
+        gen_condition(*expression.children[0]);
         emit("    CMP R0, #0");
         emit("    JZ " + else_label);
         gen_expr(*expression.children[1]);
@@ -1370,34 +1682,161 @@ private:
     }
 
     TypePtr gen_call(const Expr& expression) {
+        if (!expression.children.empty() &&
+            expression.children[0]->kind == ExprKind::Name) {
+            const std::string name = expression.children[0]->name.to_string();
+            if (name == "__builtin_va_start") {
+                if (expression.arguments.empty() ||
+                    expression.arguments[0]->kind != ExprKind::Name) {
+                    diagnose_once(expression, "va_start expects a va_list variable");
+                    emit("    MOV R0, #0");
+                    return Type::make_builtin(BuiltinKind::Void);
+                }
+                Local* local = lookup_local(expression.arguments[0]->name);
+                if (!local) {
+                    diagnose_once(expression, "unknown va_list variable");
+                    emit("    MOV R0, #0");
+                    return Type::make_builtin(BuiltinKind::Void);
+                }
+                emit("    LEA R0, [R7 + " + va_base_placeholder_ + "]");
+                emit("    STORE R0, [R7 + " + std::to_string(local->offset) + "]");
+                emit("    MOV R0, #0");
+                return Type::make_builtin(BuiltinKind::Void);
+            }
+            if (name == "__builtin_va_end") {
+                emit("    MOV R0, #0");
+                return Type::make_builtin(BuiltinKind::Void);
+            }
+            if (name == "__builtin_va_arg") {
+                if (expression.arguments.empty() ||
+                    expression.arguments[0]->kind != ExprKind::Name) {
+                    diagnose_once(expression, "va_arg expects a va_list variable");
+                    emit("    MOV R0, #0");
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
+                const TypePtr type = resolve_type(expression.type);
+                gen_address(*expression.arguments[0]);
+                const int address_temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+                emit("    LOAD R0, [R0]");
+                if (is_fp(type)) {
+                    if (is_float32(type)) {
+                        emit("    FLOAD.D F1, [R0]");
+                        emit("    FCVT.S.D F0, F1");
+                    } else {
+                        emit("    FLOAD.D F0, [R0]");
+                    }
+                } else {
+                    emit("    LOAD R0, [R0]");
+                }
+                emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+                emit("    LOAD R2, [R1]");
+                emit("    ADD R2, R2, #8");
+                emit("    STORE R2, [R1]");
+                return type;
+            }
+        }
         Function* function = resolve_call(expression);
         if (!function) {
             emit("    MOV R0, #0");
             return Type::make_builtin(BuiltinKind::Int);
         }
-        if (function->parameters.size() > 4) {
-            diagnose_once(expression, "more than four arguments are not supported yet");
-            emit("    MOV R0, #0");
-            return resolve_type(function->result);
-        }
-        std::vector<int> argument_temps;
+        struct ArgumentSlot {
+            int offset = 0;
+            bool fp = false;
+            TypePtr type;
+        };
+        std::vector<ArgumentSlot> slots;
+        std::vector<int> stack_temps;
+        int integer_argument = 0;
+        int fp_argument = 0;
+        const std::size_t named_parameters = function->parameters.size();
         for (std::size_t index = 0; index < expression.arguments.size(); ++index) {
+            if (index >= named_parameters) {
+                if (!function->variadic) {
+                    diagnose_once(expression, "too many arguments for " +
+                                                  function->qualified);
+                    break;
+                }
+                const TypePtr argument_type = type_of(*expression.arguments[index]);
+                const int temp = allocate_local(Type::make_builtin(BuiltinKind::Double));
+                if (is_fp(argument_type)) {
+                    gen_as_fp(*expression.arguments[index],
+                              Type::make_builtin(BuiltinKind::Double));
+                    emit("    FSTORE.D F0, [R7 + " + std::to_string(temp) + "]");
+                } else {
+                    gen_expr(*expression.arguments[index]);
+                    emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                    emit("    MOV R0, #0");
+                    emit("    STORE R0, [R7 + " + std::to_string(temp + 4) + "]");
+                }
+                stack_temps.push_back(temp);
+                continue;
+            }
             const TypePtr parameter = resolve_type(function->parameters[index]);
+            ArgumentSlot slot;
+            slot.type = parameter;
             if (parameter && (parameter->kind == TypeKind::LValueRef ||
                               parameter->kind == TypeKind::RValueRef)) {
                 gen_address(*expression.arguments[index]);
+                slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                ++integer_argument;
+            } else if (is_fp(parameter)) {
+                gen_as_fp(*expression.arguments[index], parameter);
+                slot.fp = true;
+                slot.offset = allocate_local(parameter);
+                emit(std::string("    FSTORE.") +
+                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                     std::to_string(slot.offset) + "]");
+                ++fp_argument;
             } else {
                 gen_expr(*expression.arguments[index]);
+                slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                ++integer_argument;
             }
-            const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-            emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
-            argument_temps.push_back(temp);
+            slots.push_back(std::move(slot));
         }
-        for (std::size_t index = 0; index < argument_temps.size(); ++index) {
-            emit("    LOAD R" + std::to_string(index) + ", [R7 + " +
-                 std::to_string(argument_temps[index]) + "]");
+        if (integer_argument > 4 || fp_argument > 8) {
+            diagnose_once(expression, "too many register arguments");
+            emit("    MOV R0, #0");
+            return resolve_type(function->result);
+        }
+        int stack_bytes = 0;
+        if (!stack_temps.empty()) {
+            stack_bytes =
+                static_cast<int>((stack_temps.size() * 8U + 15U) / 16U * 16U);
+            emit("    ADJSP #-" + std::to_string(stack_bytes));
+            for (std::size_t index = 0; index < stack_temps.size(); ++index) {
+                const int offset = static_cast<int>(index) * 8;
+                emit("    LOAD R4, [R7 + " + std::to_string(stack_temps[index]) + "]");
+                emit("    STORE R4, [SP + " + std::to_string(offset) + "]");
+                emit("    LOAD R4, [R7 + " +
+                     std::to_string(stack_temps[index] + 4) + "]");
+                emit("    STORE R4, [SP + " + std::to_string(offset + 4) + "]");
+            }
+        }
+        int integer_register = 0;
+        int fp_register = 0;
+        for (const ArgumentSlot& slot : slots) {
+            if (slot.fp) {
+                emit(std::string("    FLOAD.") +
+                     (is_float32(slot.type) ? "W" : "D") + " F" +
+                     std::to_string(fp_register) + ", [R7 + " +
+                     std::to_string(slot.offset) + "]");
+                ++fp_register;
+            } else {
+                emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
+                     std::to_string(slot.offset) + "]");
+                ++integer_register;
+            }
         }
         emit("    CALL " + function->symbol);
+        if (stack_bytes != 0) {
+            emit("    ADJSP #" + std::to_string(stack_bytes));
+        }
         return resolve_type(function->result);
     }
 
@@ -1428,7 +1867,7 @@ private:
         case StmtKind::If: {
             const std::string else_label = new_label("ifelse");
             const std::string end_label = new_label("ifend");
-            gen_expr(*statement.condition);
+            gen_condition(*statement.condition);
             emit("    CMP R0, #0");
             emit("    JZ " + else_label);
             if (statement.body) {
@@ -1448,7 +1887,7 @@ private:
             break_labels_.push_back(end);
             continue_labels_.push_back(start);
             emit(start + ":");
-            gen_expr(*statement.condition);
+            gen_condition(*statement.condition);
             emit("    CMP R0, #0");
             emit("    JZ " + end);
             if (statement.body) {
@@ -1469,7 +1908,7 @@ private:
             if (statement.body) {
                 gen_statement(*statement.body);
             }
-            gen_expr(*statement.condition);
+            gen_condition(*statement.condition);
             emit("    CMP R0, #0");
             emit("    JNZ " + start);
             emit(end + ":");
@@ -1491,7 +1930,7 @@ private:
             continue_labels_.push_back(increment);
             emit(start + ":");
             if (statement.condition) {
-                gen_expr(*statement.condition);
+                gen_condition(*statement.condition);
                 emit("    CMP R0, #0");
                 emit("    JZ " + end);
             }
@@ -1579,17 +2018,33 @@ private:
                     if (index >= type->array_size) {
                         break;
                     }
-                    gen_expr(*element);
-                    emit("    LEA R1, [R7 + " +
-                         std::to_string(local.offset + static_cast<int>(index) * element_size) +
-                         "]");
-                    store_value(type->element);
+                    if (is_fp(type->element)) {
+                        gen_as_fp(*element, type->element);
+                        emit(std::string("    FSTORE.") +
+                             (is_float32(type->element) ? "W" : "D") + " F0, [R7 + " +
+                             std::to_string(local.offset +
+                                            static_cast<int>(index) * element_size) +
+                             "]");
+                    } else {
+                        gen_expr(*element);
+                        emit("    LEA R1, [R7 + " +
+                             std::to_string(local.offset +
+                                            static_cast<int>(index) * element_size) +
+                             "]");
+                        store_value(type->element);
+                    }
                     ++index;
                 }
             }
             return;
         }
         if (declaration.initializer) {
+            if (is_fp(type)) {
+                gen_as_fp(*declaration.initializer, type);
+                emit(std::string("    FSTORE.") + (is_float32(type) ? "W" : "D") +
+                     " F0, [R7 + " + std::to_string(local.offset) + "]");
+                return;
+            }
             gen_expr(*declaration.initializer);
             emit("    LEA R1, [R7 + " + std::to_string(local.offset) + "]");
             store_value(type);
@@ -1612,8 +2067,10 @@ private:
         frame_size_ = 0;
         push_scope();
 
+        const int function_id = function_counter_++;
         const std::string placeholder =
-            "__FRAME_" + std::to_string(function_counter_++) + "__";
+            "__FRAME_" + std::to_string(function_id) + "__";
+        va_base_placeholder_ = "__VABASE_" + std::to_string(function_id) + "__";
         return_label_ = new_label("return");
         if (!function.is_static) {
             emit(".text");
@@ -1626,6 +2083,8 @@ private:
         emit("    ADJSP #-" + placeholder);
         emit("    LEA R7, [SP]");
 
+        int integer_argument = 0;
+        int fp_argument = 0;
         for (std::size_t index = 0; index < function.decl->parameters.size(); ++index) {
             const Param& parameter = function.decl->parameters[index];
             Local local;
@@ -1641,19 +2100,38 @@ private:
             if (!parameter.name.parts.empty()) {
                 local_scopes_.back()[parameter.name.parts.back()] = local;
             }
-            if (index < 4) {
-                emit("    STORE R" + std::to_string(index) + ", [R7 + " +
+            if (!local.is_reference && is_fp(local.type)) {
+                if (fp_argument < 8) {
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(local.type) ? "W" : "D") + " F" +
+                         std::to_string(fp_argument) + ", [R7 + " +
+                         std::to_string(local.offset) + "]");
+                    ++fp_argument;
+                } else {
+                    error(parameter.location,
+                          "more than eight FP parameters are not supported yet");
+                }
+            } else if (integer_argument < 4) {
+                emit("    STORE R" + std::to_string(integer_argument) + ", [R7 + " +
                      std::to_string(local.offset) + "]");
+                ++integer_argument;
             } else {
                 error(parameter.location,
-                      "more than four parameters are not supported yet");
+                      "more than four integer parameters are not supported yet");
             }
         }
 
         if (function.decl->body) {
             gen_statement(*function.decl->body);
         }
-        emit("    MOV R0, #0");
+        if (is_fp(resolve_type(function.result))) {
+            const TypePtr result = resolve_type(function.result);
+            const std::string zero = intern_fp_constant(0.0, is_float32(result));
+            emit(std::string("    FLOAD.") + (is_float32(result) ? "W" : "D") +
+                 " F0, [" + zero + "]");
+        } else {
+            emit("    MOV R0, #0");
+        }
         emit(return_label_ + ":");
         frame_size_ = (frame_size_ + 15) / 16 * 16 + 8;
         emit("    ADJSP #" + std::to_string(frame_size_));
@@ -1665,6 +2143,13 @@ private:
         while ((position = text_.find(placeholder, position)) != std::string::npos) {
             text_.replace(position, placeholder.size(), replacement);
             position += replacement.size();
+        }
+        const std::string va_base = std::to_string(frame_size_ + 8);
+        position = 0;
+        while ((position = text_.find(va_base_placeholder_, position)) !=
+               std::string::npos) {
+            text_.replace(position, va_base_placeholder_.size(), va_base);
+            position += va_base.size();
         }
     }
 
@@ -1681,28 +2166,59 @@ private:
                 if (global->type && global->type->kind == TypeKind::Array &&
                     global->initializer->kind == ExprKind::InitializerList) {
                     const int element_size = type_size(global->type->element);
+                    const bool fp_element = is_fp(global->type->element);
                     std::size_t index = 0;
                     for (const ExprPtr& element : global->initializer->children) {
                         if (index >= global->type->array_size) {
                             break;
                         }
-                        std::int64_t value = 0;
-                        if (!eval_const(*element, value)) {
-                            error(*global->decl,
-                                  "global array initializer must be constant");
-                            value = 0;
+                        if (fp_element) {
+                            double value = 0.0;
+                            if (!eval_const_fp(*element, value)) {
+                                error(*global->decl,
+                                      "global array initializer must be constant");
+                            }
+                            output += std::string(is_float32(global->type->element)
+                                                      ? "    .float "
+                                                      : "    .double ") +
+                                      fp_literal_text(value,
+                                                      is_float32(global->type->element)) +
+                                      "\n";
+                        } else {
+                            std::int64_t value = 0;
+                            if (!eval_const(*element, value)) {
+                                error(*global->decl,
+                                      "global array initializer must be constant");
+                                value = 0;
+                            }
+                            output += element_size == 1
+                                          ? "    .byte " +
+                                                std::to_string(value & 0xFF) + "\n"
+                                          : "    .word " +
+                                                std::to_string(value & 0xFFFFFFFFU) +
+                                                "\n";
                         }
-                        output += element_size == 1
-                                      ? "    .byte " + std::to_string(value & 0xFF) + "\n"
-                                      : "    .word " + std::to_string(value & 0xFFFFFFFFU) + "\n";
                         ++index;
                     }
                     while (index < global->type->array_size) {
-                        output += element_size == 1
-                                      ? "    .byte 0\n"
-                                      : "    .word 0\n";
+                        if (fp_element) {
+                            output += std::string(is_float32(global->type->element)
+                                                      ? "    .float 0.0\n"
+                                                      : "    .double 0.0\n");
+                        } else {
+                            output += element_size == 1 ? "    .byte 0\n"
+                                                        : "    .word 0\n";
+                        }
                         ++index;
                     }
+                } else if (is_fp(global->type)) {
+                    double value = 0.0;
+                    if (!eval_const_fp(*global->initializer, value)) {
+                        error(*global->decl, "global initializer must be constant");
+                    }
+                    output += std::string(is_float32(global->type) ? "    .float "
+                                                                  : "    .double ") +
+                              fp_literal_text(value, is_float32(global->type)) + "\n";
                 } else {
                     std::int64_t value = 0;
                     if (!eval_const(*global->initializer, value)) {
@@ -1739,6 +2255,7 @@ private:
     std::set<const Expr*> diagnosed_expressions_;
     std::string current_prefix_;
     std::string return_label_;
+    std::string va_base_placeholder_;
     std::string text_;
     std::string rodata_;
     std::string data_;
@@ -1746,6 +2263,7 @@ private:
     int frame_size_ = 0;
     int label_counter_ = 0;
     int string_counter_ = 0;
+    int fp_counter_ = 0;
     int anonymous_counter_ = 0;
     int static_counter_ = 0;
     int function_counter_ = 0;

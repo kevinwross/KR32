@@ -4,10 +4,18 @@
 
 #include <cstdint>
 #include <string_view>
+#include <vector>
 
 using namespace kr32;
 
 namespace {
+
+std::uint32_t word_at(const std::vector<std::uint8_t>& bytes, std::size_t offset) {
+    return static_cast<std::uint32_t>(bytes[offset]) |
+           (static_cast<std::uint32_t>(bytes[offset + 1]) << 8) |
+           (static_cast<std::uint32_t>(bytes[offset + 2]) << 16) |
+           (static_cast<std::uint32_t>(bytes[offset + 3]) << 24);
+}
 
 container::Image assemble(std::string_view source) {
     container::Image image;
@@ -88,6 +96,33 @@ TEST_CASE("object assembler emits sections, symbols, and relocations") {
     CHECK(image.relocations[0].offset == 4);
     CHECK(image.relocations[0].symbol == "foo");
     CHECK(image.relocations[0].type == container::RelocationType::Abs32);
+}
+
+TEST_CASE("object assembler emits float and double data and FP instructions") {
+    const container::Image image = assemble(
+        ".text\n"
+        ".global _start\n"
+        "_start:\n"
+        "    FADD.S F1, F2, F3\n"
+        ".data\n"
+        "fvalue:\n"
+        "    .float 1.5\n"
+        ".align 8\n"
+        "dvalue:\n"
+        "    .double 2.5\n");
+
+    const container::Section* text = find_section(image, ".text");
+    REQUIRE(text != nullptr);
+    REQUIRE(text->data.size() == 4);
+    CHECK(word_at(text->data, 0) == 0xC024'6000);
+
+    const container::Section* data = find_section(image, ".data");
+    REQUIRE(data != nullptr);
+    CHECK(data->data.size() == 16);
+    CHECK(word_at(data->data, 0) == 0x3FC0'0000);
+    CHECK(word_at(data->data, 4) == 0);
+    CHECK(word_at(data->data, 8) == 0x0000'0000);
+    CHECK(word_at(data->data, 12) == 0x4004'0000);
 }
 
 TEST_CASE("object assembler relocates data references") {

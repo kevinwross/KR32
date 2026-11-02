@@ -3,6 +3,7 @@
 #include "kr32/isa/encoding.h"
 
 #include <algorithm>
+#include <bit>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -60,6 +61,21 @@ std::string lower(std::string_view text) {
         return static_cast<char>(std::tolower(c));
     });
     return result;
+}
+
+bool parse_fp_literal(std::string_view raw, double& value, Error& error, int line) {
+    std::string text = trim(raw);
+    if (!text.empty() && (text.back() == 'f' || text.back() == 'F' ||
+                          text.back() == 'l' || text.back() == 'L')) {
+        text.pop_back();
+    }
+    char* end = nullptr;
+    value = std::strtod(text.c_str(), &end);
+    if (end == nullptr || *end != '\0') {
+        error = {"invalid floating-point literal: " + std::string(raw), line};
+        return false;
+    }
+    return true;
 }
 
 bool is_identifier_start(char c) {
@@ -168,6 +184,26 @@ bool parse_statement(std::string_view raw, int line, Statement& statement) {
 bool parse_register(std::string_view text, int& reg) {
     const std::string value = trim(text);
     if (value.size() < 2 || (value[0] != 'r' && value[0] != 'R')) {
+        return false;
+    }
+    std::size_t index = 1;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 1) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 1);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
+bool parse_fpr(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 2 || (value[0] != 'f' && value[0] != 'F')) {
         return false;
     }
     std::size_t index = 1;
@@ -548,6 +584,14 @@ private:
             return advance(static_cast<std::uint32_t>(statement.operands.size() * 4U),
                            statement.line);
         }
+        if (name == ".float") {
+            return advance(static_cast<std::uint32_t>(statement.operands.size() * 4U),
+                           statement.line);
+        }
+        if (name == ".double") {
+            return advance(static_cast<std::uint32_t>(statement.operands.size() * 8U),
+                           statement.line);
+        }
         if (name == ".byte") {
             return advance(static_cast<std::uint32_t>(statement.operands.size()),
                            statement.line);
@@ -926,6 +970,133 @@ private:
             return true;
         }
 
+        if (mnemonic == "fload.w" || mnemonic == "fload.d" ||
+            mnemonic == "fstore.w" || mnemonic == "fstore.d") {
+            if (operands.size() != 2) {
+                return fail_operands("Fd, [addr]");
+            }
+            int fpr = 0;
+            if (!parse_fpr(operands[0], fpr)) {
+                return fail(statement.line, "expected an FP register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            instruction.opcode = (mnemonic.rfind("fload", 0) == 0) ? 0x50 : 0x51;
+            instruction.rd = static_cast<std::uint8_t>(fpr);
+            instruction.literal = mnemonic.size() >= 2 &&
+                                  mnemonic.substr(mnemonic.size() - 2) == ".d";
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            return set_payload(memory.displacement,
+                               memory.displacement.symbolic ||
+                                   memory.displacement.value < -1024 ||
+                                   memory.displacement.value > 1023,
+                               instruction, relocation, addend, statement.line);
+        }
+
+        {
+            static const std::map<std::string, std::uint32_t> fp_arithmetic = {
+                {"fadd", 0x000}, {"fsub", 0x001}, {"fmul", 0x002},
+                {"fdiv", 0x003}, {"fsqrt", 0x004}, {"fmin", 0x005},
+                {"fmax", 0x006}, {"fabs", 0x007}, {"fneg", 0x008},
+                {"feq", 0x009}, {"flt", 0x00A}, {"fle", 0x00B},
+            };
+            std::string fp_name = mnemonic;
+            bool is_double = false;
+            if (fp_name.size() > 2 && fp_name.substr(fp_name.size() - 2) == ".d") {
+                is_double = true;
+                fp_name.resize(fp_name.size() - 2);
+            } else if (fp_name.size() > 2 && fp_name.substr(fp_name.size() - 2) == ".s") {
+                fp_name.resize(fp_name.size() - 2);
+            }
+            const auto fp_operation = fp_arithmetic.find(fp_name);
+            if (fp_operation != fp_arithmetic.end()) {
+                const bool compare = fp_operation->second >= 0x009;
+                const bool unary = fp_operation->second == 0x004 ||
+                                   fp_operation->second == 0x007 ||
+                                   fp_operation->second == 0x008;
+                const std::size_t expected = compare ? 3U : (unary ? 2U : 3U);
+                if (operands.size() != expected) {
+                    return fail_operands("the FP operand count");
+                }
+                instruction.opcode = 0x60;
+                instruction.immediate = static_cast<std::int16_t>(
+                    fp_operation->second | (is_double ? 0x100U : 0U));
+                int destination = 0;
+                int left = 0;
+                int right = 0;
+                if (compare) {
+                    if (!parse_register(operands[0], destination) ||
+                        !parse_fpr(operands[1], left) ||
+                        !parse_fpr(operands[2], right)) {
+                        return fail(statement.line, "expected Rd, Fs1, Fs2");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(destination);
+                } else {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_fpr(operands[1], left) ||
+                        (operands.size() == 3 && !parse_fpr(operands[2], right))) {
+                        return fail(statement.line, "expected Fd, Fs1, Fs2");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(destination);
+                }
+                instruction.rs1 = static_cast<std::uint8_t>(left);
+                instruction.field = static_cast<std::uint8_t>(right);
+                return true;
+            }
+        }
+
+        {
+            static const std::map<std::string, std::uint32_t> conversions = {
+                {"fcvt.s.d", 0x020}, {"fcvt.d.s", 0x021},
+                {"fcvt.w.s", 0x022}, {"fcvt.wu.s", 0x023},
+                {"fcvt.s.w", 0x024}, {"fcvt.s.wu", 0x025},
+                {"fcvt.w.d", 0x026}, {"fcvt.wu.d", 0x027},
+                {"fcvt.d.w", 0x028}, {"fcvt.d.wu", 0x029},
+                {"fmv.w.x", 0x030}, {"fmv.x.w", 0x031},
+            };
+            const auto conversion = conversions.find(mnemonic);
+            if (conversion != conversions.end()) {
+                if (operands.size() != 2) {
+                    return fail_operands("destination, source");
+                }
+                const std::uint32_t function = conversion->second;
+                const bool destination_gpr = function == 0x022 || function == 0x023 ||
+                                             function == 0x026 || function == 0x027 ||
+                                             function == 0x031;
+                const bool source_gpr = function == 0x024 || function == 0x025 ||
+                                        function == 0x028 || function == 0x029 ||
+                                        function == 0x030;
+                int destination = 0;
+                int source = 0;
+                if (destination_gpr) {
+                    if (!parse_register(operands[0], destination) ||
+                        !parse_fpr(operands[1], source)) {
+                        return fail(statement.line, "expected Rd, Fs");
+                    }
+                } else if (source_gpr) {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_register(operands[1], source)) {
+                        return fail(statement.line, "expected Fd, Rs");
+                    }
+                } else {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_fpr(operands[1], source)) {
+                        return fail(statement.line, "expected Fd, Fs");
+                    }
+                }
+                instruction.opcode = 0x60;
+                instruction.immediate = static_cast<std::int16_t>(function);
+                instruction.rd = static_cast<std::uint8_t>(destination);
+                instruction.rs1 = static_cast<std::uint8_t>(source);
+                return true;
+            }
+        }
+
         return fail(statement.line, "unsupported instruction: " + mnemonic);
     }
 
@@ -1042,6 +1213,28 @@ private:
                          static_cast<std::uint32_t>(value.addend),
                          container::RelocationType::Abs32});
                 }
+            }
+            return true;
+        }
+        if (name == ".float") {
+            for (const std::string& operand : statement.operands) {
+                double value = 0.0;
+                if (!parse_fp_literal(operand, value, error_, statement.line)) {
+                    return false;
+                }
+                emit32(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
+            }
+            return true;
+        }
+        if (name == ".double") {
+            for (const std::string& operand : statement.operands) {
+                double value = 0.0;
+                if (!parse_fp_literal(operand, value, error_, statement.line)) {
+                    return false;
+                }
+                const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+                emit32(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU));
+                emit32(static_cast<std::uint32_t>(bits >> 32));
             }
             return true;
         }

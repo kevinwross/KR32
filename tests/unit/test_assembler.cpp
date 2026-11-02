@@ -40,6 +40,10 @@ TEST_CASE("the assembler emits the golden MOV and memory encodings") {
     const auto branch = assemble_ok("JZ R7\n");
     REQUIRE(branch.bytes.size() == 4);
     CHECK(word_at(branch.bytes) == 0x720E'0000);
+
+    const auto add = assemble_ok("FADD.S F1, F2, F3\n");
+    REQUIRE(add.bytes.size() == 4);
+    CHECK(word_at(add.bytes) == 0xC024'6000);
 }
 
 TEST_CASE("labels and absolute jump targets use an extension word") {
@@ -56,6 +60,16 @@ TEST_CASE("directives emit bytes, words, strings, and alignment") {
     const auto words = assemble_ok(".word 0x12345678\n");
     REQUIRE(words.bytes.size() == 4);
     CHECK(word_at(words.bytes) == 0x1234'5678);
+
+    const auto floats = assemble_ok(".float 1.5, -2.25\n");
+    REQUIRE(floats.bytes.size() == 8);
+    CHECK(word_at(floats.bytes, 0) == 0x3FC0'0000);
+    CHECK(word_at(floats.bytes, 4) == 0xC010'0000);
+
+    const auto doubles = assemble_ok(".double 1.5\n");
+    REQUIRE(doubles.bytes.size() == 8);
+    CHECK(word_at(doubles.bytes, 0) == 0x0000'0000);
+    CHECK(word_at(doubles.bytes, 4) == 0x3FF8'0000);
 
     const auto bytes = assemble_ok(".byte 1, 2, 0xFF\n");
     REQUIRE(bytes.bytes.size() == 3);

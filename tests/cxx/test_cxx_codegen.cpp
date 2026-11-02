@@ -245,6 +245,137 @@ TEST_CASE("using declarations and using namespace resolve names") {
     CHECK(directive.result == 42);
 }
 
+TEST_CASE("double arithmetic, calls, and returns use FPRs") {
+    const ProgramResult program = compile_and_run(
+        "double half(double value) { return value / 2.0; }\n"
+        "int main() { return (int)half(84.0); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("mixed integer and FP arguments use independent register banks") {
+    const ProgramResult program = compile_and_run(
+        "double mix(int a, double b, int c, double d) {\n"
+        "    return a + b + c + d;\n"
+        "}\n"
+        "int main() { return (int)mix(1, 2.5, 3, 4.5); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 11);
+}
+
+TEST_CASE("FP locals, loops, comparisons, and spills run") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    double total = 0.0;\n"
+        "    for (int i = 0; i < 10; ++i) { total = total + 1.5; }\n"
+        "    if (total > 14.0) { return (int)total; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 15);
+}
+
+TEST_CASE("FP globals use float and double data directives") {
+    const ProgramResult program = compile_and_run(
+        "double scale = 2.5;\n"
+        "float bias = 1.5f;\n"
+        "int main() { return (int)(scale + bias); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 4);
+}
+
+TEST_CASE("FP and integer conversions run") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    double value = 3.75;\n"
+        "    int whole = (int)value;\n"
+        "    float small = (float)whole;\n"
+        "    double widened = (double)small;\n"
+        "    return (int)widened + 39;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("references to double pass by address") {
+    const ProgramResult program = compile_and_run(
+        "void scale(double& value) { value = value * 2.0; }\n"
+        "int main() { double value = 21.0; scale(value); return (int)value; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("float return values and float arithmetic run") {
+    const ProgramResult program = compile_and_run(
+        "float half(float value) { return value / 2.0f; }\n"
+        "int main() { return (int)(half(84.0f) + 0.5f); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("stack-passed integer varargs and va_list run") {
+    const ProgramResult program = compile_and_run(
+        "int sum(int count, ...) {\n"
+        "    va_list ap;\n"
+        "    __builtin_va_start(ap, count);\n"
+        "    int total = 0;\n"
+        "    for (int i = 0; i < count; ++i) {\n"
+        "        total += __builtin_va_arg(ap, int);\n"
+        "    }\n"
+        "    __builtin_va_end(ap);\n"
+        "    return total;\n"
+        "}\n"
+        "int main() { return sum(3, 10, 20, 12); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("promoted float and double varargs read through va_list") {
+    const ProgramResult program = compile_and_run(
+        "double sum(int count, ...) {\n"
+        "    va_list ap;\n"
+        "    __builtin_va_start(ap, count);\n"
+        "    double total = 0.0;\n"
+        "    for (int i = 0; i < count; ++i) {\n"
+        "        total += __builtin_va_arg(ap, double);\n"
+        "    }\n"
+        "    __builtin_va_end(ap);\n"
+        "    return total;\n"
+        "}\n"
+        "int main() { return (int)sum(3, 10.5, 20.25f, 11.25); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("long double is a double alias and NaN comparisons run") {
+    const ProgramResult alias = compile_and_run(
+        "long double widen(long double value) { return value * 2.0; }\n"
+        "int main() { return (int)widen(21.0); }\n");
+    INFO(alias.diagnostics);
+    REQUIRE(alias.ok);
+    CHECK(alias.result == 42);
+
+    const ProgramResult nan = compile_and_run(
+        "int main() {\n"
+        "    double zero = 0.0;\n"
+        "    double value = zero / zero;\n"
+        "    if (value != value) { return 42; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(nan.diagnostics);
+    REQUIRE(nan.ok);
+    CHECK(nan.result == 42);
+}
+
 TEST_CASE("unsupported class code is diagnosed instead of miscompiled") {
     const cxx::Result result = cxx::compile(
         "class Widget { public: int value; };\n"
