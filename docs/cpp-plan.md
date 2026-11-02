@@ -1,14 +1,12 @@
 # KR32 C++ toolchain (M9) plan
 
-**Status:** ready for final language-subset review, 2026-11-02. Architecture
-decisions confirmed: custom C++11 subset front end, one thread per core with
-cooperative oversubscription, `R11` TP, library matrix types plus intrinsics,
-`double` align 8/16-byte call boundaries, explicit per-thread transform stacks,
-full destructor unwinding, scalar FP library only, FP varargs, Itanium-like
-mangling, class-member/`this` debug support, `kr32-cxx`, and a separate
-`m9-cxx` worktree. The remaining item is confirmation of the section 4.1
-language surface and the proposed stack-based varargs rule. `implementation.md`
-remains the milestone checklist.
+**Status:** approved 2026-11-02 for implementation planning. All architecture and
+language-surface decisions are confirmed, including full destructor unwinding,
+scalar FP library only, stack-passed FP varargs with promoted doubles,
+Itanium-like mangling, class-member/`this` debug support, `kr32-cxx`, and a
+separate `m9-cxx` worktree. The live task/status tracker is
+[cpp-impl.md](../cpp-impl.md); `implementation.md` remains the milestone
+checklist. Implementation starts only after `cpp-impl.md` is reviewed.
 
 ## 1. Goals
 
@@ -485,17 +483,16 @@ Threads are late in the sequence but not an afterthought: TP/TLS, FP context
 save/restore, and transform-stack ownership are ABI decisions made before codegen
 begins.
 
-## 15. Final review items
+## 15. Final review status
 
-All architecture choices are settled except final confirmation of the language
-surface:
+Approved 2026-11-02:
 
-1. **Language scope:** confirm the section 4.1 subset, including `float`/`double`,
-   FP varargs, and the proposed `kr32::mat4`/`vec4` library API.
-2. **Varargs ABI detail:** confirm stack-passed variadic arguments with
-   `float` promoted to `double` (recommended; avoids an FP register-save area).
+1. **Language scope:** section 4.1, including `float`/`double`, FP varargs, and
+   the `kr32::mat4`/`vec4` library surface.
+2. **Varargs ABI:** stack-passed variadic arguments with `float` promoted to
+   `double` and `va_list` pointing at the first variadic slot.
 
-Once these are accepted, create `cpp-impl.md` and start the `m9-cxx` worktree.
+The implementation task tracker is [cpp-impl.md](../cpp-impl.md).
 
 ## 16. Risks
 
@@ -516,7 +513,7 @@ Once these are accepted, create `cpp-impl.md` and start the `m9-cxx` worktree.
 Before handing this to a subagent:
 
 - [x] Confirm custom front end vs external front end.
-- [ ] Confirm language subset, including float/double, FP varargs, and the
+- [x] Confirm language subset, including float/double, FP varargs, and the
       matrix surface.
 - [x] Confirm `R11` TP.
 - [x] Confirm standalone driver name and directory layout.
