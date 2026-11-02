@@ -112,7 +112,9 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 
 **Gate:** ABI tests, driver tests, and existing suite green on Windows/WSL.
 **Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
-21/21 CTest tests; `kr32_tests` reports 115 test cases and 4473 assertions.
+21/21 CTest tests; `kr32_tests` reports 115 test cases and 4473 assertions. The
+ABI review decisions were accepted 2026-11-02; all recommended choices are in
+`docs/abi.md`, and the exact TCB offsets remain deferred to M9.10.
 
 ### M9.2 — Preprocessor, lexer, parser, diagnostics
 
@@ -301,6 +303,14 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   and the `KR32_BUILD_CXX_TOOL` option/install rules. Windows MSVC Debug and WSL
   GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 115 test cases
   and 4473 assertions. M9.1 is done; M9.2 (front end) is next.
+- **2026-11-02 10:50 -08:00** — Accepted all M9.1 ABI review recommendations:
+  `this` in R0, void ctor/dtor returns with C3 reserved, uniform 8-byte vararg
+  slots, the 8/16-byte aggregate rule, the address-point vtable/RTTI layout,
+  `.cpp_except` + `__kr32_personality_v0` landing pads, direction-only TCB
+  offsets (exact offsets deferred to M9.10), EBO disabled, `long double` as a
+  `double` alias, the bare-pointer `va_list`, and `KR32_BUILD_CXX_TOOL` default
+  `ON`. No ABI contract change; `docs/abi.md` now records the approved review
+  decisions. M9.1 remains done.
 
 ## 8. Approval
 

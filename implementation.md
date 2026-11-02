@@ -924,6 +924,13 @@ Newest entries at the bottom. Use the local time zone.
       `KR32_BUILD_CXX_TOOL` option/install rules. Windows MSVC Debug and WSL GCC
       headless both pass 21/21 CTest tests; `kr32_tests` reports 115 test cases
       and 4473 assertions. M9.2 (front end) is next.
+- **2026-11-02 10:50 -08:00** — Accepted all M9.1 ABI review recommendations
+      (`this` in R0, void ctor/dtor returns, uniform 8-byte varargs, 8/16-byte
+      aggregate rule, address-point vtable/RTTI, `.cpp_except` exceptions,
+      direction-only TCB offsets deferred to M9.10, EBO disabled, `long double`
+      alias, bare-pointer `va_list`, `KR32_BUILD_CXX_TOOL` default ON). No ABI
+      contract change; [docs/abi.md](docs/abi.md) now records the approved review
+      decisions and [cpp-impl.md](cpp-impl.md) remains M9.1 done. M9.2 is next.
 
 ## 10. Updating this file
 

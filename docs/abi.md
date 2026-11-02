@@ -10,7 +10,9 @@ The machine-checkable form of the layout and register constants is
 truth is [`docs/cpp-plan.md`](cpp-plan.md); changed decisions must update both
 documents and the ABI revision.
 
-**C++ ABI revision:** 1 (M9).
+**C++ ABI revision:** 1 (M9). Reviewed and approved 2026-11-02; all review
+decisions were accepted, with the exact TCB offsets explicitly deferred to
+M9.10.
 
 ## Data model
 
@@ -327,7 +329,7 @@ Concrete examples:
   the runtime constructor/destructor helpers described in `docs/cpp-plan.md`
   section 8.
 
-The constructor return convention is a review item.
+The constructor return convention is approved in the review decisions below.
 
 ### Virtual dispatch, vtable layout, and RTTI
 
@@ -374,8 +376,8 @@ Revision 1 uses only `__class_type_info` and `__si_class_type_info`.
   cast yields null; a failed reference cast throws `std::bad_cast` from the
   runtime. Cross-casts and virtual-base casts are outside revision 1.
 
-The exact vtable and typeinfo offsets are mirrored in `abi.h` and are a review
-item.
+The exact vtable and typeinfo offsets are mirrored in `abi.h` and are approved
+in the review decisions below.
 
 ### Exceptions, cleanup, and landing pads
 
@@ -444,8 +446,9 @@ frozen in phase M9.9.
   undefined). Aggregate/class variadic arguments are rejected with a diagnostic
   in the first gate; only scalar and pointer variadic arguments are supported.
 
-Uniform 8-byte variadic slots are a review item; the alternative is
-naturally-sized 4-byte slots with explicit padding before `double`.
+Uniform 8-byte variadic slots are approved in the review decisions below; the
+alternative is naturally-sized 4-byte slots with explicit padding before
+`double`.
 
 ### Threads: `R11` thread pointer, TCB, and TLS
 
@@ -571,11 +574,11 @@ section flag. Revision 1 uses them as follows:
   thread-safe once the thread runtime exists; the compiler must not elide the
   guard for a type with a non-trivial constructor.
 
-### Provisional decisions for human review
+### Approved review decisions
 
-The following details are frozen for implementation but are called out because
-`docs/cpp-plan.md` does not spell them out. Review before phase M9.3 codegen
-depends on them.
+The following details were frozen for implementation and approved during the
+2026-11-02 review. They are called out because `docs/cpp-plan.md` does not spell
+them out.
 
 1. `this` is the implicit first integer-class argument in `R0` (rather than a
    dedicated register), shifting explicit integer parameters by one.
@@ -591,8 +594,8 @@ depends on them.
 6. `.cpp_except` is the LSDA section name; landing pads receive the exception in
    `R0` and the selector in `R1`; the personality routine is
    `__kr32_personality_v0`.
-7. TCB field offsets in the table above are provisional (direction is frozen);
-   exact offsets are fixed in M9.10.
+7. TCB field offsets in the table above are approved as direction only; the
+   exact offsets are deferred to M9.10 by review decision.
 8. Empty base optimization is disabled in revision 1 (an empty base occupies one
    byte at offset 0).
 9. `long double` is identical to `double`, including mangling as `d`.
