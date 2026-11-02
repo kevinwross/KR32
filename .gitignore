@@ -1,0 +1,24 @@
+# Build trees
+/build/
+/out/
+/dist/
+
+# CMake and build system generated files
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+CTestTestfile.cmake
+Testing/
+.ninja_deps
+.ninja_log
+
+# IDE and local user files
+/.vs/
+/.vscode/
+CMakeUserPresets.json
+*.user
+*.suo
+
+# OS noise
+Thumbs.db
+.DS_Store
