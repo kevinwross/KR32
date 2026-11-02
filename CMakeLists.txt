@@ -61,6 +61,11 @@ target_link_libraries(kr32_cc PUBLIC kr32_asm kr32_container)
 kr32_add_library(kr32_cxx src/cxx/cxx.cpp)
 target_link_libraries(kr32_cxx PUBLIC kr32_asm kr32_container)
 
+add_executable(kr32_cxx_tool src/cxx/tool/main.cpp)
+target_link_libraries(kr32_cxx_tool PRIVATE kr32_cxx kr32_warnings)
+target_compile_features(kr32_cxx_tool PRIVATE cxx_std_20)
+set_target_properties(kr32_cxx_tool PROPERTIES OUTPUT_NAME kr32-cxx)
+
 kr32_add_library(kr32_dis src/dis/disassembler.cpp)
 target_link_libraries(kr32_dis PUBLIC kr32_core kr32_container)
 
@@ -144,7 +149,7 @@ if(KR32_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS kr32 RUNTIME DESTINATION bin)
+install(TARGETS kr32 kr32_cxx_tool RUNTIME DESTINATION bin)
 
 set(CPACK_PACKAGE_NAME "KR32")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")

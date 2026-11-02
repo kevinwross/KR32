@@ -43,6 +43,12 @@ endif()
 
 add_test(NAME unit COMMAND kr32_tests)
 
+if(TARGET kr32_cxx_tool)
+    add_test(NAME cxx_tool_help COMMAND kr32_cxx_tool --help)
+    set_tests_properties(cxx_tool_help PROPERTIES
+        PASS_REGULAR_EXPRESSION "kr32-cxx")
+endif()
+
 add_test(NAME cli_version COMMAND $<TARGET_FILE:kr32> version)
 set_tests_properties(cli_version PROPERTIES
     PASS_REGULAR_EXPRESSION "kr32 0\\.1\\.0")

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 09:02 -08:00
+> **Last updated:** 2026-11-02 09:18 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -547,23 +547,36 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 
 **Goal:** a C++ compiler module linked into `kr32`, with C++ source debugging.
 
+**Status:** planning/draft. The design contract is
+[docs/cpp-plan.md](docs/cpp-plan.md); the standalone API and `kr32-cxx` driver
+skeleton are in place. The front end is intentionally still a diagnostic stub
+until the plan is reviewed and approved. `cpp-impl.md` will be created after
+approval.
+
 **Tasks**
 
+- [x] Draft the M9 design contract, including the C++ subset, ABI, runtime,
+      threads/multicore, debug, and test gates.
+- [x] Add the stable `kr32::cxx::compile` API, standalone `kr32-cxx` driver, and
+      the `cxx_tool_help` CTest.
 - [ ] Choose and pin the C++ front end (EDG or a custom front end); record the
       license and build steps.
 - [ ] `kr32_cxx` module: front end, lowering, code generation, weak/COMDAT
       merge.
 - [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
       RTTI, `new`/`delete`, static initialization.
+- [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
+      condition variables, `std::thread` subset.
 - [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
 - [ ] `kr32 cxx`, `kr32 build file.cpp`.
-- [ ] Tests: classes, templates, virtual calls, exceptions, standard-library
-      subset.
+- [ ] Tests: classes, templates, virtual calls, exceptions, threads, and
+      standard-library subset.
 
 **Test plan and gate**
 
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Exceptions unwind correctly.
+- [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
 - [ ] Commit and tag `m9`; log entry added.
@@ -855,6 +868,12 @@ Newest entries at the bottom. Use the local time zone.
       Enter/Escape handling, a PTR-to-SP button, and ^/v 16-byte scrolling
       buttons. Added Enter/Backspace platform key mappings and refreshed the
       layout screenshot/docs.
+- **2026-11-02 09:18 -08:00** — Drafted [docs/cpp-plan.md](docs/cpp-plan.md)
+      for M9: custom C++ subset front end, KR32 C++ ABI, table-driven
+      exceptions, guest threads on KR32 cores with TLS/atomics/mutex/condvar,
+      standalone driver, and phase gates. Added `include/kr32/cxx/cxx.h`, the
+      `kr32-cxx` driver skeleton, and the `cxx_tool_help` CTest; the compiler
+      itself remains a diagnostic stub pending plan review.
 
 ## 10. Updating this file
 
