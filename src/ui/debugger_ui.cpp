@@ -31,7 +31,7 @@ constexpr Color kBad{255, 104, 104, 255};
 constexpr int kToolbarHeight = 30;
 constexpr int kSourceGutter = 58;
 constexpr int kSourceBreakGutter = 18;
-constexpr int kAsmGutter = 90;
+constexpr int kAsmGutter = 104;
 constexpr int kAsmBreakGutter = 18;
 
 std::string hex(std::uint32_t value, int digits) {
@@ -505,9 +505,9 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         const bool has_breakpoint =
             session_.breakpoints().find(address) != session_.breakpoints().end();
         if (has_breakpoint) {
-            canvas.fill(Rect{rect.x + 6, y + 5, 7, 8}, kBad);
+            canvas.fill(Rect{rect.x + 8, y + 5, 7, 8}, kBad);
         }
-        canvas.text(rect.x + kAsmGutter - 8 - address_width, y, hex(address, 8),
+        canvas.text(rect.x + kAsmGutter - 10 - address_width, y, hex(address, 8),
                     address == pc ? kAccent : kDim, FontRole::Mono);        canvas.text(instruction_x, y,
                     trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
                     address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);

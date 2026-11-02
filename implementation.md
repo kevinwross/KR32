@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 08:05 -08:00
+> **Last updated:** 2026-11-02 08:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -822,6 +822,10 @@ Newest entries at the bottom. Use the local time zone.
       right-aligned address column with separators, gutter hover, left-click
       breakpoint toggling, and the same right-click Toggle/Run-to menu. Verified
       live with a disassembly gutter right-click and Run to address menu.
+- **2026-11-02 08:10 -08:00** — Widened the disassembly address gutter and added
+      padding between the breakpoint column and the address column so it mirrors
+      the source gutter geometry instead of addresses touching the breakpoint
+      separator. Screenshots and docs updated.
 
 ## 10. Updating this file
 
