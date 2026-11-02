@@ -652,6 +652,24 @@ TEST_CASE("new and delete allocate and construct objects") {
     INFO(array.diagnostics);
     REQUIRE(array.ok);
     CHECK(array.result == 42);
+
+    const ProgramResult class_array = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Item {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Item() { value = 7; }\n"
+        "    ~Item() { destroyed = destroyed + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Item* items = new Item[3];\n"
+        "    int result = items[2].value;\n"
+        "    delete[] items;\n"
+        "    return destroyed == 3 ? result : 0;\n"
+        "}\n");
+    INFO(class_array.diagnostics);
+    REQUIRE(class_array.ok);
+    CHECK(class_array.result == 7);
 }
 
 TEST_CASE("delete runs the destructor") {

@@ -384,7 +384,9 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
       scalar arrays, including constructor and destructor calls. Allocation
       failure behavior and class-array constructor/destructor helpers remain
       deferred.
-- [ ] Constructor/destructor array helpers.
+- [x] Constructor/destructor array helpers: `new[]` stores a count cookie,
+      default-constructs each class element, and `delete[]` destroys elements in
+      order before freeing the cookie base.
 - [x] Scalar/pointer exception propagation, catch by type, catch-all, nested
       try/catch, `throw;`, cross-function propagation, and destructor cleanup
       using return-based pending checks and weak per-image exception slots.
@@ -394,17 +396,18 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
       exception path; constructor-completion flags and temporaries remain
       deferred.
 - [ ] `__cxa_atexit`-style static destruction.
-- [x] Tests: scalar/object/array `new`, `delete`, destructor invocation, nested
-      try/catch, cross-function propagation, rethrow, and RAII cleanup.
+- [x] Tests: scalar/object/array `new`, `delete`, destructor invocation, class
+      array construction/destruction, nested try/catch, cross-function
+      propagation, rethrow, and RAII cleanup.
 
 **Gate:** exception/cleanup tests pass with no leaks in the guest allocator.
-**Status:** in progress 2026-11-02. `new`/`delete` and a functional
-scalar/pointer exception path are implemented and tested, including
-cross-function unwinding and destructor cleanup. The table-driven ABI runtime
-(`.cpp_except`, LSDA, `__cxa_*`), class exceptions, class-array helpers, static
-destruction, and constructor-completion flags remain. Windows MSVC Debug and
-WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 174 test
-cases and 4765 assertions.
+**Status:** in progress 2026-11-02. `new`/`delete` (including class arrays) and
+a functional scalar/pointer exception path are implemented and tested,
+including cross-function unwinding and destructor cleanup. The table-driven ABI
+runtime (`.cpp_except`, LSDA, `__cxa_*`), class exceptions, static destruction,
+and constructor-completion flags remain. Windows MSVC Debug and WSL GCC
+headless both pass 21/21 CTest tests; `kr32_tests` reports 174 test cases and
+4767 assertions.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
@@ -578,6 +581,12 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   cases and 4765 assertions. M9.9 remains in progress for the table-driven
   `.cpp_except`/LSDA/`__cxa_*` ABI runtime, class exceptions, class arrays,
   static destruction, and constructor-completion flags.
+- **2026-11-02 12:56 -08:00** — Added class-array `new[]`/`delete[]` support:
+  count cookie, default construction of every element, reverse destruction on
+  delete[], and cookie-base freeing. Windows/WSL both pass 21/21 CTest tests;
+  `kr32_tests` reports 174 test cases and 4767 assertions. M9.9 remains in
+  progress for the table-driven ABI exception runtime, class exceptions, static
+  destruction, and constructor-completion flags.
 
 ## 8. Approval
 

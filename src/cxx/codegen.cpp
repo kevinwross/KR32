@@ -2183,16 +2183,49 @@ private:
             allocate_local(Type::make_pointer(pointee));
         if (!expression.children.empty()) {
             gen_expr(*expression.children[0]);
+            const int count_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            const int base_temp =
+                allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+            emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
             const int element_size = std::max(1, type_size(pointee));
             if (element_size != 1) {
                 emit("    MUL R0, R0, #" + std::to_string(element_size));
             }
+            emit("    ADD R0, R0, #4");
             emit("    CALL malloc");
-            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
-            if (info != nullptr && find_constructor(info, 0) != nullptr) {
-                diagnose_once(expression,
-                              "new[] of classes with constructors is not supported yet");
+            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
+            emit("    STORE R1, [R0]");
+            if (info != nullptr) {
+                Function* constructor = find_constructor(info, 0);
+                if (constructor != nullptr) {
+                    const int index_temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    const std::string loop_label = new_label("new_array");
+                    const std::string done_label = new_label("new_array_done");
+                    emit("    MOV R0, #0");
+                    emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit(loop_label + ":");
+                    emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
+                    emit("    CMP R0, R1");
+                    emit("    JGE " + done_label);
+                    emit("    MUL R1, R0, #" + std::to_string(element_size));
+                    emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
+                    emit("    ADD R0, R0, #4");
+                    emit("    ADD R0, R0, R1");
+                    emit("    CALL " + constructor->symbol);
+                    emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    ADD R0, R0, #1");
+                    emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    JMP " + loop_label);
+                    emit(done_label + ":");
+                }
             }
+            emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    ADD R0, R0, #4");
+            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
         } else {
             emit("    MOV R0, #" + std::to_string(std::max(1, type_size(pointee))));
             emit("    CALL malloc");
@@ -2221,12 +2254,51 @@ private:
         const int pointer_temp =
             allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
         emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
-        if (expression.text != "[]") {
+        if (expression.text == "[]") {
+            const int base_temp =
+                allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    SUB R0, R0, #4");
+            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
             if (ClassInfo* info = class_of(pointee)) {
                 if (Function* destructor = find_destructor(info)) {
+                    const int count_temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    const int index_temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    const std::string loop_label = new_label("delete_array");
+                    const std::string done_label = new_label("delete_array_done");
+                    emit("    LOAD R1, [R7 + " + std::to_string(base_temp) + "]");
+                    emit("    LOAD R0, [R1]");
+                    emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
+                    emit("    MOV R0, #0");
+                    emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit(loop_label + ":");
+                    emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
+                    emit("    CMP R0, R1");
+                    emit("    JGE " + done_label);
+                    emit("    MUL R1, R0, #" +
+                         std::to_string(std::max(1, type_size(pointee))));
                     emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                    emit("    ADD R0, R0, R1");
                     emit("    CALL " + destructor->symbol);
+                    emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    ADD R0, R0, #1");
+                    emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    JMP " + loop_label);
+                    emit(done_label + ":");
                 }
+            }
+            emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    CALL free");
+            emit("    MOV R0, #0");
+            return Type::make_builtin(BuiltinKind::Void);
+        }
+        if (ClassInfo* info = class_of(pointee)) {
+            if (Function* destructor = find_destructor(info)) {
+                emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                emit("    CALL " + destructor->symbol);
             }
         }
         emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
