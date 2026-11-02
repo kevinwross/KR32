@@ -14,7 +14,8 @@ cluster, IPIs, and LL/SC spinlock runs are implemented. The debugger opens at
 1440x900 and uses embedded Inter and JetBrains Mono fonts, separate source-line
 and instruction stepping controls, responsive resizing, KR16-style gutters with
 breakpoint toggles and a Run to line/address context menu, a HEX word column,
-and disassembly hover help for instructions and addressing modes. See
+disassembly hover help for instructions and addressing modes, and a grouped
+REGISTERS panel with variables in a bottom tab. See
 [docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++
 toolchain is the remaining planned milestone.
 

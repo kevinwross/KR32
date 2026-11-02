@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 08:30 -08:00
+> **Last updated:** 2026-11-02 08:39 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -837,6 +837,11 @@ Newest entries at the bottom. Use the local time zone.
       1024/1440 layout. Changed the initial window and headless surface to
       1440x900 so source, HEX, and mnemonic columns have room; narrow layouts
       switch the source pane to the 13 px mono role.
+- **2026-11-02 08:39 -08:00** — Grouped all register state into the REGISTERS
+      panel: GPRs, PC/SP/FLAGS, F0-F15, TSP/T0, PTBR/PTE, and control registers.
+      Replaced the bottom MACHINE tab with VARIABLES, which now hosts locals,
+      globals/watch values, and the call stack. Updated headless output,
+      screenshots, and docs.
 
 ## 10. Updating this file
 

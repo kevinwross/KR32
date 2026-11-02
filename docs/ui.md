@@ -8,7 +8,7 @@ executables load directly.
 
 ![KR32 HEX column](screenshots/m6-hex.png)
 
-![KR32 machine panel](screenshots/m6-machine.png)
+![KR32 variables / call stack](screenshots/m6-variables.png)
 
 ![KR32 gutter menu](screenshots/m6-gutter-menu.png)
 
@@ -44,10 +44,15 @@ executables load directly.
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
-| Registers | R0-R15, PC, SP, FLAGS, mode, ticks, core |
+| Registers | R0-R15, PC/SP/FLAGS, ticks/core, F0-F15, TSP and T0 tile, PTBR/PTE, control registers |
 | Variables | Locals, globals/watch values, call stack |
-| Bottom tabs | Memory hex dump, machine state, console |
-| Machine tab | FPRs, T0 4x4 tile, PTBR/page table entries, control registers, TSP, core/mode |
+| Bottom tabs | Memory hex dump, Variables/Call stack, Console |
+
+The right-hand **REGISTERS** panel groups all register state: the 16 GPRs,
+PC/SP/FLAGS, F0-F15, TSP, the T0 tile, paging registers, and control registers.
+The bottom tabs are **MEMORY**, **VARIABLES**, and **CONSOLE**; the former
+MACHINE tab's contents now live under REGISTERS, while variables and the call
+stack moved into the VARIABLES tab.
 
 ## Gutter behavior
 

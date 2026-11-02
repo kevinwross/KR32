@@ -592,11 +592,20 @@ void DebuggerUI::draw_registers(Canvas& canvas, Rect rect) {
                     std::to_string(machine.core_id()) +
                     (machine.kernel_mode() ? " KERNEL" : " USER"),
                 kDim, FontRole::MonoSmall);
+
+    const int section_y = y + 46;
+    if (section_y < rect.y + rect.height - 20) {
+        canvas.fill(Rect{rect.x + 6, section_y, rect.width - 12, 1}, kBorder);
+        canvas.text(rect.x + 6, section_y + 5, "FPR / VECTOR / CONTROL", kDim,
+                    FontRole::MonoSmall);
+        draw_machine(canvas,
+                     Rect{rect.x, section_y + 18, rect.width,
+                          std::max(0, rect.y + rect.height - section_y - 18)});
+    }
 }
 
 void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
-    draw_panel(canvas, rect, "VARIABLES / CALL STACK");
-    int y = rect.y + 24;
+    int y = rect.y + 4;
     const debug::Function* function = session_.function_at(session_.machine().pc());
     if (function != nullptr) {
         canvas.text(rect.x + 6, y, "in " + function->name, kAccent);
@@ -742,11 +751,12 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
 void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
     canvas.fill(rect, kPanel);
     canvas.frame(rect, kBorder);
-    const char* labels[] = {"MEMORY", "MACHINE", "CONSOLE"};
+    const char* labels[] = {"MEMORY", "VARIABLES", "CONSOLE"};
+    constexpr int kTabWidth = 110;
     for (int index = 0; index < 3; ++index) {
-        const int x = rect.x + 6 + index * 100;
+        const int x = rect.x + 6 + index * kTabWidth;
         if (static_cast<int>(tab_) == index) {
-            canvas.fill(Rect{x, rect.y + 2, 92, 20}, Color{38, 66, 92, 255});
+            canvas.fill(Rect{x, rect.y + 2, kTabWidth - 8, 20}, Color{38, 66, 92, 255});
         }
         canvas.text(x + 7, rect.y + 5, labels[index],
                     static_cast<int>(tab_) == index ? kAccent : kDim, FontRole::Ui);
@@ -754,8 +764,8 @@ void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
     const Rect content{rect.x + 1, rect.y + 24, rect.width - 2, rect.height - 25};
     if (tab_ == Tab::Memory) {
         draw_memory(canvas, content);
-    } else if (tab_ == Tab::Machine) {
-        draw_machine(canvas, content);
+    } else if (tab_ == Tab::Variables) {
+        draw_variables(canvas, content);
     } else {
         draw_console(canvas, content);
     }
@@ -772,16 +782,12 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
     const int bottom_height = std::clamp(height / 3, 170, 240);
     const int bottom_top = height - bottom_height;
     const int top_height = bottom_top - kToolbarHeight;
-    int registers_height = std::clamp(top_height / 3, 190, 220);
 
     Layout result;
     result.source = Rect{0, kToolbarHeight, source_width, top_height};
     result.disassembly = Rect{source_width, kToolbarHeight, disassembly_width, top_height};
-    result.registers =
-        Rect{source_width + disassembly_width, kToolbarHeight, right_width, registers_height};
-    result.variables = Rect{source_width + disassembly_width,
-                            kToolbarHeight + registers_height, right_width,
-                            top_height - registers_height};
+    result.registers = Rect{source_width + disassembly_width, kToolbarHeight, right_width,
+                            top_height};
     result.bottom = Rect{0, bottom_top, width, bottom_height};
     return result;
 }
@@ -1053,7 +1059,6 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_source(canvas, areas.source);
     draw_disassembly(canvas, areas.disassembly);
     draw_registers(canvas, areas.registers);
-    draw_variables(canvas, areas.variables);
     draw_bottom(canvas, areas.bottom);
     draw_error(canvas);
     draw_asm_tooltip(canvas);
@@ -1097,11 +1102,11 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         return true;
     }
     if (y >= areas.bottom.y + 2 && y < areas.bottom.y + 22) {
-        if (x < areas.bottom.x + 106) {
+        if (x < areas.bottom.x + 116) {
             tab_ = Tab::Memory;
-        } else if (x < areas.bottom.x + 206) {
-            tab_ = Tab::Machine;
-        } else if (x < areas.bottom.x + 306) {
+        } else if (x < areas.bottom.x + 226) {
+            tab_ = Tab::Variables;
+        } else if (x < areas.bottom.x + 336) {
             tab_ = Tab::Console;
         }
         return true;
@@ -1199,17 +1204,17 @@ bool DebuggerUI::headless(const std::string& ppm_path) {
         return false;
     }
 
-    tab_ = Tab::Machine;
+    tab_ = Tab::Variables;
     render(canvas);
-    const std::uint64_t machine_hash = canvas.hash();
+    const std::uint64_t variables_hash = canvas.hash();
     if (!ppm_path.empty()) {
-        std::string machine_path = ppm_path;
-        const std::size_t dot = machine_path.find_last_of('.');
+        std::string variables_path = ppm_path;
+        const std::size_t dot = variables_path.find_last_of('.');
         if (dot != std::string::npos) {
-            machine_path.insert(dot, "-machine");
+            variables_path.insert(dot, "-variables");
         }
-        if (!canvas.write_ppm(machine_path)) {
-            error_ = "cannot write " + machine_path;
+        if (!canvas.write_ppm(variables_path)) {
+            error_ = "cannot write " + variables_path;
             return false;
         }
     }
@@ -1218,9 +1223,9 @@ bool DebuggerUI::headless(const std::string& ppm_path) {
     render(canvas);
     const std::uint64_t console_hash = canvas.hash();
     tab_ = original_tab;
-    std::printf("ui-render width=%d height=%d hash=%016llX machine=%016llX console=%016llX\n",
+    std::printf("ui-render width=%d height=%d hash=%016llX variables=%016llX console=%016llX\n",
                 canvas.width(), canvas.height(), static_cast<unsigned long long>(memory_hash),
-                static_cast<unsigned long long>(machine_hash),
+                static_cast<unsigned long long>(variables_hash),
                 static_cast<unsigned long long>(console_hash));
     return true;
 }

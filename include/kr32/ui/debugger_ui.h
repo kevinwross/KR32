@@ -38,11 +38,10 @@ private:
         Rect source;
         Rect disassembly;
         Rect registers;
-        Rect variables;
         Rect bottom;
     };
 
-    enum class Tab { Memory, Machine, Console };
+    enum class Tab { Memory, Variables, Console };
 
     [[nodiscard]] Layout layout(int width, int height) const;
     void set_status_from_result(const core::StepResult& result);
