@@ -1,11 +1,11 @@
 // Built-in C scalar types on KR32.
 //
 // The M4 C compiler supports _Bool, char, and int (including signed/unsigned
-// spellings, which currently map to the same underlying C type). C has no
-// templates or overloading, so each type gets its own Double<Type> function.
-// Values are fixed rather than runtime-random so the demo is reproducible.
-// Pointer, array, struct, union, and enum types are excluded because they are
-// not arithmetic scalar types; float/double are not available in the M4 subset.
+// spellings, which currently map to the same underlying C type), plus float and
+// double. C has no templates or overloading, so each type gets its own
+// Double<Type> function. Values are fixed rather than runtime-random so the
+// demo is reproducible. Pointer, array, struct, union, and enum types are
+// excluded because they are not arithmetic scalar types.
 
 int putchar(int c);
 
@@ -66,6 +66,14 @@ unsigned int DoubleUInt(unsigned int value) {
     return value * value;
 }
 
+float DoubleFloat(float value) {
+    return value * value;
+}
+
+double DoubleDouble(double value) {
+    return value * value;
+}
+
 int main(void) {
     _Bool bool_value = 1;
     char char_value = 7;
@@ -74,6 +82,8 @@ int main(void) {
     int int_value = 12;
     signed int signed_int_value = 9;
     unsigned int unsigned_int_value = 10;
+    float float_value = 2.5f;
+    double double_value = 3.25;
 
     print_string("bool 1 squared = ");
     print_int(DoubleBool(bool_value));
@@ -101,6 +111,14 @@ int main(void) {
 
     print_string("unsigned int 10 squared = ");
     print_int(DoubleUInt(unsigned_int_value));
+    putchar('\n');
+
+    print_string("float 2.5 squared = ");
+    print_int((int)DoubleFloat(float_value));
+    putchar('\n');
+
+    print_string("double 3.25 squared = ");
+    print_int((int)DoubleDouble(double_value));
     putchar('\n');
 
     return 0;
