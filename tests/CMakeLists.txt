@@ -14,6 +14,7 @@ add_executable(kr32_tests
     unit/test_cc.cpp
     unit/test_debug.cpp
     unit/test_host.cpp
+    unit/test_threads.cpp
     unit/test_assembler.cpp
     unit/test_disassembler.cpp
     cxx/test_cxx_abi.cpp

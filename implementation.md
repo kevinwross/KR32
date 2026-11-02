@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 13:33 -08:00
+> **Last updated:** 2026-11-02 13:52 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -556,12 +556,13 @@ M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
 and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
 weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
-cleanup) are complete; M9.10 (threads, TLS, atomics, synchronization) is next.
-C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with machine-checkable
-constants in `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver
-skeleton are in place, and `compile()` now produces assembly for the supported
-integer, scalar-FP, class, virtual/RTTI, matrix, function-template, allocation,
-and exception subset. Confirmed decisions include custom C++11 subset, one
+cleanup) are complete; M9.10 is in progress with stage-1 host thread/futex
+services over `core::Cluster` done. C++ ABI revision 1 is frozen in
+[docs/abi.md](docs/abi.md) with machine-checkable constants in
+`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
+in place, and `compile()` now produces assembly for the supported integer,
+scalar-FP, class, virtual/RTTI, matrix, function-template, allocation, and
+exception subset. Confirmed decisions include custom C++11 subset, one
 thread per core with cooperative oversubscription, `R11` TP, library matrices
 plus intrinsics, `double` align 8/16-byte call boundaries, explicit per-thread
 transform stacks, full destructor unwinding, scalar FP library, stack-based FP
@@ -608,8 +609,11 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
 - [x] Matrix library and intrinsics: `mat4`/`vec4`, object-assembler tile
       encoding, `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, and transform-stack
       push/pop/drop (M9.7).
-- [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
-      condition variables, `std::thread` subset.
+- [x] Host thread/futex services in `vm::ClusterHost` over `core::Cluster`
+      (M9.10 stage 1).
+- [ ] Guest TCB/TLS, FPR/TSP context save/restore, compiler
+      `thread_local`/atomics, and mutex/condvar/thread headers (M9.10
+      remaining).
 - [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
 - [ ] `kr32 cxx`, `kr32 build file.cpp`.
 - [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
@@ -643,6 +647,8 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       `_Unwind_Resume`, nested/cross-function try/catch, and rethrow pass
       (M9.9 gate: 178 cases / 4802 assertions).
 - [ ] C++ hello world and a class/template demo run.
+- [x] Host thread/futex services over `core::Cluster` pass (M9.10 stage 1:
+      183 cases / 4841 assertions).
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
@@ -1083,6 +1089,13 @@ Newest entries at the bottom. Use the local time zone.
       resumes through handlers. Windows/WSL both pass 21/21 CTest tests;
       `kr32_tests` reports 178 test cases and 4802 assertions. M9.10
       (threads/TLS/atomics) is next.
+- **2026-11-02 13:52 -08:00** — Completed M9.10 stage 1: `vm::ClusterHost`
+      over `core::Cluster` with one guest thread per core, create/join/yield/
+      exit, futex wait/wake, and syscall vectors 44..50. Added stage-1 thread
+      tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 183
+      test cases and 4841 assertions. M9.10 remains in progress for guest
+      TCB/TLS, FPR/TSP context, compiler `thread_local`/atomics, and
+      synchronization headers.
 
 ## 10. Updating this file
 

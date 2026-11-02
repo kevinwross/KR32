@@ -9,7 +9,8 @@ conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
 initialization), and M9.9 (`new`/`delete`, exceptions, cleanup) are complete;
-phase M9.10 (threads, TLS, atomics, synchronization) is next.
+phase M9.10 (threads, TLS, atomics, synchronization) is in progress with
+stage-1 host thread/futex services done.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -164,12 +165,20 @@ Completed in M9.9:
 - [x] Constructor-completion cleanup for class arrays whose element constructor
       throws.
 
+In progress:
+
+- [x] Host thread/futex services in `vm::ClusterHost` over `core::Cluster`
+      (M9.10 stage 1): create/join/yield/exit, futex wait/wake, syscall vectors,
+      and tests.
+
 Not started:
 
-- [ ] Threads, debug, and CLI integration (M9.10-M9.12). Class templates,
-      COMDAT section groups, static destruction, guarded local statics, a full
-      tile allocator/spill pass, matrix optimization/fusion, and by-value class
-      parameters/returns remain deferred.
+- [ ] Guest TCB/TLS, FPR/TSP context save/restore, compiler `thread_local`/
+      atomics, mutex/condvar/thread headers (M9.10 remaining), then debug and
+      CLI integration (M9.11-M9.12). Class templates, COMDAT section groups,
+      static destruction, guarded local statics, a full tile allocator/spill
+      pass, matrix optimization/fusion, and by-value class parameters/returns
+      remain deferred.
 
 ## 3. Milestone map
 
@@ -187,7 +196,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | done |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | done |
-| M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | not started |
+| M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | in progress |
 | M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | not started |
 | M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | not started |
 
@@ -416,7 +425,10 @@ M9.10 (threads, TLS, atomics, synchronization) is next.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
-- [ ] Define/implement host thread services: create/join/yield/exit, futex.
+- [x] Host thread/futex services in `vm::ClusterHost` over `core::Cluster`:
+      create/join/yield/exit, futex wait/wake, one thread per core, and
+      `thread_create`/`yield`/`exit`/`futex`/`self` syscall vectors. Guest
+      blocking `thread_join` remains stage 2.
 - [ ] TCB, `R11` thread pointer, TLS block, per-thread stack.
 - [ ] Per-thread FPR and TSP context save/restore on switch/migration.
 - [ ] `std::atomic` on LL/SC, initially sequentially consistent.
@@ -427,6 +439,11 @@ M9.10 (threads, TLS, atomics, synchronization) is next.
       deterministic scheduling.
 
 **Gate:** multi-core/thread tests pass on the cluster; debug view shows threads.
+**Status:** in progress 2026-11-02. Stage 1 (host thread/futex services and
+syscall ABI) is complete; guest TCB/TLS, context save/restore, compiler
+`thread_local`/atomics, and synchronization headers remain. Windows MSVC Debug
+and WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 183 test
+cases and 4841 assertions.
 
 ### M9.11 — C++ debug information and GUI/DAP
 
@@ -616,6 +633,13 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   handlers. Added multi-frame cleanup and refcounted-destruction tests.
   Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 178 test cases
   and 4802 assertions. M9.10 (threads/TLS/atomics) is next.
+- **2026-11-02 13:52 -08:00** — Completed M9.10 stage 1: `vm::ClusterHost`
+  over `core::Cluster` with one guest thread per core, create/join/yield/exit,
+  futex wait/wake, and syscall vectors 44..50. Added `test_threads.cpp` for
+  create/join, `thread_create`, futex wait/wake/mismatch, and `thread_self`.
+  Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 183 test cases
+  and 4841 assertions. M9.10 remains in progress for guest TCB/TLS, FPR/TSP
+  context, compiler `thread_local`/atomics, and synchronization headers.
 
 ## 8. Approval
 

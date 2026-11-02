@@ -18,7 +18,8 @@ public:
     Cluster(std::uint32_t count, Machine::Options options = {}) {
         std::uint32_t ram_size = options.ram_size == 0 ? kDefaultRamSize : options.ram_size;
         ram_size = std::min(ram_size, kRomBase - kRamBase);
-        shared_ram_ = std::make_shared<std::vector<std::uint8_t>>(ram_size, 0);
+        shared_ram_ = std::make_shared<std::vector<std::uint8_t>>(
+            static_cast<std::size_t>(ram_size), std::uint8_t{0});
         options.shared_ram = shared_ram_;
         options.ram_size = ram_size;
         cores_.reserve(count);
