@@ -352,6 +352,7 @@ public:
             }
         }
         emit_rtti();
+        emit_lsdas();
         emit_static_fini();
         bss_ += ".weak __kr32_exception_value\n";
         bss_ += "__kr32_exception_value:\n    .space 8\n";
@@ -359,9 +360,14 @@ public:
         bss_ += "__kr32_exception_type:\n    .space 4\n";
         bss_ += ".weak __kr32_exception_pending\n";
         bss_ += "__kr32_exception_pending:\n    .space 4\n";
+        bss_ += ".weak __kr32_exception_object\n";
+        bss_ += "__kr32_exception_object:\n    .space 4\n";
         std::string result = text_;
         if (!rodata_.empty()) {
             result += ".rodata\n" + rodata_;
+        }
+        if (!lsda_.empty()) {
+            result += lsda_;
         }
         if (!data_.empty()) {
             result += ".data\n" + data_;
@@ -2224,6 +2230,39 @@ private:
                     emit("    ADD R0, R0, #4");
                     emit("    ADD R0, R0, R1");
                     emit("    CALL " + constructor->symbol);
+                    const std::string ok_label = new_label("new_array_ok");
+                    emit("    LOAD R2, [__kr32_exception_pending]");
+                    emit("    CMP R2, #0");
+                    emit("    JZ " + ok_label);
+                    if (Function* destructor = find_destructor(info)) {
+                        const int unwind_index =
+                            allocate_local(Type::make_builtin(BuiltinKind::Int));
+                        const std::string unwind_loop =
+                            new_label("new_array_unwind");
+                        const std::string unwind_done =
+                            new_label("new_array_unwind_done");
+                        emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                        emit("    SUB R0, R0, #1");
+                        emit("    STORE R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit(unwind_loop + ":");
+                        emit("    LOAD R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    CMP R0, #0");
+                        emit("    JLT " + unwind_done);
+                        emit("    MUL R1, R0, #" + std::to_string(element_size));
+                        emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
+                        emit("    ADD R0, R0, #4");
+                        emit("    ADD R0, R0, R1");
+                        emit("    CALL " + destructor->symbol);
+                        emit("    LOAD R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    SUB R0, R0, #1");
+                        emit("    STORE R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    JMP " + unwind_loop);
+                        emit(unwind_done + ":");
+                    }
+                    emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
+                    emit("    CALL free");
+                    emit_pending_check();
+                    emit(ok_label + ":");
                     emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    ADD R0, R0, #1");
                     emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
@@ -2316,7 +2355,13 @@ private:
     }
 
     std::string exception_type_key(const TypePtr& type) {
-        return mangle_type(decay(resolve_type(type)));
+        TypePtr resolved = resolve_type(type);
+        if (resolved) {
+            resolved = resolved->clone();
+            resolved->is_const = false;
+            resolved->is_volatile = false;
+        }
+        return mangle_type(decay(resolved));
     }
 
     int exception_type_id(const TypePtr& type) {
@@ -2369,13 +2414,37 @@ private:
         uses_exceptions_ = true;
         if (statement.expression) {
             const TypePtr type = type_of(*statement.expression);
-            gen_expr(*statement.expression);
-            if (is_fp(type)) {
-                emit(std::string("    FSTORE.") +
-                     (is_float32(type) ? "W" : "D") +
-                     " F0, [__kr32_exception_value]");
+            if (ClassInfo* info = class_of(type)) {
+                gen_address(*statement.expression);
+                const int source =
+                    allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+                emit("    STORE R0, [R7 + " + std::to_string(source) + "]");
+                emit("    MOV R0, #" + std::to_string(info->size));
+                emit("    CALL __cxa_allocate_exception");
+                const int object =
+                    allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+                emit("    STORE R0, [R7 + " + std::to_string(object) + "]");
+                const std::vector<std::string> parts =
+                    split_qualified(info->qualified);
+                const std::string typeinfo = "_ZTI" + mangle_qualified(parts);
+                emit("    LEA R1, [" + typeinfo + "]");
+                emit("    STORE R1, [R0 - 8]");
+                emit("    MOV R1, #0");
+                emit("    STORE R1, [R0 - 4]");
+                emit("    LOAD R1, [R7 + " + std::to_string(source) + "]");
+                emit("    MOV R2, #" + std::to_string(info->size));
+                emit("    CALL memcpy");
+                emit("    LOAD R0, [R7 + " + std::to_string(object) + "]");
+                emit("    STORE R0, [__kr32_exception_object]");
             } else {
-                emit("    STORE R0, [__kr32_exception_value]");
+                gen_expr(*statement.expression);
+                if (is_fp(type)) {
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(type) ? "W" : "D") +
+                         " F0, [__kr32_exception_value]");
+                } else {
+                    emit("    STORE R0, [__kr32_exception_value]");
+                }
             }
             emit("    MOV R0, #" + std::to_string(exception_type_id(type)));
             emit("    STORE R0, [__kr32_exception_type]");
@@ -2412,45 +2481,91 @@ private:
         emit("    JMP " + end_label);
         emit(catch_label + ":");
         exception_handlers_.pop_back();
+        const std::string lsda_label = new_label("lsda");
+        const std::string no_match_label = new_label("catch_no_match");
+        LsdaRecord record;
+        record.label = lsda_label;
+        emit("    LEA R0, [" + lsda_label + "]");
+        emit("    LOAD R1, [__kr32_exception_type]");
+        emit("    CALL __kr32_personality_v0");
+        emit("    CMP R0, #0");
+        emit("    JZ " + no_match_label);
+        emit("    JMP R0");
         for (const CatchHandler& clause : statement.handlers) {
-            const std::string next_label = new_label("catch_next");
+            const std::string clause_label = new_label("catch_clause");
+            int type_id = 0;
             if (clause.parameter && clause.parameter->type) {
-                const TypePtr type = resolve_type(clause.parameter->type);
-                const int id = exception_type_id(type);
-                emit("    LOAD R0, [__kr32_exception_type]");
-                emit("    CMP R0, #" + std::to_string(id));
-                emit("    JNZ " + next_label);
+                TypePtr type = resolve_type(clause.parameter->type);
+                if (type && (type->kind == TypeKind::LValueRef ||
+                             type->kind == TypeKind::RValueRef)) {
+                    type = type->element;
+                }
+                type_id = exception_type_id(type);
             }
+            record.entries.emplace_back(type_id, clause_label);
+            emit(clause_label + ":");
             emit("    MOV R0, #0");
             emit("    STORE R0, [__kr32_exception_pending]");
+            emit("    LOAD R0, [__kr32_exception_object]");
+            emit("    CALL __cxa_begin_catch");
             push_scope();
             if (clause.parameter && clause.parameter->type) {
-                const TypePtr type = resolve_type(clause.parameter->type);
+                const TypePtr declared = resolve_type(clause.parameter->type);
+                const bool is_reference =
+                    declared && (declared->kind == TypeKind::LValueRef ||
+                                 declared->kind == TypeKind::RValueRef);
+                const TypePtr type = is_reference ? declared->element : declared;
                 Local local;
-                local.type = type;
-                local.offset = allocate_local(type);
-                if (!clause.parameter->name.parts.empty()) {
-                    local_scopes_.back()[clause.parameter->name.parts.back()] = local;
-                }
-                if (is_fp(type)) {
-                    emit(std::string("    FLOAD.") +
-                         (is_float32(type) ? "W" : "D") +
-                         " F0, [__kr32_exception_value]");
-                    emit(std::string("    FSTORE.") +
-                         (is_float32(type) ? "W" : "D") + " F0, [R7 + " +
-                         std::to_string(local.offset) + "]");
+                local.type = declared;
+                local.is_reference = is_reference;
+                if (ClassInfo* info = class_of(type)) {
+                    if (is_reference) {
+                        local.offset = allocate_local(
+                            Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+                        if (!clause.parameter->name.parts.empty()) {
+                            local_scopes_.back()[clause.parameter->name.parts.back()] =
+                                local;
+                        }
+                        emit("    LOAD R0, [__kr32_exception_object]");
+                        emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                    } else {
+                        local.offset = allocate_local(type);
+                        if (!clause.parameter->name.parts.empty()) {
+                            local_scopes_.back()[clause.parameter->name.parts.back()] =
+                                local;
+                        }
+                        emit("    LOAD R1, [__kr32_exception_object]");
+                        emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                        emit("    MOV R2, #" + std::to_string(info->size));
+                        emit("    CALL memcpy");
+                    }
                 } else {
-                    emit("    LOAD R0, [__kr32_exception_value]");
-                    emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                    local.offset = allocate_local(type);
+                    if (!clause.parameter->name.parts.empty()) {
+                        local_scopes_.back()[clause.parameter->name.parts.back()] = local;
+                    }
+                    if (is_fp(type)) {
+                        emit(std::string("    FLOAD.") +
+                             (is_float32(type) ? "W" : "D") +
+                             " F0, [__kr32_exception_value]");
+                        emit(std::string("    FSTORE.") +
+                             (is_float32(type) ? "W" : "D") + " F0, [R7 + " +
+                             std::to_string(local.offset) + "]");
+                    } else {
+                        emit("    LOAD R0, [__kr32_exception_value]");
+                        emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                    }
                 }
             }
             if (clause.body) {
                 gen_statement(*clause.body);
             }
             pop_scope();
+            emit("    CALL __cxa_end_catch");
             emit("    JMP " + end_label);
-            emit(next_label + ":");
         }
+        exception_lsdas_.push_back(std::move(record));
+        emit(no_match_label + ":");
         if (exception_handlers_.empty()) {
             emit("    MOV R0, #1");
             emit("    CALL exit");
@@ -3831,7 +3946,7 @@ private:
             emit("    MOV R0, #0");
         }
         emit(return_label_ + ":");
-        if (function.qualified == "main" && !static_destructors_.empty()) {
+        if (function.qualified == "main") {
             const int result_temp =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(result_temp) + "]");
@@ -3963,12 +4078,97 @@ private:
         }
     }
 
-    void emit_static_fini() {
-        if (static_destructors_.empty()) {
+    void emit_lsdas() {
+        if (exception_lsdas_.empty()) {
             return;
         }
-        text_ += ".text\n.global __kr32_cxx_fini\n__kr32_cxx_fini:\n";
+        text_ += ".text\n.weak __kr32_personality_v0\n__kr32_personality_v0:\n";
+        text_ += "    LOAD R2, [R0]\n";
+        text_ += "    ADD R0, R0, #4\n";
+        text_ += ".Lpersonality_loop:\n";
+        text_ += "    CMP R2, #0\n";
+        text_ += "    JLE .Lpersonality_fail\n";
+        text_ += "    LOAD R3, [R0]\n";
+        text_ += "    CMP R3, #0\n";
+        text_ += "    JZ .Lpersonality_match\n";
+        text_ += "    CMP R3, R1\n";
+        text_ += "    JZ .Lpersonality_match\n";
+        text_ += "    ADD R0, R0, #8\n";
+        text_ += "    SUB R2, R2, #1\n";
+        text_ += "    JMP .Lpersonality_loop\n";
+        text_ += ".Lpersonality_match:\n";
+        text_ += "    LOAD R0, [R0 + 4]\n";
+        text_ += "    RET\n";
+        text_ += ".Lpersonality_fail:\n";
+        text_ += "    MOV R0, #0\n";
+        text_ += "    RET\n";
+        lsda_ += ".cpp_except\n";
+        for (const LsdaRecord& record : exception_lsdas_) {
+            lsda_ += record.label + ":\n";
+            lsda_ += "    .word " + std::to_string(record.entries.size()) + "\n";
+            for (const auto& entry : record.entries) {
+                lsda_ += "    .word " + std::to_string(entry.first) + "\n";
+                lsda_ += "    .word " + entry.second + "\n";
+            }
+        }
+    }
+
+    void emit_static_fini() {
+        text_ += ".weak __cxa_allocate_exception\n__cxa_allocate_exception:\n";
+        text_ += "    ADD R0, R0, #8\n";
+        text_ += "    CALL malloc\n";
+        text_ += "    ADD R0, R0, #8\n";
+        text_ += "    RET\n";
+        text_ += ".weak __cxa_throw\n__cxa_throw:\n";
+        text_ += "    STORE R1, [R0 - 8]\n";
+        text_ += "    STORE R2, [R0 - 4]\n";
+        text_ += "    STORE R0, [__kr32_exception_object]\n";
+        text_ += "    MOV R3, #1\n";
+        text_ += "    STORE R3, [__kr32_exception_pending]\n";
+        text_ += "    RET\n";
+        text_ += ".weak __cxa_begin_catch\n__cxa_begin_catch:\n    RET\n";
+        text_ += ".weak __cxa_end_catch\n__cxa_end_catch:\n    RET\n";
+        text_ += ".weak __cxa_rethrow\n__cxa_rethrow:\n";
+        text_ += "    MOV R0, #1\n";
+        text_ += "    STORE R0, [__kr32_exception_pending]\n";
+        text_ += "    RET\n";
+        text_ += ".weak __cxa_atexit\n__cxa_atexit:\n";
+        text_ += "    LEA R3, [__kr32_atexit_count]\n";
+        text_ += "    LOAD R4, [R3]\n";
+        text_ += "    CMP R4, #16\n";
+        text_ += "    JGE .Latexit_full\n";
+        text_ += "    LEA R5, [__kr32_atexit_funcs]\n";
+        text_ += "    MUL R6, R4, #4\n";
+        text_ += "    ADD R5, R5, R6\n";
+        text_ += "    STORE R0, [R5]\n";
+        text_ += "    LEA R5, [__kr32_atexit_args]\n";
+        text_ += "    ADD R5, R5, R6\n";
+        text_ += "    STORE R1, [R5]\n";
+        text_ += "    ADD R4, R4, #1\n";
+        text_ += "    STORE R4, [R3]\n";
+        text_ += ".Latexit_full:\n";
+        text_ += "    MOV R0, #0\n    RET\n";
+        text_ += ".text\n.weak __kr32_cxx_fini\n__kr32_cxx_fini:\n";
         text_ += "    PUSH R7\n    ADJSP #-24\n    LEA R7, [SP]\n";
+        text_ += "    LEA R1, [__kr32_atexit_count]\n";
+        text_ += "    LOAD R2, [R1]\n";
+        text_ += "    STORE R2, [R7 + 0]\n";
+        text_ += ".Latexit_loop:\n";
+        text_ += "    LOAD R2, [R7 + 0]\n";
+        text_ += "    CMP R2, #0\n";
+        text_ += "    JLE .Latexit_done\n";
+        text_ += "    SUB R2, R2, #1\n";
+        text_ += "    STORE R2, [R7 + 0]\n";
+        text_ += "    LEA R3, [__kr32_atexit_funcs]\n";
+        text_ += "    MUL R4, R2, #4\n";
+        text_ += "    ADD R3, R3, R4\n";
+        text_ += "    LOAD R5, [R3]\n";
+        text_ += "    LEA R3, [__kr32_atexit_args]\n";
+        text_ += "    ADD R3, R3, R4\n";
+        text_ += "    LOAD R0, [R3]\n";
+        text_ += "    CALL R5\n";
+        text_ += "    JMP .Latexit_loop\n";
+        text_ += ".Latexit_done:\n";
         for (auto iterator = static_destructors_.rbegin();
              iterator != static_destructors_.rend(); ++iterator) {
             Global* global = *iterator;
@@ -3982,6 +4182,12 @@ private:
             }
         }
         text_ += "    ADJSP #24\n    POP R7\n    RET\n";
+        bss_ += ".weak __kr32_atexit_count\n";
+        bss_ += "__kr32_atexit_count:\n    .space 4\n";
+        bss_ += ".weak __kr32_atexit_funcs\n";
+        bss_ += "__kr32_atexit_funcs:\n    .space 64\n";
+        bss_ += ".weak __kr32_atexit_args\n";
+        bss_ += "__kr32_atexit_args:\n    .space 64\n";
     }
 
     void emit_globals() {
@@ -4111,7 +4317,12 @@ private:
         std::string label;
         std::size_t scope_depth = 0;
     };
+    struct LsdaRecord {
+        std::string label;
+        std::vector<std::pair<int, std::string>> entries;
+    };
     std::vector<ExceptionHandler> exception_handlers_;
+    std::vector<LsdaRecord> exception_lsdas_;
     std::map<std::string, int> exception_type_ids_;
     bool uses_exceptions_ = false;
     std::string current_prefix_;
@@ -4122,6 +4333,7 @@ private:
     std::string va_base_placeholder_;
     std::string text_;
     std::string rodata_;
+    std::string lsda_;
     std::string data_;
     std::string bss_;
     int frame_size_ = 0;

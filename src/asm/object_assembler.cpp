@@ -443,6 +443,8 @@ public:
         add_section(".text", container::SectionType::Text,
                     container::Alloc | container::Execute);
         add_section(".rodata", container::SectionType::Rodata, container::Alloc);
+        add_section(".cpp_except", container::SectionType::Rodata,
+                    container::Alloc);
         add_section(".data", container::SectionType::Data,
                     container::Alloc | container::Write);
         add_section(".bss", container::SectionType::Bss,
@@ -568,8 +570,8 @@ private:
 
     bool pass1_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
-        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss" ||
-            name == ".debug_info") {
+        if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
+            name == ".data" || name == ".bss" || name == ".debug_info") {
             return switch_section(name, statement.line);
         }
         if (name == ".global" || name == ".globl" || name == ".weak") {
@@ -1322,8 +1324,8 @@ private:
 
     bool pass2_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
-        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss" ||
-            name == ".debug_info") {
+        if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
+            name == ".data" || name == ".bss" || name == ".debug_info") {
             return switch_section(name, statement.line);
         }
         if (name == ".global" || name == ".globl" || name == ".weak" ||

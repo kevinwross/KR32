@@ -9,10 +9,10 @@ conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), and M9.8 (function templates, weak symbols, and
 static initialization) are complete; phase M9.9 (`new`/`delete` and exceptions)
-is in progress, with `new`/`delete`, class arrays, scalar/pointer exception
-propagation, destructor cleanup, and static construction/destruction
-implemented; the table-driven ABI exception runtime, class exceptions, and
-constructor-completion flags remain.
+is in progress, with `new`/`delete`, class arrays, static construction/
+destruction, class exceptions, table-driven catch selection, and
+scalar/pointer/class propagation implemented; the true frame-chain unwinder,
+exception-object destruction, and general temporary completion flags remain.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -158,11 +158,17 @@ In progress:
 - [x] `new`/`delete` for scalars, objects, and scalar arrays, including
       constructor/destructor calls.
 - [x] Scalar/pointer throw, catch, rethrow, nested handlers, cross-function
-      propagation, and destructor cleanup (return-based; table-driven ABI
-      runtime deferred).
-- [x] Static construction and reverse-order destruction for global objects.
-- [ ] Table-driven `.cpp_except`/LSDA/`__cxa_*`, class exceptions, and
-      constructor-completion flags.
+      propagation, and destructor cleanup (return-based unwind).
+- [x] Static construction and reverse-order destruction for global objects,
+      `__cxa_atexit` registry, and reverse destruction.
+- [x] Class exceptions with `__cxa_allocate_exception`/`begin_catch`/
+      `end_catch`, plus `.cpp_except` LSDA catch tables and
+      `__kr32_personality_v0` catch selection.
+- [x] Constructor-completion cleanup for class arrays whose element constructor
+      throws.
+- [ ] True R7-chain table-driven unwinder, cleanup landing pads/
+      `_Unwind_Resume`, exception-object destruction, and general temporary
+      completion flags.
 
 Not started:
 
@@ -389,30 +395,37 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
 - [x] Constructor/destructor array helpers: `new[]` stores a count cookie,
       default-constructs each class element, and `delete[]` destroys elements in
       order before freeing the cookie base.
-- [x] Scalar/pointer exception propagation, catch by type, catch-all, nested
-      try/catch, `throw;`, cross-function propagation, and destructor cleanup
-      using return-based pending checks and weak per-image exception slots.
-      The ABI's table-driven `.cpp_except`/LSDA/`__cxa_*` runtime and class
-      exception objects remain deferred.
-- [x] Destructor unwinding for live locals and caller frames on the supported
-      exception path; constructor-completion flags and temporaries remain
-      deferred.
-- [x] Static destruction via a generated `__kr32_cxx_fini` called on `main`
-      return, destroying global objects in reverse declaration order. The
-      ABI's `__cxa_atexit` registration interface remains with the table-driven
-      runtime work.
+- [x] Scalar/pointer/class exception propagation, catch by type/value/
+      reference, catch-all, nested try/catch, `throw;`, cross-function
+      propagation, and destructor cleanup using return-based pending checks.
+      Catch selection is table-driven through `.cpp_except` LSDA records and
+      `__kr32_personality_v0`; the frame-chain unwinder and
+      `_Unwind_Resume`-style cleanup landing pads remain deferred.
+- [x] Class exception header allocation via `__cxa_allocate_exception`, with
+      `__cxa_begin_catch`/`__cxa_end_catch` hooks and weak per-image exception
+      slots. Reference/value catches work; exception-object destruction and
+      reference counting remain deferred.
+- [x] Constructor-completion cleanup for class arrays: a throwing element
+      constructor destroys already-constructed elements and frees the cookie.
+      General temporary/conditional completion flags remain deferred.
+- [x] `__cxa_atexit` registry with fixed-capacity function/argument tables and
+      reverse-order invocation from `__kr32_cxx_fini`, plus reverse-order static
+      object destruction. The ABI's exact registered-destructor sequencing
+      remains deferred.
 - [x] Tests: scalar/object/array `new`, `delete`, destructor invocation, class
-      array construction/destruction, nested try/catch, cross-function
-      propagation, rethrow, RAII cleanup, and static destruction order.
+      arrays, throwing array constructors, nested/cross-function try/catch,
+      rethrow, RAII cleanup, class exceptions, ABI metadata, and static
+      destruction order.
 
 **Gate:** exception/cleanup tests pass with no leaks in the guest allocator.
-**Status:** in progress 2026-11-02. `new`/`delete` (including class arrays),
-static construction/destruction, and a functional scalar/pointer exception path
-are implemented and tested, including cross-function unwinding and destructor
-cleanup. The table-driven ABI runtime (`.cpp_except`, LSDA, `__cxa_*`), class
-exceptions, and constructor-completion flags remain. Windows MSVC Debug and WSL
-GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 175 test cases
-and 4769 assertions.
+**Status:** in progress 2026-11-02. `new`/`delete`, class arrays, static
+construction/destruction, class exceptions, table-driven catch selection, and
+a functional scalar/pointer/class exception path are implemented and tested.
+The true table-driven frame-chain unwinder (R7 walk + PC call-site lookup +
+cleanup landing pads/`_Unwind_Resume`), exception-object destruction, general
+temporary completion flags, and precise leak accounting remain. Windows MSVC
+Debug and WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports
+177 test cases and 4798 assertions.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
@@ -598,6 +611,15 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   both pass 21/21 CTest tests; `kr32_tests` reports 175 test cases and 4769
   assertions. M9.9 remains in progress for the table-driven ABI exception
   runtime, class exceptions, and constructor-completion flags.
+- **2026-11-02 13:17 -08:00** — Added `.cpp_except` LSDA records and
+  `__kr32_personality_v0` table-driven catch selection, class exception
+  objects with `__cxa_allocate_exception`/`begin_catch`/`end_catch`,
+  constructor-completion cleanup for throwing class-array constructors, and a
+  fixed-capacity `__cxa_atexit` registry. Added class-exception, throwing-array,
+  and ABI-metadata tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests`
+  reports 177 test cases and 4798 assertions. M9.9 remains in progress for the
+  true R7-chain unwinder/cleanup landing pads, exception-object destruction, and
+  general temporary completion flags.
 
 ## 8. Approval
 

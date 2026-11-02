@@ -574,6 +574,49 @@ TEST_CASE("try/catch handles thrown scalars and nested handlers") {
     CHECK(rethrow.result == 42);
 }
 
+TEST_CASE("exceptions emit ABI metadata and runtime entry points") {
+    const cxx::Result result = cxx::compile(
+        "int main() { try { throw 1; } catch (int value) { return value; } return 0; }\n");
+    REQUIRE(result.ok);
+    CHECK(result.assembly.find(".cpp_except") != std::string::npos);
+    CHECK(result.assembly.find("__kr32_personality_v0") != std::string::npos);
+    CHECK(result.assembly.find("__cxa_begin_catch") != std::string::npos);
+    CHECK(result.assembly.find("__cxa_end_catch") != std::string::npos);
+    CHECK(result.assembly.find("__cxa_atexit") != std::string::npos);
+}
+
+TEST_CASE("class exceptions are caught by reference and value") {
+    const ProgramResult reference = compile_and_run(
+        "class Error {\n"
+        "public:\n"
+        "    int code;\n"
+        "    Error(int input) { code = input; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Error error(42); throw error; }\n"
+        "    catch (const Error& caught) { return caught.code; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(reference.diagnostics);
+    REQUIRE(reference.ok);
+    CHECK(reference.result == 42);
+
+    const ProgramResult value = compile_and_run(
+        "class Error {\n"
+        "public:\n"
+        "    int code;\n"
+        "    Error(int input) { code = input; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Error error(42); throw error; }\n"
+        "    catch (Error caught) { return caught.code; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(value.diagnostics);
+    REQUIRE(value.ok);
+    CHECK(value.result == 42);
+}
+
 TEST_CASE("exceptions propagate across function calls") {
     const ProgramResult program = compile_and_run(
         "int risky() { throw 42; }\n"
@@ -670,6 +713,23 @@ TEST_CASE("new and delete allocate and construct objects") {
     INFO(class_array.diagnostics);
     REQUIRE(class_array.ok);
     CHECK(class_array.result == 7);
+
+    const ProgramResult throwing_array = compile_and_run(
+        "int destroyed = 0;\n"
+        "int constructed = 0;\n"
+        "class Item {\n"
+        "public:\n"
+        "    Item() { if (constructed == 2) { throw 7; } constructed = constructed + 1; }\n"
+        "    ~Item() { destroyed = destroyed + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Item* items = new Item[3]; delete[] items; }\n"
+        "    catch (int value) { return destroyed == 2 ? 42 : 0; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(throwing_array.diagnostics);
+    REQUIRE(throwing_array.ok);
+    CHECK(throwing_array.result == 42);
 }
 
 TEST_CASE("delete runs the destructor") {
