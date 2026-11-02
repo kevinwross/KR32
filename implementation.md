@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:25 -08:00
+> **Last updated:** 2026-11-02 12:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -957,6 +957,9 @@ Newest entries at the bottom. Use the local time zone.
       DOUBLE view, and the hover tooltip shows both interpretations and raw hex.
       Verified `float 2.5f` loads as `0x40200000`; the earlier `5.3e-315` was
       the raw 64-bit double interpretation, not a bad load.
+- **2026-11-02 12:33 -08:00** — Updated `examples/types.c` to use libc
+      `printf` with `%d`, `%u`, `%.2f`, and `%.4f` instead of the hand-written
+      `putchar` helpers, demonstrating the new libc and FP formatting.
 
 ## 10. Updating this file
 

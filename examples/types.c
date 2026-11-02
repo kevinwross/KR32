@@ -6,37 +6,10 @@
 // Double<Type> function. Values are fixed rather than runtime-random so the
 // demo is reproducible. Pointer, array, struct, union, and enum types are
 // excluded because they are not arithmetic scalar types.
+//
+// Output uses the KR32 C libc printf, including the FP conversions.
 
-int putchar(int c);
-
-void print_string(const char *text) {
-    while (*text) {
-        putchar(*text);
-        text = text + 1;
-    }
-}
-
-void print_int(int value) {
-    if (value == 0) {
-        putchar('0');
-        return;
-    }
-    if (value < 0) {
-        putchar('-');
-        value = -value;
-    }
-    char digits[12];
-    int count = 0;
-    while (value > 0) {
-        digits[count] = '0' + value % 10;
-        count = count + 1;
-        value = value / 10;
-    }
-    while (count > 0) {
-        count = count - 1;
-        putchar(digits[count]);
-    }
-}
+#include <stdio.h>
 
 _Bool DoubleBool(_Bool value) {
     return value * value;
@@ -85,41 +58,15 @@ int main(void) {
     float float_value = 2.5f;
     double double_value = 3.25;
 
-    print_string("bool 1 squared = ");
-    print_int(DoubleBool(bool_value));
-    putchar('\n');
-
-    print_string("char 7 squared = ");
-    print_int(DoubleChar(char_value));
-    putchar('\n');
-
-    print_string("signed char 5 squared = ");
-    print_int(DoubleSChar(signed_char_value));
-    putchar('\n');
-
-    print_string("unsigned char 6 squared = ");
-    print_int(DoubleUChar(unsigned_char_value));
-    putchar('\n');
-
-    print_string("int 12 squared = ");
-    print_int(DoubleInt(int_value));
-    putchar('\n');
-
-    print_string("signed int 9 squared = ");
-    print_int(DoubleSInt(signed_int_value));
-    putchar('\n');
-
-    print_string("unsigned int 10 squared = ");
-    print_int(DoubleUInt(unsigned_int_value));
-    putchar('\n');
-
-    print_string("float 2.5 squared = ");
-    print_int((int)DoubleFloat(float_value));
-    putchar('\n');
-
-    print_string("double 3.25 squared = ");
-    print_int((int)DoubleDouble(double_value));
-    putchar('\n');
+    printf("bool 1 squared = %d\n", DoubleBool(bool_value));
+    printf("char 7 squared = %d\n", DoubleChar(char_value));
+    printf("signed char 5 squared = %d\n", DoubleSChar(signed_char_value));
+    printf("unsigned char 6 squared = %d\n", DoubleUChar(unsigned_char_value));
+    printf("int 12 squared = %d\n", DoubleInt(int_value));
+    printf("signed int 9 squared = %d\n", DoubleSInt(signed_int_value));
+    printf("unsigned int 10 squared = %u\n", DoubleUInt(unsigned_int_value));
+    printf("float 2.5 squared = %.2f\n", DoubleFloat(float_value));
+    printf("double 3.25 squared = %.4f\n", DoubleDouble(double_value));
 
     return 0;
 }
