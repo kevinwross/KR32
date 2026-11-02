@@ -1454,6 +1454,15 @@ StepResult Machine::execute(const isa::Instruction& instruction,
         return finish_next();
     }
 
+    case 0x3F: { // SETSP (unwinder stack restore)
+        const std::uint32_t new_sp = reg(instruction.rs1);
+        if ((new_sp & 3U) != 0) {
+            return fail_align(new_sp);
+        }
+        sp_ = new_sp;
+        return finish_next();
+    }
+
     case 0x40: // INT
     case 0x41: { // SYSCALL
         const std::uint32_t vector = payload(instruction);

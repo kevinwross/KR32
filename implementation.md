@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 13:17 -08:00
+> **Last updated:** 2026-11-02 13:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -554,14 +554,10 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (scalar `float`/`double`, FP calls, conversions, and stack varargs), M9.5
 (classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
-and RTTI), M9.7 (matrix/transform-stack codegen), and M9.8 (function templates,
-weak symbols, and static initialization) are complete; M9.9 is in progress with
-`new`/`delete`, scalar/pointer exceptions, cross-function propagation, and
-destructor cleanup, class-array `new[]`/`delete[]`, static construction/
-destruction, class exceptions, and `.cpp_except`/`__kr32_personality_v0`
-table-driven catch selection implemented; the true frame-chain unwinder,
-exception-object destruction, and general temporary completion flags remain. C++ ABI
-revision 1 is frozen in [docs/abi.md](docs/abi.md) with machine-checkable
+and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
+weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
+cleanup) are complete; M9.10 (threads, TLS, atomics, synchronization) is next.
+C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with machine-checkable
 constants in `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver
 skeleton are in place, and `compile()` now produces assembly for the supported
 integer, scalar-FP, class, virtual/RTTI, matrix, function-template, allocation,
@@ -599,22 +595,11 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
 - [x] Function templates, weak template/inline symbols, and static
       initialization (M9.8). Class templates, COMDAT groups, static
       destruction, and guarded local statics remain deferred.
-- [x] `new`/`delete` for scalars, objects, and scalar arrays, including
-      constructor/destructor calls (M9.9 partial).
-- [x] Scalar/pointer throw/catch/rethrow, nested and cross-function
-      propagation, and destructor cleanup (M9.9 partial, return-based).
-- [x] Class-array `new[]`/`delete[]` helpers: count cookie, element
-      construction/destruction loops (M9.9 partial).
-- [x] Static construction/destruction for global objects in reverse order
-      (M9.9 partial, custom `__kr32_cxx_fini`).
-- [x] Class exceptions with `__cxa_allocate_exception`/`begin_catch`/
-      `end_catch`, `.cpp_except` LSDA catch tables, and
-      `__kr32_personality_v0` (M9.9 partial).
-- [x] Constructor-completion cleanup for throwing class-array constructors and
-      `__cxa_atexit` registry (M9.9 partial).
-- [ ] True R7-chain table-driven unwinder, cleanup landing pads/
-      `_Unwind_Resume`, exception-object destruction, and general temporary
-      completion flags (M9.9 remaining).
+- [x] `new`/`delete`, class arrays, and static construction/destruction (M9.9).
+- [x] R7 frame-chain unwinder with `.cpp_except` call-site ranges, cleanup
+      landing pads, `_Unwind_Resume`, and restored `SP`/`R7`.
+- [x] Refcounted class exceptions with `__cxa_begin_catch`/`end_catch`,
+      `__cxa_rethrow`, and `__cxa_atexit` registry (M9.9).
 - [x] Scalar `float`/`double` codegen, FP calls/spills, conversions, and ABI
       alignment (M9.4); `.float`/`.double` object-assembler support ported from
       main.
@@ -652,14 +637,12 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       assertions).
 - [x] Function templates, weak template/inline symbols across TUs, and static
       initialization order pass (M9.8 gate: 169 cases / 4745 assertions).
-- [x] Scalar/object/array `new`, `delete`, and destructor invocation pass
-      (M9.9 partial: 171 cases / 4753 assertions).
-- [x] Nested/cross-function try/catch, rethrow, and RAII destructor unwinding
-      pass (M9.9 partial: 177 cases / 4798 assertions).
-- [x] Class exceptions, throwing array constructors, ABI metadata, and
-      reverse-order static destruction pass (M9.9 partial).
+- [x] `new`/`delete`, class arrays, static construction/destruction, and
+      refcounted class exceptions pass (M9.9).
+- [x] R7 frame-chain unwinding, multi-frame cleanup landing pads,
+      `_Unwind_Resume`, nested/cross-function try/catch, and rethrow pass
+      (M9.9 gate: 178 cases / 4802 assertions).
 - [ ] C++ hello world and a class/template demo run.
-- [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
@@ -1092,6 +1075,14 @@ Newest entries at the bottom. Use the local time zone.
       M9.9 remains in progress for the true R7-chain unwinder/cleanup landing
       pads, exception-object destruction, and general temporary completion
       flags.
+- **2026-11-02 13:33 -08:00** — Completed M9.9. Replaced the pending-flag path
+      with an R7 frame-chain unwinder (`.cpp_except` function descriptors and
+      call-site ranges, cleanup landing pads, restored `SP`/`R7`,
+      `_Unwind_Resume`, `SETSP` stack restore), refcounted class-exception
+      destruction, `__cxa_rethrow`, and class-array constructor cleanup that
+      resumes through handlers. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 178 test cases and 4802 assertions. M9.10
+      (threads/TLS/atomics) is next.
 
 ## 10. Updating this file
 

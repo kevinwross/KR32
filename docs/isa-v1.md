@@ -175,7 +175,7 @@ displacement is inline or in the extension word.
 | 0x3C | `PUSH` | stack |
 | 0x3D | `POP` | stack |
 | 0x3E | `ADJSP` | stack |
-| 0x3F | reserved | |
+| 0x3F | `SETSP` | stack, unwinder support (`SP = Rs1`) |
 | 0x40 | `INT` | system |
 | 0x41 | `SYSCALL` | system |
 | 0x42 | `IRET` | system |
@@ -290,6 +290,7 @@ A count of zero leaves the destination unchanged and leaves `C` unchanged.
 | `PUSH` | `Rs` | `SP -= 4`; store `Rs` |
 | `POP` | `Rd` | load `Rd`; `SP += 4` |
 | `ADJSP` | `#imm` | `SP += imm` |
+| `SETSP` | `Rs1` | `SP = Rs1` (used by the exception unwinder) |
 
 The target is `Rs1` when `L = 0` and the inline/extension payload when `L = 1`.
 `JCOND` puts the condition in 16..13; `JMP` and `CALL` reserve that field.

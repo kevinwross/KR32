@@ -1413,6 +1413,19 @@ private:
                                statement.line);
         }
 
+        if (mnemonic == "setsp") {
+            if (operands.size() != 1) {
+                return fail_operands("Rs");
+            }
+            int source = 0;
+            if (!parse_register(operands[0], source)) {
+                return fail(statement.line, "expected a source register");
+            }
+            instruction.opcode = 0x3F;
+            set_source(source);
+            return true;
+        }
+
         if (mnemonic == "int" || mnemonic == "syscall") {
             if (operands.size() != 1) {
                 return fail_operands("#vector");

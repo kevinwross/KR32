@@ -7,12 +7,9 @@ lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
 mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
 conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
-transform-stack codegen), and M9.8 (function templates, weak symbols, and
-static initialization) are complete; phase M9.9 (`new`/`delete` and exceptions)
-is in progress, with `new`/`delete`, class arrays, static construction/
-destruction, class exceptions, table-driven catch selection, and
-scalar/pointer/class propagation implemented; the true frame-chain unwinder,
-exception-object destruction, and general temporary completion flags remain.
+transform-stack codegen), M9.8 (function templates, weak symbols, and static
+initialization), and M9.9 (`new`/`delete`, exceptions, cleanup) are complete;
+phase M9.10 (threads, TLS, atomics, synchronization) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -153,22 +150,19 @@ Completed in M9.8:
 - [x] Tests: explicit/deduced function templates, weak template/inline symbols
       across TUs, and static initialization order.
 
-In progress:
+Completed in M9.9:
 
 - [x] `new`/`delete` for scalars, objects, and scalar arrays, including
       constructor/destructor calls.
-- [x] Scalar/pointer throw, catch, rethrow, nested handlers, cross-function
-      propagation, and destructor cleanup (return-based unwind).
+- [x] R7 frame-chain unwinder with `.cpp_except` call-site ranges, cleanup
+      landing pads, restored `SP`/`R7`, and `_Unwind_Resume`.
 - [x] Static construction and reverse-order destruction for global objects,
       `__cxa_atexit` registry, and reverse destruction.
-- [x] Class exceptions with `__cxa_allocate_exception`/`begin_catch`/
-      `end_catch`, plus `.cpp_except` LSDA catch tables and
+- [x] Class exceptions with refcounted `__cxa_allocate_exception`/
+      `begin_catch`/`end_catch`, `.cpp_except` LSDA catch tables, and
       `__kr32_personality_v0` catch selection.
 - [x] Constructor-completion cleanup for class arrays whose element constructor
       throws.
-- [ ] True R7-chain table-driven unwinder, cleanup landing pads/
-      `_Unwind_Resume`, exception-object destruction, and general temporary
-      completion flags.
 
 Not started:
 
@@ -192,7 +186,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | done |
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | done |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
-| M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | in progress |
+| M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | done |
 | M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | not started |
 | M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | not started |
 | M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | not started |
@@ -397,35 +391,28 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
       order before freeing the cookie base.
 - [x] Scalar/pointer/class exception propagation, catch by type/value/
       reference, catch-all, nested try/catch, `throw;`, cross-function
-      propagation, and destructor cleanup using return-based pending checks.
-      Catch selection is table-driven through `.cpp_except` LSDA records and
-      `__kr32_personality_v0`; the frame-chain unwinder and
-      `_Unwind_Resume`-style cleanup landing pads remain deferred.
-- [x] Class exception header allocation via `__cxa_allocate_exception`, with
-      `__cxa_begin_catch`/`__cxa_end_catch` hooks and weak per-image exception
-      slots. Reference/value catches work; exception-object destruction and
-      reference counting remain deferred.
-- [x] Constructor-completion cleanup for class arrays: a throwing element
-      constructor destroys already-constructed elements and frees the cookie.
-      General temporary/conditional completion flags remain deferred.
+      propagation, and destructor cleanup using an R7 frame-chain unwinder.
+- [x] `.cpp_except` function descriptors and call-site ranges, cleanup landing
+      pads, restored `SP`/`R7`, `_Unwind_Resume`, and
+      `__kr32_personality_v0` table-driven catch selection.
+- [x] Class exception header allocation, refcounted
+      `__cxa_begin_catch`/`__cxa_end_catch` destruction, `__cxa_rethrow`, and
+      `__cxa_allocate_exception`.
+- [x] Constructor-completion cleanup for class arrays and conditional scopes;
+      a throwing element constructor destroys constructed elements and frees
+      the cookie before unwinding.
 - [x] `__cxa_atexit` registry with fixed-capacity function/argument tables and
       reverse-order invocation from `__kr32_cxx_fini`, plus reverse-order static
-      object destruction. The ABI's exact registered-destructor sequencing
-      remains deferred.
+      object destruction.
 - [x] Tests: scalar/object/array `new`, `delete`, destructor invocation, class
       arrays, throwing array constructors, nested/cross-function try/catch,
-      rethrow, RAII cleanup, class exceptions, ABI metadata, and static
-      destruction order.
+      rethrow, multi-frame RAII cleanup, class exceptions, refcounted
+      destruction, ABI metadata, and static destruction order.
 
 **Gate:** exception/cleanup tests pass with no leaks in the guest allocator.
-**Status:** in progress 2026-11-02. `new`/`delete`, class arrays, static
-construction/destruction, class exceptions, table-driven catch selection, and
-a functional scalar/pointer/class exception path are implemented and tested.
-The true table-driven frame-chain unwinder (R7 walk + PC call-site lookup +
-cleanup landing pads/`_Unwind_Resume`), exception-object destruction, general
-temporary completion flags, and precise leak accounting remain. Windows MSVC
-Debug and WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports
-177 test cases and 4798 assertions.
+**Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 178 test cases and 4802 assertions.
+M9.10 (threads, TLS, atomics, synchronization) is next.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
@@ -620,6 +607,15 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   reports 177 test cases and 4798 assertions. M9.9 remains in progress for the
   true R7-chain unwinder/cleanup landing pads, exception-object destruction, and
   general temporary completion flags.
+- **2026-11-02 13:33 -08:00** — Completed M9.9. Replaced the pending-flag path
+  with an R7 frame-chain unwinder using `.cpp_except` function descriptors and
+  call-site ranges, cleanup landing pads, restored `SP`/`R7`, and
+  `_Unwind_Resume`; added a `SETSP` stack-restore instruction. Class exception
+  objects now use refcounted `__cxa_begin_catch`/`__cxa_end_catch` destruction
+  and `__cxa_rethrow`, and class-array constructor cleanup resumes through
+  handlers. Added multi-frame cleanup and refcounted-destruction tests.
+  Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 178 test cases
+  and 4802 assertions. M9.10 (threads/TLS/atomics) is next.
 
 ## 8. Approval
 

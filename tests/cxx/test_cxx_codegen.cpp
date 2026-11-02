@@ -615,6 +615,43 @@ TEST_CASE("class exceptions are caught by reference and value") {
     INFO(value.diagnostics);
     REQUIRE(value.ok);
     CHECK(value.result == 42);
+
+    const ProgramResult destruction = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Error {\n"
+        "public:\n"
+        "    ~Error() { destroyed = 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    int caught = 0;\n"
+        "    try { Error error; throw error; }\n"
+        "    catch (const Error& caught_error) { caught = 1; }\n"
+        "    return destroyed == 1 && caught == 1 ? 42 : 0;\n"
+        "}\n");
+    INFO(destruction.diagnostics);
+    REQUIRE(destruction.ok);
+    CHECK(destruction.result == 42);
+}
+
+TEST_CASE("unwinder walks multiple frames and resumes through cleanup pads") {
+    const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    int digit;\n"
+        "    Guard(int value) { digit = value; }\n"
+        "    ~Guard() { result = result * 10 + digit; }\n"
+        "};\n"
+        "void deep() { Guard guard(3); throw 1; }\n"
+        "void middle() { Guard guard(2); deep(); }\n"
+        "int main() {\n"
+        "    try { Guard guard(1); middle(); }\n"
+        "    catch (int value) { return result == 321 ? 42 : 0; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
 }
 
 TEST_CASE("exceptions propagate across function calls") {

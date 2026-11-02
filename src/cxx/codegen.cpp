@@ -353,6 +353,7 @@ public:
         }
         emit_rtti();
         emit_lsdas();
+        emit_eh_frame();
         emit_static_fini();
         bss_ += ".weak __kr32_exception_value\n";
         bss_ += "__kr32_exception_value:\n    .space 8\n";
@@ -2229,11 +2230,15 @@ private:
                     emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
                     emit("    ADD R0, R0, #4");
                     emit("    ADD R0, R0, R1");
+                    const std::string ctor_start = new_label("array_ctor_start");
+                    const std::string ctor_end = new_label("array_ctor_end");
+                    const std::string ctor_landing = new_label("array_ctor_landing");
+                    const std::string ctor_continue = new_label("array_ctor_continue");
+                    emit(ctor_start + ":");
                     emit("    CALL " + constructor->symbol);
-                    const std::string ok_label = new_label("new_array_ok");
-                    emit("    LOAD R2, [__kr32_exception_pending]");
-                    emit("    CMP R2, #0");
-                    emit("    JZ " + ok_label);
+                    emit(ctor_end + ":");
+                    emit("    JMP " + ctor_continue);
+                    emit(ctor_landing + ":");
                     if (Function* destructor = find_destructor(info)) {
                         const int unwind_index =
                             allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -2261,8 +2266,15 @@ private:
                     }
                     emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
                     emit("    CALL free");
-                    emit_pending_check();
-                    emit(ok_label + ":");
+                    if (!exception_handlers_.empty()) {
+                        const ExceptionHandler handler = exception_handlers_.back();
+                        emit_destructors_from(handler.scope_depth);
+                        emit("    JMP " + handler.label);
+                    } else {
+                        emit("    JMP _Unwind_Resume");
+                    }
+                    emit(ctor_continue + ":");
+                    record_call_site(ctor_start, ctor_end, ctor_landing);
                     emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    ADD R0, R0, #1");
                     emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
@@ -2428,6 +2440,12 @@ private:
                     split_qualified(info->qualified);
                 const std::string typeinfo = "_ZTI" + mangle_qualified(parts);
                 emit("    LEA R1, [" + typeinfo + "]");
+                emit("    STORE R1, [R0 - 12]");
+                if (Function* destructor = find_destructor(info)) {
+                    emit("    LEA R1, [" + destructor->symbol + "]");
+                } else {
+                    emit("    MOV R1, #0");
+                }
                 emit("    STORE R1, [R0 - 8]");
                 emit("    MOV R1, #0");
                 emit("    STORE R1, [R0 - 4]");
@@ -2449,22 +2467,23 @@ private:
             emit("    MOV R0, #" + std::to_string(exception_type_id(type)));
             emit("    STORE R0, [__kr32_exception_type]");
         }
+        if (!statement.expression) {
+            emit("    LOAD R0, [__kr32_exception_object]");
+            emit("    CALL __cxa_rethrow");
+        }
         emit("    MOV R0, #1");
         emit("    STORE R0, [__kr32_exception_pending]");
-        if (exception_handlers_.empty()) {
-            emit_destructors_from(0);
-            if (current_function_ != nullptr &&
-                current_function_->qualified == "main") {
-                emit("    MOV R0, #1");
-                emit("    CALL exit");
-            } else {
-                emit("    JMP " + return_label_);
-            }
-            return;
-        }
-        const ExceptionHandler handler = exception_handlers_.back();
-        emit_destructors_from(handler.scope_depth);
-        emit("    JMP " + handler.label);
+        const std::string throw_start = new_label("throw_start");
+        const std::string throw_end = new_label("throw_end");
+        const std::string throw_landing = new_label("throw_landing");
+        const std::string throw_continue = new_label("throw_continue");
+        emit(throw_start + ":");
+        emit("    CALL __kr32_throw");
+        emit(throw_end + ":");
+        emit("    JMP " + throw_continue);
+        emit_unwind_landing(throw_landing);
+        emit(throw_continue + ":");
+        record_call_site(throw_start, throw_end, throw_landing);
     }
 
     void gen_try(const Stmt& statement) {
@@ -2558,9 +2577,12 @@ private:
                 }
             }
             if (clause.body) {
+                ++active_catch_count_;
                 gen_statement(*clause.body);
+                --active_catch_count_;
             }
             pop_scope();
+            emit("    LOAD R0, [__kr32_exception_object]");
             emit("    CALL __cxa_end_catch");
             emit("    JMP " + end_label);
         }
@@ -2575,6 +2597,23 @@ private:
             emit("    JMP " + outer.label);
         }
         emit(end_label + ":");
+    }
+
+    void emit_unwind_landing(const std::string& label) {
+        emit(label + ":");
+        if (!exception_handlers_.empty()) {
+            const ExceptionHandler handler = exception_handlers_.back();
+            emit_destructors_from(handler.scope_depth);
+            emit("    JMP " + handler.label);
+        } else {
+            emit_destructors_from(0);
+            emit("    JMP _Unwind_Resume");
+        }
+    }
+
+    void record_call_site(const std::string& start, const std::string& end,
+                          const std::string& landing) {
+        current_call_sites_.push_back({start, end, landing});
     }
 
     TypePtr gen_expr(const Expr& expression) {
@@ -3331,6 +3370,8 @@ private:
                 ++integer_register;
             }
         }
+        const std::string call_start = new_label("cs_start");
+        emit(call_start + ":");
         if (virtual_dispatch) {
             emit("    LOAD R4, [R0]");
             emit("    LOAD R4, [R4 + " +
@@ -3342,9 +3383,14 @@ private:
         if (stack_bytes != 0) {
             emit("    ADJSP #" + std::to_string(stack_bytes));
         }
-        if (!function->is_destructor) {
-            emit_pending_check();
-        }
+        const std::string call_end = new_label("cs_end");
+        const std::string call_landing = new_label("cs_landing");
+        const std::string call_continue = new_label("cs_continue");
+        emit(call_end + ":");
+        emit("    JMP " + call_continue);
+        emit_unwind_landing(call_landing);
+        emit(call_continue + ":");
+        record_call_site(call_start, call_end, call_landing);
         return resolve_type(function->result);
     }
 
@@ -3484,6 +3530,10 @@ private:
                 emit("    MOV R0, #0");
             }
             emit_all_local_destructors();
+            if (active_catch_count_ > 0) {
+                emit("    LOAD R0, [__kr32_exception_object]");
+                emit("    CALL __cxa_end_catch");
+            }
             if (value_temp >= 0) {
                 if (is_fp(result_type)) {
                     emit(std::string("    FLOAD.") +
@@ -3844,6 +3894,7 @@ private:
             return;
         }
         current_function_ = &function;
+        current_call_sites_.clear();
         current_prefix_ = function.qualified;
         const std::size_t separator = current_prefix_.rfind("::");
         current_prefix_ =
@@ -3957,6 +4008,24 @@ private:
         emit("    ADJSP #" + std::to_string(frame_size_));
         emit("    POP R7");
         emit("    RET");
+
+        const std::string function_end = new_label("func_end");
+        emit(function_end + ":");
+        const std::string sites_label = new_label("func_sites");
+        const std::string descriptor_label = new_label("func_eh");
+        std::string descriptor = descriptor_label + ":\n";
+        descriptor += "    .word " + function.symbol + "\n";
+        descriptor += "    .word " + function_end + "\n";
+        descriptor += "    .word " + std::to_string(frame_size_) + "\n";
+        descriptor += "    .word " + sites_label + "\n";
+        descriptor += sites_label + ":\n";
+        descriptor += "    .word " + std::to_string(current_call_sites_.size()) + "\n";
+        for (const CallSiteRecord& site : current_call_sites_) {
+            descriptor += "    .word " + site.start + "\n";
+            descriptor += "    .word " + site.end + "\n";
+            descriptor += "    .word " + site.landing + "\n";
+        }
+        function_eh_records_.push_back({descriptor_label, std::move(descriptor)});
 
         std::string replacement = std::to_string(frame_size_);
         std::size_t position = 0;
@@ -4113,22 +4182,153 @@ private:
         }
     }
 
+    void emit_eh_frame() {
+        if (function_eh_records_.empty()) {
+            return;
+        }
+        lsda_ += ".data\n.weak __kr32_eh_frame\n__kr32_eh_frame:\n";
+        lsda_ += "    .word " + std::to_string(function_eh_records_.size()) + "\n";
+        for (const FunctionEhRecord& record : function_eh_records_) {
+            lsda_ += "    .word " + record.label + "\n";
+        }
+        for (const FunctionEhRecord& record : function_eh_records_) {
+            lsda_ += record.text;
+        }
+        text_ += ".text\n.weak __kr32_throw\n__kr32_throw:\n";
+        text_ += "    PUSH R7\n    ADJSP #-24\n    LEA R7, [SP]\n";
+        text_ += "    LOAD R2, [R7 + 24]\n";
+        text_ += "    LOAD R3, [R7 + 28]\n";
+        text_ += "    JMP __kr32_unwind_continue\n";
+        text_ += "__kr32_unwind_continue:\n";
+        text_ += "    LEA R4, [__kr32_eh_frame]\n";
+        text_ += "    LOAD R5, [R4]\n";
+        text_ += "    ADD R4, R4, #4\n";
+        text_ += ".Lunwind_desc_loop:\n";
+        text_ += "    CMP R5, #0\n";
+        text_ += "    JLE .Lunwind_fail\n";
+        text_ += "    LOAD R10, [R4]\n";
+        text_ += "    LOAD R6, [R10]\n";
+        text_ += "    CMP R3, R6\n";
+        text_ += "    JLT .Lunwind_next_desc\n";
+        text_ += "    LOAD R6, [R10 + 4]\n";
+        text_ += "    CMP R3, R6\n";
+        text_ += "    JGT .Lunwind_next_desc\n";
+        text_ += "    LOAD R6, [R10 + 8]\n";
+        text_ += "    LOAD R7, [R10 + 12]\n";
+        text_ += "    LOAD R8, [R7]\n";
+        text_ += "    ADD R7, R7, #4\n";
+        text_ += ".Lunwind_site_loop:\n";
+        text_ += "    CMP R8, #0\n";
+        text_ += "    JLE .Lunwind_pop\n";
+        text_ += "    LOAD R9, [R7]\n";
+        text_ += "    CMP R3, R9\n";
+        text_ += "    JLT .Lunwind_next_site\n";
+        text_ += "    LOAD R9, [R7 + 4]\n";
+        text_ += "    CMP R3, R9\n";
+        text_ += "    JGT .Lunwind_next_site\n";
+        text_ += "    LOAD R9, [R7 + 8]\n";
+        text_ += "    STORE R2, [__kr32_unwind_frame]\n";
+        text_ += "    STORE R3, [__kr32_unwind_pc]\n";
+        text_ += "    MOV R7, R2\n";
+        text_ += "    SETSP R7\n";
+        text_ += "    JMP R9\n";
+        text_ += ".Lunwind_next_site:\n";
+        text_ += "    ADD R7, R7, #12\n";
+        text_ += "    SUB R8, R8, #1\n";
+        text_ += "    JMP .Lunwind_site_loop\n";
+        text_ += ".Lunwind_pop:\n";
+        text_ += "    ADD R9, R2, R6\n";
+        text_ += "    LOAD R3, [R9 + 4]\n";
+        text_ += "    LOAD R2, [R9]\n";
+        text_ += "    JMP __kr32_unwind_continue\n";
+        text_ += ".Lunwind_next_desc:\n";
+        text_ += "    ADD R4, R4, #4\n";
+        text_ += "    SUB R5, R5, #1\n";
+        text_ += "    JMP .Lunwind_desc_loop\n";
+        text_ += ".Lunwind_fail:\n";
+        text_ += "    MOV R0, #1\n";
+        text_ += "    CALL exit\n";
+        text_ += "    HALT\n";
+        text_ += ".weak _Unwind_Resume\n_Unwind_Resume:\n";
+        text_ += "    LOAD R2, [__kr32_unwind_frame]\n";
+        text_ += "    LOAD R3, [__kr32_unwind_pc]\n";
+        text_ += "    LEA R4, [__kr32_eh_frame]\n";
+        text_ += "    LOAD R5, [R4]\n";
+        text_ += "    ADD R4, R4, #4\n";
+        text_ += ".Lunwind_resume_desc:\n";
+        text_ += "    CMP R5, #0\n";
+        text_ += "    JLE .Lunwind_fail\n";
+        text_ += "    LOAD R10, [R4]\n";
+        text_ += "    LOAD R6, [R10]\n";
+        text_ += "    CMP R3, R6\n";
+        text_ += "    JLT .Lunwind_resume_next\n";
+        text_ += "    LOAD R6, [R10 + 4]\n";
+        text_ += "    CMP R3, R6\n";
+        text_ += "    JGT .Lunwind_resume_next\n";
+        text_ += "    LOAD R6, [R10 + 8]\n";
+        text_ += "    ADD R9, R2, R6\n";
+        text_ += "    LOAD R3, [R9 + 4]\n";
+        text_ += "    LOAD R2, [R9]\n";
+        text_ += "    JMP __kr32_unwind_continue\n";
+        text_ += ".Lunwind_resume_next:\n";
+        text_ += "    ADD R4, R4, #4\n";
+        text_ += "    SUB R5, R5, #1\n";
+        text_ += "    JMP .Lunwind_resume_desc\n";
+        bss_ += ".weak __kr32_unwind_frame\n";
+        bss_ += "__kr32_unwind_frame:\n    .space 4\n";
+        bss_ += ".weak __kr32_unwind_pc\n";
+        bss_ += "__kr32_unwind_pc:\n    .space 4\n";
+    }
+
     void emit_static_fini() {
         text_ += ".weak __cxa_allocate_exception\n__cxa_allocate_exception:\n";
-        text_ += "    ADD R0, R0, #8\n";
+        text_ += "    ADD R0, R0, #12\n";
         text_ += "    CALL malloc\n";
-        text_ += "    ADD R0, R0, #8\n";
+        text_ += "    ADD R0, R0, #12\n";
         text_ += "    RET\n";
         text_ += ".weak __cxa_throw\n__cxa_throw:\n";
-        text_ += "    STORE R1, [R0 - 8]\n";
-        text_ += "    STORE R2, [R0 - 4]\n";
+        text_ += "    STORE R1, [R0 - 12]\n";
+        text_ += "    STORE R2, [R0 - 8]\n";
+        text_ += "    MOV R3, #0\n";
+        text_ += "    STORE R3, [R0 - 4]\n";
         text_ += "    STORE R0, [__kr32_exception_object]\n";
         text_ += "    MOV R3, #1\n";
         text_ += "    STORE R3, [__kr32_exception_pending]\n";
         text_ += "    RET\n";
-        text_ += ".weak __cxa_begin_catch\n__cxa_begin_catch:\n    RET\n";
-        text_ += ".weak __cxa_end_catch\n__cxa_end_catch:\n    RET\n";
+        text_ += ".weak __cxa_begin_catch\n__cxa_begin_catch:\n";
+        text_ += "    CMP R0, #0\n";
+        text_ += "    JZ .Lbegin_catch_done\n";
+        text_ += "    LOAD R1, [R0 - 4]\n";
+        text_ += "    ADD R1, R1, #1\n";
+        text_ += "    STORE R1, [R0 - 4]\n";
+        text_ += ".Lbegin_catch_done:\n";
+        text_ += "    RET\n";
+        text_ += ".weak __cxa_end_catch\n__cxa_end_catch:\n";
+        text_ += "    CMP R0, #0\n";
+        text_ += "    JZ .Lend_catch_done\n";
+        text_ += "    LOAD R1, [R0 - 4]\n";
+        text_ += "    SUB R1, R1, #1\n";
+        text_ += "    STORE R1, [R0 - 4]\n";
+        text_ += "    CMP R1, #0\n";
+        text_ += "    JNZ .Lend_catch_done\n";
+        text_ += "    LOAD R2, [R0 - 8]\n";
+        text_ += "    CMP R2, #0\n";
+        text_ += "    JZ .Lend_catch_free\n";
+        text_ += "    PUSH R0\n";
+        text_ += "    CALL R2\n";
+        text_ += "    POP R0\n";
+        text_ += ".Lend_catch_free:\n";
+        text_ += "    SUB R0, R0, #12\n";
+        text_ += "    CALL free\n";
+        text_ += ".Lend_catch_done:\n";
+        text_ += "    RET\n";
         text_ += ".weak __cxa_rethrow\n__cxa_rethrow:\n";
+        text_ += "    CMP R0, #0\n";
+        text_ += "    JZ .Lrethrow_done\n";
+        text_ += "    LOAD R1, [R0 - 4]\n";
+        text_ += "    SUB R1, R1, #1\n";
+        text_ += "    STORE R1, [R0 - 4]\n";
+        text_ += ".Lrethrow_done:\n";
         text_ += "    MOV R0, #1\n";
         text_ += "    STORE R0, [__kr32_exception_pending]\n";
         text_ += "    RET\n";
@@ -4321,8 +4521,20 @@ private:
         std::string label;
         std::vector<std::pair<int, std::string>> entries;
     };
+    struct CallSiteRecord {
+        std::string start;
+        std::string end;
+        std::string landing;
+    };
+    struct FunctionEhRecord {
+        std::string label;
+        std::string text;
+    };
     std::vector<ExceptionHandler> exception_handlers_;
     std::vector<LsdaRecord> exception_lsdas_;
+    std::vector<CallSiteRecord> current_call_sites_;
+    std::vector<FunctionEhRecord> function_eh_records_;
+    int active_catch_count_ = 0;
     std::map<std::string, int> exception_type_ids_;
     bool uses_exceptions_ = false;
     std::string current_prefix_;
