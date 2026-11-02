@@ -324,6 +324,16 @@ std::string preprocess(std::string_view source) {
                         "void *memset(void *destination, int value, int count);\n"
                         "int strlen(const char *text);\n";
                 }
+                if (directive.find("stdarg.h") != std::string::npos) {
+                    result += "typedef char *va_list;\n";
+                    function_macros["va_start"] =
+                        FunctionMacro{{"ap", "last"}, "__builtin_va_start(ap)"};
+                    function_macros["va_arg"] =
+                        FunctionMacro{{"ap", "type"}, "__builtin_va_arg(ap, type)"};
+                    function_macros["va_end"] = FunctionMacro{{"ap"}, "((void)0)"};
+                    function_macros["va_copy"] =
+                        FunctionMacro{{"dest", "src"}, "__builtin_va_copy(dest, src)"};
+                }
             }
             result.push_back('\n');
             continue;
@@ -657,6 +667,7 @@ struct FunctionSignature {
     std::string name;
     TypePtr result;
     std::vector<TypePtr> parameters;
+    bool variadic = false;
     bool defined = false;
 };
 
@@ -1064,12 +1075,17 @@ private:
     void parse_function(const TypePtr& result_type, const std::string& name) {
         std::vector<TypePtr> parameters;
         std::vector<std::string> parameter_names;
+        bool variadic = false;
         if (!match(")")) {
             if (peek().text == "void" && peek(1).text == ")") {
                 take();
                 take();
             } else {
                 while (true) {
+                    if (match("...")) {
+                        variadic = true;
+                        break;
+                    }
                     TypePtr parameter = parse_type();
                     std::string parameter_name = parse_name();
                     if (match("[")) {
@@ -1081,6 +1097,10 @@ private:
                     if (!match(",")) {
                         break;
                     }
+                    if (match("...")) {
+                        variadic = true;
+                        break;
+                    }
                 }
                 expect(")");
             }
@@ -1088,9 +1108,12 @@ private:
 
         auto found = functions_.find(name);
         if (found == functions_.end()) {
-            functions_.emplace(name, FunctionSignature{name, result_type, parameters, false});
+            functions_.emplace(
+                name, FunctionSignature{name, result_type, parameters, variadic, false});
         } else if (found->second.defined) {
             error("function already defined: " + name);
+        } else {
+            found->second.variadic = variadic;
         }
 
         if (match(";")) {
@@ -1974,6 +1997,68 @@ private:
             }
             return type;
         }
+        if (peek().text == "__builtin_va_start") {
+            if (current_function_.empty()) {
+                error("__builtin_va_start outside a function");
+            }
+            take();
+            expect("(");
+            if (peek().kind != TokenKind::Identifier) {
+                error("__builtin_va_start requires a va_list variable");
+            }
+            const std::string list_name = take().text;
+            expect(")");
+            gen_lvalue_address(list_name);
+            emit("    MOV R1, R0");
+            emit("    LEA R0, [R7 + __FRAME_" + current_function_ + "__ + 8]");
+            emit("    STORE R0, [R1]");
+            return type_pointer(type_char());
+        }
+        if (peek().text == "__builtin_va_copy") {
+            take();
+            expect("(");
+            if (peek().kind != TokenKind::Identifier) {
+                error("__builtin_va_copy requires a destination");
+            }
+            const std::string destination = take().text;
+            expect(",");
+            if (peek().kind != TokenKind::Identifier) {
+                error("__builtin_va_copy requires a source");
+            }
+            const std::string source = take().text;
+            expect(")");
+            gen_lvalue_address(source);
+            emit("    LOAD R1, [R0]");
+            gen_lvalue_address(destination);
+            emit("    STORE R1, [R0]");
+            return type_pointer(type_char());
+        }
+        if (peek().text == "__builtin_va_arg") {
+            take();
+            expect("(");
+            if (peek().kind != TokenKind::Identifier) {
+                error("va_arg requires a va_list variable");
+            }
+            const std::string list_name = take().text;
+            expect(",");
+            TypePtr type = parse_type();
+            expect(")");
+            gen_lvalue_address(list_name);
+            emit("    MOV R2, R0");
+            emit("    LOAD R1, [R2]");
+            if (type->kind == Type::Kind::Double) {
+                emit("    FLOAD.D F0, [R1]");
+            } else if (type->kind == Type::Kind::Float) {
+                emit("    FLOAD.W F0, [R1]");
+            } else if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
+                emit("    LOAD8S R0, [R1]");
+            } else {
+                emit("    LOAD R0, [R1]");
+            }
+            emit("    ADD R1, R1, #8");
+            emit("    STORE R1, [R2]");
+            return type;
+        }
         if (peek().kind == TokenKind::Identifier) {
             const std::string name = take().text;
             if (match("(")) {
@@ -1981,17 +2066,37 @@ private:
                 std::vector<int> slots;
                 std::vector<TypePtr> target_types;
                 const auto signature = functions_.find(name);
+                const bool variadic =
+                    signature != functions_.end() && signature->second.variadic;
+                const std::size_t fixed_count =
+                    signature != functions_.end() ? signature->second.parameters.size() : 0;
                 if (!match(")")) {
                     while (true) {
                         TypePtr argument = gen_expression();
+                        const std::size_t index = arguments.size();
+                        const bool extra = variadic && index >= fixed_count;
                         TypePtr target = argument;
-                        if (signature != functions_.end() &&
-                            arguments.size() < signature->second.parameters.size()) {
-                            target = signature->second.parameters[arguments.size()];
+                        if (signature != functions_.end() && index < fixed_count) {
+                            target = signature->second.parameters[index];
+                        } else if (extra) {
+                            if (argument->kind == Type::Kind::Float) {
+                                target = type_double();
+                            } else if (argument->kind == Type::Kind::Char ||
+                                       argument->kind == Type::Kind::Bool) {
+                                target = type_int();
+                            }
                         }
                         convert_value(argument, target);
-                        const int slot = allocate_local(target);
-                        if (is_fp_type(target)) {
+                        const int slot = allocate_local(extra ? type_double() : target);
+                        if (extra) {
+                            if (is_fp_type(target)) {
+                                emit("    FSTORE.D F0, [R7 + " + std::to_string(slot) + "]");
+                            } else {
+                                emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                                emit("    MOV R1, #0");
+                                emit("    STORE R1, [R7 + " + std::to_string(slot + 4) + "]");
+                            }
+                        } else if (is_fp_type(target)) {
                             emit(std::string("    FSTORE") +
                                  (target->kind == Type::Kind::Double ? ".D" : ".W") +
                                  " F0, [R7 + " + std::to_string(slot) + "]");
@@ -2007,12 +2112,29 @@ private:
                     }
                     expect(")");
                 }
-                if (arguments.size() > 4) {
+                if (!variadic && arguments.size() > 4) {
                     error("more than four arguments are not supported yet");
                 }
+                const std::size_t extra_count =
+                    variadic && slots.size() > fixed_count ? slots.size() - fixed_count : 0;
+                for (std::size_t offset = 0; offset < extra_count; ++offset) {
+                    const std::size_t index = fixed_count + extra_count - 1 - offset;
+                    emit("    ADJSP #-8");
+                    if (is_fp_type(target_types[index])) {
+                        emit("    FLOAD.D F0, [R7 + " + std::to_string(slots[index]) + "]");
+                        emit("    FSTORE.D F0, [SP]");
+                    } else {
+                        emit("    LOAD R0, [R7 + " + std::to_string(slots[index]) + "]");
+                        emit("    STORE R0, [SP]");
+                        emit("    MOV R1, #0");
+                        emit("    STORE R1, [SP + 4]");
+                    }
+                }
+                const std::size_t register_count =
+                    variadic ? std::min(fixed_count, slots.size()) : slots.size();
                 int integer_register = 0;
                 int fp_register = 0;
-                for (std::size_t index = 0; index < slots.size(); ++index) {
+                for (std::size_t index = 0; index < register_count; ++index) {
                     if (is_fp_type(target_types[index])) {
                         emit(std::string("    FLOAD") +
                              (target_types[index]->kind == Type::Kind::Double ? ".D" : ".W") +
@@ -2026,6 +2148,9 @@ private:
                     }
                 }
                 emit("    CALL " + name);
+                if (extra_count > 0) {
+                    emit("    ADJSP #" + std::to_string(extra_count * 8));
+                }
                 if (signature != functions_.end()) {
                     return signature->second.result;
                 }

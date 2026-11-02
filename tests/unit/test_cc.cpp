@@ -155,6 +155,86 @@ TEST_CASE("a compiled C program supports FP globals and comparisons") {
     CHECK(program.result == 20);
 }
 
+TEST_CASE("a compiled C program supports variadic integer and FP arguments") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdarg.h>\n"
+        "int sum(int count, ...) {\n"
+        "    va_list ap;\n"
+        "    va_start(ap, count);\n"
+        "    int total = 0;\n"
+        "    for (int i = 0; i < count; i = i + 1) {\n"
+        "        total = total + va_arg(ap, int);\n"
+        "    }\n"
+        "    va_end(ap);\n"
+        "    return total;\n"
+        "}\n"
+        "double dsum(int count, ...) {\n"
+        "    va_list ap;\n"
+        "    va_start(ap, count);\n"
+        "    double total = 0.0;\n"
+        "    for (int i = 0; i < count; i = i + 1) {\n"
+        "        total = total + va_arg(ap, double);\n"
+        "    }\n"
+        "    va_end(ap);\n"
+        "    return total;\n"
+        "}\n"
+        "double mixed(int count, ...) {\n"
+        "    va_list ap;\n"
+        "    va_start(ap, count);\n"
+        "    int n = va_arg(ap, int);\n"
+        "    double d = va_arg(ap, double);\n"
+        "    double f = va_arg(ap, double);\n"
+        "    va_end(ap);\n"
+        "    return n + d + f;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    return sum(3, 1, 2, 3) + (int)dsum(2, 1.5, 2.5) +\n"
+        "           (int)mixed(3, 4, 2.5, 1.25f);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 17);
+}
+
+TEST_CASE("a compiled C program promotes char and float variadic arguments") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdarg.h>\n"
+        "int promoted(int count, ...) {\n"
+        "    va_list ap;\n"
+        "    va_start(ap, count);\n"
+        "    int character = va_arg(ap, int);\n"
+        "    double real = va_arg(ap, double);\n"
+        "    va_end(ap);\n"
+        "    return character + (int)real;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    char c = 7;\n"
+        "    float f = 2.5f;\n"
+        "    return promoted(2, c, f);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 9);
+}
+
+TEST_CASE("variadic calls keep fixed FP args and support more than four extras") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdarg.h>\n"
+        "double weighted(double base, int count, ...) {\n"
+        "    va_list ap;\n"
+        "    va_start(ap, count);\n"
+        "    double total = base;\n"
+        "    for (int i = 0; i < count; i = i + 1) {\n"
+        "        total = total + va_arg(ap, double);\n"
+        "    }\n"
+        "    va_end(ap);\n"
+        "    return total;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    return (int)weighted(1.5, 5, 1.0, 2.0, 3.0, 4.0, 5.0);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 16);
+}
+
 TEST_CASE("a compiled C program supports arrays and indexing") {
     const ProgramResult program = compile_and_run(
         "int sum(int *values, int count) {\n"

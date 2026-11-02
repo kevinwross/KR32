@@ -65,6 +65,19 @@ alignment at public call boundaries.
   FP register banks separately before `CALL`. This preserves left-to-right
   evaluation and mixed integer/FP argument lists.
 
+### C varargs
+
+- The fixed parameters use the normal register convention. Variadic arguments
+  are passed on the stack in **uniform 8-byte, 8-byte-aligned slots**, pushed in
+  reverse order so the first variable argument is at `[SP]` at the call.
+- `float` promotes to `double`; `char`, `_Bool`, and integer types promote to
+  `int`. Pointers occupy one 8-byte slot with the low 4 bytes significant.
+- `va_list` is a 4-byte `char *` pointing at the next stack slot. `va_start`
+  computes `R7 + frame_size + 8` (the first argument above the return address
+  and saved frame pointer); `va_arg` loads the slot and advances by 8 bytes.
+- The caller removes all variadic stack slots after the call. There is no
+  register save area and no hidden argument count.
+
 ## Runtime
 
 `_start` calls `main`, then `exit` with `main`'s return value in `R0`.

@@ -76,7 +76,8 @@ kr32 cc examples/hello.c -S -o hello.s
 kr32 build examples/hello.c -o hello-c.k32 --run
 kr32 build examples/types.c -o types-c.k32 --run
 kr32 build examples/floats.c -o floats-c.k32 --run
-kr32 gui examples/floats.c
+kr32 build examples/varargs.c -o varargs-c.k32 --run
+kr32 gui examples/varargs.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm

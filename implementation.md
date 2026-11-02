@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 11:09 -08:00
+> **Last updated:** 2026-11-02 11:16 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -936,6 +936,11 @@ Newest entries at the bottom. Use the local time zone.
       globals. Added `.float`/`.double` data directives to both assemblers, FP
       opcode support to the object assembler, FP debug type/variable records,
       `examples/floats.c`, and FP unit/integration tests.
+- **2026-11-02 11:16 -08:00** — Added C variadic functions and FP varargs:
+      fixed args use the normal register ABI, variadic args use uniform
+      8-byte stack slots (float promotes to double; char/bool promote to int),
+      and `stdarg.h` supplies `va_list`, `va_start`, `va_arg`, `va_copy`, and
+      `va_end`. Added `examples/varargs.c`, CTest coverage, and ABI docs.
 
 ## 10. Updating this file
 

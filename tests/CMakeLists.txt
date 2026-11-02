@@ -114,6 +114,14 @@ add_test(NAME build_c_floats
 set_tests_properties(build_c_floats PROPERTIES
     PASS_REGULAR_EXPRESSION "global 4.5 squared = 20")
 
+add_test(NAME build_c_varargs
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/varargs.c
+        -o ${CMAKE_BINARY_DIR}/varargs-c.k32 --run)
+set_tests_properties(build_c_varargs PROPERTIES
+    PASS_REGULAR_EXPRESSION "mixed varargs 4 \\+ 2.5 \\+ 1.25 = 7")
+
+
 
 add_test(NAME debug_dump
     COMMAND $<TARGET_FILE:kr32> debug ${CMAKE_BINARY_DIR}/hello-c.k32)
