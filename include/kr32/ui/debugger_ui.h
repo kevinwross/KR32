@@ -26,6 +26,7 @@ public:
     [[nodiscard]] bool click(int x, int y, int width, int height);
     [[nodiscard]] bool context_menu(int x, int y, int width, int height);
     void hover(int x, int y, int width, int height);
+    void mouse_up();
     [[nodiscard]] bool wheel(int x, int y, int width, int height, int delta);
     [[nodiscard]] bool key(int key, bool shift);
     [[nodiscard]] bool quit_requested() const { return quit_; }
@@ -116,6 +117,9 @@ private:
     int variables_scroll_ = 0;
     int stack_scroll_ = 0;
     int console_scroll_ = 0;
+    bool scroll_dragging_ = false;
+    int scroll_drag_panel_ = -1;
+    int scroll_drag_last_y_ = 0;
     Rect source_scroll_track_{};
     Rect source_scroll_thumb_{};
     Rect asm_scroll_track_{};

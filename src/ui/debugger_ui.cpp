@@ -1118,6 +1118,7 @@ void DebuggerUI::begin_memory_address_edit() {
     memory_address_editing_ = true;
     memory_edit_ = hex(memory_address_, 8);
     memory_edit_fresh_ = true;
+    status_ = "edit memory address";
 }
 
 void DebuggerUI::finish_memory_address_edit(bool commit) {
@@ -1139,6 +1140,7 @@ void DebuggerUI::finish_memory_address_edit(bool commit) {
         }
         if (valid) {
             memory_address_ = value & ~0xFU;
+            status_ = "memory address 0x" + hex(memory_address_, 8);
         }
     }
     memory_address_editing_ = false;
@@ -1435,6 +1437,27 @@ void DebuggerUI::activate_context_menu(bool run_to_address) {
 void DebuggerUI::hover(int x, int y, int width, int height) {
     mouse_x_ = x;
     mouse_y_ = y;
+    if (scroll_dragging_) {
+        const int rows = (y - scroll_drag_last_y_) / 14;
+        if (rows != 0) {
+            scroll_drag_last_y_ = y;
+            if (scroll_drag_panel_ == 0) {
+                source_follow_ = false;
+                source_scroll_ = std::max(0, source_scroll_ + rows);
+            } else if (scroll_drag_panel_ == 1) {
+                asm_scroll_ += rows;
+            } else if (scroll_drag_panel_ == 2) {
+                cores_scroll_ = std::max(0, cores_scroll_ + rows * 14);
+            } else if (scroll_drag_panel_ == 3) {
+                variables_scroll_ = std::max(0, variables_scroll_ + rows);
+            } else if (scroll_drag_panel_ == 4) {
+                stack_scroll_ = std::max(0, stack_scroll_ + rows);
+            } else if (scroll_drag_panel_ == 5) {
+                console_scroll_ = std::max(0, console_scroll_ + rows);
+            }
+        }
+        return;
+    }
     if (menu_.open) {
         const int hover = menu_.toggle_rect.contains(x, y)
                               ? 0
@@ -1493,6 +1516,11 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
             break;
         }
     }
+}
+
+void DebuggerUI::mouse_up() {
+    scroll_dragging_ = false;
+    scroll_drag_panel_ = -1;
 }
 
 bool DebuggerUI::context_menu(int x, int y, int width, int height) {
@@ -1593,20 +1621,24 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
     }
     if (source_scroll_track_.contains(x, y)) source_follow_ = false;
     const auto scroll_bar_click = [&](const Rect& track, const Rect& thumb, int& offset,
-                                      int page) {
+                                      int page, int panel_id) {
         if (!track.contains(x, y)) return false;
-        if (!thumb.contains(x, y)) {
+        if (thumb.contains(x, y)) {
+            scroll_dragging_ = true;
+            scroll_drag_panel_ = panel_id;
+            scroll_drag_last_y_ = y;
+        } else {
             offset += y < thumb.y ? -page : page;
         }
         return true;
     };
-    if (scroll_bar_click(source_scroll_track_, source_scroll_thumb_, source_scroll_, 10) ||
-        scroll_bar_click(asm_scroll_track_, asm_scroll_thumb_, asm_scroll_, 5) ||
-        scroll_bar_click(cores_scroll_track_, cores_scroll_thumb_, cores_scroll_, 70) ||
+    if (scroll_bar_click(source_scroll_track_, source_scroll_thumb_, source_scroll_, 10, 0) ||
+        scroll_bar_click(asm_scroll_track_, asm_scroll_thumb_, asm_scroll_, 5, 1) ||
+        scroll_bar_click(cores_scroll_track_, cores_scroll_thumb_, cores_scroll_, 70, 2) ||
         scroll_bar_click(variables_scroll_track_, variables_scroll_thumb_, variables_scroll_,
-                         5) ||
-        scroll_bar_click(stack_scroll_track_, stack_scroll_thumb_, stack_scroll_, 5) ||
-        scroll_bar_click(console_scroll_track_, console_scroll_thumb_, console_scroll_, 5)) {
+                         5, 3) ||
+        scroll_bar_click(stack_scroll_track_, stack_scroll_thumb_, stack_scroll_, 5, 4) ||
+        scroll_bar_click(console_scroll_track_, console_scroll_thumb_, console_scroll_, 5, 5)) {
         return true;
     }
     if (y < kToolbarHeight) {

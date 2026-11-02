@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 10:35 -08:00
+> **Last updated:** 2026-11-02 10:37 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -919,6 +919,9 @@ Newest entries at the bottom. Use the local time zone.
       vertical spacing, increased register row spacing, switched F0-F15 to one
       full 64-bit decimal/scientific value per line, added FPR hover details and
       a decimal/scientific FPR edit popup, and refreshed screenshots/docs.
+- **2026-11-02 10:37 -08:00** — Added scrollbar thumb dragging and mouse-up
+      handling; improved memory/register edit feedback. Re-verified UI after the
+      FPR layout/editor changes.
 
 ## 10. Updating this file
 
