@@ -1,8 +1,11 @@
 #include "kr32/cli/cli.h"
 
 #include "kr32/asm/assembler.h"
+#include "kr32/asm/object_assembler.h"
+#include "kr32/container/container.h"
 #include "kr32/core/machine.h"
 #include "kr32/dis/disassembler.h"
+#include "kr32/link/linker.h"
 #include "kr32/version.h"
 
 #include <cctype>
@@ -115,6 +118,115 @@ bool load_program(const std::string& path,
     return read_file(path, bytes, error);
 }
 
+bool is_container(const std::string& path) {
+    const std::size_t dot = path.find_last_of('.');
+    return dot != std::string::npos && lower(path.substr(dot + 1)) == "k32";
+}
+
+std::string fault_name(core::FaultKind kind);
+void print_machine(const core::Machine& machine);
+
+bool read_container_file(const std::string& path,
+                         container::Image& image,
+                         std::string& error) {
+    std::vector<std::uint8_t> bytes;
+    if (!read_file(path, bytes, error)) {
+        return false;
+    }
+    container::Error container_error;
+    if (!container::read(bytes, image, container_error)) {
+        error = path + ": " + container_error.message;
+        return false;
+    }
+    return true;
+}
+
+bool load_executable(core::Machine& machine,
+                     const container::Image& image,
+                     std::string& error) {
+    if (image.type != container::ImageType::Executable) {
+        error = "input is a relocatable object, not an executable";
+        return false;
+    }
+    for (const container::Section& section : image.sections) {
+        if ((section.flags & container::Alloc) == 0 ||
+            section.type == container::SectionType::Bss) {
+            continue;
+        }
+        if (!machine.load_image(section.address, section.data)) {
+            error = "section does not fit: " + section.name;
+            return false;
+        }
+    }
+    machine.reset(image.entry);
+    return true;
+}
+
+void write_map(const linker::Map& map, std::string& text) {
+    text.clear();
+    text += "SECTIONS\n";
+    for (const linker::Map::Section& section : map.sections) {
+        char buffer[128];
+        std::snprintf(buffer, sizeof(buffer), "  %-16s 0x%08X 0x%08X\n",
+                      section.name.c_str(), section.address, section.size);
+        text += buffer;
+    }
+    text += "SYMBOLS\n";
+    for (const linker::Map::Symbol& symbol : map.symbols) {
+        char buffer[160];
+        std::snprintf(buffer, sizeof(buffer), "  %-24s 0x%08X %s\n",
+                      symbol.name.c_str(), symbol.address,
+                      symbol.bind == container::SymbolBind::Global ? "GLOBAL"
+                      : symbol.bind == container::SymbolBind::Weak ? "WEAK"
+                                                                   : "LOCAL");
+        text += buffer;
+    }
+}
+
+int run_machine(core::Machine& machine,
+                std::uint64_t max_steps,
+                bool trace,
+                bool stats) {
+    bool halted = false;
+    for (std::uint64_t step = 0; step < max_steps; ++step) {
+        if (trace) {
+            std::uint32_t word = 0;
+            if (machine.read32(machine.pc(), word)) {
+                std::printf("0x%08X: 0x%08X\n", machine.pc(), word);
+            }
+        }
+        const core::StepResult result = machine.step();
+        if (result.kind == core::StepResult::Kind::Retired ||
+            result.kind == core::StepResult::Kind::FaultDelivered) {
+            continue;
+        }
+        if (result.kind == core::StepResult::Kind::Halted) {
+            halted = true;
+            break;
+        }
+        std::printf("FAULT %s PC=0x%08X address=0x%08X code=0x%X\n",
+                    fault_name(result.fault.kind).c_str(),
+                    machine.pc(), result.fault.address, result.fault.code);
+        print_machine(machine);
+        return 1;
+    }
+
+    if (!halted) {
+        std::printf("LIMIT after %llu steps\n",
+                    static_cast<unsigned long long>(max_steps));
+        print_machine(machine);
+        return 1;
+    }
+
+    print_machine(machine);
+    const int exit_code = static_cast<int>(machine.reg(0) & 0xFFU);
+    std::printf("HALTED exit=%d\n", exit_code);
+    if (stats) {
+        std::printf("ticks=%llu\n", static_cast<unsigned long long>(machine.ticks()));
+    }
+    return exit_code;
+}
+
 std::string fault_name(core::FaultKind kind) {
     switch (kind) {
     case core::FaultKind::InvalidOpcode: return "invalid-opcode";
@@ -145,7 +257,7 @@ void print_machine(const core::Machine& machine) {
 }
 
 void print_version() {
-    std::printf("kr32 %s (ISA %s, container %s, M2b machine)\n",
+    std::printf("kr32 %s (ISA %s, container %s, M3 toolchain)\n",
                 kr32::kVersion, kr32::kIsaVersion, kr32::kContainerVersion);
 }
 
@@ -156,15 +268,15 @@ void print_help() {
         "Commands:\n"
         "  version              print the version tuple\n"
         "  help                 print this help\n"
-        "  as <file.asm>        assemble to a raw image (default a.bin)\n"
+        "  as <file.asm>        assemble a raw image or .k32 object\n"
         "  dis <image>          disassemble a raw image\n"
         "  vm <file>            assemble/load and run an image\n"
         "  run <file>           alias for vm\n"
-        "  ld <files>           link (M3)\n"
-        "  build <file>         compile/assemble/link (M3)\n"
+        "  ld <files>           link .k32 objects into an executable\n"
+        "  build <file>         assemble, link, and optionally run\n"
         "  cc <file>            compile C (M4)\n"
         "  cxx <file>           compile C++ (M9)\n"
-        "  size <file>          section sizes (M3)\n"
+        "  size <file>          print .k32 section sizes\n"
         "  debug <file>         dump debug information (M5)\n"
         "  dap <file>           Debug Adapter Protocol server (M7)\n"
         "  shell                interactive shell (M7)\n"
@@ -176,13 +288,15 @@ void print_help() {
         "  --smoke-ui           not built (KR32_BUILD_UI=OFF)\n"
 #endif
         "\n"
-        "Options for as:  -o <path> --base <addr>\n"
+        "Options for as:  -o <path> --object --base <addr> --listing <path>\n"
+        "Options for ld:  -o <image.k32> --map <path> --base <addr> --strip\n"
+        "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
         "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats\n");
 }
 
 void print_as_usage() {
-    std::printf("Usage: kr32 as <file.asm> [-o <image>] [--base <addr>] [--listing <path>]\n");
+    std::printf("Usage: kr32 as <file.asm> [--object] [-o <path>] [--base <addr>] [--listing <path>]\n");
 }
 
 void print_dis_usage() {
@@ -194,7 +308,7 @@ void print_vm_usage() {
 }
 
 int not_implemented(std::string_view command) {
-    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M2b machine).\n",
+    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M3 toolchain).\n",
                  static_cast<int>(command.size()), command.data());
     return 2;
 }
@@ -204,12 +318,17 @@ int command_as(int argc, char** argv) {
     std::string output = "a.bin";
     std::string listing;
     std::uint32_t base = kDefaultBase;
+    bool object = false;
 
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--help" || argument == "-h") {
             print_as_usage();
             return 0;
+        }
+        if (argument == "--object") {
+            object = true;
+            continue;
         }
         if (argument == "-o") {
             if (index + 1 >= argc) {
@@ -261,6 +380,30 @@ int command_as(int argc, char** argv) {
         return 1;
     }
     const std::string text(bytes.begin(), bytes.end());
+    if (object) {
+        if (output == "a.bin") {
+            output = "a.k32";
+        }
+        container::Image object_image;
+        assembler::Error object_error;
+        if (!assembler::assemble_object(text, object_image, object_error)) {
+            std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), object_error.line,
+                         object_error.message.c_str());
+            return 1;
+        }
+        std::vector<std::uint8_t> container_bytes;
+        container::Error container_error;
+        if (!container::write(object_image, container_bytes, container_error)) {
+            std::fprintf(stderr, "kr32 as: %s\n", container_error.message.c_str());
+            return 1;
+        }
+        if (!write_file(output, container_bytes, error)) {
+            std::fprintf(stderr, "kr32 as: %s\n", error.c_str());
+            return 1;
+        }
+        std::printf("wrote %zu-byte object to %s\n", container_bytes.size(), output.c_str());
+        return 0;
+    }
     assembler::Result result;
     assembler::Error assembly_error;
     if (!assembler::assemble(text, assembler::Options{base}, result, assembly_error)) {
@@ -345,6 +488,246 @@ int command_dis(int argc, char** argv) {
     return 0;
 }
 
+void print_ld_usage() {
+    std::printf("Usage: kr32 ld <objects...> [-o <image.k32>] [--map <path>] [--base <addr>] [--strip]\n");
+}
+
+void print_build_usage() {
+    std::printf("Usage: kr32 build <file.s> [-o <image.k32>] [--map <path>] [--base <addr>] [--run] [--strip]\n");
+}
+
+int command_ld(int argc, char** argv) {
+    std::string output = "a.k32";
+    std::string map_path;
+    linker::Options options;
+    bool strip = false;
+    std::vector<std::string> inputs;
+
+    for (int index = 2; index < argc; ++index) {
+        const std::string_view argument(argv[index]);
+        if (argument == "--help" || argument == "-h") {
+            print_ld_usage();
+            return 0;
+        }
+        if (argument == "-o") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 ld: -o needs a path\n");
+                return 2;
+            }
+            output = argv[++index];
+            continue;
+        }
+        if (argument == "--map") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 ld: --map needs a path\n");
+                return 2;
+            }
+            map_path = argv[++index];
+            continue;
+        }
+        if (argument == "--strip") {
+            strip = true;
+            continue;
+        }
+        if (argument == "--base" || argument == "--stack-top" || argument == "--stack-limit") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 ld: %.*s needs a value\n",
+                             static_cast<int>(argument.size()), argument.data());
+                return 2;
+            }
+            std::uint32_t value = 0;
+            if (!parse_u32(argv[++index], value)) {
+                std::fprintf(stderr, "kr32 ld: invalid value\n");
+                return 2;
+            }
+            if (argument == "--base") options.base = value;
+            if (argument == "--stack-top") options.stack_top = value;
+            if (argument == "--stack-limit") options.stack_limit = value;
+            continue;
+        }
+        inputs.emplace_back(argument);
+    }
+
+    if (inputs.empty()) {
+        print_ld_usage();
+        return 2;
+    }
+    options.strip = strip;
+
+    std::vector<container::Image> objects;
+    std::string error;
+    for (const std::string& input : inputs) {
+        container::Image object;
+        if (!read_container_file(input, object, error)) {
+            std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
+            return 1;
+        }
+        if (object.type != container::ImageType::Object) {
+            std::fprintf(stderr, "kr32 ld: %s is not an object\n", input.c_str());
+            return 1;
+        }
+        objects.push_back(std::move(object));
+    }
+
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    if (!linker::link(objects, options, image, map, link_error)) {
+        std::fprintf(stderr, "kr32 ld: %s\n", link_error.message.c_str());
+        return 1;
+    }
+
+    std::vector<std::uint8_t> bytes;
+    container::Error container_error;
+    if (!container::write(image, bytes, container_error)) {
+        std::fprintf(stderr, "kr32 ld: %s\n", container_error.message.c_str());
+        return 1;
+    }
+    if (!write_file(output, bytes, error)) {
+        std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
+        return 1;
+    }
+    if (!map_path.empty()) {
+        std::string text;
+        write_map(map, text);
+        if (!write_text(map_path, text, error)) {
+            std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
+            return 1;
+        }
+    }
+    std::printf("linked %zu objects to %s (entry 0x%08X)\n", objects.size(),
+                output.c_str(), image.entry);
+    return 0;
+}
+
+int command_size(int argc, char** argv) {
+    if (argc != 3) {
+        std::printf("Usage: kr32 size <image.k32>\n");
+        return 2;
+    }
+    container::Image image;
+    std::string error;
+    if (!read_container_file(argv[2], image, error)) {
+        std::fprintf(stderr, "kr32 size: %s\n", error.c_str());
+        return 1;
+    }
+    std::printf("%-16s %10s %10s %10s\n", "SECTION", "ADDRESS", "SIZE", "ALIGN");
+    for (const container::Section& section : image.sections) {
+        std::printf("%-16s 0x%08X 0x%08X %10u\n", section.name.c_str(), section.address,
+                    section.size, section.alignment);
+    }
+    std::printf("entry=0x%08X base=0x%08X type=%s\n", image.entry, image.base,
+                image.type == container::ImageType::Executable ? "executable" : "object");
+    return 0;
+}
+
+int command_build(int argc, char** argv) {
+    std::string source;
+    std::string output = "a.k32";
+    std::string map_path;
+    linker::Options options;
+    bool run = false;
+    bool strip = false;
+
+    for (int index = 2; index < argc; ++index) {
+        const std::string_view argument(argv[index]);
+        if (argument == "--help" || argument == "-h") {
+            print_build_usage();
+            return 0;
+        }
+        if (argument == "--run") {
+            run = true;
+            continue;
+        }
+        if (argument == "--strip") {
+            strip = true;
+            continue;
+        }
+        if (argument == "-o" || argument == "--map") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 build: %.*s needs a path\n",
+                             static_cast<int>(argument.size()), argument.data());
+                return 2;
+            }
+            if (argument == "-o") output = argv[++index];
+            if (argument == "--map") map_path = argv[++index];
+            continue;
+        }
+        if (argument == "--base") {
+            if (index + 1 >= argc || !parse_u32(argv[++index], options.base)) {
+                std::fprintf(stderr, "kr32 build: invalid --base\n");
+                return 2;
+            }
+            continue;
+        }
+        if (!source.empty()) {
+            std::fprintf(stderr, "kr32 build: unexpected argument\n");
+            return 2;
+        }
+        source = std::string(argument);
+    }
+
+    if (source.empty()) {
+        print_build_usage();
+        return 2;
+    }
+    options.strip = strip;
+
+    std::vector<std::uint8_t> source_bytes;
+    std::string error;
+    if (!read_file(source, source_bytes, error)) {
+        std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
+        return 1;
+    }
+    const std::string text(source_bytes.begin(), source_bytes.end());
+    container::Image object;
+    assembler::Error assembly_error;
+    if (!assembler::assemble_object(text, object, assembly_error)) {
+        std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), assembly_error.line,
+                     assembly_error.message.c_str());
+        return 1;
+    }
+
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    if (!linker::link({object}, options, image, map, link_error)) {
+        std::fprintf(stderr, "kr32 build: %s\n", link_error.message.c_str());
+        return 1;
+    }
+
+    std::vector<std::uint8_t> bytes;
+    container::Error container_error;
+    if (!container::write(image, bytes, container_error)) {
+        std::fprintf(stderr, "kr32 build: %s\n", container_error.message.c_str());
+        return 1;
+    }
+    if (!write_file(output, bytes, error)) {
+        std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
+        return 1;
+    }
+    if (!map_path.empty()) {
+        std::string map_text;
+        write_map(map, map_text);
+        if (!write_text(map_path, map_text, error)) {
+            std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
+            return 1;
+        }
+    }
+    std::printf("built %s (entry 0x%08X)\n", output.c_str(), image.entry);
+
+    if (!run) {
+        return 0;
+    }
+
+    core::Machine machine(core::Machine::Options{core::kDefaultRamSize});
+    if (!load_executable(machine, image, error)) {
+        std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
+        return 1;
+    }
+    return run_machine(machine, kDefaultMaxSteps, false, false);
+}
+
 int command_vm(int argc, char** argv) {
     std::string program;
     std::string bios;
@@ -406,18 +789,31 @@ int command_vm(int argc, char** argv) {
         return 2;
     }
 
-    std::vector<std::uint8_t> image;
+    core::Machine machine(core::Machine::Options{ram_size});
     std::string error;
-    if (!load_program(program, base, image, error)) {
-        std::fprintf(stderr, "kr32 vm: %s\n", error.c_str());
-        return 1;
+    if (is_container(program)) {
+        container::Image executable;
+        if (!read_container_file(program, executable, error)) {
+            std::fprintf(stderr, "kr32 vm: %s\n", error.c_str());
+            return 1;
+        }
+        if (!load_executable(machine, executable, error)) {
+            std::fprintf(stderr, "kr32 vm: %s\n", error.c_str());
+            return 1;
+        }
+    } else {
+        std::vector<std::uint8_t> flat;
+        if (!load_program(program, base, flat, error)) {
+            std::fprintf(stderr, "kr32 vm: %s\n", error.c_str());
+            return 1;
+        }
+        if (!machine.load_image(base, flat)) {
+            std::fprintf(stderr, "kr32 vm: image does not fit at 0x%08X\n", base);
+            return 1;
+        }
+        machine.reset(base);
     }
 
-    core::Machine machine(core::Machine::Options{ram_size});
-    if (!machine.load_image(base, image)) {
-        std::fprintf(stderr, "kr32 vm: image does not fit at 0x%08X\n", base);
-        return 1;
-    }
     if (!bios.empty()) {
         std::vector<std::uint8_t> rom;
         if (!read_file(bios, rom, error)) {
@@ -429,47 +825,9 @@ int command_vm(int argc, char** argv) {
             return 1;
         }
         machine.reset();
-    } else {
-        machine.reset(base);
     }
 
-    bool halted = false;
-    for (std::uint64_t step = 0; step < max_steps; ++step) {
-        if (trace) {
-            std::uint32_t word = 0;
-            if (machine.read32(machine.pc(), word)) {
-                std::printf("0x%08X: 0x%08X\n", machine.pc(), word);
-            }
-        }
-        const core::StepResult result = machine.step();
-        if (result.kind == core::StepResult::Kind::Retired) {
-            continue;
-        }
-        if (result.kind == core::StepResult::Kind::Halted) {
-            halted = true;
-            break;
-        }
-        std::printf("FAULT %s PC=0x%08X address=0x%08X code=0x%X\n",
-                    fault_name(result.fault.kind).c_str(),
-                    machine.pc(), result.fault.address, result.fault.code);
-        print_machine(machine);
-        return 1;
-    }
-
-    if (!halted) {
-        std::printf("LIMIT after %llu steps\n",
-                    static_cast<unsigned long long>(max_steps));
-        print_machine(machine);
-        return 1;
-    }
-
-    print_machine(machine);
-    const int exit_code = static_cast<int>(machine.reg(0) & 0xFFU);
-    std::printf("HALTED exit=%d\n", exit_code);
-    if (stats) {
-        std::printf("ticks=%llu\n", static_cast<unsigned long long>(machine.ticks()));
-    }
-    return exit_code;
+    return run_machine(machine, max_steps, trace, stats);
 }
 
 } // namespace
@@ -520,9 +878,18 @@ int run(int argc, char** argv) {
     if (command == "vm" || command == "run") {
         return command_vm(argc, argv);
     }
+    if (command == "ld") {
+        return command_ld(argc, argv);
+    }
+    if (command == "build") {
+        return command_build(argc, argv);
+    }
+    if (command == "size") {
+        return command_size(argc, argv);
+    }
 
     for (const std::string_view candidate :
-         {"ld", "build", "cc", "cxx", "size", "debug", "dap", "shell"}) {
+         {"cc", "cxx", "debug", "dap", "shell"}) {
         if (command == candidate) {
             return not_implemented(command);
         }

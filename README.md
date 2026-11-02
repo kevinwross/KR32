@@ -8,9 +8,10 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M2b complete (2026-11-02). The machine now has scalar FP, 4x4 tiles,
-a transform stack, and the associated loads, stores, assembler syntax, and demos.
-The next milestone is the `.k32` container, linker, and build pipeline.
+**Status:** M3 complete (2026-11-02). The toolchain now emits `.k32`
+relocatable objects, links them into executables, reports section sizes, and can
+build and run `.s` programs through one command. The container format is
+documented in [docs/container.md](docs/container.md). The C compiler is next.
 
 ## Build
 
@@ -58,6 +59,10 @@ ctest --preset linux-asan
 
 ```text
 kr32 as examples/demo.asm -o demo.bin --listing demo.lst
+kr32 as examples/hello.s --object -o hello.o
+kr32 ld hello.o -o hello.k32 --map hello.map
+kr32 size hello.k32
+kr32 build examples/hello.s -o hello.k32 --run
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm
@@ -71,10 +76,11 @@ kr32 --smoke-ui     # initialize and tear down the SDL2 platform
 kr32 gui            # M6 placeholder for the windowed debugger
 ```
 
-`as` writes a raw image and an optional symbol listing. `dis` reads a raw image.
-`run`/`vm` assemble a `.asm`/`.s` source or load a raw image, then execute it;
-the process exit code is `R0 & 0xFF`. The remaining tool commands (`ld`,
-`build`, `cc`, `cxx`, `size`, `debug`, `dap`, `shell`) are stubs for later
+`as` writes a raw image or, with `--object`, a relocatable `.k32` object. `ld`
+merges objects, resolves symbols and relocations, and writes an executable
+`.k32`; `--map` writes the section/symbol map. `build` runs assemble, link, and
+optional `--run` in one command. `size` reports `.k32` sections. The remaining
+tool commands (`cc`, `cxx`, `debug`, `dap`, `shell`) are stubs for later
 milestones.
 
 ## Layout

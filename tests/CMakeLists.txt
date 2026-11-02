@@ -7,6 +7,9 @@ add_executable(kr32_tests
     unit/test_boot.cpp
     unit/test_fp.cpp
     unit/test_matrix.cpp
+    unit/test_container.cpp
+    unit/test_object_assembler.cpp
+    unit/test_linker.cpp
     unit/test_assembler.cpp
     unit/test_disassembler.cpp)
 
@@ -14,6 +17,8 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_core
     kr32_asm
     kr32_dis
+    kr32_container
+    kr32_link
     kr32_warnings)
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
@@ -56,6 +61,19 @@ add_test(NAME bios_smoke
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunBiosSmoke.cmake)
+
+add_test(NAME build_hello
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/hello.s
+        -o ${CMAKE_BINARY_DIR}/hello.k32 --run)
+set_tests_properties(build_hello PROPERTIES PASS_REGULAR_EXPRESSION "HALTED")
+
+add_test(NAME link_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunLinkSmoke.cmake)
 
 if(KR32_BUILD_UI)
     add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)

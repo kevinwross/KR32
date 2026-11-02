@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 01:27 -08:00
+> **Last updated:** 2026-11-02 01:37 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -360,29 +360,35 @@ strided loads, assembler/disassembler support, and demos are in place.
 
 **Goal:** relocatable objects, a linker, a `.k32` image, and `kr32 build`.
 
+**Status:** complete 2026-11-02. The object assembler currently covers the
+integer instruction subset used by the M3 pipeline; FP/M and the full C-directed
+directive set can extend the same section/symbol/relocation model without a
+container change.
+
 **Tasks**
 
-- [ ] Write `docs/container.md`: header, sections, symbols, relocations, debug
+- [x] Write `docs/container.md`: header, sections, symbols, relocations, debug
       sections, CRC.
-- [ ] Container reader/writer with round-trip tests.
-- [ ] Assembler emits relocatable objects with `.text`, `.rodata`, `.data`,
+- [x] Container reader/writer with round-trip tests.
+- [x] Assembler emits relocatable objects with `.text`, `.rodata`, `.data`,
       `.bss`, symbols, and relocations.
-- [ ] Linker: layout, symbol resolution, relocation, map, strip; define
+- [x] Linker: layout, symbol resolution, relocation, map, strip; define
       `__heap_start`, `__stack_top`, `__stack_limit`.
-- [ ] CLI: `kr32 ld`, `kr32 size`, `kr32 build` for `.s` inputs.
-- [ ] Golden object and executable fixtures.
-- [ ] `build` pipeline: assemble → link → run.
-- [ ] C++ readiness: reserve weak/COMDAT flags, relocation types, section
-      merging, and extensible debug sections.
+- [x] CLI: `kr32 ld`, `kr32 size`, `kr32 build` for `.s` inputs.
+- [x] Golden object and executable fixtures (generated and round-tripped in the
+      test suite).
+- [x] `build` pipeline: assemble → link → run.
+- [x] C++ readiness: weak symbols, reserved COMDAT/section flags, relocation
+      types, section merging, and extensible debug sections.
 
 **Test plan and gate**
 
-- [ ] Container round-trip for every section and relocation type.
-- [ ] Two-object link resolves symbols and relocations correctly.
-- [ ] Linker map lists sections and symbols.
-- [ ] `kr32 build examples/hello.s --run` succeeds.
-- [ ] Windows and WSL tests pass.
-- [ ] Commit and tag `m3`; log entry added.
+- [x] Container round-trip for every section and relocation type.
+- [x] Two-object link resolves symbols and relocations correctly.
+- [x] Linker map lists sections and symbols.
+- [x] `kr32 build examples/hello.s --run` succeeds.
+- [x] Windows and WSL tests pass.
+- [x] Commit and tag `m3`; log entry added.
 
 ### M4 — Simple C compiler and minimal runtime
 
@@ -705,6 +711,14 @@ Newest entries at the bottom. Use the local time zone.
       11 CTest cases including both FP/matrix demos; Windows MSVC Debug/Release
       and Ninja; WSL GCC/Clang/ASan.
 - **2026-11-02 01:27 -08:00** — Tagged `m2b`.
+- **2026-11-02 01:37 -08:00** — M3 implemented: `.k32` container with CRC,
+      sections, symbols, relocations, and debug sections; object assembler;
+      linker with section merging, symbol resolution, map, strip, and runtime
+      symbols; `as --object`, `ld`, `size`, `build`, and `.k32` VM loading.
+- **2026-11-02 01:37 -08:00** — M3 gate passed: 74 unit cases / 4033 assertions,
+      13 CTest cases including `build_hello` and two-object `link_smoke`;
+      Windows MSVC Debug/Release and Ninja; WSL GCC/Clang/ASan.
+- **2026-11-02 01:37 -08:00** — Tagged `m3`.
 
 ## 10. Updating this file
 

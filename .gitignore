@@ -2,6 +2,8 @@
 /build/
 /out/
 /dist/
+/a.bin
+/a.k32
 
 # CMake and build system generated files
 CMakeFiles/
