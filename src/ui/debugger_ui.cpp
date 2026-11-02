@@ -569,43 +569,138 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     }
 }
 
-void DebuggerUI::draw_registers(Canvas& canvas, Rect rect) {
-    draw_panel(canvas, rect, "REGISTERS");
-    const core::Machine& machine = session_.machine();
-    const int column_width = std::max(110, (rect.width - 16) / 2);
-    for (int index = 0; index < 16; ++index) {
-        const int column = index / 8;
-        const int row = index % 8;
-        const int x = rect.x + 8 + column * column_width;
-        const int y = rect.y + 24 + row * 14;
-        canvas.text(x, y, "R" + std::to_string(index), kDim, FontRole::MonoSmall);
-        canvas.text(x + 26, y, hex(machine.reg(static_cast<std::size_t>(index)), 8), kText,
-                    FontRole::MonoSmall);
+void DebuggerUI::draw_cores(Canvas& canvas, Rect rect) {
+    draw_panel(canvas, rect, "CORES");
+    core_rows_.clear();
+    const std::size_t count = session_.core_count();
+    if (count == 0) {
+        canvas.text(rect.x + 8, rect.y + 26, "(no cores)", kDim, FontRole::MonoSmall);
+        return;
     }
-    const int y = rect.y + 24 + 8 * 14 + 6;
-    canvas.text(rect.x + 8, y, "PC " + hex(machine.pc(), 8), kAccent, FontRole::MonoSmall);
-    canvas.text(rect.x + 8, y + 14,
-                "SP " + hex(machine.sp(), 8) + "  FLAGS " + hex(machine.flags(), 8), kText,
-                FontRole::MonoSmall);
-    canvas.text(rect.x + 8, y + 28,
-                "TICKS " + decimal(machine.ticks()) + "  CORE " +
-                    std::to_string(machine.core_id()) +
-                    (machine.kernel_mode() ? " KERNEL" : " USER"),
-                kDim, FontRole::MonoSmall);
-
-    const int section_y = y + 46;
-    if (section_y < rect.y + rect.height - 20) {
-        canvas.fill(Rect{rect.x + 6, section_y, rect.width - 12, 1}, kBorder);
-        canvas.text(rect.x + 6, section_y + 5, "FPR / VECTOR / CONTROL", kDim,
+    if (selected_core_ >= count) selected_core_ = 0;
+    if (expanded_core_ > count) expanded_core_ = count;
+    int y = rect.y + 24;
+    for (std::size_t index = 0; index < count; ++index) {
+        const bool expanded = index == expanded_core_;
+        const Rect row{rect.x + 1, y, rect.width - 2, 18};
+        if (index == selected_core_) {
+            canvas.fill(row, Color{38, 66, 92, 255});
+        }
+        const core::Machine& machine = session_.core(index);
+        canvas.text(rect.x + 6, y + 2, expanded ? "v" : ">", kAccent,
                     FontRole::MonoSmall);
-        draw_machine(canvas,
-                     Rect{rect.x, section_y + 18, rect.width,
-                          std::max(0, rect.y + rect.height - section_y - 18)});
+        canvas.text(rect.x + 20, y + 2,
+                    "Core " + std::to_string(index) + "  PC " + hex(machine.pc(), 8),
+                    index == selected_core_ ? kText : kDim, FontRole::MonoSmall);
+        core_rows_.push_back(CoreRow{index, row, expanded});
+        y += 18;
+        if (expanded) {
+            const int used = draw_core_state(
+                canvas, Rect{rect.x + 6, y + 2, rect.width - 12,
+                             std::max(0, rect.y + rect.height - y - 4)},
+                index);
+            y += used + 6;
+        }
+        if (y > rect.y + rect.height - 18) {
+            break;
+        }
     }
 }
 
+int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_index) {
+    const core::Machine& machine = session_.core(core_index);
+    const int start_y = rect.y;
+    int y = rect.y;
+    canvas.text(rect.x, y, "PC " + hex(machine.pc(), 8) + "  SP " + hex(machine.sp(), 8),
+                kAccent, FontRole::MonoSmall);
+    y += 14;
+    canvas.text(rect.x, y,
+                "FLAGS " + hex(machine.flags(), 8) + "  " +
+                    (machine.kernel_mode() ? "KERNEL" : "USER"),
+                kText, FontRole::MonoSmall);
+    y += 14;
+    canvas.text(rect.x, y, "TICKS " + decimal(machine.ticks()) + "  CORE " +
+                               std::to_string(machine.core_id()),
+                kDim, FontRole::MonoSmall);
+    y += 18;
+
+    const int column_width = std::max(100, (rect.width - 8) / 2);
+    for (int row = 0; row < 8; ++row) {
+        for (int column = 0; column < 2; ++column) {
+            const int index = row + column * 8;
+            const int x = rect.x + column * column_width;
+            canvas.text(x, y, "R" + std::to_string(index), kDim, FontRole::MonoSmall);
+            canvas.text(x + 24, y, hex(machine.reg(static_cast<std::size_t>(index)), 8),
+                        kText, FontRole::MonoSmall);
+        }
+        y += 14;
+    }
+
+    canvas.fill(Rect{rect.x, y + 2, rect.width, 1}, kBorder);
+    y += 8;
+    canvas.text(rect.x, y, "FPR", kDim, FontRole::MonoSmall);
+    y += 14;
+    for (int row = 0; row < 8; ++row) {
+        for (int column = 0; column < 2; ++column) {
+            const int index = row + column * 8;
+            const int x = rect.x + column * column_width;
+            canvas.text(x, y, "F" + std::to_string(index), kDim, FontRole::MonoSmall);
+            canvas.text(x + 24, y,
+                        hex(static_cast<std::uint32_t>(machine.fpr(static_cast<std::size_t>(
+                                                        index)) &
+                                                   0xFFFFFFFFU),
+                            8),
+                        kText, FontRole::MonoSmall);
+        }
+        y += 12;
+    }
+
+    canvas.fill(Rect{rect.x, y + 2, rect.width, 1}, kBorder);
+    y += 8;
+    canvas.text(rect.x, y, "TSP " + hex(machine.tsp(), 8), kAccent, FontRole::MonoSmall);
+    y += 14;
+    for (int row = 0; row < 4; ++row) {
+        std::string line;
+        for (int column = 0; column < 4; ++column) {
+            char buffer[24] = {};
+            std::snprintf(buffer, sizeof(buffer), "%7.2f",
+                          machine.tile_value(0, static_cast<std::size_t>(row * 4 + column)));
+            line += buffer;
+            line += " ";
+        }
+        canvas.text(rect.x, y, line, kText, FontRole::MonoSmall);
+        y += 11;
+    }
+
+    canvas.fill(Rect{rect.x, y + 2, rect.width, 1}, kBorder);
+    y += 8;
+    for (std::uint32_t number : {3U, 6U, 10U}) {
+        std::uint32_t value = 0;
+        if (machine.read_control_register(number, value)) {
+            canvas.text(rect.x, y, "CR" + std::to_string(number) + " " + hex(value, 8),
+                        kDim, FontRole::MonoSmall);
+            y += 12;
+        }
+    }
+    std::uint32_t ptbr = 0;
+    if (machine.read_control_register(8, ptbr)) {
+        canvas.text(rect.x, y, "PTBR " + hex(ptbr, 8), kDim, FontRole::MonoSmall);
+        y += 12;
+        for (int index = 0; index < 4; ++index) {
+            std::uint32_t entry = 0;
+            if (machine.read_physical32(ptbr + static_cast<std::uint32_t>(index * 4), entry)) {
+                canvas.text(rect.x, y, "PTE" + std::to_string(index) + " " + hex(entry, 8),
+                            kDim, FontRole::MonoSmall);
+                y += 12;
+            }
+        }
+    }
+    return std::min(y - start_y, rect.height);
+}
+
 void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
-    int y = rect.y + 4;
+    draw_panel(canvas, rect, "VARIABLES");
+    int y = rect.y + 24;
     const debug::Function* function = session_.function_at(session_.machine().pc());
     if (function != nullptr) {
         canvas.text(rect.x + 6, y, "in " + function->name, kAccent);
@@ -637,105 +732,63 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             y += 14;
         }
     }
-    std::vector<debug::Frame> frames = session_.call_stack();
-    if (!frames.empty() && y < rect.y + rect.height - 12) {
-        canvas.text(rect.x + 6, y, "STACK", kDim);
-        y += 14;
-        for (const debug::Frame& frame : frames) {
-            if (y > rect.y + rect.height - 10) {
-                break;
-            }
-            canvas.text(rect.x + 10, y, trim_to(frame.function + " " + hex(frame.pc, 8), 46),
-                        kText, FontRole::MonoSmall);
-            y += 14;
+}
+
+void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
+    draw_panel(canvas, rect, "CALL STACK");
+    int y = rect.y + 24;
+    const std::vector<debug::Frame> frames = session_.call_stack();
+    if (frames.empty()) {
+        canvas.text(rect.x + 6, y, "(no frames)", kDim, FontRole::MonoSmall);
+        return;
+    }
+    for (std::size_t index = 0; index < frames.size(); ++index) {
+        if (y > rect.y + rect.height - 14) {
+            break;
         }
+        const debug::Frame& frame = frames[index];
+        canvas.text(rect.x + 6, y,
+                    "#" + std::to_string(index) + " " +
+                        trim_to(frame.function + " " + hex(frame.pc, 8),
+                                static_cast<std::size_t>((rect.width - 16) / 7)),
+                    index == 0 ? kAccent : kText, FontRole::MonoSmall);
+        y += 14;
     }
 }
 
 void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
-    const std::uint32_t rows = std::max<std::uint32_t>(
-        3, static_cast<std::uint32_t>(std::max(0, rect.height - 8) / 18));
+    const int bytes_per_row = rect.width >= 520 ? 16 : 8;
+    constexpr int rows = 4;
     const std::uint32_t sp = session_.machine().sp();
-    std::uint32_t base = sp > rows * 16U + 16U ? sp - rows * 16U - 16U : session_.machine().ram_base();
-    base &= 0xFFFF'FFF0U;
+    const std::uint32_t span = static_cast<std::uint32_t>(bytes_per_row * rows + 16);
+    std::uint32_t base = sp > span ? sp - span : session_.machine().ram_base();
+    base &= ~0xFU;
     if (base < session_.machine().ram_base()) {
         base = session_.machine().ram_base();
     }
-    for (std::uint32_t row = 0; row < rows; ++row) {
-        const std::uint32_t address = base + row * 16U;
-        const int y = rect.y + 4 + static_cast<int>(row) * 18;
-        std::string line = hex(address, 8) + "  ";
-        for (int column = 0; column < 16; ++column) {
+    draw_panel(canvas, rect, "MEMORY  ADDR " + hex(base, 8));
+    for (int row = 0; row < rows; ++row) {
+        const std::uint32_t address = base + static_cast<std::uint32_t>(row * bytes_per_row);
+        std::string hex_part = "0x" + hex(address, 8) + "  ";
+        std::string ascii_part;
+        for (int column = 0; column < bytes_per_row; ++column) {
             std::uint8_t value = 0;
             const std::uint32_t byte_address = address + static_cast<std::uint32_t>(column);
             const bool ok = session_.machine().read8(byte_address, value) ||
                             session_.machine().read_physical8(byte_address, value);
-            line += ok ? hex(value, 2) + " " : "?? ";
+            hex_part += ok ? hex(value, 2) + " " : "?? ";
+            ascii_part.push_back(ok && value >= 32 && value <= 126
+                                     ? static_cast<char>(value)
+                                     : '.');
         }
-        canvas.text(rect.x + 6, y, line, kText, FontRole::MonoSmall);
-    }
-}
-
-void DebuggerUI::draw_machine(Canvas& canvas, Rect rect) {
-    const core::Machine& machine = session_.machine();
-    int y = rect.y + 4;
-    for (int index = 0; index < 8; ++index) {
-        std::string line = "F" + std::to_string(index) + " " + hex(static_cast<std::uint32_t>(machine.fpr(index) & 0xFFFFFFFFU), 8);
-        line += "  F" + std::to_string(index + 8) + " " +
-                hex(static_cast<std::uint32_t>(machine.fpr(index + 8) & 0xFFFFFFFFU), 8);
-        canvas.text(rect.x + 6, y, line, kText, FontRole::MonoSmall);
-        y += 12;
-    }
-    y += 2;
-    canvas.text(rect.x + 6, y, "TSP " + hex(machine.tsp(), 8), kAccent, FontRole::MonoSmall);
-    y += 12;
-    for (int row = 0; row < 4; ++row) {
-        std::string line;
-        for (int column = 0; column < 4; ++column) {
-            char buffer[24] = {};
-            std::snprintf(buffer, sizeof(buffer), "%7.2f", machine.tile_value(0, static_cast<std::size_t>(row * 4 + column)));
-            line += buffer;
-            line += " ";
-        }
-        canvas.text(rect.x + 6, y, line, kText, FontRole::MonoSmall);
-        y += 11;
-    }
-    y += 2;
-    canvas.text(rect.x + 6, y, "CORE " + std::to_string(machine.core_id()) + "  MODE " +
-                (machine.kernel_mode() ? "KERNEL" : "USER"), kAccent, FontRole::MonoSmall);
-    y += 12;
-    std::uint32_t ptbr = 0;
-    if (machine.read_control_register(8, ptbr)) {
-        canvas.text(rect.x + 6, y, "PTBR " + hex(ptbr, 8), kDim, FontRole::MonoSmall);
-        y += 12;
-        for (int index = 0; index < 4; ++index) {
-            std::uint32_t entry = 0;
-            if (machine.read_physical32(ptbr + static_cast<std::uint32_t>(index * 4), entry)) {
-                canvas.text(rect.x + 6, y, "PTE" + std::to_string(index) + " " + hex(entry, 8),
-                            kDim, FontRole::MonoSmall);
-                y += 12;
-            }
-        }
-    }
-    if (y > rect.y + rect.height - 10) {
-        return;
-    }
-    for (std::uint32_t number : {3U, 6U, 10U}) {
-        std::uint32_t value = 0;
-        if (!machine.read_control_register(number, value)) {
-            continue;
-        }
-        canvas.text(rect.x + 6, y, "CR" + std::to_string(number) + " " + hex(value, 8), kDim,
-                    FontRole::MonoSmall);
-        y += 12;
-        if (y > rect.y + rect.height - 10) {
-            break;
-        }
+        canvas.text(rect.x + 6, rect.y + 26 + row * 18,
+                    hex_part + "  " + ascii_part, kText, FontRole::MonoSmall);
     }
 }
 
 void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
-    int y = rect.y + 4;
+    draw_panel(canvas, rect, "CONSOLE");
+    int y = rect.y + 24;
     std::istringstream stream(session_.console());
     std::string line;
     while (std::getline(stream, line) && y < rect.y + rect.height - 10) {
@@ -748,29 +801,6 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
     }
 }
 
-void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
-    canvas.fill(rect, kPanel);
-    canvas.frame(rect, kBorder);
-    const char* labels[] = {"MEMORY", "VARIABLES", "CONSOLE"};
-    constexpr int kTabWidth = 110;
-    for (int index = 0; index < 3; ++index) {
-        const int x = rect.x + 6 + index * kTabWidth;
-        if (static_cast<int>(tab_) == index) {
-            canvas.fill(Rect{x, rect.y + 2, kTabWidth - 8, 20}, Color{38, 66, 92, 255});
-        }
-        canvas.text(x + 7, rect.y + 5, labels[index],
-                    static_cast<int>(tab_) == index ? kAccent : kDim, FontRole::Ui);
-    }
-    const Rect content{rect.x + 1, rect.y + 24, rect.width - 2, rect.height - 25};
-    if (tab_ == Tab::Memory) {
-        draw_memory(canvas, content);
-    } else if (tab_ == Tab::Variables) {
-        draw_variables(canvas, content);
-    } else {
-        draw_console(canvas, content);
-    }
-}
-
 DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
     const int right_width = std::clamp(width * 23 / 100, 230, 360);
     int source_width = std::clamp(width * 36 / 100, 240, width - right_width - 300);
@@ -779,16 +809,25 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
         disassembly_width = 300;
         source_width = width - disassembly_width - right_width;
     }
-    const int bottom_height = std::clamp(height / 3, 170, 240);
+    const int bottom_height = std::clamp(height * 24 / 100, 190, 230);
     const int bottom_top = height - bottom_height;
     const int top_height = bottom_top - kToolbarHeight;
+    const int memory_width = width * 40 / 100;
+    const int variables_width = width * 20 / 100;
+    const int stack_width = width * 18 / 100;
+    const int console_width = width - memory_width - variables_width - stack_width;
 
     Layout result;
     result.source = Rect{0, kToolbarHeight, source_width, top_height};
     result.disassembly = Rect{source_width, kToolbarHeight, disassembly_width, top_height};
-    result.registers = Rect{source_width + disassembly_width, kToolbarHeight, right_width,
-                            top_height};
-    result.bottom = Rect{0, bottom_top, width, bottom_height};
+    result.cores = Rect{source_width + disassembly_width, kToolbarHeight, right_width,
+                        top_height};
+    result.memory = Rect{0, bottom_top, memory_width, bottom_height};
+    result.variables = Rect{memory_width, bottom_top, variables_width, bottom_height};
+    result.call_stack = Rect{memory_width + variables_width, bottom_top, stack_width,
+                             bottom_height};
+    result.console = Rect{memory_width + variables_width + stack_width, bottom_top,
+                          console_width, bottom_height};
     return result;
 }
 
@@ -1058,8 +1097,11 @@ void DebuggerUI::render(Canvas& canvas) {
     const Layout areas = layout(canvas.width(), canvas.height());
     draw_source(canvas, areas.source);
     draw_disassembly(canvas, areas.disassembly);
-    draw_registers(canvas, areas.registers);
-    draw_bottom(canvas, areas.bottom);
+    draw_cores(canvas, areas.cores);
+    draw_memory(canvas, areas.memory);
+    draw_variables(canvas, areas.variables);
+    draw_call_stack(canvas, areas.call_stack);
+    draw_console(canvas, areas.console);
     draw_error(canvas);
     draw_asm_tooltip(canvas);
     draw_context_menu(canvas);
@@ -1101,15 +1143,17 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         }
         return true;
     }
-    if (y >= areas.bottom.y + 2 && y < areas.bottom.y + 22) {
-        if (x < areas.bottom.x + 116) {
-            tab_ = Tab::Memory;
-        } else if (x < areas.bottom.x + 226) {
-            tab_ = Tab::Variables;
-        } else if (x < areas.bottom.x + 336) {
-            tab_ = Tab::Console;
+    if (y >= kToolbarHeight) {
+        for (const CoreRow& row : core_rows_) {
+            if (!row.row.contains(x, y)) continue;
+            selected_core_ = row.index;
+            if (expanded_core_ == row.index) {
+                expanded_core_ = core_rows_.size();
+            } else {
+                expanded_core_ = row.index;
+            }
+            return true;
         }
-        return true;
     }
     if (y >= areas.source.y + 2 && y < areas.source.y + 20) {
         const int button_start = areas.source.x + areas.source.width - 3 * 42 - 4;
@@ -1185,48 +1229,19 @@ bool DebuggerUI::key(int key_value, bool shift) {
         restart();
         return true;
     }
-    if (key_value == kr32::platform::key::Tab) {
-        tab_ = static_cast<Tab>((static_cast<int>(tab_) + 1) % 3);
-        return true;
-    }
     return false;
 }
 
 bool DebuggerUI::headless(const std::string& ppm_path) {
-    const Tab original_tab = tab_;
     Canvas canvas(1440, 900);
-
-    tab_ = Tab::Memory;
     render(canvas);
-    const std::uint64_t memory_hash = canvas.hash();
+    const std::uint64_t hash = canvas.hash();
     if (!ppm_path.empty() && !canvas.write_ppm(ppm_path)) {
         error_ = "cannot write " + ppm_path;
         return false;
     }
-
-    tab_ = Tab::Variables;
-    render(canvas);
-    const std::uint64_t variables_hash = canvas.hash();
-    if (!ppm_path.empty()) {
-        std::string variables_path = ppm_path;
-        const std::size_t dot = variables_path.find_last_of('.');
-        if (dot != std::string::npos) {
-            variables_path.insert(dot, "-variables");
-        }
-        if (!canvas.write_ppm(variables_path)) {
-            error_ = "cannot write " + variables_path;
-            return false;
-        }
-    }
-
-    tab_ = Tab::Console;
-    render(canvas);
-    const std::uint64_t console_hash = canvas.hash();
-    tab_ = original_tab;
-    std::printf("ui-render width=%d height=%d hash=%016llX variables=%016llX console=%016llX\n",
-                canvas.width(), canvas.height(), static_cast<unsigned long long>(memory_hash),
-                static_cast<unsigned long long>(variables_hash),
-                static_cast<unsigned long long>(console_hash));
+    std::printf("ui-render width=%d height=%d hash=%016llX\n", canvas.width(),
+                canvas.height(), static_cast<unsigned long long>(hash));
     return true;
 }
 

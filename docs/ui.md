@@ -6,10 +6,6 @@ executables load directly.
 
 ![KR32 debugger](screenshots/m6-debugger.png)
 
-![KR32 HEX column](screenshots/m6-hex.png)
-
-![KR32 variables / call stack](screenshots/m6-variables.png)
-
 ![KR32 gutter menu](screenshots/m6-gutter-menu.png)
 
 ![KR32 disassembly gutter menu](screenshots/m6-disasm-gutter-menu.png)
@@ -44,15 +40,18 @@ executables load directly.
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
-| Registers | R0-R15, PC/SP/FLAGS, ticks/core, F0-F15, TSP and T0 tile, PTBR/PTE, control registers |
-| Variables | Locals, globals/watch values, call stack |
-| Bottom tabs | Memory hex dump, Variables/Call stack, Console |
+| Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
+| Memory | Four-line address/hex/ASCII dump, always visible |
+| Variables | Current function, locals, and globals, always visible |
+| Call stack | Current frames, always visible |
+| Console | Guest console output, always visible |
 
-The right-hand **REGISTERS** panel groups all register state: the 16 GPRs,
-PC/SP/FLAGS, F0-F15, TSP, the T0 tile, paging registers, and control registers.
-The bottom tabs are **MEMORY**, **VARIABLES**, and **CONSOLE**; the former
-MACHINE tab's contents now live under REGISTERS, while variables and the call
-stack moved into the VARIABLES tab.
+The right-hand **CORES** panel lists one row per core and is expandable. The
+expanded row shows that core's PC/SP/FLAGS, GPRs, F0-F15, TSP and T0 tile,
+paging registers, and control registers. Click a core row to select it or
+collapse/expand its details. The bottom row keeps **MEMORY**, **VARIABLES**,
+**CALL STACK**, and **CONSOLE** visible at all times; MEMORY is a fixed four-line
+dump with an address, hex bytes, and printable ASCII.
 
 ## Gutter behavior
 
@@ -83,7 +82,8 @@ stack moved into the VARIABLES tab.
 - The source-pane **OVER / IN / OUT** buttons step by C source line.
 - The disassembly-pane **OVER / IN / OUT** buttons step by instruction.
 - `F9` toggle a breakpoint at the current source line.
-- `R` restart/reload; `Tab` cycles the bottom tabs; `Esc` quits.
+- `R` restart/reload; `Esc` quits.
+- Left-click a core row to select it and toggle its expanded state.
 - Left-click a source or disassembly gutter row to toggle a breakpoint; right-click
   it for the gutter menu.
 
@@ -93,8 +93,8 @@ stack moved into the VARIABLES tab.
 kr32 gui --headless build/hello-c.k32 --screenshot build/hello-ui.ppm
 ```
 
-renders the memory, machine, and console tabs, writes PPM screenshots, and
-prints stable per-tab hashes. CTest's `ui_headless` uses this path, while
+renders the complete 1440x900 debugger surface, writes a PPM screenshot, and
+prints a stable frame hash. CTest's `ui_headless` uses this path, while
 `ui_smoke` uses the SDL dummy driver. `KR32_BUILD_UI=OFF` excludes the SDL,
 canvas, and GUI targets and keeps the headless test suite green.
 

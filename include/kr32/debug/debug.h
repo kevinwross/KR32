@@ -75,6 +75,15 @@ public:
 
     [[nodiscard]] core::Machine& machine() { return machine_; }
     [[nodiscard]] const core::Machine& machine() const { return machine_; }
+    [[nodiscard]] std::size_t core_count() const { return 1; }
+    [[nodiscard]] core::Machine& core(std::size_t index) {
+        (void)index;
+        return machine_;
+    }
+    [[nodiscard]] const core::Machine& core(std::size_t index) const {
+        (void)index;
+        return machine_;
+    }
     [[nodiscard]] const Info& info() const { return info_; }
 
     void set_breakpoint(std::uint32_t address);

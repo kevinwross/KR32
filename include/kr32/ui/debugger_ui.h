@@ -37,11 +37,18 @@ private:
     struct Layout {
         Rect source;
         Rect disassembly;
-        Rect registers;
-        Rect bottom;
+        Rect cores;
+        Rect memory;
+        Rect variables;
+        Rect call_stack;
+        Rect console;
     };
 
-    enum class Tab { Memory, Variables, Console };
+    struct CoreRow {
+        std::size_t index = 0;
+        Rect row{};
+        bool expanded = false;
+    };
 
     [[nodiscard]] Layout layout(int width, int height) const;
     void set_status_from_result(const core::StepResult& result);
@@ -56,11 +63,11 @@ private:
     void draw_toolbar(Canvas& canvas);
     void draw_source(Canvas& canvas, Rect rect);
     void draw_disassembly(Canvas& canvas, Rect rect);
-    void draw_registers(Canvas& canvas, Rect rect);
+    void draw_cores(Canvas& canvas, Rect rect);
+    int draw_core_state(Canvas& canvas, Rect rect, std::size_t core_index);
     void draw_variables(Canvas& canvas, Rect rect);
-    void draw_bottom(Canvas& canvas, Rect rect);
+    void draw_call_stack(Canvas& canvas, Rect rect);
     void draw_memory(Canvas& canvas, Rect rect);
-    void draw_machine(Canvas& canvas, Rect rect);
     void draw_console(Canvas& canvas, Rect rect);
     void draw_asm_tooltip(Canvas& canvas);
     void draw_error(Canvas& canvas);
@@ -73,11 +80,13 @@ private:
     debug::Session session_;
     bool loaded_ = false;
     bool quit_ = false;
-    Tab tab_ = Tab::Memory;
     std::string path_;
     std::string status_ = "load a .k32 image";
     std::string error_;
     std::vector<std::string> source_lines_;
+    std::vector<CoreRow> core_rows_;
+    std::size_t expanded_core_ = 0;
+    std::size_t selected_core_ = 0;
     int source_scroll_ = 0;
 
     struct ContextMenu {
