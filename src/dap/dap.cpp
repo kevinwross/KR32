@@ -756,9 +756,6 @@ private:
                    command == "stepOut") {
             core::StepResult result;
             if (command == "continue") {
-                if (session_.at_breakpoint()) {
-                    (void)session_.step();
-                }
                 result = session_.run(200000);
             } else if (command == "next") {
                 result = session_.step_over();

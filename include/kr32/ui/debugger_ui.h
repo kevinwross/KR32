@@ -17,6 +17,9 @@ public:
     void step();
     void step_over();
     void step_out();
+    void step_line_in();
+    void step_line_over();
+    void step_line_out();
     void toggle_breakpoint_at_current_line();
 
     void render(Canvas& canvas);

@@ -129,6 +129,66 @@ TEST_CASE("DebugSession stops at breakpoints and inspects frames") {
     CHECK(current->name == "main");
 }
 
+TEST_CASE("DebugSession steps by source line") {
+    const container::Image image = compile_debug_image(
+        "int add(int a, int b) { return a + b; }\n"
+        "int main(void) {\n"
+        "    int x = 1;\n"
+        "    int y = add(2, 3);\n"
+        "    return y + x;\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Line* first = find_line(info, 3);
+    REQUIRE(first != nullptr);
+    session.set_breakpoint(first->address);
+    (void)session.run();
+    REQUIRE(session.at_breakpoint());
+
+    const core::StepResult line = session.step_line_in();
+    CHECK(line.kind == core::StepResult::Kind::Retired);
+    const debug::Line* next = session.line_at(session.machine().pc());
+    REQUIRE(next != nullptr);
+    CHECK(next->line != first->line);
+}
+
+TEST_CASE("DebugSession steps over and out by source line") {
+    const container::Image image = compile_debug_image(
+        "int add(int a, int b) { return a + b; }\n"
+        "int main(void) {\n"
+        "    int x = 1;\n"
+        "    int y = add(2, 3);\n"
+        "    return y + x;\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Line* call_line = find_line(info, 4);
+    REQUIRE(call_line != nullptr);
+    session.set_breakpoint(call_line->address);
+    (void)session.run();
+    REQUIRE(session.at_breakpoint());
+
+    const core::StepResult over = session.step_line_over();
+    CHECK(over.kind == core::StepResult::Kind::Retired);
+    const debug::Function* function = session.function_at(session.machine().pc());
+    REQUIRE(function != nullptr);
+    CHECK(function->name == "main");
+    const debug::Line* after = session.line_at(session.machine().pc());
+    REQUIRE(after != nullptr);
+    CHECK(after->line != call_line->line);
+
+    const core::StepResult out = session.step_line_out();
+    CHECK(out.kind == core::StepResult::Kind::Retired);
+}
+
 TEST_CASE("DebugSession captures console output") {
     const container::Image image = compile_debug_image(
         "int putchar(int c);\n"

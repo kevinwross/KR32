@@ -180,10 +180,85 @@ core::StepResult Session::step() {
     return machine_.step();
 }
 
+core::StepResult Session::step_line_in() {
+    const Line* start = line_at(machine_.pc());
+    if (start == nullptr) {
+        return machine_.step();
+    }
+    core::StepResult result;
+    for (int guard = 0; guard < 1'000'000; ++guard) {
+        result = machine_.step();
+        if (result.kind != core::StepResult::Kind::Retired) {
+            return result;
+        }
+        const Line* current = line_at(machine_.pc());
+        if (current != nullptr &&
+            (current->line != start->line || current->source != start->source)) {
+            return result;
+        }
+    }
+    return result;
+}
+
+core::StepResult Session::step_line_over() {
+    const Line* start = line_at(machine_.pc());
+    if (start == nullptr) {
+        return machine_.step();
+    }
+    std::uint32_t target = 0;
+    bool found = false;
+    const Function* function = function_at(machine_.pc());
+    for (const Line& line : info_.lines) {
+        if (line.address <= machine_.pc()) continue;
+        if (function != nullptr && function_at(line.address) != function) continue;
+        if (line.line == start->line && line.source == start->source) continue;
+        target = line.address;
+        found = true;
+        break;
+    }
+    if (!found) {
+        return machine_.step();
+    }
+    const bool existing = breakpoints_.find(target) != breakpoints_.end();
+    if (!existing) {
+        set_breakpoint(target);
+    }
+    core::StepResult result = run(200000);
+    if (!existing) {
+        clear_breakpoint(target);
+    }
+    return result;
+}
+
+core::StepResult Session::step_line_out() {
+    if (function_at(machine_.pc()) == nullptr) {
+        return machine_.step();
+    }
+    const core::StepResult result = step_out();
+    if (result.kind != core::StepResult::Kind::Retired) {
+        return result;
+    }
+    if (function_at(machine_.pc()) == nullptr) {
+        return result;
+    }
+    return step_line_in();
+}
+
 core::StepResult Session::run(std::uint64_t max_steps) {
     core::StepResult result;
+    const std::uint32_t initial_pc = machine_.pc();
+    bool skipped_initial = breakpoints_.find(initial_pc) == breakpoints_.end();
     for (std::uint64_t step_index = 0; step_index < max_steps; ++step_index) {
         if (at_breakpoint()) {
+            if (!skipped_initial) {
+                skipped_initial = true;
+                result = machine_.step();
+                if (result.kind == core::StepResult::Kind::Halted ||
+                    result.kind == core::StepResult::Kind::Raised) {
+                    return result;
+                }
+                continue;
+            }
             return result;
         }
         result = machine_.step();

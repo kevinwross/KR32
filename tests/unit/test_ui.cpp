@@ -23,7 +23,8 @@ TEST_CASE("the portable canvas renders deterministic frames") {
     CHECK(first.hash() != 0);
     CHECK(first.width() == 320);
     CHECK(first.height() == 200);
-    CHECK(ui::Canvas::text_width("KR32") == 24);
+    CHECK(ui::Canvas::text_width("KR32") > 0);
+    CHECK(ui::Canvas::text_height(ui::FontRole::Mono) > 0);
 }
 
 TEST_CASE("the portable canvas clips drawing to its bounds") {

@@ -235,6 +235,27 @@ void DebuggerUI::step_out() {
     set_status_from_result(session_.step_out());
 }
 
+void DebuggerUI::step_line_in() {
+    if (!loaded_) {
+        return;
+    }
+    set_status_from_result(session_.step_line_in());
+}
+
+void DebuggerUI::step_line_over() {
+    if (!loaded_) {
+        return;
+    }
+    set_status_from_result(session_.step_line_over());
+}
+
+void DebuggerUI::step_line_out() {
+    if (!loaded_) {
+        return;
+    }
+    set_status_from_result(session_.step_line_out());
+}
+
 void DebuggerUI::set_status_from_result(const core::StepResult& result) {
     if (session_.at_breakpoint()) {
         status_ = "breakpoint at " + hex(session_.machine().pc(), 8);
@@ -301,15 +322,16 @@ std::string DebuggerUI::format_hex(std::uint32_t value, int digits) const {
 void DebuggerUI::draw_panel(Canvas& canvas, Rect rect, const std::string& title) {
     canvas.fill(rect, kPanel);
     canvas.frame(rect, kBorder);
-    canvas.fill(Rect{rect.x + 1, rect.y + 1, rect.width - 2, 16}, kPanelAlt);
-    canvas.text(rect.x + 6, rect.y + 4, trim_to(title, static_cast<std::size_t>((rect.width - 12) / 6)),
-                kAccent);
+    canvas.fill(Rect{rect.x + 1, rect.y + 1, rect.width - 2, 20}, kPanelAlt);
+    canvas.text(rect.x + 6, rect.y + 3,
+                trim_to(title, static_cast<std::size_t>((rect.width - 12) / 7)), kAccent,
+                FontRole::UiBold);
 }
 
 void DebuggerUI::draw_toolbar(Canvas& canvas) {
     canvas.fill(Rect{0, 0, canvas.width(), kToolbarHeight}, kPanelAlt);
     canvas.fill(Rect{0, kToolbarHeight - 1, canvas.width(), 1}, kBorder);
-    canvas.text(8, 11, "KR32", kAccent, 2);
+    canvas.text(8, 7, "KR32", kAccent, FontRole::UiBold);
     const Color button{42, 54, 66, 255};
     const struct {
         const char* label;
@@ -321,12 +343,12 @@ void DebuggerUI::draw_toolbar(Canvas& canvas) {
         {"BUILD", 396, 48},
     };
     for (const auto& button_entry : buttons) {
-        canvas.fill(Rect{button_entry.x, 5, button_entry.width, 20}, button);
-        canvas.frame(Rect{button_entry.x, 5, button_entry.width, 20}, kBorder);
-        canvas.text(button_entry.x + 6, 11, button_entry.label, kText);
+        canvas.fill(Rect{button_entry.x, 4, button_entry.width, 22}, button);
+        canvas.frame(Rect{button_entry.x, 4, button_entry.width, 22}, kBorder);
+        canvas.text(button_entry.x + 6, 7, button_entry.label, kText, FontRole::Ui);
     }
-    canvas.text(452, 11, trim_to(status_, static_cast<std::size_t>((canvas.width() - 460) / 6)),
-                kDim);
+    canvas.text(452, 7, trim_to(status_, static_cast<std::size_t>((canvas.width() - 460) / 7)),
+                kDim, FontRole::MonoSmall);
 }
 
 void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
@@ -335,15 +357,26 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
         title += "  " + session_.info().sources.front().path;
     }
     draw_panel(canvas, rect, title);
-    const int line_height = 9;
-    const int top = rect.y + 20;
-    const int visible = std::max(1, (rect.height - 24) / line_height);
+    const int button_width = 40;
+    const int button_start = rect.x + rect.width - 3 * (button_width + 2) - 4;
+    canvas.fill(Rect{button_start - 1, rect.y + 1, rect.width - (button_start - rect.x) + 1, 20},
+                kPanelAlt);
+    const char* labels[] = {"OVER", "IN", "OUT"};
+    for (int index = 0; index < 3; ++index) {
+        const int x = button_start + index * (button_width + 2);
+        canvas.fill(Rect{x, rect.y + 2, button_width, 18}, Color{42, 54, 66, 255});
+        canvas.frame(Rect{x, rect.y + 2, button_width, 18}, kBorder);
+        canvas.text(x + 5, rect.y + 3, labels[index], kText, FontRole::MonoSmall);
+    }
+    const int line_height = 18;
+    const int top = rect.y + 24;
+    const int visible = std::max(1, (rect.height - 28) / line_height);
     const int current = current_source_line();
     if (current > 0 && (current - 1 < source_scroll_ || current - 1 >= source_scroll_ + visible)) {
         source_scroll_ = std::max(0, current - visible / 2);
     }
     if (source_lines_.empty()) {
-        canvas.text(rect.x + 8, top, "source unavailable", kDim);
+        canvas.text(rect.x + 8, top, "source unavailable", kDim, FontRole::MonoSmall);
         return;
     }
     for (int row = 0; row < visible; ++row) {
@@ -354,34 +387,52 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
         const int line_number = index + 1;
         const int y = top + row * line_height;
         if (line_number == current) {
-            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height}, Color{38, 66, 92, 255});
+            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height},
+                        Color{38, 66, 92, 255});
         }
         std::uint32_t address = 0;
         const bool has_breakpoint =
             source_line_to_address(line_number, address) &&
             session_.breakpoints().find(address) != session_.breakpoints().end();
-        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim);
+        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim,
+                    FontRole::Mono);
         const std::string number = std::to_string(line_number);
-        canvas.text(rect.x + 16, y, number, line_number == current ? kText : kDim);
-        canvas.text(rect.x + 16 + static_cast<int>(number.size()) * 6 + 6, y,
+        canvas.text(rect.x + 16, y, number, line_number == current ? kText : kDim, FontRole::Mono);
+        canvas.text(rect.x + 52, y,
                     trim_to(source_lines_[static_cast<std::size_t>(index)],
-                            static_cast<std::size_t>((rect.width - 60) / 6)),
-                    line_number == current ? kText : Color{180, 194, 206, 255});
+                            static_cast<std::size_t>((rect.width - 58) / 8)),
+                    line_number == current ? kText : Color{180, 194, 206, 255},
+                    FontRole::Mono);
     }
 }
 
 void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "DISASSEMBLY");
+    const int button_width = 38;
+    const int button_start = rect.x + rect.width - 3 * (button_width + 2) - 4;
+    canvas.fill(Rect{button_start - 1, rect.y + 1, rect.width - (button_start - rect.x) + 1, 20},
+                kPanelAlt);
+    const char* labels[] = {"OVER", "IN", "OUT"};
+    for (int index = 0; index < 3; ++index) {
+        const int x = button_start + index * (button_width + 2);
+        canvas.fill(Rect{x, rect.y + 2, button_width, 18}, Color{42, 54, 66, 255});
+        canvas.frame(Rect{x, rect.y + 2, button_width, 18}, kBorder);
+        canvas.text(x + 4, rect.y + 3, labels[index], kText, FontRole::MonoSmall);
+    }
     const std::uint32_t pc = session_.machine().pc();
-    const int rows = std::max(1, (rect.height - 24) / 9);
+    const int line_height = 20;
+    const int rows = std::max(1, (rect.height - 28) / line_height);
     const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
     std::uint32_t start = pc >= before ? pc - before : 0;
     start = std::max(start, session_.machine().ram_base());
+    const int address_width = Canvas::text_width("00000000", FontRole::Mono);
+    const int instruction_x = rect.x + 12 + address_width + 10;
     for (int row = 0; row < rows; ++row) {
         const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
-        const int y = rect.y + 20 + row * 9;
+        const int y = rect.y + 24 + row * line_height;
         if (address == pc) {
-            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, 9}, Color{38, 66, 92, 255});
+            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height},
+                        Color{38, 66, 92, 255});
         }
         std::uint8_t bytes[8] = {};
         bool read_ok = true;
@@ -408,9 +459,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
                     }
                 };
                 skip_space();
-                for (int digit = 0; digit < 8 && position < text.size(); ++digit) {
-                    ++position;
-                }
+                position = std::min(text.size(), position + 8);
                 skip_space();
                 if (position + 8 <= text.size() &&
                     std::all_of(text.begin() + static_cast<std::ptrdiff_t>(position),
@@ -428,10 +477,13 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         }
         const bool has_breakpoint =
             session_.breakpoints().find(address) != session_.breakpoints().end();
-        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim);
-        canvas.text(rect.x + 12, y, hex(address, 8), address == pc ? kAccent : kDim);
-        canvas.text(rect.x + 64, y, trim_to(text, static_cast<std::size_t>((rect.width - 70) / 6)),
-                    address == pc ? kText : Color{180, 194, 206, 255});
+        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim,
+                    FontRole::Mono);
+        canvas.text(rect.x + 12, y, hex(address, 8), address == pc ? kAccent : kDim,
+                    FontRole::Mono);
+        canvas.text(instruction_x, y,
+                    trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
+                    address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);
     }
 }
 
@@ -442,26 +494,30 @@ void DebuggerUI::draw_registers(Canvas& canvas, Rect rect) {
         const int column = index / 8;
         const int row = index % 8;
         const int x = rect.x + 8 + column * 145;
-        const int y = rect.y + 22 + row * 10;
-        canvas.text(x, y, "R" + std::to_string(index), kDim);
-        canvas.text(x + 22, y, hex(machine.reg(static_cast<std::size_t>(index)), 8), kText);
+        const int y = rect.y + 24 + row * 14;
+        canvas.text(x, y, "R" + std::to_string(index), kDim, FontRole::MonoSmall);
+        canvas.text(x + 26, y, hex(machine.reg(static_cast<std::size_t>(index)), 8), kText,
+                    FontRole::MonoSmall);
     }
-    const int y = rect.y + 22 + 8 * 10 + 4;
-    canvas.text(rect.x + 8, y, "PC " + hex(machine.pc(), 8), kAccent);
-    canvas.text(rect.x + 8, y + 10, "SP " + hex(machine.sp(), 8) + "  FLAGS " + hex(machine.flags(), 8),
-                kText);
-    canvas.text(rect.x + 8, y + 20, "TICKS " + decimal(machine.ticks()) + "  CORE " +
-                std::to_string(machine.core_id()) + (machine.kernel_mode() ? " KERNEL" : " USER"),
-                kDim);
+    const int y = rect.y + 24 + 8 * 14 + 6;
+    canvas.text(rect.x + 8, y, "PC " + hex(machine.pc(), 8), kAccent, FontRole::MonoSmall);
+    canvas.text(rect.x + 8, y + 14,
+                "SP " + hex(machine.sp(), 8) + "  FLAGS " + hex(machine.flags(), 8), kText,
+                FontRole::MonoSmall);
+    canvas.text(rect.x + 8, y + 28,
+                "TICKS " + decimal(machine.ticks()) + "  CORE " +
+                    std::to_string(machine.core_id()) +
+                    (machine.kernel_mode() ? " KERNEL" : " USER"),
+                kDim, FontRole::MonoSmall);
 }
 
 void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "VARIABLES / CALL STACK");
-    int y = rect.y + 22;
+    int y = rect.y + 24;
     const debug::Function* function = session_.function_at(session_.machine().pc());
     if (function != nullptr) {
         canvas.text(rect.x + 6, y, "in " + function->name, kAccent);
-        y += 10;
+        y += 16;
         for (const debug::Variable& variable : session_.info().variables) {
             if (variable.function != function->name || y > rect.y + rect.height - 30) {
                 continue;
@@ -470,13 +526,13 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             std::string error;
             const bool ok = session_.read_variable(variable.name, value, error);
             canvas.text(rect.x + 10, y, variable.name + " = " + (ok ? "0x" + hex(value, 8) : "?"),
-                        ok ? kText : kBad);
-            y += 9;
+                        ok ? kText : kBad, FontRole::MonoSmall);
+            y += 14;
         }
     }
     if (!session_.info().globals.empty() && y < rect.y + rect.height - 30) {
         canvas.text(rect.x + 6, y, "WATCH", kDim);
-        y += 9;
+        y += 14;
         for (const debug::Global& global : session_.info().globals) {
             if (y > rect.y + rect.height - 20) {
                 break;
@@ -485,65 +541,61 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             std::string error;
             const bool ok = session_.read_global(global.name, value, error);
             canvas.text(rect.x + 10, y, global.name + " = " + (ok ? "0x" + hex(value, 8) : "?"),
-                        ok ? kText : kBad);
-            y += 9;
+                        ok ? kText : kBad, FontRole::MonoSmall);
+            y += 14;
         }
     }
     std::vector<debug::Frame> frames = session_.call_stack();
     if (!frames.empty() && y < rect.y + rect.height - 12) {
         canvas.text(rect.x + 6, y, "STACK", kDim);
-        y += 9;
+        y += 14;
         for (const debug::Frame& frame : frames) {
             if (y > rect.y + rect.height - 10) {
                 break;
             }
             canvas.text(rect.x + 10, y, trim_to(frame.function + " " + hex(frame.pc, 8), 46),
-                        kText);
-            y += 9;
+                        kText, FontRole::MonoSmall);
+            y += 14;
         }
     }
 }
 
 void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
-    constexpr std::uint32_t kRows = 14;
+    constexpr std::uint32_t kRows = 9;
     const std::uint32_t sp = session_.machine().sp();
     std::uint32_t base = sp > kRows * 16U + 16U ? sp - kRows * 16U - 16U : session_.machine().ram_base();
     base &= 0xFFFF'FFF0U;
     if (base < session_.machine().ram_base()) {
         base = session_.machine().ram_base();
     }
-    for (int row = 0; row < 14; ++row) {
-        const std::uint32_t address = base + static_cast<std::uint32_t>(row * 16);
-        const int y = rect.y + 6 + row * 10;
+    for (std::uint32_t row = 0; row < kRows; ++row) {
+        const std::uint32_t address = base + row * 16U;
+        const int y = rect.y + 4 + static_cast<int>(row) * 18;
         std::string line = hex(address, 8) + "  ";
         for (int column = 0; column < 16; ++column) {
             std::uint8_t value = 0;
             const std::uint32_t byte_address = address + static_cast<std::uint32_t>(column);
             const bool ok = session_.machine().read8(byte_address, value) ||
                             session_.machine().read_physical8(byte_address, value);
-            if (!ok) {
-                line += "?? ";
-            } else {
-                line += hex(value, 2) + " ";
-            }
+            line += ok ? hex(value, 2) + " " : "?? ";
         }
-        canvas.text(rect.x + 6, y, line, kText);
+        canvas.text(rect.x + 6, y, line, kText, FontRole::MonoSmall);
     }
 }
 
 void DebuggerUI::draw_machine(Canvas& canvas, Rect rect) {
     const core::Machine& machine = session_.machine();
-    int y = rect.y + 6;
+    int y = rect.y + 4;
     for (int index = 0; index < 8; ++index) {
         std::string line = "F" + std::to_string(index) + " " + hex(static_cast<std::uint32_t>(machine.fpr(index) & 0xFFFFFFFFU), 8);
         line += "  F" + std::to_string(index + 8) + " " +
                 hex(static_cast<std::uint32_t>(machine.fpr(index + 8) & 0xFFFFFFFFU), 8);
-        canvas.text(rect.x + 6, y, line, kText);
-        y += 9;
+        canvas.text(rect.x + 6, y, line, kText, FontRole::MonoSmall);
+        y += 12;
     }
     y += 2;
-    canvas.text(rect.x + 6, y, "TSP " + hex(machine.tsp(), 8), kAccent);
-    y += 10;
+    canvas.text(rect.x + 6, y, "TSP " + hex(machine.tsp(), 8), kAccent, FontRole::MonoSmall);
+    y += 12;
     for (int row = 0; row < 4; ++row) {
         std::string line;
         for (int column = 0; column < 4; ++column) {
@@ -552,23 +604,23 @@ void DebuggerUI::draw_machine(Canvas& canvas, Rect rect) {
             line += buffer;
             line += " ";
         }
-        canvas.text(rect.x + 6, y, line, kText);
-        y += 9;
+        canvas.text(rect.x + 6, y, line, kText, FontRole::MonoSmall);
+        y += 11;
     }
     y += 2;
     canvas.text(rect.x + 6, y, "CORE " + std::to_string(machine.core_id()) + "  MODE " +
-                (machine.kernel_mode() ? "KERNEL" : "USER"), kAccent);
-    y += 9;
+                (machine.kernel_mode() ? "KERNEL" : "USER"), kAccent, FontRole::MonoSmall);
+    y += 12;
     std::uint32_t ptbr = 0;
     if (machine.read_control_register(8, ptbr)) {
-        canvas.text(rect.x + 6, y, "PTBR " + hex(ptbr, 8), kDim);
-        y += 9;
+        canvas.text(rect.x + 6, y, "PTBR " + hex(ptbr, 8), kDim, FontRole::MonoSmall);
+        y += 12;
         for (int index = 0; index < 4; ++index) {
             std::uint32_t entry = 0;
             if (machine.read_physical32(ptbr + static_cast<std::uint32_t>(index * 4), entry)) {
                 canvas.text(rect.x + 6, y, "PTE" + std::to_string(index) + " " + hex(entry, 8),
-                            kDim);
-                y += 9;
+                            kDim, FontRole::MonoSmall);
+                y += 12;
             }
         }
     }
@@ -580,8 +632,9 @@ void DebuggerUI::draw_machine(Canvas& canvas, Rect rect) {
         if (!machine.read_control_register(number, value)) {
             continue;
         }
-        canvas.text(rect.x + 6, y, "CR" + std::to_string(number) + " " + hex(value, 8), kDim);
-        y += 9;
+        canvas.text(rect.x + 6, y, "CR" + std::to_string(number) + " " + hex(value, 8), kDim,
+                    FontRole::MonoSmall);
+        y += 12;
         if (y > rect.y + rect.height - 10) {
             break;
         }
@@ -589,16 +642,16 @@ void DebuggerUI::draw_machine(Canvas& canvas, Rect rect) {
 }
 
 void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
-    int y = rect.y + 6;
+    int y = rect.y + 4;
     std::istringstream stream(session_.console());
     std::string line;
     while (std::getline(stream, line) && y < rect.y + rect.height - 10) {
-        canvas.text(rect.x + 6, y, trim_to(line, static_cast<std::size_t>((rect.width - 12) / 6)),
-                    kText);
-        y += 9;
+        canvas.text(rect.x + 6, y, trim_to(line, static_cast<std::size_t>((rect.width - 12) / 8)),
+                    kText, FontRole::Mono);
+        y += 16;
     }
     if (session_.console().empty()) {
-        canvas.text(rect.x + 6, y, "(no console output)", kDim);
+        canvas.text(rect.x + 6, y, "(no console output)", kDim, FontRole::MonoSmall);
     }
 }
 
@@ -609,12 +662,12 @@ void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
     for (int index = 0; index < 3; ++index) {
         const int x = rect.x + 6 + index * 100;
         if (static_cast<int>(tab_) == index) {
-            canvas.fill(Rect{x, rect.y + 2, 92, 18}, Color{38, 66, 92, 255});
+            canvas.fill(Rect{x, rect.y + 2, 92, 20}, Color{38, 66, 92, 255});
         }
-        canvas.text(x + 7, rect.y + 7, labels[index],
-                    static_cast<int>(tab_) == index ? kAccent : kDim);
+        canvas.text(x + 7, rect.y + 5, labels[index],
+                    static_cast<int>(tab_) == index ? kAccent : kDim, FontRole::Ui);
     }
-    const Rect content{rect.x + 1, rect.y + 22, rect.width - 2, rect.height - 23};
+    const Rect content{rect.x + 1, rect.y + 24, rect.width - 2, rect.height - 25};
     if (tab_ == Tab::Memory) {
         draw_memory(canvas, content);
     } else if (tab_ == Tab::Machine) {
@@ -640,7 +693,7 @@ void DebuggerUI::render(Canvas& canvas) {
     canvas.clear(kBackground);
     draw_toolbar(canvas);
     if (!loaded_) {
-        canvas.text(40, 100, "KR32 WINDOWED DEBUGGER", kAccent, 2);
+        canvas.text(40, 100, "KR32 WINDOWED DEBUGGER", kAccent, FontRole::UiBold);
         canvas.text(40, 140, "usage: kr32 gui <image.k32>", kText);
         canvas.text(40, 160, "F5 run  F10 over  F11 step  shift+F11 out  F9 breakpoint", kDim);
         draw_error(canvas);
@@ -688,6 +741,24 @@ bool DebuggerUI::click(int x, int y) {
             tab_ = Tab::Console;
         }
         return true;
+    }
+    if (y >= kToolbarHeight + 2 && y < kToolbarHeight + 20) {
+        const int source_start = 420 - 3 * 42 - 4;
+        const int disassembly_start = 420 + 300 - 3 * 40 - 4;
+        if (x >= source_start && x < source_start + 3 * 42) {
+            const int index = (x - source_start) / 42;
+            if (index == 0) step_line_over();
+            if (index == 1) step_line_in();
+            if (index == 2) step_line_out();
+            return true;
+        }
+        if (x >= disassembly_start && x < disassembly_start + 3 * 40) {
+            const int index = (x - disassembly_start) / 40;
+            if (index == 0) step_over();
+            if (index == 1) step();
+            if (index == 2) step_out();
+            return true;
+        }
     }
     if (x < 420 && y >= kToolbarHeight && y < kToolbarHeight + 330) {
         const int row = (y - (kToolbarHeight + 20)) / 9;

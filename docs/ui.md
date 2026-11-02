@@ -11,8 +11,11 @@ directly.
 ## Architecture
 
 - `ui::Canvas` is a 32-bit RGBA software canvas (`0xAARRGGBB`) with rectangles,
-  frames, lines, a built-in 5x7 bitmap font, PPM output, and a deterministic
-  frame hash. It has no OS or SDL dependency.
+  frames, lines, PPM output, a deterministic frame hash, and TTF glyph
+  rasterization. It has no OS or SDL dependency. Fonts are embedded with
+  `stb_truetype`: Inter Regular/Bold 14 px for UI text and JetBrains Mono
+  Regular 15/13 px for source, disassembly, registers, and small labels.
+  Both font families are SIL OFL 1.1; see `third_party/fonts/`.
 - `ui::DebuggerUI` owns a `debug::Session`, source text, breakpoints, tab state,
   and all painting/hit-testing. It is usable headlessly.
 - `platform::Window` is the SDL2 boundary: one window, one streaming ARGB8888
@@ -24,8 +27,8 @@ directly.
 | Area | Contents |
 | --- | --- |
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
-| Source | Source lines, current-line highlight, breakpoint markers |
-| Disassembly | Current PC and surrounding instructions |
+| Source | Source lines, current-line highlight, breakpoint markers, line-step Over/In/Out |
+| Disassembly | Current PC and surrounding instructions, instruction-step Over/In/Out |
 | Registers | R0-R15, PC, SP, FLAGS, mode, ticks, core |
 | Variables | Locals, globals/watch values, call stack |
 | Bottom tabs | Memory hex dump, machine state, console |
@@ -34,7 +37,10 @@ directly.
 ## Controls
 
 - `F5` run to a breakpoint or halt.
-- `F10` step over, `F11` step in, `Shift+F11` step out.
+- `F10` instruction step over, `F11` instruction step in, `Shift+F11`
+  instruction step out.
+- The source-pane **OVER / IN / OUT** buttons step by C source line.
+- The disassembly-pane **OVER / IN / OUT** buttons step by instruction.
 - `F9` toggle a breakpoint at the current source line.
 - `R` restart/reload; `Tab` cycles the bottom tabs; `Esc` quits.
 - Click a source line or disassembly row to toggle a breakpoint.
@@ -52,8 +58,6 @@ canvas, and GUI targets and keeps the headless test suite green.
 
 ## Current limits
 
-- The font is a built-in uppercase 5x7 atlas; lowercase source is displayed in
-  uppercase.
 - There is no native file dialog, settings panel, or guest-argument editor yet;
   those are reserved for the M7 host services.
 - "Break" is expressed through breakpoints; a cooperative pause of a running

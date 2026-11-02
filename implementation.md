@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 02:35 -08:00
+> **Last updated:** 2026-11-02 07:03 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -86,6 +86,8 @@ Notes:
 | --- | --- | --- |
 | JSON library | DAP work | Prefer a vendored MIT single-header; record the exact version and license here before adding it |
 | KR16 font atlas | GUI work | Reuse the subsetted fonts and license notices from KR16 |
+| stb_truetype | GUI work | Public domain/MIT single-header TTF rasterizer |
+| Inter / JetBrains Mono | GUI work | SIL OFL 1.1; embedded TTF glyph sources |
 | VS Code + DAP extension | M7 | Debugging convenience, not a build dependency |
 | EDG or another C++ front end | M9 | Apache-2.0 with LLVM exceptions if EDG; not installed yet |
 
@@ -467,8 +469,8 @@ control is expressed through breakpoints.
 
 **Tasks**
 
-- [x] Portable UI layout, painting, widgets, hit testing, and a built-in 5x7
-      font atlas.
+- [x] Portable UI layout, painting, widgets, hit testing, and an embedded
+      Inter/JetBrains Mono TTF font atlas.
 - [x] SDL2 backend; software RGBA canvas presented as an SDL texture.
 - [x] Panels: source, disassembly, registers, variables, watches, memory,
       call stack, console.
@@ -795,6 +797,13 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 02:35 -08:00** — M8 gate passed: 102 unit cases / 4320 assertions,
       19 CTest cases; Windows MSVC Debug/Release/Ninja; WSL GCC/Clang/ASan.
 - **2026-11-02 02:35 -08:00** — Tagged `m8`.
+- **2026-11-02 07:03 -08:00** — Post-M8 UI polish: replaced the built-in 5x7
+      bitmap font with embedded Inter and JetBrains Mono TTF rendering via
+      stb_truetype; restored lowercase C source and mono line spacing; added
+      separate source-line Over/In/Out and disassembly instruction-step
+      Over/In/Out controls. Added `DebugSession` line stepping and tests.
+      Verification: 104 unit cases / 4346 assertions, 19 CTest on Windows and
+      WSL UI builds, 17 CTest headless UI-off/ASan.
 
 ## 10. Updating this file
 

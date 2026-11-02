@@ -2,121 +2,93 @@
 
 #include <algorithm>
 #include <array>
-#include <cctype>
-#include <cstdio>
 #include <cstdlib>
 #include <fstream>
 #include <string>
+#include <vector>
+
+#define STB_TRUETYPE_IMPLEMENTATION
+#include "stb/stb_truetype.h"
+
+#include "kr32/resources/embedded_fonts.h"
 
 namespace kr32::ui {
 namespace {
 
-using Glyph = std::array<std::uint8_t, 7>;
+struct Glyph {
+    int advance = 0;
+    int x0 = 0;
+    int y0 = 0;
+    int x1 = 0;
+    int y1 = 0;
+};
 
-Glyph make_glyph(std::string_view spec) {
-    Glyph glyph{};
-    std::size_t row = 0;
-    std::size_t column = 0;
-    for (char c : spec) {
-        if (c == '/') {
-            ++row;
-            column = 0;
-            continue;
-        }
-        if (row >= glyph.size() || column >= 5) {
-            continue;
-        }
-        if (c == '1') {
-            glyph[row] = static_cast<std::uint8_t>(glyph[row] | (1U << (4 - column)));
-        }
-        ++column;
+} // namespace
+
+struct Canvas::FontFace {
+    std::vector<std::uint8_t> data;
+    stbtt_fontinfo info{};
+    float scale = 0.0F;
+    int ascent = 0;
+    int line_height = 0;
+    std::array<Glyph, 95> glyphs{};
+};
+
+namespace {
+
+std::unique_ptr<Canvas::FontFace> load_face(std::span<const std::uint8_t> source,
+                                            int pixel_height) {
+    auto face = std::make_unique<Canvas::FontFace>();
+    face->data.assign(source.begin(), source.end());
+    if (face->data.empty()) {
+        return nullptr;
     }
-    return glyph;
+    const int offset = stbtt_GetFontOffsetForIndex(face->data.data(), 0);
+    if (offset < 0 || stbtt_InitFont(&face->info, face->data.data(), offset) == 0) {
+        return nullptr;
+    }
+    face->scale = stbtt_ScaleForMappingEmToPixels(
+        &face->info, static_cast<float>(pixel_height));
+    int ascent = 0;
+    int descent = 0;
+    int line_gap = 0;
+    stbtt_GetFontVMetrics(&face->info, &ascent, &descent, &line_gap);
+    face->ascent = static_cast<int>(ascent * face->scale);
+    face->line_height = static_cast<int>((ascent - descent + line_gap) * face->scale);
+    for (int codepoint = 32; codepoint < 127; ++codepoint) {
+        Glyph& glyph = face->glyphs[static_cast<std::size_t>(codepoint - 32)];
+        int advance = 0;
+        int left_bearing = 0;
+        stbtt_GetCodepointHMetrics(&face->info, codepoint, &advance, &left_bearing);
+        glyph.advance = static_cast<int>(advance * face->scale);
+        stbtt_GetCodepointBitmapBox(&face->info, codepoint, face->scale, face->scale,
+                                    &glyph.x0, &glyph.y0, &glyph.x1, &glyph.y1);
+    }
+    return face;
 }
 
-Glyph glyph_for(char input) {
-    char c = input;
-    if (c >= 'a' && c <= 'z') {
-        c = static_cast<char>(c - 'a' + 'A');
-    }
-    switch (c) {
-    case ' ': return make_glyph("00000/00000/00000/00000/00000/00000/00000");
-    case 'A': return make_glyph("01110/10001/10001/11111/10001/10001/10001");
-    case 'B': return make_glyph("11110/10001/10001/11110/10001/10001/11110");
-    case 'C': return make_glyph("01111/10000/10000/10000/10000/10000/01111");
-    case 'D': return make_glyph("11110/10001/10001/10001/10001/10001/11110");
-    case 'E': return make_glyph("11111/10000/10000/11110/10000/10000/11111");
-    case 'F': return make_glyph("11111/10000/10000/11110/10000/10000/10000");
-    case 'G': return make_glyph("01111/10000/10000/10111/10001/10001/01111");
-    case 'H': return make_glyph("10001/10001/10001/11111/10001/10001/10001");
-    case 'I': return make_glyph("11111/00100/00100/00100/00100/00100/11111");
-    case 'J': return make_glyph("00111/00010/00010/00010/00010/10010/01100");
-    case 'K': return make_glyph("10001/10010/10100/11000/10100/10010/10001");
-    case 'L': return make_glyph("10000/10000/10000/10000/10000/10000/11111");
-    case 'M': return make_glyph("10001/11011/10101/10101/10001/10001/10001");
-    case 'N': return make_glyph("10001/11001/10101/10011/10001/10001/10001");
-    case 'O': return make_glyph("01110/10001/10001/10001/10001/10001/01110");
-    case 'P': return make_glyph("11110/10001/10001/11110/10000/10000/10000");
-    case 'Q': return make_glyph("01110/10001/10001/10001/10101/10010/01101");
-    case 'R': return make_glyph("11110/10001/10001/11110/10100/10010/10001");
-    case 'S': return make_glyph("01111/10000/10000/01110/00001/00001/11110");
-    case 'T': return make_glyph("11111/00100/00100/00100/00100/00100/00100");
-    case 'U': return make_glyph("10001/10001/10001/10001/10001/10001/01110");
-    case 'V': return make_glyph("10001/10001/10001/10001/10001/01010/00100");
-    case 'W': return make_glyph("10001/10001/10001/10101/10101/11011/10001");
-    case 'X': return make_glyph("10001/10001/01010/00100/01010/10001/10001");
-    case 'Y': return make_glyph("10001/10001/01010/00100/00100/00100/00100");
-    case 'Z': return make_glyph("11111/00001/00010/00100/01000/10000/11111");
-    case '0': return make_glyph("01110/10011/10101/10101/11001/10001/01110");
-    case '1': return make_glyph("00100/01100/00100/00100/00100/00100/01110");
-    case '2': return make_glyph("01110/10001/00001/00010/00100/01000/11111");
-    case '3': return make_glyph("11110/00001/00001/01110/00001/00001/11110");
-    case '4': return make_glyph("00010/00110/01010/10010/11111/00010/00010");
-    case '5': return make_glyph("11111/10000/11110/00001/00001/10001/01110");
-    case '6': return make_glyph("00110/01000/10000/11110/10001/10001/01110");
-    case '7': return make_glyph("11111/00001/00010/00100/01000/01000/01000");
-    case '8': return make_glyph("01110/10001/10001/01110/10001/10001/01110");
-    case '9': return make_glyph("01110/10001/10001/01111/00001/00010/01100");
-    case '.': return make_glyph("00000/00000/00000/00000/00000/00100/00100");
-    case ',': return make_glyph("00000/00000/00000/00000/00000/00100/01000");
-    case ':': return make_glyph("00000/00100/00100/00000/00100/00100/00000");
-    case ';': return make_glyph("00000/00100/00100/00000/00100/01000/00000");
-    case '-': return make_glyph("00000/00000/00000/11111/00000/00000/00000");
-    case '_': return make_glyph("00000/00000/00000/00000/00000/00000/11111");
-    case '/': return make_glyph("00001/00010/00010/00100/01000/01000/10000");
-    case '\\': return make_glyph("10000/01000/01000/00100/00010/00010/00001");
-    case '(': return make_glyph("00010/00100/01000/01000/01000/00100/00010");
-    case ')': return make_glyph("01000/00100/00010/00010/00010/00100/01000");
-    case '[': return make_glyph("01110/01000/01000/01000/01000/01000/01110");
-    case ']': return make_glyph("01110/00010/00010/00010/00010/00010/01110");
-    case '{': return make_glyph("00110/01000/01000/10000/01000/01000/00110");
-    case '}': return make_glyph("01100/00010/00010/00001/00010/00010/01100");
-    case '<': return make_glyph("00010/00100/01000/10000/01000/00100/00010");
-    case '>': return make_glyph("01000/00100/00010/00001/00010/00100/01000");
-    case '=': return make_glyph("00000/00000/11111/00000/11111/00000/00000");
-    case '+': return make_glyph("00000/00100/00100/11111/00100/00100/00000");
-    case '*': return make_glyph("00000/10101/01110/11111/01110/10101/00000");
-    case '%': return make_glyph("11001/11010/00010/00100/01000/01011/10011");
-    case '!': return make_glyph("00100/00100/00100/00100/00100/00000/00100");
-    case '?': return make_glyph("01110/10001/00001/00010/00100/00000/00100");
-    case '#': return make_glyph("01010/01010/11111/01010/11111/01010/01010");
-    case '\'': return make_glyph("00100/00100/00000/00000/00000/00000/00000");
-    case '"': return make_glyph("01010/01010/00000/00000/00000/00000/00000");
-    case '|': return make_glyph("00100/00100/00100/00100/00100/00100/00100");
-    case '&': return make_glyph("01100/10010/10100/01000/10101/10010/01101");
-    case '@': return make_glyph("01110/10001/10111/10101/10111/10000/01110");
-    case '$': return make_glyph("00100/01111/10100/01110/00101/11110/00100");
-    case '^': return make_glyph("00100/01010/10001/00000/00000/00000/00000");
-    case '~': return make_glyph("00000/00000/01001/10110/00000/00000/00000");
-    default: return make_glyph("11111/10001/10001/10001/10001/10001/11111");
-    }
+const std::array<std::unique_ptr<Canvas::FontFace>, 4>& shared_fonts() {
+    static const std::array<std::unique_ptr<Canvas::FontFace>, 4> fonts = [] {
+        const kr32::ui::EmbeddedFonts embedded = kr32::ui::embedded_fonts();
+        std::array<std::unique_ptr<Canvas::FontFace>, 4> result;
+        result[0] = load_face(embedded.ui_regular, 14);
+        result[1] = load_face(embedded.ui_bold, 14);
+        result[2] = load_face(embedded.mono_regular, 15);
+        result[3] = load_face(embedded.mono_regular, 13);
+        return result;
+    }();
+    return fonts;
 }
 
 } // namespace
 
 Canvas::Canvas(int width, int height)
     : width_(std::max(0, width)), height_(std::max(0, height)),
-      pixels_(static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_), 0xFF101418U) {}
+      pixels_(static_cast<std::size_t>(width_) * static_cast<std::size_t>(height_), 0xFF101418U) {
+    (void)shared_fonts();
+}
+
+Canvas::~Canvas() = default;
 
 std::uint32_t Canvas::pack(Color color) {
     return (static_cast<std::uint32_t>(color.a) << 24) |
@@ -132,8 +104,22 @@ void Canvas::pixel(int x, int y, Color color) {
     if (x < 0 || y < 0 || x >= width_ || y >= height_) {
         return;
     }
-    pixels_[static_cast<std::size_t>(y) * static_cast<std::size_t>(width_) +
-            static_cast<std::size_t>(x)] = pack(color);
+    const std::size_t index = static_cast<std::size_t>(y) * static_cast<std::size_t>(width_) +
+                              static_cast<std::size_t>(x);
+    if (color.a == 255) {
+        pixels_[index] = pack(color);
+        return;
+    }
+    const std::uint32_t destination = pixels_[index];
+    const std::uint32_t alpha = color.a;
+    const std::uint32_t inverse = 255U - alpha;
+    const std::uint32_t red =
+        ((color.r * alpha) + (((destination >> 16) & 0xFFU) * inverse)) / 255U;
+    const std::uint32_t green =
+        ((color.g * alpha) + (((destination >> 8) & 0xFFU) * inverse)) / 255U;
+    const std::uint32_t blue =
+        ((color.b * alpha) + ((destination & 0xFFU) * inverse)) / 255U;
+    pixels_[index] = 0xFF000000U | (red << 16) | (green << 8) | blue;
 }
 
 std::uint32_t Canvas::pixel_at(int x, int y) const {
@@ -151,7 +137,23 @@ void Canvas::fill(Rect rect, Color color) {
     const int bottom = std::min(height_, rect.y + rect.height);
     for (int y = top; y < bottom; ++y) {
         for (int x = left; x < right; ++x) {
-            pixel(x, y, color);
+            const std::size_t index = static_cast<std::size_t>(y) *
+                                          static_cast<std::size_t>(width_) +
+                                      static_cast<std::size_t>(x);
+            if (color.a == 255) {
+                pixels_[index] = pack(color);
+            } else {
+                const std::uint32_t destination = pixels_[index];
+                const std::uint32_t alpha = color.a;
+                const std::uint32_t inverse = 255U - alpha;
+                const std::uint32_t red =
+                    ((color.r * alpha) + (((destination >> 16) & 0xFFU) * inverse)) / 255U;
+                const std::uint32_t green =
+                    ((color.g * alpha) + (((destination >> 8) & 0xFFU) * inverse)) / 255U;
+                const std::uint32_t blue =
+                    ((color.b * alpha) + ((destination & 0xFFU) * inverse)) / 255U;
+                pixels_[index] = 0xFF000000U | (red << 16) | (green << 8) | blue;
+            }
         }
     }
 }
@@ -188,41 +190,96 @@ void Canvas::line(int x0, int y0, int x1, int y1, Color color) {
     }
 }
 
-int Canvas::text_width(std::string_view value, int scale) {
-    return static_cast<int>(value.size()) * 6 * scale;
+const Canvas::FontFace& Canvas::font(FontRole role) {
+    const auto& fonts = shared_fonts();
+    const std::size_t index = static_cast<std::size_t>(role);
+    if (index < fonts.size() && fonts[index] != nullptr) {
+        return *fonts[index];
+    }
+    static const FontFace empty{};
+    return empty;
 }
 
-int Canvas::text_height(int scale) {
-    return 7 * scale;
+int Canvas::text_height(FontRole role) {
+    const FontFace& face = font(role);
+    return face.line_height > 0 ? face.line_height : 8;
 }
 
-void Canvas::text(int x, int y, std::string_view value, Color color, int scale) {
+int Canvas::text_width(std::string_view value, FontRole role, int scale) {
     if (scale < 1) {
         scale = 1;
     }
+    const FontFace& face = font(role);
+    int width = 0;
+    for (char c : value) {
+        if (c == '\n') {
+            continue;
+        }
+        const int index = static_cast<unsigned char>(c) >= 32 &&
+                                  static_cast<unsigned char>(c) < 127
+                              ? static_cast<unsigned char>(c) - 32
+                              : '?' - 32;
+        width += face.glyphs[static_cast<std::size_t>(index)].advance * scale;
+    }
+    return width;
+}
+
+void Canvas::text(int x,
+                  int y,
+                  std::string_view value,
+                  Color color,
+                  FontRole role,
+                  int scale) {
+    if (scale < 1) {
+        scale = 1;
+    }
+    const FontFace& face = font(role);
+    if (face.scale <= 0.0F) {
+        return;
+    }
     int cursor = x;
+    std::vector<std::uint8_t> bitmap;
     for (char c : value) {
         if (c == '\n') {
             cursor = x;
-            y += 8 * scale;
+            y += face.line_height * scale;
             continue;
         }
-        if (c == '\t') {
-            cursor += 4 * 6 * scale;
-            continue;
-        }
-        const Glyph glyph = glyph_for(c);
-        for (std::size_t row = 0; row < glyph.size(); ++row) {
-            for (int column = 0; column < 5; ++column) {
-                if ((glyph[row] & (1U << (4 - column))) == 0) {
-                    continue;
+        const int index = static_cast<unsigned char>(c) >= 32 &&
+                                  static_cast<unsigned char>(c) < 127
+                              ? static_cast<unsigned char>(c) - 32
+                              : '?' - 32;
+        const Glyph& glyph = face.glyphs[static_cast<std::size_t>(index)];
+        const int width = std::max(0, glyph.x1 - glyph.x0);
+        const int height = std::max(0, glyph.y1 - glyph.y0);
+        if (width > 0 && height > 0) {
+            bitmap.assign(static_cast<std::size_t>(width) * height, 0);
+            stbtt_MakeCodepointBitmap(&face.info, bitmap.data(), width, height, width,
+                                      face.scale, face.scale,
+                                      c >= 32 && c < 127 ? c : '?');
+            const int origin_x = cursor + glyph.x0 * scale;
+            const int origin_y = y + face.ascent * scale + glyph.y0 * scale;
+            for (int row = 0; row < height; ++row) {
+                for (int column = 0; column < width; ++column) {
+                    const std::uint8_t alpha =
+                        bitmap[static_cast<std::size_t>(row) * width + column];
+                    if (alpha == 0) {
+                        continue;
+                    }
+                    Color blended = color;
+                    blended.a = static_cast<std::uint8_t>(
+                        (static_cast<std::uint32_t>(alpha) * color.a) / 255U);
+                    if (scale == 1) {
+                        pixel(origin_x + column, origin_y + row, blended);
+                    } else {
+                        fill(Rect{origin_x + column * scale, origin_y + row * scale,
+                                  scale, scale},
+                             blended);
+                    }
                 }
-                fill(Rect{cursor + column * scale, y + static_cast<int>(row) * scale, scale,
-                          scale},
-                     color);
             }
         }
-        cursor += 6 * scale;
+        cursor += glyph.advance * scale;
     }
 }
 
