@@ -174,7 +174,15 @@ core::StepResult ClusterHost::step() {
             continue;
         }
         core::Machine& machine = cluster_.core(core);
+        const std::uint64_t before = machine.write_generation();
         core::StepResult result = machine.step();
+        if (machine.write_generation() != before) {
+            for (std::uint32_t other = 0; other < cluster_.size(); ++other) {
+                if (other != core) {
+                    cluster_.core(other).invalidate_reservation();
+                }
+            }
+        }
         if (result.kind == core::StepResult::Kind::Halted) {
             thread.state = State::Done;
             thread.exit_code =
@@ -200,7 +208,15 @@ core::StepResult ClusterHost::step_except(std::uint32_t skip_core) {
             continue;
         }
         core::Machine& machine = cluster_.core(core);
+        const std::uint64_t before = machine.write_generation();
         core::StepResult result = machine.step();
+        if (machine.write_generation() != before) {
+            for (std::uint32_t other = 0; other < cluster_.size(); ++other) {
+                if (other != core) {
+                    cluster_.core(other).invalidate_reservation();
+                }
+            }
+        }
         if (result.kind == core::StepResult::Kind::Halted) {
             thread.state = State::Done;
             thread.exit_code =

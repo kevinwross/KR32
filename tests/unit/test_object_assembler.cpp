@@ -148,6 +148,21 @@ TEST_CASE("object assembler emits tile and transform-stack instructions") {
     CHECK((word_at(text->data, 24) >> 25) == 0x52);
 }
 
+TEST_CASE("object assembler emits atomics") {
+    const container::Image image = assemble(
+        ".text\n"
+        "_start:\n"
+        "    LL R1, [R2]\n"
+        "    SC R1, [R2]\n"
+        "    FENCE\n");
+    const container::Section* text = find_section(image, ".text");
+    REQUIRE(text != nullptr);
+    REQUIRE(text->data.size() == 3 * 4);
+    CHECK(word_at(text->data, 0) == 0x8C24'4800);
+    CHECK(word_at(text->data, 4) == 0x8E24'4800);
+    CHECK(word_at(text->data, 8) == 0x9000'0000);
+}
+
 TEST_CASE("object assembler relocates data references") {
     const container::Image image = assemble(
         ".text\n"

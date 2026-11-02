@@ -132,6 +132,73 @@ TEST_CASE("futex wait returns immediately when the value does not match") {
     CHECK(primary.reg(0) == vm::kThreadWouldBlock);
 }
 
+TEST_CASE("two cores increment a shared counter with LL/SC") {
+    const std::string source =
+        ".text\n"
+        ".global worker\n"
+        "worker:\n"
+        "    MOV R4, #500\n"
+        ".Lworker_loop:\n"
+        "    LL R1, [counter]\n"
+        "    ADD R2, R1, #1\n"
+        "    SC R2, [counter]\n"
+        "    JNZ .Lworker_retry\n"
+        "    SUB R4, R4, #1\n"
+        "    JNZ .Lworker_loop\n"
+        "    MOV R0, #0\n"
+        "    SYSCALL #32\n"
+        "    HALT\n"
+        ".Lworker_retry:\n"
+        "    JMP .Lworker_loop\n"
+        ".data\n"
+        ".global counter\n"
+        "counter:\n"
+        "    .word 0\n";
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(source, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({user}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+    std::uint32_t entry = 0;
+    std::uint32_t counter = 0;
+    for (const container::Symbol& symbol : image.symbols) {
+        if (symbol.name == "worker") {
+            entry = symbol.value;
+        } else if (symbol.name == "counter") {
+            counter = symbol.value;
+        }
+    }
+    REQUIRE(entry != 0);
+    REQUIRE(counter != 0);
+
+    vm::ClusterHost host({3, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(image, error));
+    const std::uint32_t first = host.create(entry, 0);
+    const std::uint32_t second = host.create(entry, 0);
+    REQUIRE(first != vm::kThreadError);
+    REQUIRE(second != vm::kThreadError);
+    CHECK(first != second);
+    CHECK(host.running(second));
+    CHECK(host.cluster().core(second - 1).pc() == entry);
+    std::uint32_t code = 0;
+    REQUIRE(host.join(first, code));
+    CHECK(code == 0);
+    REQUIRE(host.join(second, code));
+    CHECK(code == 0);
+    std::uint32_t value = 0;
+    REQUIRE(host.cluster().core(0).read32(counter, value));
+    CHECK(value == 1000);
+    std::uint32_t second_view = 0;
+    REQUIRE(host.cluster().core(second - 1).read32(counter, second_view));
+    CHECK(second_view == 1000);
+}
+
 TEST_CASE("guest TCB exposes the approved R11-relative layout") {
     const Program program = build_worker(
         "void worker(int value) { exit(value); }\n"

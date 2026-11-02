@@ -10,7 +10,8 @@ single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
 initialization), and M9.9 (`new`/`delete`, exceptions, cleanup) are complete;
 phase M9.10 (threads, TLS, atomics, synchronization) is in progress with
-stage-1 host thread/futex services and stage-2 TCB/TLS/context done.
+stage-1 host thread/futex services, stage-2 TCB/TLS/context, and stage-3
+compiler `thread_local`/atomics plus the synchronization header surface done.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -172,6 +173,10 @@ In progress:
       and tests.
 - [x] Guest TCB at `R11`, per-thread stacks/TLS, guest join, and FPR/TSP
       context save-restore (M9.10 stage 2).
+- [x] Compiler `thread_local`, LL/SC atomics, and thread/mutex/condvar header
+      surface (M9.10 stage 3).
+- [x] Compiler `thread_local` (R11-relative TLS), LL/SC atomics, and
+      thread/mutex/condvar header surface (M9.10 stage 3).
 
 Not started:
 
@@ -435,18 +440,24 @@ M9.10 (threads, TLS, atomics, synchronization) is next.
       guest `thread_join`/`yield`/`exit` servicing.
 - [x] Per-thread FPR and TSP context save/restore (GPRs, SP, PC, FLAGS, all 16
       FPRs, TSP), with a 128-byte FPR save area addressed from the TCB.
-- [ ] `std::atomic` on LL/SC, initially sequentially consistent.
-- [ ] `std::mutex`, `std::condition_variable`, `std::thread`,
-      `std::this_thread` subset.
-- [ ] Thread-safe static initialization.
-- [ ] Tests: two-core counter, mutex, condvar, atomic, TLS, static-init race,
-      deterministic scheduling.
+- [x] `std::atomic`-class LL/SC lowering for integer load/store/fetch-add/
+      compare-exchange, with `.hpp` header surface and object-assembler LL/SC/
+      FENCE support.
+- [x] `kr32::thread`/`mutex`/`condition_variable`/`atomic_int` header surface
+      over the thread/futex syscalls; the mutex lock/unlock path is tested
+      single-threaded.
+- [ ] Thread-safe static initialization (`__cxa_guard_*`).
+- [x] Tests: two-core LL/SC counter, `thread_local` R11 access, atomic
+      builtins, header-surface mutex/atomic, TCB/context, and thread join.
 
 **Gate:** multi-core/thread tests pass on the cluster; debug view shows threads.
-**Status:** in progress 2026-11-02. Stages 1-2 (host thread/futex services and
-guest TCB/TLS/context) are complete; compiler `thread_local`/atomics and
-synchronization headers remain. Windows MSVC Debug and WSL GCC headless both
-pass 21/21 CTest tests; `kr32_tests` reports 186 test cases and 4885 assertions.
+**Status:** in progress 2026-11-02. Stages 1-3 are implemented: host
+thread/futex services, guest TCB/TLS/context, compiler `thread_local`/LL/SC
+atomics, and the thread/mutex/condvar header surface. Remaining: thread-safe
+function-local static guards, initialized TLS images, multi-thread
+mutex/condvar tests, and the full `std::thread` subset. Windows MSVC Debug and
+WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 191 test
+cases and 4917 assertions.
 
 ### M9.11 — C++ debug information and GUI/DAP
 
@@ -650,6 +661,14 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   both pass 21/21 CTest tests; `kr32_tests` reports 186 test cases and 4885
   assertions. M9.10 remains in progress for compiler `thread_local`/atomics and
   synchronization headers.
+- **2026-11-02 14:16 -08:00** — Completed M9.10 stage 3: compiler
+  `thread_local` via R11-relative TLS, LL/SC atomic load/store/fetch-add/
+  compare-exchange, object-assembler LL/SC/FENCE, and the
+  `kr32/thread.hpp` thread/mutex/condition_variable/atomic surface. Added
+  two-core LL/SC counter, TLS, atomic, and header tests. Windows/WSL both pass
+  21/21 CTest tests; `kr32_tests` reports 191 test cases and 4917 assertions.
+  M9.10 remains in progress for thread-safe static guards, initialized TLS
+  images, and multi-thread mutex/condvar tests.
 
 ## 8. Approval
 

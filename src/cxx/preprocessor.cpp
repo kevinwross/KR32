@@ -500,6 +500,32 @@ private:
         }
         if (directive == "include") {
             const std::string header(trim(rest));
+            if (header.find("kr32/thread.hpp") != std::string::npos ||
+                header.find("thread.hpp") != std::string::npos) {
+                append_line(
+                    "namespace kr32 {\n"
+                    "inline int thread_create(int entry, int arg, int stack_size = 0) { return __builtin_kr32_syscall(44, entry, arg, stack_size); }\n"
+                    "inline int thread_join(int handle) { return __builtin_kr32_syscall(45, handle, 0, 0); }\n"
+                    "inline void thread_yield() { (void)__builtin_kr32_syscall(46, 0, 0, 0); }\n"
+                    "inline int futex_wait(int* address, int expected) { return __builtin_kr32_syscall(48, (int)address, expected, 0); }\n"
+                    "inline int futex_wake(int* address, int count) { return __builtin_kr32_syscall(49, (int)address, count, 0); }\n"
+                    "struct atomic_int {\n"
+                    "    int value;\n"
+                    "    atomic_int() { value = 0; }\n"
+                    "    int load() { return __atomic_load_n(&value, 0); }\n"
+                    "    void store(int next) { __atomic_store_n(&value, next, 0); }\n"
+                    "    int fetch_add(int delta) { return __atomic_fetch_add(&value, delta, 0); }\n"
+                    "    bool compare_exchange(int* expected, int desired) { return __atomic_compare_exchange_n(&value, expected, desired, 0, 0, 0); }\n"
+                    "};\n"
+                    "struct mutex {\n"
+                    "    int state;\n"
+                    "    mutex() { state = 0; }\n"
+                    "    void lock() { int expected = 0; while (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) { expected = 0; futex_wait(&state, 1); } }\n"
+                    "    void unlock() { __atomic_store_n(&state, 0, 0); futex_wake(&state, 1); }\n"
+                    "};\n"
+                    "}\n");
+                return;
+            }
             if (header.find("kr32/runtime.hpp") != std::string::npos ||
                 header.find("runtime.hpp") != std::string::npos) {
                 append_line(

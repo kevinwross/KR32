@@ -64,6 +64,7 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
     }
     machine.reset(image.entry);
     machine.set_tsp(machine.ram_base() + 512U * 1024U);
+    machine.set_reg(11, machine.ram_base() + machine.ram_size() - 1024U);
     machine.set_syscall_handler([&](core::Machine& current, std::uint32_t vector) {
         if (vector == 33) {
             program.output.push_back(static_cast<char>(current.reg(0) & 0xFFU));
@@ -71,6 +72,10 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
         }
         if (vector == 32) {
             current.halt(current.reg(0));
+            return true;
+        }
+        if (vector >= 44 && vector <= 50) {
+            current.set_reg(0, 0);
             return true;
         }
         return false;
@@ -778,6 +783,58 @@ TEST_CASE("delete runs the destructor") {
         "    ~Guard() { result = 42; }\n"
         "};\n"
         "int main() { Guard* guard = new Guard(); delete guard; return result; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("thread/atomic/mutex header surface compiles and runs") {
+    const ProgramResult program = compile_and_run(
+        "#include <kr32/thread.hpp>\n"
+        "int main() {\n"
+        "    kr32::atomic_int value;\n"
+        "    value.store(1);\n"
+        "    value.fetch_add(41);\n"
+        "    kr32::mutex guard;\n"
+        "    guard.lock();\n"
+        "    guard.unlock();\n"
+        "    return value.load();\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("atomic builtins lower to LL/SC") {
+    const ProgramResult program = compile_and_run(
+        "int counter = 0;\n"
+        "int main() {\n"
+        "    __atomic_store_n(&counter, 1, 0);\n"
+        "    __atomic_fetch_add(&counter, 41, 0);\n"
+        "    return __atomic_load_n(&counter, 0);\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+
+    const ProgramResult compare_exchange = compile_and_run(
+        "int value = 0;\n"
+        "int main() {\n"
+        "    int expected = 0;\n"
+        "    if (!__atomic_compare_exchange_n(&value, &expected, 42, 0, 0, 0)) {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    return value;\n"
+        "}\n");
+    INFO(compare_exchange.diagnostics);
+    REQUIRE(compare_exchange.ok);
+    CHECK(compare_exchange.result == 42);
+}
+
+TEST_CASE("thread_local globals use R11 TP offsets") {
+    const ProgramResult program = compile_and_run(
+        "thread_local int value;\n"
+        "int main() { value = 42; return value; }\n");
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);

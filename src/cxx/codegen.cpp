@@ -411,6 +411,8 @@ private:
         bool extern_c = false;
         bool defined = false;
         bool is_static = false;
+        bool is_thread_local = false;
+        int tls_offset = 0;
         const Expr* initializer = nullptr;
         bool needs_init = false;
     };
@@ -976,6 +978,13 @@ private:
         global->qualified = qualify(prefix, declaration.name);
         global->extern_c = declaration.is_extern_c;
         global->is_static = declaration.is_static;
+        global->is_thread_local = declaration.is_thread_local;
+        if (global->is_thread_local) {
+            const int alignment = std::max(1, type_align(resolve_type(declaration.type)));
+            tls_cursor_ = (tls_cursor_ + alignment - 1) / alignment * alignment;
+            global->tls_offset = tls_cursor_;
+            tls_cursor_ += std::max(1, type_size(resolve_type(declaration.type)));
+        }
         global->type = resolve_type(declaration.type);
         global->initializer = declaration.initializer.get();
         global->defined = !declaration.is_extern || declaration.initializer != nullptr;
@@ -1244,6 +1253,18 @@ private:
                 std::string intrinsic;
                 if (matrix_intrinsic_name(expression, intrinsic)) {
                     return matrix_intrinsic_type(intrinsic);
+                }
+                if (atomic_intrinsic_name(expression, intrinsic)) {
+                    if (intrinsic == "__atomic_store_n") {
+                        return Type::make_builtin(BuiltinKind::Void);
+                    }
+                    if (intrinsic == "__atomic_compare_exchange_n") {
+                        return Type::make_builtin(BuiltinKind::Bool);
+                    }
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
+                if (syscall_intrinsic_name(expression, intrinsic)) {
+                    return Type::make_builtin(BuiltinKind::Int);
                 }
             }
             if (Function* function = resolve_call(expression)) {
@@ -2002,7 +2023,11 @@ private:
                 return;
             }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
-                emit("    LEA R0, [" + global->symbol + "]");
+                if (global->is_thread_local) {
+                    emit("    ADD R0, R11, #" + std::to_string(global->tls_offset));
+                } else {
+                    emit("    LEA R0, [" + global->symbol + "]");
+                }
                 return;
             }
             if (current_class_ != nullptr && expression.name.parts.size() == 1) {
@@ -2616,6 +2641,114 @@ private:
         current_call_sites_.push_back({start, end, landing});
     }
 
+    bool atomic_intrinsic_name(const Expr& call, std::string& name) {
+        if (call.children.empty() || call.children[0]->kind != ExprKind::Name) {
+            return false;
+        }
+        name = call.children[0]->name.to_string();
+        return name == "__atomic_load_n" || name == "__atomic_store_n" ||
+               name == "__atomic_fetch_add" ||
+               name == "__atomic_compare_exchange_n";
+    }
+
+    int atomic_argument_value(const Expr& expression) {
+        gen_expr(expression);
+        const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+        emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+        return temp;
+    }
+
+    TypePtr gen_atomic_intrinsic(const Expr& call, const std::string& name) {
+        if (name == "__atomic_load_n") {
+            gen_expr(*call.arguments[0]);
+            emit("    MOV R1, R0");
+            emit("    LL R0, [R1]");
+            emit("    FENCE");
+            return Type::make_builtin(BuiltinKind::Int);
+        }
+        if (name == "__atomic_store_n") {
+            gen_expr(*call.arguments[0]);
+            const int address = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+            gen_expr(*call.arguments[1]);
+            emit("    MOV R1, R0");
+            emit("    LOAD R0, [R7 + " + std::to_string(address) + "]");
+            emit("    STORE R1, [R0]");
+            emit("    FENCE");
+            emit("    MOV R0, #0");
+            return Type::make_builtin(BuiltinKind::Void);
+        }
+        if (name == "__atomic_fetch_add") {
+            const int address = atomic_argument_value(*call.arguments[0]);
+            const int value = atomic_argument_value(*call.arguments[1]);
+            const std::string loop = new_label("atomic_add");
+            emit(loop + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(address) + "]");
+            emit("    LL R1, [R0]");
+            emit("    LOAD R2, [R7 + " + std::to_string(value) + "]");
+            emit("    ADD R2, R1, R2");
+            emit("    SC R2, [R0]");
+            emit("    JNZ " + loop);
+            emit("    MOV R0, R1");
+            return Type::make_builtin(BuiltinKind::Int);
+        }
+        const int address = atomic_argument_value(*call.arguments[0]);
+        const int expected = atomic_argument_value(*call.arguments[1]);
+        const int desired = atomic_argument_value(*call.arguments[2]);
+        const std::string loop = new_label("atomic_cas");
+        const std::string fail = new_label("atomic_cas_fail");
+        const std::string done = new_label("atomic_cas_done");
+        emit(loop + ":");
+        emit("    LOAD R0, [R7 + " + std::to_string(address) + "]");
+        emit("    LL R1, [R0]");
+        emit("    LOAD R2, [R7 + " + std::to_string(expected) + "]");
+        emit("    LOAD R2, [R2]");
+        emit("    CMP R1, R2");
+        emit("    JNZ " + fail);
+        emit("    LOAD R3, [R7 + " + std::to_string(desired) + "]");
+        emit("    SC R3, [R0]");
+        emit("    JNZ " + loop);
+        emit("    MOV R0, #1");
+        emit("    JMP " + done);
+        emit(fail + ":");
+        emit("    LOAD R0, [R7 + " + std::to_string(expected) + "]");
+        emit("    STORE R1, [R0]");
+        emit("    MOV R0, #0");
+        emit(done + ":");
+        return Type::make_builtin(BuiltinKind::Bool);
+    }
+
+    bool syscall_intrinsic_name(const Expr& call, std::string& name) {
+        if (call.children.empty() || call.children[0]->kind != ExprKind::Name) {
+            return false;
+        }
+        name = call.children[0]->name.to_string();
+        return name == "__builtin_kr32_syscall";
+    }
+
+    TypePtr gen_syscall_intrinsic(const Expr& call) {
+        if (call.arguments.empty() ||
+            call.arguments[0]->kind != ExprKind::IntegerLiteral) {
+            diagnose_once(call, "syscall vector must be an integer literal");
+            emit("    MOV R0, #0");
+            return Type::make_builtin(BuiltinKind::Int);
+        }
+        std::vector<int> arguments;
+        for (std::size_t index = 1; index < call.arguments.size() && index <= 3;
+             ++index) {
+            gen_expr(*call.arguments[index]);
+            const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+            arguments.push_back(temp);
+        }
+        for (std::size_t index = 0; index < arguments.size(); ++index) {
+            emit("    LOAD R" + std::to_string(index) + ", [R7 + " +
+                 std::to_string(arguments[index]) + "]");
+        }
+        emit("    SYSCALL #" + std::to_string(call.arguments[0]->integer));
+        return Type::make_builtin(BuiltinKind::Int);
+    }
+
     TypePtr gen_expr(const Expr& expression) {
         switch (expression.kind) {
         case ExprKind::IntegerLiteral:
@@ -2661,7 +2794,11 @@ private:
                 return type;
             }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
-                emit("    LEA R0, [" + global->symbol + "]");
+                if (global->is_thread_local) {
+                    emit("    ADD R0, R11, #" + std::to_string(global->tls_offset));
+                } else {
+                    emit("    LEA R0, [" + global->symbol + "]");
+                }
                 TypePtr type = resolve_type(global->type);
                 if (type && type->kind == TypeKind::Array) {
                     return type;
@@ -2905,7 +3042,7 @@ private:
             emit("    CMP R0, #0");
             emit("    MOV R0, #0");
             const std::string done = new_label("not");
-            emit("    JZ " + done);
+            emit("    JNZ " + done);
             emit("    MOV R0, #1");
             emit(done + ":");
         }
@@ -3179,6 +3316,12 @@ private:
         std::string intrinsic;
         if (matrix_intrinsic_name(expression, intrinsic)) {
             return emit_matrix_intrinsic(expression, intrinsic);
+        }
+        if (atomic_intrinsic_name(expression, intrinsic)) {
+            return gen_atomic_intrinsic(expression, intrinsic);
+        }
+        if (syscall_intrinsic_name(expression, intrinsic)) {
+            return gen_syscall_intrinsic(expression);
         }
         if (!expression.children.empty() &&
             expression.children[0]->kind == ExprKind::Name) {
@@ -4115,7 +4258,7 @@ private:
 
     void emit_static_initializers() {
         for (const auto& global : global_storage_) {
-            if (!global->needs_init) {
+            if (!global->needs_init || global->is_thread_local) {
                 continue;
             }
             if (ClassInfo* info = class_of(global->type)) {
@@ -4392,7 +4535,7 @@ private:
 
     void emit_globals() {
         for (const auto& global : global_storage_) {
-            if (!global->defined) {
+            if (!global->defined || global->is_thread_local) {
                 continue;
             }
             const int size = std::max(1, type_size(global->type));
@@ -4500,6 +4643,7 @@ private:
     std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
+    int tls_cursor_ = 32;
     std::vector<Global*> static_destructors_;
     std::map<std::string, TypePtr> type_aliases_;
     std::map<std::string, std::set<std::string>> imports_;

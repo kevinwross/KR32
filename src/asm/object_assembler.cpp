@@ -997,8 +997,34 @@ private:
                                instruction, relocation, addend, statement.line);
         }
 
+        if (mnemonic == "ll" || mnemonic == "sc") {
+            if (operands.size() != 2) {
+                return fail_operands("Rd, [addr]");
+            }
+            int source = 0;
+            if (!parse_register(operands[0], source)) {
+                return fail(statement.line, "expected a register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            set_destination(source);
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.opcode = (mnemonic == "ll") ? 0x46 : 0x47;
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            instruction.literal = true;
+            return set_payload(memory.displacement,
+                               memory.displacement.symbolic ||
+                                   memory.displacement.value < -1024 ||
+                                   memory.displacement.value > 1023,
+                               instruction, relocation, addend, statement.line);
+        }
+
         if (mnemonic == "nop" || mnemonic == "ret" || mnemonic == "halt" ||
-            mnemonic == "brk") {
+            mnemonic == "brk" || mnemonic == "fence") {
             if (!operands.empty()) {
                 return fail_operands("no operands");
             }
@@ -1006,6 +1032,7 @@ private:
             if (mnemonic == "ret") instruction.opcode = 0x3B;
             if (mnemonic == "halt") instruction.opcode = 0x43;
             if (mnemonic == "brk") instruction.opcode = 0x44;
+            if (mnemonic == "fence") instruction.opcode = 0x48;
             return true;
         }
 
