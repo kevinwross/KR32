@@ -27,6 +27,11 @@ target_link_libraries(kr32_tests PRIVATE
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
 
+if(TARGET kr32_ui)
+    target_sources(kr32_tests PRIVATE unit/test_ui.cpp)
+    target_link_libraries(kr32_tests PRIVATE kr32_ui)
+endif()
+
 # doctest 2.4.11 includes <ciso646>, which libstdc++ 15 flags with #warning.
 # It is a dependency diagnostics issue, not a KR32 warning.
 if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
@@ -96,6 +101,14 @@ if(KR32_BUILD_UI)
     add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)
     set_tests_properties(ui_smoke PROPERTIES
         ENVIRONMENT "SDL_VIDEODRIVER=dummy")
+
+    add_test(NAME ui_headless
+        COMMAND $<TARGET_FILE:kr32> gui --headless
+            ${CMAKE_BINARY_DIR}/hello-c.k32
+            --screenshot ${CMAKE_BINARY_DIR}/hello-ui.ppm)
+    set_tests_properties(ui_headless PROPERTIES
+        DEPENDS build_c_hello
+        PASS_REGULAR_EXPRESSION "ui-render")
 endif()
 
 add_test(NAME boundary_clean

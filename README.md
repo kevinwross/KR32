@@ -8,11 +8,11 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M5 complete (2026-11-02). The compiler emits `.debug_info`, and
-`DebugSession` provides breakpoints, stepping, call stacks, variables, memory,
-and console capture. `kr32 debug app.k32` dumps source/function/type records;
-the format and API are documented in [docs/debug.md](docs/debug.md). The
-windowed debugger is next.
+**Status:** M6 complete (2026-11-02). The portable SDL2 debugger renders source,
+disassembly, registers, variables/watches, memory, call stack, console, and
+KR32 FPR/tile/MMU/transform panels. It opens `.k32` images or builds C sources
+directly, and supports breakpoints, stepping, and headless screenshots. See
+[docs/ui.md](docs/ui.md). Host services, shell, and DAP are next.
 
 ## Build
 
@@ -76,7 +76,8 @@ kr32 vm examples/demo.asm --bios boot-halt.bin
 kr32 version
 kr32 help
 kr32 --smoke-ui     # initialize and tear down the SDL2 platform
-kr32 gui            # M6 placeholder for the windowed debugger
+kr32 gui examples/hello.c
+kr32 gui build/hello.k32 --headless --screenshot hello-ui.ppm
 ```
 
 `as` writes a raw image or, with `--object`, a relocatable `.k32` object. `ld`
@@ -84,8 +85,9 @@ merges objects, resolves symbols and relocations, and writes an executable
 `.k32`; `--map` writes the section/symbol map. `cc` compiles C to assembly or an
 object. `build` runs compile/assemble, link, and optional `--run` in one
 command. `size` reports `.k32` sections and `debug` dumps the `.debug_info`
-records. The remaining tool commands (`cxx`, `dap`, `shell`) are stubs for later
-milestones.
+records. `gui` opens the source/disassembly debugger or renders headless PPM
+screenshots. The remaining tool commands (`cxx`, `dap`, `shell`) are stubs for
+later milestones.
 
 ## Layout
 

@@ -1,0 +1,813 @@
+#include "kr32/ui/debugger_ui.h"
+
+#include <algorithm>
+#include <cctype>
+#include <cstdio>
+#include <fstream>
+#include <iterator>
+#include <sstream>
+#include <string>
+#include <vector>
+
+#include "kr32/asm/object_assembler.h"
+#include "kr32/cc/cc.h"
+#include "kr32/dis/disassembler.h"
+#include "kr32/isa/encoding.h"
+#include "kr32/link/linker.h"
+#include "kr32/platform/window.h"
+
+namespace kr32::ui {
+namespace {
+
+constexpr Color kBackground{12, 16, 20, 255};
+constexpr Color kPanel{22, 28, 34, 255};
+constexpr Color kPanelAlt{28, 36, 44, 255};
+constexpr Color kBorder{54, 68, 80, 255};
+constexpr Color kText{220, 228, 236, 255};
+constexpr Color kDim{132, 146, 158, 255};
+constexpr Color kAccent{76, 170, 255, 255};
+constexpr Color kBad{255, 104, 104, 255};
+
+constexpr int kToolbarHeight = 30;
+constexpr int kBottomTop = 438;
+
+std::string hex(std::uint32_t value, int digits) {
+    char buffer[24] = {};
+    if (digits == 2) {
+        std::snprintf(buffer, sizeof(buffer), "%02X", value & 0xFFU);
+    } else if (digits == 4) {
+        std::snprintf(buffer, sizeof(buffer), "%04X", value & 0xFFFFU);
+    } else {
+        std::snprintf(buffer, sizeof(buffer), "%08X", value);
+    }
+    return buffer;
+}
+
+std::string decimal(std::uint64_t value) {
+    char buffer[32] = {};
+    std::snprintf(buffer, sizeof(buffer), "%llu", static_cast<unsigned long long>(value));
+    return buffer;
+}
+
+std::string trim_to(std::string value, std::size_t limit) {
+    if (value.size() > limit) {
+        value.resize(limit);
+    }
+    return value;
+}
+
+bool compile_c_source(const std::string& path, container::Image& image, std::string& error) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        error = "cannot open " + path;
+        return false;
+    }
+    const std::string source((std::istreambuf_iterator<char>(input)),
+                             std::istreambuf_iterator<char>());
+    const cc::Result compiled = cc::compile(source, path);
+    if (!compiled.ok) {
+        if (!compiled.diagnostics.empty()) {
+            const cc::Diagnostic& diagnostic = compiled.diagnostics.front();
+            error = path + ":" + std::to_string(diagnostic.line) + ":" +
+                    std::to_string(diagnostic.column) + ": " + diagnostic.message;
+        } else {
+            error = path + ": compile failed";
+        }
+        return false;
+    }
+    container::Image user;
+    assembler::Error assembly_error;
+    if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
+        error = path + ": " + assembly_error.message;
+        return false;
+    }
+    container::Image runtime;
+    if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
+        error = "runtime: " + assembly_error.message;
+        return false;
+    }
+    linker::Map map;
+    linker::Error link_error;
+    if (!linker::link({user, runtime}, linker::Options{}, image, map, link_error)) {
+        error = path + ": " + link_error.message;
+        return false;
+    }
+    return true;
+}
+
+bool has_c_extension(const std::string& path) {
+    const std::size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos) {
+        return false;
+    }
+    std::string extension = path.substr(dot + 1);
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return extension == "c";
+}
+
+} // namespace
+
+bool DebuggerUI::load(const std::string& path, std::string& error) {
+    std::string source_path;
+    if (has_c_extension(path)) {
+        if (!compile_c_source(path, image_, error)) {
+            return false;
+        }
+        source_path = path;
+    } else {
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            error = "cannot open " + path;
+            return false;
+        }
+        const std::vector<std::uint8_t> bytes((std::istreambuf_iterator<char>(input)),
+                                              std::istreambuf_iterator<char>());
+        container::Error container_error;
+        if (!container::read(bytes, image_, container_error)) {
+            error = path + ": " + container_error.message;
+            return false;
+        }
+    }
+    if (image_.type != container::ImageType::Executable) {
+        error = path + ": not an executable";
+        return false;
+    }
+    if (!session_.load(image_, error)) {
+        return false;
+    }
+    path_ = path;
+    source_lines_.clear();
+    if (source_path.empty() && !session_.info().sources.empty()) {
+        source_path = session_.info().sources.front().path;
+    }
+    if (!source_path.empty()) {
+        std::ifstream source(source_path);
+        if (!source) {
+            source.open("../" + source_path);
+        }
+        if (!source) {
+            source.open("../../" + source_path);
+        }
+        if (source) {
+            std::string line;
+            while (std::getline(source, line)) {
+                source_lines_.push_back(line);
+            }
+        }
+    }
+    loaded_ = true;
+    source_scroll_ = 0;
+    error_.clear();
+    prepare_initial_stop();
+    status_ = "paused at " + hex(session_.machine().pc(), 8);
+    return true;
+}
+
+void DebuggerUI::prepare_initial_stop() {
+    const debug::Function* main_function = nullptr;
+    for (const debug::Function& function : session_.info().functions) {
+        if (function.name == "main") {
+            main_function = &function;
+            break;
+        }
+    }
+    if (main_function == nullptr) {
+        return;
+    }
+    std::uint32_t target = 0;
+    bool found = false;
+    for (const debug::Line& line : session_.info().lines) {
+        if (line.address >= main_function->start && line.address < main_function->end) {
+            target = line.address;
+            found = true;
+            break;
+        }
+    }
+    if (!found) {
+        session_.machine().set_pc(main_function->start);
+        return;
+    }
+    session_.set_breakpoint(target);
+    (void)session_.run(10000);
+    session_.clear_breakpoint(target);
+}
+
+void DebuggerUI::restart() {
+    if (!loaded_ || path_.empty()) {
+        return;
+    }
+    std::string error;
+    if (!load(path_, error)) {
+        error_ = error;
+        return;
+    }
+    status_ = "restarted at " + hex(session_.machine().pc(), 8);
+    error_.clear();
+}
+
+void DebuggerUI::run() {
+    if (!loaded_) {
+        return;
+    }
+    const core::StepResult result = session_.run(200000);
+    set_status_from_result(result);
+}
+
+void DebuggerUI::step() {
+    if (!loaded_) {
+        return;
+    }
+    set_status_from_result(session_.step());
+}
+
+void DebuggerUI::step_over() {
+    if (!loaded_) {
+        return;
+    }
+    set_status_from_result(session_.step_over());
+}
+
+void DebuggerUI::step_out() {
+    if (!loaded_) {
+        return;
+    }
+    set_status_from_result(session_.step_out());
+}
+
+void DebuggerUI::set_status_from_result(const core::StepResult& result) {
+    if (session_.at_breakpoint()) {
+        status_ = "breakpoint at " + hex(session_.machine().pc(), 8);
+        return;
+    }
+    if (result.kind == core::StepResult::Kind::Halted) {
+        status_ = "halted exit=" + decimal(session_.machine().exit_code());
+        return;
+    }
+    if (result.kind == core::StepResult::Kind::Raised ||
+        result.kind == core::StepResult::Kind::FaultDelivered) {
+        status_ = "fault vector=" + decimal(result.fault.vector) + " at " +
+                  hex(result.fault.address, 8);
+        return;
+    }
+    status_ = "paused at " + hex(session_.machine().pc(), 8);
+}
+
+int DebuggerUI::current_source_line() const {
+    if (!loaded_) {
+        return 0;
+    }
+    const debug::Line* line = session_.line_at(session_.machine().pc());
+    return line == nullptr ? 0 : line->line;
+}
+
+bool DebuggerUI::source_line_to_address(int line, std::uint32_t& address) const {
+    for (const debug::Line& candidate : session_.info().lines) {
+        if (candidate.line == line) {
+            address = candidate.address;
+            return true;
+        }
+    }
+    return false;
+}
+
+std::string DebuggerUI::source_line(int line) const {
+    if (line <= 0 || static_cast<std::size_t>(line) > source_lines_.size()) {
+        return {};
+    }
+    return source_lines_[static_cast<std::size_t>(line - 1)];
+}
+
+void DebuggerUI::toggle_breakpoint_at_current_line() {
+    const int line = current_source_line();
+    std::uint32_t address = 0;
+    if (line == 0 || !source_line_to_address(line, address)) {
+        status_ = "no breakpoint address for the current line";
+        return;
+    }
+    if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
+        session_.clear_breakpoint(address);
+        status_ = "breakpoint cleared at " + hex(address, 8);
+    } else {
+        session_.set_breakpoint(address);
+        status_ = "breakpoint set at " + hex(address, 8);
+    }
+}
+
+std::string DebuggerUI::format_hex(std::uint32_t value, int digits) const {
+    return hex(value, digits);
+}
+
+void DebuggerUI::draw_panel(Canvas& canvas, Rect rect, const std::string& title) {
+    canvas.fill(rect, kPanel);
+    canvas.frame(rect, kBorder);
+    canvas.fill(Rect{rect.x + 1, rect.y + 1, rect.width - 2, 16}, kPanelAlt);
+    canvas.text(rect.x + 6, rect.y + 4, trim_to(title, static_cast<std::size_t>((rect.width - 12) / 6)),
+                kAccent);
+}
+
+void DebuggerUI::draw_toolbar(Canvas& canvas) {
+    canvas.fill(Rect{0, 0, canvas.width(), kToolbarHeight}, kPanelAlt);
+    canvas.fill(Rect{0, kToolbarHeight - 1, canvas.width(), 1}, kBorder);
+    canvas.text(8, 11, "KR32", kAccent, 2);
+    const Color button{42, 54, 66, 255};
+    const struct {
+        const char* label;
+        int x;
+        int width;
+    } buttons[] = {
+        {"RUN", 82, 40},   {"STEP", 126, 44}, {"OVER", 174, 44},
+        {"OUT", 222, 36},  {"BKPT", 262, 44}, {"RST", 310, 34}, {"LOAD", 348, 44},
+        {"BUILD", 396, 48},
+    };
+    for (const auto& button_entry : buttons) {
+        canvas.fill(Rect{button_entry.x, 5, button_entry.width, 20}, button);
+        canvas.frame(Rect{button_entry.x, 5, button_entry.width, 20}, kBorder);
+        canvas.text(button_entry.x + 6, 11, button_entry.label, kText);
+    }
+    canvas.text(452, 11, trim_to(status_, static_cast<std::size_t>((canvas.width() - 460) / 6)),
+                kDim);
+}
+
+void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
+    std::string title = "SOURCE";
+    if (!session_.info().sources.empty()) {
+        title += "  " + session_.info().sources.front().path;
+    }
+    draw_panel(canvas, rect, title);
+    const int line_height = 9;
+    const int top = rect.y + 20;
+    const int visible = std::max(1, (rect.height - 24) / line_height);
+    const int current = current_source_line();
+    if (current > 0 && (current - 1 < source_scroll_ || current - 1 >= source_scroll_ + visible)) {
+        source_scroll_ = std::max(0, current - visible / 2);
+    }
+    if (source_lines_.empty()) {
+        canvas.text(rect.x + 8, top, "source unavailable", kDim);
+        return;
+    }
+    for (int row = 0; row < visible; ++row) {
+        const int index = source_scroll_ + row;
+        if (index < 0 || static_cast<std::size_t>(index) >= source_lines_.size()) {
+            break;
+        }
+        const int line_number = index + 1;
+        const int y = top + row * line_height;
+        if (line_number == current) {
+            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height}, Color{38, 66, 92, 255});
+        }
+        std::uint32_t address = 0;
+        const bool has_breakpoint =
+            source_line_to_address(line_number, address) &&
+            session_.breakpoints().find(address) != session_.breakpoints().end();
+        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim);
+        const std::string number = std::to_string(line_number);
+        canvas.text(rect.x + 16, y, number, line_number == current ? kText : kDim);
+        canvas.text(rect.x + 16 + static_cast<int>(number.size()) * 6 + 6, y,
+                    trim_to(source_lines_[static_cast<std::size_t>(index)],
+                            static_cast<std::size_t>((rect.width - 60) / 6)),
+                    line_number == current ? kText : Color{180, 194, 206, 255});
+    }
+}
+
+void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
+    draw_panel(canvas, rect, "DISASSEMBLY");
+    const std::uint32_t pc = session_.machine().pc();
+    const int rows = std::max(1, (rect.height - 24) / 9);
+    const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
+    std::uint32_t start = pc >= before ? pc - before : 0;
+    start = std::max(start, session_.machine().ram_base());
+    for (int row = 0; row < rows; ++row) {
+        const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
+        const int y = rect.y + 20 + row * 9;
+        if (address == pc) {
+            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, 9}, Color{38, 66, 92, 255});
+        }
+        std::uint8_t bytes[8] = {};
+        bool read_ok = true;
+        for (int index = 0; index < 8; ++index) {
+            read_ok = read_ok && session_.machine().read8(address + index, bytes[index]);
+        }
+        std::string text;
+        if (read_ok) {
+            std::vector<std::uint8_t> data(bytes, bytes + 8);
+            disassembler::Options options;
+            options.base = address;
+            options.max_words = 1;
+            text = disassembler::disassemble(data, options);
+            const std::size_t newline = text.find('\n');
+            if (newline != std::string::npos) {
+                text.resize(newline);
+            }
+            const std::size_t colon = text.find(':');
+            if (colon != std::string::npos) {
+                std::size_t position = colon + 1;
+                auto skip_space = [&]() {
+                    while (position < text.size() && text[position] == ' ') {
+                        ++position;
+                    }
+                };
+                skip_space();
+                for (int digit = 0; digit < 8 && position < text.size(); ++digit) {
+                    ++position;
+                }
+                skip_space();
+                if (position + 8 <= text.size() &&
+                    std::all_of(text.begin() + static_cast<std::ptrdiff_t>(position),
+                                text.begin() + static_cast<std::ptrdiff_t>(position + 8),
+                                [](char c) { return std::isxdigit(static_cast<unsigned char>(c)) != 0; })) {
+                    position += 8;
+                }
+                skip_space();
+                if (position < text.size()) {
+                    text = text.substr(position);
+                }
+            }
+        } else {
+            text = "??";
+        }
+        const bool has_breakpoint =
+            session_.breakpoints().find(address) != session_.breakpoints().end();
+        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim);
+        canvas.text(rect.x + 12, y, hex(address, 8), address == pc ? kAccent : kDim);
+        canvas.text(rect.x + 64, y, trim_to(text, static_cast<std::size_t>((rect.width - 70) / 6)),
+                    address == pc ? kText : Color{180, 194, 206, 255});
+    }
+}
+
+void DebuggerUI::draw_registers(Canvas& canvas, Rect rect) {
+    draw_panel(canvas, rect, "REGISTERS");
+    const core::Machine& machine = session_.machine();
+    for (int index = 0; index < 16; ++index) {
+        const int column = index / 8;
+        const int row = index % 8;
+        const int x = rect.x + 8 + column * 145;
+        const int y = rect.y + 22 + row * 10;
+        canvas.text(x, y, "R" + std::to_string(index), kDim);
+        canvas.text(x + 22, y, hex(machine.reg(static_cast<std::size_t>(index)), 8), kText);
+    }
+    const int y = rect.y + 22 + 8 * 10 + 4;
+    canvas.text(rect.x + 8, y, "PC " + hex(machine.pc(), 8), kAccent);
+    canvas.text(rect.x + 8, y + 10, "SP " + hex(machine.sp(), 8) + "  FLAGS " + hex(machine.flags(), 8),
+                kText);
+    canvas.text(rect.x + 8, y + 20, "TICKS " + decimal(machine.ticks()) + "  CORE " +
+                std::to_string(machine.core_id()) + (machine.kernel_mode() ? " KERNEL" : " USER"),
+                kDim);
+}
+
+void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
+    draw_panel(canvas, rect, "VARIABLES / CALL STACK");
+    int y = rect.y + 22;
+    const debug::Function* function = session_.function_at(session_.machine().pc());
+    if (function != nullptr) {
+        canvas.text(rect.x + 6, y, "in " + function->name, kAccent);
+        y += 10;
+        for (const debug::Variable& variable : session_.info().variables) {
+            if (variable.function != function->name || y > rect.y + rect.height - 30) {
+                continue;
+            }
+            std::uint32_t value = 0;
+            std::string error;
+            const bool ok = session_.read_variable(variable.name, value, error);
+            canvas.text(rect.x + 10, y, variable.name + " = " + (ok ? "0x" + hex(value, 8) : "?"),
+                        ok ? kText : kBad);
+            y += 9;
+        }
+    }
+    if (!session_.info().globals.empty() && y < rect.y + rect.height - 30) {
+        canvas.text(rect.x + 6, y, "WATCH", kDim);
+        y += 9;
+        for (const debug::Global& global : session_.info().globals) {
+            if (y > rect.y + rect.height - 20) {
+                break;
+            }
+            std::uint32_t value = 0;
+            std::string error;
+            const bool ok = session_.read_global(global.name, value, error);
+            canvas.text(rect.x + 10, y, global.name + " = " + (ok ? "0x" + hex(value, 8) : "?"),
+                        ok ? kText : kBad);
+            y += 9;
+        }
+    }
+    std::vector<debug::Frame> frames = session_.call_stack();
+    if (!frames.empty() && y < rect.y + rect.height - 12) {
+        canvas.text(rect.x + 6, y, "STACK", kDim);
+        y += 9;
+        for (const debug::Frame& frame : frames) {
+            if (y > rect.y + rect.height - 10) {
+                break;
+            }
+            canvas.text(rect.x + 10, y, trim_to(frame.function + " " + hex(frame.pc, 8), 46),
+                        kText);
+            y += 9;
+        }
+    }
+}
+
+void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
+    constexpr std::uint32_t kRows = 14;
+    const std::uint32_t sp = session_.machine().sp();
+    std::uint32_t base = sp > kRows * 16U + 16U ? sp - kRows * 16U - 16U : session_.machine().ram_base();
+    base &= 0xFFFF'FFF0U;
+    if (base < session_.machine().ram_base()) {
+        base = session_.machine().ram_base();
+    }
+    for (int row = 0; row < 14; ++row) {
+        const std::uint32_t address = base + static_cast<std::uint32_t>(row * 16);
+        const int y = rect.y + 6 + row * 10;
+        std::string line = hex(address, 8) + "  ";
+        for (int column = 0; column < 16; ++column) {
+            std::uint8_t value = 0;
+            const std::uint32_t byte_address = address + static_cast<std::uint32_t>(column);
+            const bool ok = session_.machine().read8(byte_address, value) ||
+                            session_.machine().read_physical8(byte_address, value);
+            if (!ok) {
+                line += "?? ";
+            } else {
+                line += hex(value, 2) + " ";
+            }
+        }
+        canvas.text(rect.x + 6, y, line, kText);
+    }
+}
+
+void DebuggerUI::draw_machine(Canvas& canvas, Rect rect) {
+    const core::Machine& machine = session_.machine();
+    int y = rect.y + 6;
+    for (int index = 0; index < 8; ++index) {
+        std::string line = "F" + std::to_string(index) + " " + hex(static_cast<std::uint32_t>(machine.fpr(index) & 0xFFFFFFFFU), 8);
+        line += "  F" + std::to_string(index + 8) + " " +
+                hex(static_cast<std::uint32_t>(machine.fpr(index + 8) & 0xFFFFFFFFU), 8);
+        canvas.text(rect.x + 6, y, line, kText);
+        y += 9;
+    }
+    y += 2;
+    canvas.text(rect.x + 6, y, "TSP " + hex(machine.tsp(), 8), kAccent);
+    y += 10;
+    for (int row = 0; row < 4; ++row) {
+        std::string line;
+        for (int column = 0; column < 4; ++column) {
+            char buffer[24] = {};
+            std::snprintf(buffer, sizeof(buffer), "%7.2f", machine.tile_value(0, static_cast<std::size_t>(row * 4 + column)));
+            line += buffer;
+            line += " ";
+        }
+        canvas.text(rect.x + 6, y, line, kText);
+        y += 9;
+    }
+    y += 2;
+    canvas.text(rect.x + 6, y, "CORE " + std::to_string(machine.core_id()) + "  MODE " +
+                (machine.kernel_mode() ? "KERNEL" : "USER"), kAccent);
+    y += 9;
+    std::uint32_t ptbr = 0;
+    if (machine.read_control_register(8, ptbr)) {
+        canvas.text(rect.x + 6, y, "PTBR " + hex(ptbr, 8), kDim);
+        y += 9;
+        for (int index = 0; index < 4; ++index) {
+            std::uint32_t entry = 0;
+            if (machine.read_physical32(ptbr + static_cast<std::uint32_t>(index * 4), entry)) {
+                canvas.text(rect.x + 6, y, "PTE" + std::to_string(index) + " " + hex(entry, 8),
+                            kDim);
+                y += 9;
+            }
+        }
+    }
+    if (y > rect.y + rect.height - 10) {
+        return;
+    }
+    for (std::uint32_t number : {3U, 6U, 10U}) {
+        std::uint32_t value = 0;
+        if (!machine.read_control_register(number, value)) {
+            continue;
+        }
+        canvas.text(rect.x + 6, y, "CR" + std::to_string(number) + " " + hex(value, 8), kDim);
+        y += 9;
+        if (y > rect.y + rect.height - 10) {
+            break;
+        }
+    }
+}
+
+void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
+    int y = rect.y + 6;
+    std::istringstream stream(session_.console());
+    std::string line;
+    while (std::getline(stream, line) && y < rect.y + rect.height - 10) {
+        canvas.text(rect.x + 6, y, trim_to(line, static_cast<std::size_t>((rect.width - 12) / 6)),
+                    kText);
+        y += 9;
+    }
+    if (session_.console().empty()) {
+        canvas.text(rect.x + 6, y, "(no console output)", kDim);
+    }
+}
+
+void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
+    canvas.fill(rect, kPanel);
+    canvas.frame(rect, kBorder);
+    const char* labels[] = {"MEMORY", "MACHINE", "CONSOLE"};
+    for (int index = 0; index < 3; ++index) {
+        const int x = rect.x + 6 + index * 100;
+        if (static_cast<int>(tab_) == index) {
+            canvas.fill(Rect{x, rect.y + 2, 92, 18}, Color{38, 66, 92, 255});
+        }
+        canvas.text(x + 7, rect.y + 7, labels[index],
+                    static_cast<int>(tab_) == index ? kAccent : kDim);
+    }
+    const Rect content{rect.x + 1, rect.y + 22, rect.width - 2, rect.height - 23};
+    if (tab_ == Tab::Memory) {
+        draw_memory(canvas, content);
+    } else if (tab_ == Tab::Machine) {
+        draw_machine(canvas, content);
+    } else {
+        draw_console(canvas, content);
+    }
+}
+
+void DebuggerUI::draw_error(Canvas& canvas) {
+    if (error_.empty()) {
+        return;
+    }
+    const Rect dialog{260, 240, 500, 110};
+    canvas.fill(dialog, Color{44, 24, 28, 255});
+    canvas.frame(dialog, kBad, 2);
+    canvas.text(dialog.x + 12, dialog.y + 12, "ERROR", kBad);
+    canvas.text(dialog.x + 12, dialog.y + 32, trim_to(error_, 74), kText);
+    canvas.text(dialog.x + 12, dialog.y + 78, "click to dismiss", kDim);
+}
+
+void DebuggerUI::render(Canvas& canvas) {
+    canvas.clear(kBackground);
+    draw_toolbar(canvas);
+    if (!loaded_) {
+        canvas.text(40, 100, "KR32 WINDOWED DEBUGGER", kAccent, 2);
+        canvas.text(40, 140, "usage: kr32 gui <image.k32>", kText);
+        canvas.text(40, 160, "F5 run  F10 over  F11 step  shift+F11 out  F9 breakpoint", kDim);
+        draw_error(canvas);
+        return;
+    }
+    draw_source(canvas, Rect{0, kToolbarHeight, 420, 330});
+    draw_disassembly(canvas, Rect{420, kToolbarHeight, 300, 330});
+    draw_registers(canvas, Rect{720, kToolbarHeight, 304, 198});
+    draw_variables(canvas, Rect{720, 228, 304, 132});
+    draw_bottom(canvas, Rect{0, kBottomTop, 1024, 202});
+    draw_error(canvas);
+}
+
+bool DebuggerUI::click(int x, int y) {
+    if (!error_.empty()) {
+        error_.clear();
+        return true;
+    }
+    if (y < kToolbarHeight) {
+        if (x >= 82 && x < 122) {
+            run();
+        } else if (x >= 126 && x < 170) {
+            step();
+        } else if (x >= 174 && x < 218) {
+            step_over();
+        } else if (x >= 222 && x < 258) {
+            step_out();
+        } else if (x >= 262 && x < 306) {
+            toggle_breakpoint_at_current_line();
+        } else if (x >= 310 && x < 344) {
+            restart();
+        } else if (x >= 348 && x < 392) {
+            restart();
+        } else if (x >= 396 && x < 444) {
+            restart();
+        }
+        return true;
+    }
+    if (y >= kBottomTop + 2 && y < kBottomTop + 20) {
+        if (x < 106) {
+            tab_ = Tab::Memory;
+        } else if (x < 206) {
+            tab_ = Tab::Machine;
+        } else if (x < 306) {
+            tab_ = Tab::Console;
+        }
+        return true;
+    }
+    if (x < 420 && y >= kToolbarHeight && y < kToolbarHeight + 330) {
+        const int row = (y - (kToolbarHeight + 20)) / 9;
+        const int line = source_scroll_ + row + 1;
+        std::uint32_t address = 0;
+        if (source_line_to_address(line, address)) {
+            if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
+                session_.clear_breakpoint(address);
+            } else {
+                session_.set_breakpoint(address);
+            }
+        }
+        return true;
+    }
+    if (x >= 420 && x < 720 && y >= kToolbarHeight && y < kToolbarHeight + 330) {
+        const int row = (y - (kToolbarHeight + 20)) / 9;
+        const std::uint32_t pc = session_.machine().pc();
+        const std::uint32_t before = 16U * 4U;
+        const std::uint32_t start = pc >= before ? pc - before : 0;
+        const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
+        if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
+            session_.clear_breakpoint(address);
+        } else {
+            session_.set_breakpoint(address);
+        }
+        return true;
+    }
+    return false;
+}
+
+bool DebuggerUI::key(int key_value, bool shift) {
+    if (key_value == kr32::platform::key::Escape) {
+        quit_ = true;
+        return true;
+    }
+    if (key_value == kr32::platform::key::F5) {
+        run();
+        return true;
+    }
+    if (key_value == kr32::platform::key::F10) {
+        step_over();
+        return true;
+    }
+    if (key_value == kr32::platform::key::F11) {
+        if (shift) {
+            step_out();
+        } else {
+            step();
+        }
+        return true;
+    }
+    if (key_value == kr32::platform::key::F9) {
+        toggle_breakpoint_at_current_line();
+        return true;
+    }
+    if (key_value == 'R' || key_value == 'r') {
+        restart();
+        return true;
+    }
+    if (key_value == kr32::platform::key::Tab) {
+        tab_ = static_cast<Tab>((static_cast<int>(tab_) + 1) % 3);
+        return true;
+    }
+    return false;
+}
+
+bool DebuggerUI::headless(const std::string& ppm_path) {
+    const Tab original_tab = tab_;
+    Canvas canvas(1024, 640);
+
+    tab_ = Tab::Memory;
+    render(canvas);
+    const std::uint64_t memory_hash = canvas.hash();
+    if (!ppm_path.empty() && !canvas.write_ppm(ppm_path)) {
+        error_ = "cannot write " + ppm_path;
+        return false;
+    }
+
+    tab_ = Tab::Machine;
+    render(canvas);
+    const std::uint64_t machine_hash = canvas.hash();
+    if (!ppm_path.empty()) {
+        std::string machine_path = ppm_path;
+        const std::size_t dot = machine_path.find_last_of('.');
+        if (dot != std::string::npos) {
+            machine_path.insert(dot, "-machine");
+        }
+        if (!canvas.write_ppm(machine_path)) {
+            error_ = "cannot write " + machine_path;
+            return false;
+        }
+    }
+
+    tab_ = Tab::Console;
+    render(canvas);
+    const std::uint64_t console_hash = canvas.hash();
+    tab_ = original_tab;
+    std::printf("ui-render width=%d height=%d hash=%016llX machine=%016llX console=%016llX\n",
+                canvas.width(), canvas.height(), static_cast<unsigned long long>(memory_hash),
+                static_cast<unsigned long long>(machine_hash),
+                static_cast<unsigned long long>(console_hash));
+    return true;
+}
+
+bool render_headless(const std::string& image_path,
+                     const std::string& ppm_path,
+                     std::uint64_t& hash,
+                     std::string& error) {
+    DebuggerUI debugger;
+    if (!debugger.load(image_path, error)) {
+        return false;
+    }
+    Canvas canvas(1024, 640);
+    debugger.render(canvas);
+    if (!ppm_path.empty() && !canvas.write_ppm(ppm_path)) {
+        error = "cannot write " + ppm_path;
+        return false;
+    }
+    hash = canvas.hash();
+    return true;
+}
+
+} // namespace kr32::ui

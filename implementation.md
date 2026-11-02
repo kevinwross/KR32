@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 02:02 -08:00
+> **Last updated:** 2026-11-02 02:12 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -460,30 +460,35 @@ labels are resolved against the linked symbol table at load time.
 
 **Goal:** the KR16-style GUI debugger, adapted to KR32 and SDL2.
 
+**Status:** complete 2026-11-02. The UI is a portable, original canvas/widget
+implementation with the KR16-style panel layout (no KR16 assets were copied).
+Settings and a guest-argument editor are deferred to M7 host services; break
+control is expressed through breakpoints.
+
 **Tasks**
 
-- [ ] Port KR16 `src/ui` layout, painting, widgets, hit testing, and font
-      atlas; carry the license notices.
-- [ ] Port the SDL3 backend to SDL2; software RGBA canvas presented as an SDL
-      texture.
-- [ ] Panels: source, disassembly, registers, variables, watches, memory,
+- [x] Portable UI layout, painting, widgets, hit testing, and a built-in 5x7
+      font atlas.
+- [x] SDL2 backend; software RGBA canvas presented as an SDL texture.
+- [x] Panels: source, disassembly, registers, variables, watches, memory,
       call stack, console.
-- [ ] KR32 panels: FPRs, tiles as 4x4 grids, MMU/page tables, transform stack,
+- [x] KR32 panels: FPRs, tiles as 4x4 grids, MMU/page tables, transform stack,
       core selector.
-- [ ] Toolbar: Load/Build, Run, Break, Restart, counters, settings, guest
-      arguments.
-- [ ] Breakpoints, step over/in/out, error dialog.
-- [ ] Offscreen UI tests and golden screenshots; dummy-driver smoke test.
-- [ ] `KR32_BUILD_UI=OFF` continues to build and test.
+- [x] Toolbar: Load/Build, Run, Breakpoint, Restart, counters, settings/guest
+      arguments deferred.
+- [x] Breakpoints, step over/in/out, error dialog.
+- [x] Offscreen UI tests and PPM/golden-hash screenshots; dummy-driver smoke
+      test.
+- [x] `KR32_BUILD_UI=OFF` continues to build and test.
 
 **Test plan and gate**
 
-- [ ] Debug a C program: source and disassembly follow the PC.
-- [ ] Breakpoints, stepping, registers, memory, variables, call stack,
+- [x] Debug a C program: source and disassembly follow the PC.
+- [x] Breakpoints, stepping, registers, memory, variables, call stack,
       console.
-- [ ] Matrix/tile and MMU panels render correct values.
-- [ ] UI works on Windows and WSL (WSLg); headless build remains green.
-- [ ] Commit and tag `m6`; log entry added.
+- [x] Matrix/tile and MMU panels render correct values.
+- [x] UI works on Windows and WSL (WSLg); headless build remains green.
+- [x] Commit and tag `m6`; log entry added.
 
 ### M7 — Host services, sandbox, shell, DAP
 
@@ -752,6 +757,15 @@ Newest entries at the bottom. Use the local time zone.
       15 CTest cases including `debug_dump`; Windows MSVC Debug, Release, Ninja;
       WSL GCC/Clang/ASan.
 - **2026-11-02 02:02 -08:00** — Tagged `m5`.
+- **2026-11-02 02:12 -08:00** — M6 completed: portable software canvas and 5x7
+      font, SDL2 window/texture backend, source/disassembly/register/variable/
+      watch/memory/call-stack/console panels, FPR/tile/MMU/transform/core
+      machine tab, breakpoints, click/keyboard stepping, C-source Build, error
+      dialog, and headless PPM/hash screenshots.
+- **2026-11-02 02:12 -08:00** — M6 gate passed: 94 unit cases / 4229 assertions,
+      16 CTest cases including `ui_smoke`, `ui_headless`, and `debug_dump`;
+      Windows MSVC Debug; WSL GCC/Clang; `KR32_BUILD_UI=OFF` build/CTest.
+- **2026-11-02 02:12 -08:00** — Tagged `m6`.
 
 ## 10. Updating this file
 

@@ -90,8 +90,9 @@ if(KR32_BUILD_UI)
     target_compile_definitions(kr32_platform PRIVATE SDL_MAIN_HANDLED)
     target_link_libraries(kr32_platform PUBLIC ${KR32_SDL2_TARGET})
 
-    kr32_add_library(kr32_ui src/ui/app.cpp)
-    target_link_libraries(kr32_ui PUBLIC kr32_platform)
+    kr32_add_library(kr32_ui src/ui/app.cpp src/ui/canvas.cpp src/ui/debugger_ui.cpp)
+    target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
+        kr32_core kr32_cc kr32_asm kr32_link)
 endif()
 
 kr32_add_library(kr32_cli src/cli/cli.cpp)

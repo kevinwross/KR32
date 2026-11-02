@@ -81,6 +81,7 @@ public:
     void clear_breakpoint(std::uint32_t address);
     void clear_breakpoints();
     [[nodiscard]] bool at_breakpoint() const;
+    [[nodiscard]] const std::set<std::uint32_t>& breakpoints() const { return breakpoints_; }
 
     [[nodiscard]] core::StepResult step();
     [[nodiscard]] core::StepResult run(std::uint64_t max_steps = 1'000'000);
