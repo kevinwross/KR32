@@ -320,7 +320,21 @@ std::string preprocess(std::string_view source) {
                         "void *realloc(void *pointer, int size); "
                         "void *memcpy(void *destination, const void *source, int count); "
                         "void *memset(void *destination, int value, int count); "
-                        "int strlen(const char *text);";
+                        "int strlen(const char *text); "
+                        "char *strcpy(char *destination, const char *source); "
+                        "char *strncpy(char *destination, const char *source, int count); "
+                        "char *strcat(char *destination, const char *source); "
+                        "char *strncat(char *destination, const char *source, int count); "
+                        "int strcmp(const char *left, const char *right); "
+                        "int strncmp(const char *left, const char *right, int count); "
+                        "char *strchr(const char *text, int character); "
+                        "char *strrchr(const char *text, int character); "
+                        "char *strstr(const char *text, const char *needle); "
+                        "char *strtok(char *text, const char *delimiters); "
+                        "char *strdup(const char *text); "
+                        "void *memmove(void *destination, const void *source, int count); "
+                        "int memcmp(const void *left, const void *right, int count); "
+                        "void *memchr(const void *memory, int character, int count);";
                 }
                 if (directive.find("stdarg.h") != std::string::npos) {
                     result += "typedef char *va_list;";

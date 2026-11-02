@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:48 -08:00
+> **Last updated:** 2026-11-02 13:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -972,6 +972,11 @@ Newest entries at the bottom. Use the local time zone.
       `src/cc/libc.c`, embed it via CMake, keep its debug records with source id
       1, and load/switch between all debug source files in the GUI. Stepping
       into `printf`/`malloc` now shows `src/cc/libc.c` and its locals.
+- **2026-11-02 13:02 -08:00** — Added the remaining C string/memory routines:
+      `strcpy`, `strncpy`, `strcat`, `strncat`, `strcmp`, `strncmp`, `strchr`,
+      `strrchr`, `strstr`, `strtok`, `strdup`, `memmove`, `memcmp`, and
+      `memchr`, with `<string.h>` prototypes, unit coverage, and
+      `examples/strings.c`.
 
 ## 10. Updating this file
 

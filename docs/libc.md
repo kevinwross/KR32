@@ -61,18 +61,32 @@ The allocator is a boundary-tag allocator with address-ordered free lists:
 
 ## String and memory functions
 
-The runtime currently provides only three string/memory routines:
+The runtime provides:
 
-| Function | Signature | Notes |
-| --- | --- | --- |
-| `strlen` | `int strlen(const char *text)` | Scans to the first NUL |
-| `memcpy` | `void *memcpy(void *dst, const void *src, int count)` | Non-overlapping regions; returns `dst` |
-| `memset` | `void *memset(void *dst, int value, int count)` | Uses the low byte of `value`; returns `dst` |
+| Function | Signature |
+| --- | --- |
+| `strlen` | `int strlen(const char *text)` |
+| `memcpy` | `void *memcpy(void *dst, const void *src, int count)` |
+| `memset` | `void *memset(void *dst, int value, int count)` |
+| `strcpy` | `char *strcpy(char *dst, const char *src)` |
+| `strncpy` | `char *strncpy(char *dst, const char *src, int count)` |
+| `strcat` | `char *strcat(char *dst, const char *src)` |
+| `strncat` | `char *strncat(char *dst, const char *src, int count)` |
+| `strcmp` | `int strcmp(const char *left, const char *right)` |
+| `strncmp` | `int strncmp(const char *left, const char *right, int count)` |
+| `strchr` | `char *strchr(const char *text, int character)` |
+| `strrchr` | `char *strrchr(const char *text, int character)` |
+| `strstr` | `char *strstr(const char *text, const char *needle)` |
+| `strtok` | `char *strtok(char *text, const char *delimiters)` |
+| `strdup` | `char *strdup(const char *text)` |
+| `memmove` | `void *memmove(void *dst, const void *src, int count)` |
+| `memcmp` | `int memcmp(const void *left, const void *right, int count)` |
+| `memchr` | `void *memchr(const void *memory, int character, int count)` |
 
-There is no `strcpy`, `strncpy`, `strcmp`, `strncmp`, `strcat`, `strncat`,
-`strchr`, `strrchr`, `strstr`, `strtok`, `strdup`, `memmove`, `memcmp`, or
-`memchr` yet. `<string.h>` is a synthetic header that exposes the three existing
-prototypes. All sizes and lengths are 32-bit `int` values in the current libc.
+`memcpy` requires non-overlapping regions; use `memmove` when they may overlap.
+`strtok` uses a single static cursor and is not reentrant or thread-safe.
+`strdup` allocates with `malloc`; free its result with `free`. All lengths and
+counts are 32-bit `int` values. `<string.h>` exposes the complete set.
 
 ## printf
 

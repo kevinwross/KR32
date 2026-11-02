@@ -128,6 +128,14 @@ add_test(NAME build_c_libc
 set_tests_properties(build_c_libc PROPERTIES
     PASS_REGULAR_EXPRESSION "heap reuse: ok")
 
+add_test(NAME build_c_strings
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/strings.c
+        -o ${CMAKE_BINARY_DIR}/strings-c.k32 --run)
+set_tests_properties(build_c_strings PROPERTIES
+    PASS_REGULAR_EXPRESSION "memmove: ababcd")
+
+
 
 
 

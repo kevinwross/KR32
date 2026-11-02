@@ -636,6 +636,221 @@ float fmaxf(float left, float right) {
     return __builtin_fmax(left, right);
 }
 
+char *strcpy(char *destination, const char *source) {
+    char *result = destination;
+    while (*source != '\0') {
+        *destination = *source;
+        destination = destination + 1;
+        source = source + 1;
+    }
+    *destination = '\0';
+    return result;
+}
+
+char *strncpy(char *destination, const char *source, int count) {
+    char *result = destination;
+    int index = 0;
+    while (index < count && source[index] != '\0') {
+        destination[index] = source[index];
+        index = index + 1;
+    }
+    while (index < count) {
+        destination[index] = '\0';
+        index = index + 1;
+    }
+    return result;
+}
+
+char *strcat(char *destination, const char *source) {
+    char *result = destination;
+    while (*destination != '\0') {
+        destination = destination + 1;
+    }
+    strcpy(destination, source);
+    return result;
+}
+
+char *strncat(char *destination, const char *source, int count) {
+    char *result = destination;
+    while (*destination != '\0') {
+        destination = destination + 1;
+    }
+    int index = 0;
+    while (index < count && source[index] != '\0') {
+        destination[index] = source[index];
+        index = index + 1;
+    }
+    destination[index] = '\0';
+    return result;
+}
+
+int strcmp(const char *left, const char *right) {
+    int index = 0;
+    while (left[index] != '\0' && left[index] == right[index]) {
+        index = index + 1;
+    }
+    return (left[index] & 0xFF) - (right[index] & 0xFF);
+}
+
+int strncmp(const char *left, const char *right, int count) {
+    int index = 0;
+    while (index < count) {
+        const int difference =
+            (left[index] & 0xFF) - (right[index] & 0xFF);
+        if (difference != 0 || left[index] == '\0') {
+            return difference;
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
+char *strchr(const char *text, int character) {
+    const char wanted = (char)character;
+    while (*text != '\0') {
+        if (*text == wanted) {
+            return (char *)text;
+        }
+        text = text + 1;
+    }
+    if (wanted == '\0') {
+        return (char *)text;
+    }
+    return 0;
+}
+
+char *strrchr(const char *text, int character) {
+    const char wanted = (char)character;
+    const char *last = 0;
+    while (*text != '\0') {
+        if (*text == wanted) {
+            last = text;
+        }
+        text = text + 1;
+    }
+    if (wanted == '\0') {
+        return (char *)text;
+    }
+    return (char *)last;
+}
+
+char *strstr(const char *text, const char *needle) {
+    if (*needle == '\0') {
+        return (char *)text;
+    }
+    while (*text != '\0') {
+        const char *left = text;
+        const char *right = needle;
+        while (*right != '\0' && *left == *right) {
+            left = left + 1;
+            right = right + 1;
+        }
+        if (*right == '\0') {
+            return (char *)text;
+        }
+        text = text + 1;
+    }
+    return 0;
+}
+
+static int is_delimiter(char character, const char *delimiters) {
+    while (*delimiters != '\0') {
+        if (*delimiters == character) {
+            return 1;
+        }
+        delimiters = delimiters + 1;
+    }
+    return 0;
+}
+
+static char *token_cursor = 0;
+
+char *strtok(char *text, const char *delimiters) {
+    if (text != 0) {
+        token_cursor = text;
+    }
+    if (token_cursor == 0) {
+        return 0;
+    }
+    while (*token_cursor != '\0' && is_delimiter(*token_cursor, delimiters)) {
+        token_cursor = token_cursor + 1;
+    }
+    if (*token_cursor == '\0') {
+        token_cursor = 0;
+        return 0;
+    }
+    char *result = token_cursor;
+    while (*token_cursor != '\0' && !is_delimiter(*token_cursor, delimiters)) {
+        token_cursor = token_cursor + 1;
+    }
+    if (*token_cursor != '\0') {
+        *token_cursor = '\0';
+        token_cursor = token_cursor + 1;
+    } else {
+        token_cursor = 0;
+    }
+    return result;
+}
+
+char *strdup(const char *text) {
+    const int length = strlen(text);
+    char *copy = (char *)malloc(length + 1);
+    if (copy == 0) {
+        return 0;
+    }
+    memcpy(copy, text, length + 1);
+    return copy;
+}
+
+void *memmove(void *destination, const void *source, int count) {
+    char *to = (char *)destination;
+    const char *from = (const char *)source;
+    if (count <= 0 || to == from) {
+        return destination;
+    }
+    if ((unsigned int)to < (unsigned int)from) {
+        int index = 0;
+        while (index < count) {
+            to[index] = from[index];
+            index = index + 1;
+        }
+    } else {
+        int index = count;
+        while (index > 0) {
+            index = index - 1;
+            to[index] = from[index];
+        }
+    }
+    return destination;
+}
+
+int memcmp(const void *left, const void *right, int count) {
+    const char *a = (const char *)left;
+    const char *b = (const char *)right;
+    int index = 0;
+    while (index < count) {
+        const int difference = (a[index] & 0xFF) - (b[index] & 0xFF);
+        if (difference != 0) {
+            return difference;
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
+void *memchr(const void *memory, int character, int count) {
+    const char *bytes = (const char *)memory;
+    const char wanted = (char)character;
+    int index = 0;
+    while (index < count) {
+        if (bytes[index] == wanted) {
+            return (void *)(bytes + index);
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
 int printf(const char *format, ...) {
     va_list arguments;
     va_start(arguments, format);

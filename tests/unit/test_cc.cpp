@@ -323,6 +323,37 @@ TEST_CASE("LL/SC and bit builtins expose the atomic and bit escapes") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("libc string and memory functions work together") {
+    const ProgramResult program = compile_and_run(
+        "#include <string.h>\n"
+        "int main(void) {\n"
+        "    char text[64];\n"
+        "    strcpy(text, \"hello\");\n"
+        "    strcat(text, \" world\");\n"
+        "    if (strcmp(text, \"hello world\") != 0) return 1;\n"
+        "    if (strncmp(text, \"hello\", 5) != 0) return 2;\n"
+        "    if (strchr(text, 'w') == 0 || strrchr(text, 'o') == 0) return 3;\n"
+        "    if (strstr(text, \"world\") == 0) return 4;\n"
+        "    char overlap[16];\n"
+        "    strcpy(overlap, \"abcdef\");\n"
+        "    memmove(overlap + 2, overlap, 4);\n"
+        "    if (strcmp(overlap, \"ababcd\") != 0) return 5;\n"
+        "    if (memcmp(\"abc\", \"abc\", 3) != 0) return 6;\n"
+        "    if (memchr(overlap, 'd', 16) == 0) return 7;\n"
+        "    char tokens[32];\n"
+        "    strcpy(tokens, \"one,two;three\");\n"
+        "    if (strcmp(strtok(tokens, \",;\"), \"one\") != 0) return 8;\n"
+        "    if (strcmp(strtok(0, \",;\"), \"two\") != 0) return 9;\n"
+        "    if (strcmp(strtok(0, \",;\"), \"three\") != 0) return 10;\n"
+        "    char *copy = strdup(\"abc\");\n"
+        "    if (copy == 0 || strcmp(copy, \"abc\") != 0) return 11;\n"
+        "    free(copy);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("overflow builtins report wraparound") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"
