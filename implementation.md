@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 09:27 -08:00
+> **Last updated:** 2026-11-02 09:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -547,13 +547,15 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 
 **Goal:** a C++ compiler module linked into `kr32`, with C++ source debugging.
 
-**Status:** planning/draft. The design contract is
+**Status:** planning/final review. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the standalone API and `kr32-cxx` driver
-skeleton are in place. Major decisions confirmed 2026-11-02: custom C++11 subset,
-one thread per core with cooperative oversubscription, `R11` TP, library
-matrices plus intrinsics, `double` align 8/16-byte call boundaries, and explicit
-per-thread transform stacks. The front end remains a diagnostic stub until the
-remaining review items are settled; `cpp-impl.md` will follow approval.
+skeleton are in place. Architecture decisions confirmed 2026-11-02: custom C++11
+subset, one thread per core with cooperative oversubscription, `R11` TP, library
+matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
+per-thread transform stacks, full destructor unwinding, scalar FP library,
+stack-based FP varargs, Itanium-like mangling, class-member/`this` debug support,
+and a separate `m9-cxx` worktree. Only the section 4.1 language surface and
+varargs ABI detail await final confirmation; `cpp-impl.md` follows approval.
 
 **Tasks**
 
@@ -568,6 +570,7 @@ remaining review items are settled; `cpp-impl.md` will follow approval.
 - [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
       RTTI, `new`/`delete`, static initialization.
 - [ ] Scalar `float`/`double` codegen, FP calls/spills, and ABI alignment.
+- [ ] Variadic functions with promoted `float`/`double` arguments and `va_list`.
 - [ ] Matrix library and intrinsics: `mat4`/`vec4`, tile allocation,
       `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, transform-stack push/pop.
 - [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
@@ -581,6 +584,7 @@ remaining review items are settled; `cpp-impl.md` will follow approval.
 
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Float/double arithmetic and calls match ISA semantics.
+- [ ] Variadic `double`/`va_list` tests pass.
 - [ ] Matrix multiply/transform/dot and transform-stack tests pass.
 - [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
@@ -888,6 +892,12 @@ Newest entries at the bottom. Use the local time zone.
       `double`, FP ABI, `mat4`/`vec4` intrinsics, transform-stack rules, and
       FP/matrix test gates to the plan and checklist. Remaining decisions are
       listed in `docs/cpp-plan.md` section 15.
+- **2026-11-02 09:30 -08:00** — Completed the M9 review decisions: full
+      destructor unwinding, scalar FP library only, FP varargs with stack-passed
+      promoted doubles, Itanium-like mangling, class-member/`this` debug gate,
+      and a separate `m9-cxx` worktree. Updated the plan and checklist; only the
+      section 4.1 language surface and stack-varargs ABI detail remain for final
+      approval.
 
 ## 10. Updating this file
 

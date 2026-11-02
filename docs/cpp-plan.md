@@ -1,12 +1,14 @@
 # KR32 C++ toolchain (M9) plan
 
-**Status:** draft for review, 2026-11-02. The major architecture decisions were
-confirmed in review: custom C++11 subset front end, one thread per core with
-cooperative oversubscription, `R11` as the thread pointer, library matrix types
-plus compiler intrinsics, 8-byte `double` alignment with 16-byte public call
-boundaries, and explicit per-thread transform-stack discipline. Remaining review
-items are listed in section 15. `implementation.md` remains the milestone
-checklist.
+**Status:** ready for final language-subset review, 2026-11-02. Architecture
+decisions confirmed: custom C++11 subset front end, one thread per core with
+cooperative oversubscription, `R11` TP, library matrix types plus intrinsics,
+`double` align 8/16-byte call boundaries, explicit per-thread transform stacks,
+full destructor unwinding, scalar FP library only, FP varargs, Itanium-like
+mangling, class-member/`this` debug support, `kr32-cxx`, and a separate
+`m9-cxx` worktree. The remaining item is confirmation of the section 4.1
+language surface and the proposed stack-based varargs rule. `implementation.md`
+remains the milestone checklist.
 
 ## 1. Goals
 
@@ -46,16 +48,20 @@ These decisions were confirmed during the 2026-11-02 review.
 | --- | --- |
 | Front end | Custom recursive-descent C++ subset front end; no EDG/Clang dependency |
 | Language level | C++11-flavoured subset, not full standard conformance |
-| ABI | Documented KR32 C++ ABI, Itanium-like name mangling where practical (mangling still to confirm) |
+| ABI | Documented KR32 C++ ABI; Itanium-like name mangling |
 | Object model | Extend the existing object/debug model; C and C++ share `.k32` |
-| Exceptions | Table-driven cleanup/landing pads, introduced after basic classes |
+| Exceptions | Table-driven cleanup with full destructor unwinding |
 | Threads | Guest threads mapped to KR32 cores; one thread per core with cooperative oversubscription; no host OS threads |
 | TLS | `R11` is the C++ thread pointer |
 | FP layout | `float` align 4; `double` align 8; 16-byte public call boundaries |
+| FP library | Scalar math plus `numeric_limits<float/double>`; formatted FP I/O deferred |
+| Varargs | FP varargs supported; stack-passed with float promoted to double |
 | Matrices | `kr32::mat4`/`vec4` library types plus compiler intrinsics; `T0..T15` caller-saved |
 | Transform stack | Explicit library push/pop/drop; TSP owned by the current thread |
 | Standard library | Freestanding runtime plus a small selected `std::` subset |
+| Debug | Lines, locals, class members, and `this` in the first GUI gate |
 | Driver | `kr32-cxx` standalone executable plus a library API |
+| Workflow | Separate `m9-cxx` worktree/branch |
 | Integration | Library target first, CLI wiring last |
 | Directory | `src/cxx`, `include/kr32/cxx`, `tests/cxx` |
 
@@ -68,6 +74,10 @@ These decisions were confirmed during the 2026-11-02 review.
 - `float` (32-bit) and `double` (64-bit), including literals, arithmetic,
   comparisons, conversions, NaN/infinity, and `long double` as a documented
   alias for `double` initially.
+- Variadic functions with `float`/`double` arguments; float promotes to double.
+  Variadic arguments are passed on the stack (named arguments keep the normal
+  ABI), and `va_list` points at the first variadic slot. This is the proposed
+  simple rule for review.
 - Namespaces, nested names, `using` declarations.
 - Function and operator overloading.
 - Default arguments and `const` member functions.
@@ -265,6 +275,9 @@ Extend `docs/abi.md` into one C/C++ ABI document covering:
 - `this` convention; member function calling convention.
 - Scalar FP arguments in `F0..F7`, FP returns in `F0`/`F1`, and `F8..F15`
   callee-saved; mixed integer/FP argument assignment.
+- Variadic calls: named arguments follow the normal ABI; variadic arguments are
+  stack-passed in order, `float` promotes to `double`, and `va_list` addresses
+  the first variadic slot.
 - Tile registers `T0..T15` as caller-saved; matrix arguments by pointer/reference
   in the first ABI; transform-stack (`TSP`) ownership.
 - Vtable layout, RTTI pointer, virtual destructor slots.
@@ -312,6 +325,8 @@ Freestanding runtime additions:
 - Thread runtime, `futex`, TLS setup, and thread entry thunk.
 - `kr32/matrix.hpp`: `mat4`, `vec4`, transform-stack helpers, and FP math
   wrappers (`sqrtf`, `fabsf`, `fminf`, `fmaxf`, and double variants).
+- `va_list`/`va_start`/`va_arg`/`va_end` support for the stack-based variadic
+  ABI. Formatted FP output is not part of the first library gate.
 - Minimal `std::` types listed in section 4.1.
 
 The initial library is intentionally small. Missing headers must produce a clear
@@ -428,6 +443,7 @@ tests/cxx/                       C++ compiler tests
 - Compile, assemble, link, run C++ programs through the existing tools.
 - Float/double arithmetic, literals, conversions, comparisons, NaN/infinity, and
   FP spills.
+- Variadic calls with promoted `double` arguments and `va_arg` access.
 - Matrix multiply, transform, transpose, dot product, and transform-stack
   push/pop/drop against scalar reference results.
 - Multiple translation units, headers, inline functions, weak/COMDAT.
@@ -469,24 +485,17 @@ Threads are late in the sequence but not an afterthought: TP/TLS, FP context
 save/restore, and transform-stack ownership are ABI decisions made before codegen
 begins.
 
-## 15. Open questions for review
+## 15. Final review items
 
-1. **Language scope:** is the section 4.1 subset the right M9 gate, including
-   `float`/`double` and the listed matrix library surface?
-2. **Exceptions:** table-driven cleanup (confirmed direction) — do we require
-   destructor unwinding in the first exception gate, or can the first gate be
-   throw/catch without full cleanup?
-3. **Standard library:** is the minimal `std::` subset enough, or is a named
-   container/string subset required for the gate?
-4. **FP library:** is scalar `<cmath>`-style math plus `numeric_limits` enough,
-   or is formatted FP I/O required as well?
-5. **Name mangling:** Itanium-like (recommended) or a smaller custom scheme?
-6. **Debug:** must class members/`this`/templates be in the first GUI gate, or
-   can they land after the core compiler?
-7. **Driver:** is `kr32-cxx` acceptable as the standalone name and root CMake
-   target?
-8. **Repository workflow:** separate worktree/branch for M9, or direct work in
-   the current tree?
+All architecture choices are settled except final confirmation of the language
+surface:
+
+1. **Language scope:** confirm the section 4.1 subset, including `float`/`double`,
+   FP varargs, and the proposed `kr32::mat4`/`vec4` library API.
+2. **Varargs ABI detail:** confirm stack-passed variadic arguments with
+   `float` promoted to `double` (recommended; avoids an FP register-save area).
+
+Once these are accepted, create `cpp-impl.md` and start the `m9-cxx` worktree.
 
 ## 16. Risks
 
@@ -507,12 +516,12 @@ begins.
 Before handing this to a subagent:
 
 - [x] Confirm custom front end vs external front end.
-- [ ] Confirm language subset, including float/double and the matrix surface,
-      and thread/exception scope.
+- [ ] Confirm language subset, including float/double, FP varargs, and the
+      matrix surface.
 - [x] Confirm `R11` TP.
-- [ ] Confirm standalone driver name and directory layout.
+- [x] Confirm standalone driver name and directory layout.
 - [x] Confirm `docs/cpp-plan.md` is the design source of truth.
-- [ ] Confirm worktree/branch strategy.
+- [x] Confirm worktree/branch strategy.
 
 Once approved, create `cpp-impl.md` as the live task/status tracker and keep this
 document as the design contract.
