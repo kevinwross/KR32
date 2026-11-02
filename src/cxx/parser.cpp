@@ -42,6 +42,7 @@ struct Specifiers {
     bool is_typedef = false;
     bool is_typename = false;
     bool is_auto = false;
+    bool is_extern = false;
 };
 
 struct Declarator {
@@ -412,6 +413,14 @@ private:
             }
             if (at("register")) {
                 advance();
+                continue;
+            }
+            if (at("extern")) {
+                specifiers.is_extern = true;
+                advance();
+                if (peek().kind == TokenKind::StringLiteral) {
+                    advance();
+                }
                 continue;
             }
             if (at("typedef")) {
@@ -929,6 +938,8 @@ private:
             declaration->is_mutable = specifiers.is_mutable;
             declaration->is_thread_local = specifiers.is_thread_local;
             declaration->is_typedef = specifiers.is_typedef;
+            declaration->is_extern = specifiers.is_extern;
+            declaration->is_operator = declarator.is_operator;
             declaration->is_override = declarator.is_override;
             declaration->is_final = declarator.is_final;
             declaration->is_pure = declarator.is_pure;
@@ -1365,16 +1376,16 @@ private:
         }
         if (peek(index).text == "<") {
             int depth = 0;
-            while (!at_end()) {
-                if (peek(index).text == "<") {
+            while (index < tokens_.size()) {
+                if (tokens_[index].text == "<") {
                     ++depth;
-                } else if (peek(index).text == ">") {
+                } else if (tokens_[index].text == ">") {
                     --depth;
                     if (depth == 0) {
                         ++index;
                         break;
                     }
-                } else if (peek(index).text == ">>") {
+                } else if (tokens_[index].text == ">>") {
                     depth -= 2;
                     if (depth <= 0) {
                         ++index;

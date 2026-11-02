@@ -258,9 +258,11 @@ struct Decl {
     bool is_specialization = false;
     bool is_enum_class = false;
     bool is_extern_c = false;
+    bool is_extern = false;
     bool is_using_namespace = false;
     bool is_constructor = false;
     bool is_destructor = false;
+    bool is_operator = false;
     Access access = Access::Public;
 };
 

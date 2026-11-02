@@ -18,7 +18,8 @@ add_executable(kr32_tests
     unit/test_disassembler.cpp
     cxx/test_cxx_abi.cpp
     cxx/test_cxx_api.cpp
-    cxx/test_cxx_parser.cpp)
+    cxx/test_cxx_parser.cpp
+    cxx/test_cxx_codegen.cpp)
 
 target_link_libraries(kr32_tests PRIVATE
     kr32_core

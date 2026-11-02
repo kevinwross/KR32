@@ -64,7 +64,8 @@ kr32_add_library(kr32_cxx
     src/cxx/ast.cpp
     src/cxx/lexer.cpp
     src/cxx/preprocessor.cpp
-    src/cxx/parser.cpp)
+    src/cxx/parser.cpp
+    src/cxx/codegen.cpp)
 target_link_libraries(kr32_cxx PUBLIC kr32_asm kr32_container)
 target_include_directories(kr32_cxx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 

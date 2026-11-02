@@ -1,7 +1,9 @@
 #include "kr32/cxx/cxx.h"
 
+#include "cxx/codegen.h"
 #include "cxx/parser.h"
 
+#include <memory>
 #include <utility>
 
 namespace kr32::cxx {
@@ -13,17 +15,23 @@ Result compile(std::string_view source, const Options& options) {
     if (!result.diagnostics.empty()) {
         return result;
     }
-    (void)unit;
 
-    // The lexer/parser/AST front end is in place; lowering and code generation
-    // arrive in later M9 phases. A successful parse still reports that the
-    // backend is missing rather than pretending to produce output.
-    Diagnostic diagnostic;
-    diagnostic.line = 1;
-    diagnostic.column = 1;
-    diagnostic.message =
-        "C++ code generation is not implemented yet; the parser accepted the input";
-    result.diagnostics.push_back(std::move(diagnostic));
+    if (options.emit == Emit::Object) {
+        Diagnostic diagnostic;
+        diagnostic.line = 1;
+        diagnostic.column = 1;
+        diagnostic.message =
+            "relocatable object output is not implemented yet; use --emit asm";
+        result.diagnostics.push_back(std::move(diagnostic));
+        return result;
+    }
+
+    result.assembly = generate_assembly(*unit, result.diagnostics);
+    if (!result.diagnostics.empty()) {
+        result.assembly.clear();
+        return result;
+    }
+    result.ok = true;
     return result;
 }
 

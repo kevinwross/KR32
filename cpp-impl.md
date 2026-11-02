@@ -2,9 +2,10 @@
 
 **Status:** approved and started 2026-11-02. Design approved in
 [docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
-worktree/branch. Phases M9.1 (ABI/API/test harness) and M9.2 (preprocessor,
-lexer, parser, AST, diagnostics) are complete; phase M9.3 (semantic analysis,
-mangling, and integer code generation) is next.
+worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
+lexer, parser, AST, diagnostics), and M9.3 (scopes, name lookup, overloads,
+mangling, integer code generation) are complete; phase M9.4 (scalar
+`float`/`double`) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -64,10 +65,23 @@ Completed in M9.2:
 - [x] Host parser tests under `tests/cxx/test_cxx_parser.cpp`, including a
       malformed-input corpus.
 
+Completed in M9.3:
+
+- [x] Symbol collection, namespace scopes, name lookup, `using` declarations and
+      `using namespace`, and overload resolution for integer/pointer/reference
+      parameters (`src/cxx/codegen.*`).
+- [x] Itanium-like mangling for free functions, namespaces, and globals, with
+      unit tests for the documented examples.
+- [x] Direct assembly lowering for functions, calls, locals, globals, arrays,
+      pointers, references, integer arithmetic/comparisons, and control flow;
+      `compile()` now returns assembly and `ok`.
+- [x] C frame shape with 16-byte public call alignment.
+- [x] Codegen tests: functions, recursion, namespaces/overloads, references,
+      arrays/loops, globals, `extern "C"`, cross-TU linking, and unsupported
+      class diagnostics.
+
 Not started:
 
-- [ ] Semantic analysis, symbol tables, overload resolution, mangling, and
-      integer code generation (M9.3).
 - [ ] Scalar FP, classes, virtual dispatch/RTTI, matrices, templates, exceptions,
       threads, debug, and CLI integration (M9.4-M9.12).
 
@@ -80,7 +94,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.0 | Review this tracker, create `m9-cxx` worktree, freeze phase-1 files | tracker approved; clean worktree | done |
 | M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | done |
 | M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | done |
-| M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | not started |
+| M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | done |
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | not started |
 | M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | not started |
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | not started |
@@ -154,15 +168,19 @@ including the malformed-input corpus. M9.3 is next.
 
 ### M9.3 — Functions, namespaces, references, overloads
 
-- [ ] Build scopes, name lookup, namespace qualification, `using`.
-- [ ] Function types, parameter passing, return types, references.
-- [ ] Overload resolution for the supported subset.
-- [ ] Itanium-like mangling for free functions and namespaces.
-- [ ] Lower functions and calls to the IR/assembly path.
-- [ ] Reuse the C frame shape initially, with 16-byte public call alignment.
-- [ ] Integration tests: multiple functions, references, overloads, multi-TU.
+- [x] Build scopes, name lookup, namespace qualification, `using`.
+- [x] Function types, parameter passing, return types, references.
+- [x] Overload resolution for the supported subset.
+- [x] Itanium-like mangling for free functions and namespaces.
+- [x] Lower functions and calls to the IR/assembly path. (Direct assembly
+      lowering for now; a shared optimization IR remains a later refactor.)
+- [x] Reuse the C frame shape initially, with 16-byte public call alignment.
+- [x] Integration tests: multiple functions, references, overloads, multi-TU.
 
 **Gate:** simple C++ programs compile, link, and run through the existing tools.
+**Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 142 test cases and 4646 assertions.
+M9.4 (scalar `float`/`double`) is next.
 
 ### M9.4 — Scalar float and double
 
@@ -341,6 +359,16 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   Windows MSVC Debug and WSL GCC headless both pass 21/21 CTest tests;
   `kr32_tests` reports 131 test cases and 4617 assertions. M9.3 (semantic
   analysis, mangling, integer code generation) is next.
+- **2026-11-02 11:25 -08:00** — Completed M9.3. Added symbol collection, namespace
+  scopes, `using`/`using namespace`, overload resolution, Itanium-like mangling,
+  and direct assembly lowering for functions, calls, locals, globals, arrays,
+  pointers, references, integer operations, and control flow. `compile()` now
+  returns assembly on success. Added codegen tests for recursion, namespaces and
+  overloads, references, arrays, globals, `extern "C"`, cross-TU linking, and
+  unsupported-class diagnostics. Windows/WSL both pass 21/21 CTest tests;
+  `kr32_tests` reports 142 test cases and 4646 assertions. M9.4 (scalar
+  `float`/`double`) is next; the main-branch `.float`/`.double` assembler
+  directives and FP instruction support are available for it.
 
 ## 8. Approval
 

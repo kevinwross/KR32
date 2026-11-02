@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 11:10 -08:00
+> **Last updated:** 2026-11-02 11:25 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -550,17 +550,17 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 **Status:** implementation started 2026-11-02. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the implementation/task tracker is
 [cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phases M9.1
-(ABI/API/test harness) and M9.2 (preprocessor, lexer, AST, parser, diagnostics)
-are complete, and M9.3 (semantic analysis, mangling, integer code generation) is
-next. C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with
-machine-checkable constants in `include/kr32/cxx/abi.h`. The standalone API and
-`kr32-cxx` driver skeleton are in place, and `compile()` now runs the front end
-before reporting the missing backend. Confirmed decisions include custom C++11
-subset, one thread per core with cooperative oversubscription, `R11` TP, library
-matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
-per-thread transform stacks, full destructor unwinding, scalar FP library,
-stack-based FP varargs, Itanium-like mangling, and class-member/`this` debug
-support.
+(ABI/API/test harness), M9.2 (preprocessor, lexer, AST, parser, diagnostics), and
+M9.3 (scopes, name lookup, overloads, mangling, integer code generation) are
+complete, and M9.4 (scalar `float`/`double`) is next. C++ ABI revision 1 is
+frozen in [docs/abi.md](docs/abi.md) with machine-checkable constants in
+`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
+in place, and `compile()` now produces assembly for the supported integer
+subset. Confirmed decisions include custom C++11 subset, one thread per core
+with cooperative oversubscription, `R11` TP, library matrices plus intrinsics,
+`double` align 8/16-byte call boundaries, explicit per-thread transform stacks,
+full destructor unwinding, scalar FP library, stack-based FP varargs,
+Itanium-like mangling, and class-member/`this` debug support.
 
 **Tasks**
 
@@ -577,6 +577,10 @@ support.
 - [x] Choose a custom C++ front end; no external front-end dependency.
 - [x] C++ preprocessor, lexer, AST, recursive-descent parser, and diagnostics
       (M9.2); host parser tests including a malformed-input corpus.
+- [x] Integer C++ semantic analysis, namespace/`using` lookup, overload
+      resolution, Itanium-like mangling, and direct assembly lowering (M9.3);
+      functions, recursion, references, arrays, globals, `extern "C"`, and
+      multi-TU tests run through the existing linker/VM.
 - [ ] `kr32_cxx` module: front end, lowering, code generation, weak/COMDAT
       merge.
 - [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
@@ -598,6 +602,9 @@ support.
       Windows/WSL (M9.1 gate: 21/21 CTest).
 - [x] Preprocessor/lexer/parser/AST tests, including malformed input, pass on
       Windows/WSL (M9.2 gate: 131 cases / 4617 assertions).
+- [x] Integer C++ functions, overloads, references, arrays, globals, `extern "C"`,
+      and cross-TU linking compile, link, and run (M9.3 gate: 142 cases / 4646
+      assertions).
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Float/double arithmetic and calls match ISA semantics.
 - [ ] Variadic `double`/`va_list` tests pass.
@@ -945,6 +952,17 @@ Newest entries at the bottom. Use the local time zone.
       GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 131 test
       cases and 4617 assertions. M9.3 (semantic analysis, mangling, integer
       code generation) is next.
+- **2026-11-02 11:25 -08:00** — Completed M9.3. Added symbol collection,
+      namespace scopes, `using`/`using namespace`, overload resolution,
+      Itanium-like mangling, and direct assembly lowering for functions, calls,
+      locals, globals, arrays, pointers, references, integer operations, and
+      control flow. `compile()` now returns assembly for the supported subset.
+      Added codegen tests for recursion, namespaces/overloads, references,
+      arrays/loops, globals, `extern "C"`, multi-TU linking, and unsupported
+      class diagnostics. Windows/WSL both pass 21/21 CTest tests; `kr32_tests`
+      reports 142 test cases and 4646 assertions. M9.4 (scalar `float`/`double`)
+      is next; the main-branch `.float`/`.double` data directives and FP
+      instruction support are available for that phase.
 
 ## 10. Updating this file
 
