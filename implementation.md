@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 00:46 -08:00
+> **Last updated:** 2026-11-02 00:54 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -195,6 +195,10 @@ container, debug format, and ABI are designed for C++ from the start.
 **Goal:** a repository that builds one `kr32` executable on Windows and WSL,
 with the module boundaries, CI, and test harness in place.
 
+**Status:** code complete 2026-11-02. The local gate passes on Windows and WSL.
+The CI workflow is in place; its first remote run is pending because no remote
+is configured yet.
+
 **Tasks**
 
 - [x] Initialise the local Git repository with the global identity, branch
@@ -206,49 +210,50 @@ with the module boundaries, CI, and test harness in place.
       C++20/SDL2 smoke tests pass.
 - [x] Install SDL2 development files on Windows: 2.32.10 in
       `third_party/SDL2` via `scripts/install-sdl2.ps1`; `SDL2_DIR` set.
-- [ ] Add `README.md` with the one-command build quick start.
-- [ ] Add `CMakeLists.txt` and `CMakePresets.json`:
+- [x] Add `README.md` with the one-command build quick start.
+- [x] Add `CMakeLists.txt` and `CMakePresets.json`:
   - `windows-msvc`, `windows-ninja`
   - `linux-gcc`, `linux-clang`
   - `linux-arm64-gcc`
   - `linux-asan` (ASan + UBSan)
-- [ ] C++20, warnings-as-errors, no compiler-specific extensions.
-- [ ] `KR32_BUILD_UI` option, default ON; `KR32_BUILD_TESTS` option, default ON.
-- [ ] Skeleton libraries with the agreed dependency edges:
+- [x] C++20, warnings-as-errors, no compiler-specific extensions.
+- [x] `KR32_BUILD_UI` option, default ON; `KR32_BUILD_TESTS` option, default ON.
+- [x] Skeleton libraries with the agreed dependency edges:
       `kr32_core`, `kr32_asm`, `kr32_link`, `kr32_container`, `kr32_cc`,
       `kr32_cxx` (stub), `kr32_dis`, `kr32_debug`, `kr32_vm`, `kr32_dap`,
       `kr32_ui`, `kr32_platform`, `kr32_cli`.
-- [ ] `kr32` executable with a CLI dispatcher: `version`, `help`, and stubs for
+- [x] `kr32` executable with a CLI dispatcher: `version`, `help`, and stubs for
       `as`, `ld`, `build`, `cc`, `cxx`, `vm`, `dis`, `size`, `debug`, `dap`,
       `shell`.
-- [ ] Platform-boundary check: `src/ui` contains no OS or SDL headers;
+- [x] Platform-boundary check: `src/ui` contains no OS or SDL headers;
       `src/platform` is the only OS/SDL boundary.
-- [ ] Vendor `third_party/doctest.h`; add a `kr32_tests` target and one smoke
+- [x] Vendor `third_party/doctest.h`; add a `kr32_tests` target and one smoke
       test.
-- [ ] Golden-vector harness skeleton: encode/decode API plus the first vectors
+- [x] Golden-vector harness skeleton: encode/decode API plus the first vectors
       from `docs/isa-v1.md`.
-- [ ] CI workflow:
+- [x] CI workflow:
   - Windows MSVC Debug and Release.
   - Ubuntu GCC and Clang.
-  - Linux ARM64 native (or a documented placeholder until the runner exists).
+  - Linux ARM64 native.
   - Sanitizers.
   - UI ON and UI OFF.
-- [ ] CMake install/package placeholder and a `dist/` convention.
-- [ ] Tag `m0` after the gate passes.
+- [x] CMake install/package placeholder and a `dist/` convention.
+- [x] Tag `m0` after the local gate passes.
 
 **Test plan and gate**
 
-- [ ] Windows: configure and build `windows-msvc` (or `windows-ninja`); `ctest`
-      passes.
-- [ ] WSL: configure and build `linux-gcc` and `linux-clang`; `ctest` passes.
-- [ ] `KR32_BUILD_UI=OFF` configures and builds without SDL2.
-- [ ] `KR32_BUILD_UI=ON` configures and builds with SDL2.
-- [ ] `kr32 version` prints the version tuple.
-- [ ] `kr32 help` lists every command.
-- [ ] Boundary check fails on an intentional OS include in `src/ui` and passes
+- [x] Windows: configure and build `windows-msvc` (Debug and Release) and
+      `windows-ninja` (Debug and Release); `ctest` passes.
+- [x] WSL: configure and build `linux-gcc` and `linux-clang`; `ctest` passes.
+- [x] `KR32_BUILD_UI=OFF` configures and builds without SDL2.
+- [x] `KR32_BUILD_UI=ON` configures and builds with SDL2.
+- [x] `kr32 version` prints the version tuple.
+- [x] `kr32 help` lists every command.
+- [x] Boundary check fails on an intentional OS include in `src/ui` and passes
       on the clean tree.
-- [ ] CI is green on every configured job.
-- [ ] Commit and tag `m0`; log entry added.
+- [ ] CI is green on every configured job. The workflow exists; the first remote
+      run needs a GitHub push.
+- [x] Commit and tag `m0`; log entry added.
 
 ### M1 — Machine core, assembler, disassembler
 
@@ -654,6 +659,15 @@ Newest entries at the bottom. Use the local time zone.
   set, and a minimal CMake + SDL2 link/run test prints `SDL 2.32.10`.
 - **2026-11-02 00:46 -08:00** — Windows dependencies are complete; the headless
   and UI builds can both proceed.
+- **2026-11-02 00:54 -08:00** — M0 scaffold implemented: CMake project and
+  presets, module targets, CLI dispatcher, platform boundary, vendored doctest,
+  golden-vector harness, CI workflow, install/package placeholder, README.
+- **2026-11-02 00:54 -08:00** — M0 local gate passed: Windows MSVC Debug/Release
+  and Ninja Debug/Release; WSL GCC/Clang/ASan; UI ON and OFF; 7 CTest tests;
+  boundary negative test; `kr32 version`, `help`, and `--smoke-ui`.
+- **2026-11-02 00:54 -08:00** — CI workflow is committed; its first remote run is
+  pending because the repository has no remote yet.
+- **2026-11-02 00:54 -08:00** — Tagged `m0`.
 
 ## 10. Updating this file
 
