@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 10:43 -08:00
+> **Last updated:** 2026-11-02 10:59 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -925,6 +925,11 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 10:43 -08:00** — Restored the FPR panel to two columns of eight,
       widened the Cores panel, and added a DOUBLE/FLOAT interpretation toggle.
       FPR editing and hover now follow the active view; the default is double.
+- **2026-11-02 10:59 -08:00** — Added `examples/types.c`: scalar `_Bool`,
+      `char`, signed/unsigned char, `int`, and signed/unsigned int variables
+      with per-type square functions, console output, and a `build_c_types`
+      CTest. The example builds/runs under the M4 C compiler and can be loaded
+      into the GUI.
 
 ## 10. Updating this file
 
