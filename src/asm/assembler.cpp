@@ -186,6 +186,27 @@ bool parse_register(std::string_view text, int& reg) {
     return true;
 }
 
+bool parse_control_register(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 3 || (value[0] != 'c' && value[0] != 'C') ||
+        (value[1] != 'r' && value[1] != 'R')) {
+        return false;
+    }
+    std::size_t index = 2;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 2) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 2);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
 bool take_register(std::string_view text, int& reg, std::string& rest) {
     std::string value = trim(text);
     if (value.empty() || (value[0] != 'r' && value[0] != 'R')) {
@@ -863,6 +884,38 @@ private:
                                instruction, statement.line);
         }
 
+        if (mnemonic == "ll" || mnemonic == "sc") {
+            if (operands.size() != 2) {
+                return fail_operands("Rd, [addr]");
+            }
+            int source = 0;
+            if (!parse_register(operands[0], source)) {
+                return fail(statement.line, "expected a register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            if (memory.indexed) {
+                return fail(statement.line, "LL/SC do not support a base+index operand");
+            }
+            set_destination(source);
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.opcode = (mnemonic == "ll") ? 0x46 : 0x47;
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            instruction.literal = true;
+            Expr displacement = memory.displacement;
+            if (memory.pc_relative && memory.uses_symbol) {
+                displacement.value -= static_cast<std::int64_t>(address);
+            }
+            return set_payload(displacement,
+                               memory.uses_symbol || displacement.value < -1024 ||
+                                   displacement.value > 1023,
+                               instruction, statement.line);
+        }
+
         if (mnemonic == "cmp") {
             if (operands.size() != 2) {
                 return fail_operands("Rs1, Rs2 or Rs1, #imm");
@@ -995,6 +1048,44 @@ private:
             }
         }
 
+        if (mnemonic == "rdcr" || mnemonic == "wrcr") {
+            if (operands.size() != 2) {
+                return fail_operands("Rd, CRn or CRn, Rs");
+            }
+            int control = 0;
+            int reg = 0;
+            if (mnemonic == "rdcr") {
+                if (!parse_register(operands[0], reg) ||
+                    !parse_control_register(operands[1], control)) {
+                    return fail(statement.line, "expected Rd, CRn");
+                }
+                set_destination(reg);
+                instruction.opcode = 0x49;
+            } else {
+                if (!parse_control_register(operands[0], control) ||
+                    !parse_register(operands[1], reg)) {
+                    return fail(statement.line, "expected CRn, Rs");
+                }
+                set_destination(reg);
+                instruction.opcode = 0x4A;
+            }
+            instruction.field = static_cast<std::uint8_t>(control);
+            return true;
+        }
+
+        if (mnemonic == "rdsp" || mnemonic == "wrsp") {
+            if (operands.size() != 1) {
+                return fail_operands("Rd");
+            }
+            int reg = 0;
+            if (!parse_register(operands[0], reg)) {
+                return fail(statement.line, "expected a register");
+            }
+            set_destination(reg);
+            instruction.opcode = (mnemonic == "rdsp") ? 0x4B : 0x4C;
+            return true;
+        }
+
         if (mnemonic == "push" || mnemonic == "pop") {
             if (operands.size() != 1) {
                 return fail_operands("Rs");
@@ -1037,7 +1128,7 @@ private:
         }
 
         if (mnemonic == "nop" || mnemonic == "brk" || mnemonic == "halt" ||
-            mnemonic == "ret") {
+            mnemonic == "ret" || mnemonic == "iret" || mnemonic == "fence") {
             if (!operands.empty()) {
                 return fail_operands("no operands");
             }
@@ -1045,6 +1136,8 @@ private:
             if (mnemonic == "brk") instruction.opcode = 0x44;
             if (mnemonic == "halt") instruction.opcode = 0x43;
             if (mnemonic == "ret") instruction.opcode = 0x3B;
+            if (mnemonic == "iret") instruction.opcode = 0x42;
+            if (mnemonic == "fence") instruction.opcode = 0x48;
             return true;
         }
 

@@ -3,6 +3,8 @@ add_executable(kr32_tests
     unit/test_encoding.cpp
     unit/test_version.cpp
     unit/test_machine.cpp
+    unit/test_privilege.cpp
+    unit/test_boot.cpp
     unit/test_assembler.cpp
     unit/test_disassembler.cpp)
 
@@ -37,6 +39,13 @@ add_test(NAME run_demo
     COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)
 set_tests_properties(run_demo PROPERTIES
     PASS_REGULAR_EXPRESSION "R1=12;R3=30")
+
+add_test(NAME bios_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunBiosSmoke.cmake)
 
 if(KR32_BUILD_UI)
     add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)

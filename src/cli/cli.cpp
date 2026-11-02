@@ -120,8 +120,11 @@ std::string fault_name(core::FaultKind kind) {
     case core::FaultKind::InvalidOpcode: return "invalid-opcode";
     case core::FaultKind::DivideByZero: return "divide-by-zero";
     case core::FaultKind::Breakpoint: return "breakpoint";
+    case core::FaultKind::PageFault: return "page-fault";
     case core::FaultKind::Alignment: return "alignment";
     case core::FaultKind::GeneralProtection: return "general-protection";
+    case core::FaultKind::DoubleFault: return "double-fault";
+    case core::FaultKind::SoftwareInterrupt: return "software-interrupt";
     case core::FaultKind::Limit: return "step-limit";
     case core::FaultKind::None: return "none";
     }
@@ -142,7 +145,7 @@ void print_machine(const core::Machine& machine) {
 }
 
 void print_version() {
-    std::printf("kr32 %s (ISA %s, container %s, M1 core)\n",
+    std::printf("kr32 %s (ISA %s, container %s, M2 machine)\n",
                 kr32::kVersion, kr32::kIsaVersion, kr32::kContainerVersion);
 }
 
@@ -187,11 +190,11 @@ void print_dis_usage() {
 }
 
 void print_vm_usage() {
-    std::printf("Usage: kr32 vm <file> [--base <addr>] [--max-steps <n>] [--ram-size <n>] [--trace] [--stats]\n");
+    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--base <addr>] [--max-steps <n>] [--ram-size <n>] [--trace] [--stats]\n");
 }
 
 int not_implemented(std::string_view command) {
-    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M1 core).\n",
+    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M2 machine).\n",
                  static_cast<int>(command.size()), command.data());
     return 2;
 }
@@ -344,6 +347,7 @@ int command_dis(int argc, char** argv) {
 
 int command_vm(int argc, char** argv) {
     std::string program;
+    std::string bios;
     std::uint32_t base = kDefaultBase;
     std::uint32_t ram_size = core::kDefaultRamSize;
     std::uint64_t max_steps = kDefaultMaxSteps;
@@ -362,6 +366,14 @@ int command_vm(int argc, char** argv) {
         }
         if (argument == "--stats") {
             stats = true;
+            continue;
+        }
+        if (argument == "--bios") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 vm: --bios needs a path\n");
+                return 2;
+            }
+            bios = argv[++index];
             continue;
         }
         if (argument == "--base" || argument == "--ram-size" || argument == "--max-steps") {
@@ -406,7 +418,20 @@ int command_vm(int argc, char** argv) {
         std::fprintf(stderr, "kr32 vm: image does not fit at 0x%08X\n", base);
         return 1;
     }
-    machine.reset(base);
+    if (!bios.empty()) {
+        std::vector<std::uint8_t> rom;
+        if (!read_file(bios, rom, error)) {
+            std::fprintf(stderr, "kr32 vm: %s\n", error.c_str());
+            return 1;
+        }
+        if (!machine.load_image(core::kRomBase, rom)) {
+            std::fprintf(stderr, "kr32 vm: BIOS does not fit in ROM\n");
+            return 1;
+        }
+        machine.reset();
+    } else {
+        machine.reset(base);
+    }
 
     bool halted = false;
     for (std::uint64_t step = 0; step < max_steps; ++step) {

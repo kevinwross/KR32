@@ -14,7 +14,7 @@ using kr32::isa::encode;
 namespace {
 
 Machine make_machine() {
-    return Machine(Machine::Options{1U * 1024U * 1024U});
+    return Machine(Machine::Options{1U * 1024U * 1024U, 0, false});
 }
 
 Instruction make(std::uint8_t opcode,

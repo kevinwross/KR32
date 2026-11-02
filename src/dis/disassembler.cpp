@@ -284,6 +284,9 @@ std::string format_instruction(const isa::Instruction& instruction,
     case 0x41:
         out << "SYSCALL " << value_text(instruction, true);
         break;
+    case 0x42:
+        out << "IRET";
+        break;
     case 0x43:
         out << "HALT";
         break;

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 01:08 -08:00
+> **Last updated:** 2026-11-02 01:19 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -302,26 +302,31 @@ raw-image CLI, symbol listings, demo, and tests pass on Windows and WSL.
 **Goal:** a user-mode-capable machine with paging, faults, and the multicore
 foundation.
 
+**Status:** complete 2026-11-02. The boot test prebuilds the identity page
+tables in the harness; the BIOS installs `PTBR`/`VTBR`/`MCTL`, enables paging,
+and `IRET`s into user code, which then traps through `SYSCALL`. Moving page-table
+construction into the ROM itself is deferred to the boot/loader work in M3/M7.
+
 **Tasks**
 
-- [ ] Exception vectors, delivery frame, `IRET`, `ESR`, `FAR`, `#DF`.
-- [ ] 4 KiB two-level MMU: PTE flags, permissions, `A`/`D`, `PTBR`, `MCTL`.
-- [ ] User/kernel mode, `KSP`, `VTBR`, privileged instructions, `#GP`.
-- [ ] Boot ROM/BIOS: reset vector, identity map, paging enable, jump to kernel.
-- [ ] `LL`/`SC`/`FENCE`, per-core state, `COREID`, inter-processor block.
-- [ ] CLI flags: `--ram-size`, `--bios`, `--max-steps`, `--trace`.
-- [ ] Unit/integration tests for every fault and permission case.
-- [ ] Two-core bring-up smoke test.
+- [x] Exception vectors, delivery frame, `IRET`, `ESR`, `FAR`, `#DF`.
+- [x] 4 KiB two-level MMU: PTE flags, permissions, `A`/`D`, `PTBR`, `MCTL`.
+- [x] User/kernel mode, `KSP`, `VTBR`, privileged instructions, `#GP`.
+- [x] Boot ROM/BIOS: reset vector, identity map, paging enable, jump to kernel.
+- [x] `LL`/`SC`/`FENCE`, per-core state, `COREID`, inter-processor block hook.
+- [x] CLI flags: `--ram-size`, `--bios`, `--max-steps`, `--trace`.
+- [x] Unit/integration tests for every fault and permission case.
+- [x] Two-core bring-up smoke test.
 
 **Test plan and gate**
 
-- [ ] `#PF` error code and `FAR` are correct for load/store/fetch/user.
-- [ ] Guard region faults in both paging modes.
-- [ ] `IRET` restores mode and `SP`.
-- [ ] `LL`/`SC` works on aligned RAM; unaligned/non-RAM faults as specified.
-- [ ] BIOS boots a user program end to end.
-- [ ] Windows and WSL tests pass.
-- [ ] Commit and tag `m2`; log entry added.
+- [x] `#PF` error code and `FAR` are correct for load/store/fetch/user.
+- [x] Guard region faults in both paging modes.
+- [x] `IRET` restores mode and `SP`.
+- [x] `LL`/`SC` works on aligned RAM; unaligned/non-RAM faults as specified.
+- [x] BIOS boots a user program end to end.
+- [x] Windows and WSL test suites pass.
+- [x] Commit and tag `m2`; log entry added.
 
 ### M2b — FP and M extension
 
@@ -680,6 +685,13 @@ Newest entries at the bottom. Use the local time zone.
       round-trip, demo run, determinism; Windows MSVC Debug/Release and Ninja;
       WSL GCC/Clang and ASan/UBSan.
 - **2026-11-02 01:08 -08:00** — Tagged `m1`.
+- **2026-11-02 01:19 -08:00** — M2 implemented: control registers, two-level
+      paging with permissions and A/D, user/kernel mode, exception delivery and
+      `IRET`, `#PF`/`#GP`/`#ALIGN`/`#DF`, interrupts, `LL`/`SC`/`FENCE`,
+      `COREID`, a cluster IPB hook, `--bios`, and a BIOS-to-user boot test.
+- **2026-11-02 01:19 -08:00** — M2 gate passed: 49 unit cases / 3436 assertions,
+      BIOS smoke test, and 9 CTest cases on Windows; WSL GCC/Clang/ASan pass.
+- **2026-11-02 01:19 -08:00** — Tagged `m2`.
 
 ## 10. Updating this file
 

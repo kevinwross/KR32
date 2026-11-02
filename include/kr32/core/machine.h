@@ -25,16 +25,37 @@ inline constexpr std::uint32_t kFlagK = 1U << 5;
 inline constexpr std::uint32_t kVectorInvalidOpcode = 1;
 inline constexpr std::uint32_t kVectorDivideByZero = 2;
 inline constexpr std::uint32_t kVectorBreakpoint = 3;
+inline constexpr std::uint32_t kVectorPageFault = 4;
 inline constexpr std::uint32_t kVectorGeneralProtection = 5;
 inline constexpr std::uint32_t kVectorAlignment = 6;
+inline constexpr std::uint32_t kVectorDoubleFault = 7;
+
+inline constexpr std::uint32_t kPageSize = 0x1000;
+inline constexpr std::uint32_t kPageOffsetMask = 0x0FFF;
+inline constexpr std::uint32_t kPageFrameMask = 0xFFFF'F000;
+
+inline constexpr std::uint32_t kPteValid = 1U << 0;
+inline constexpr std::uint32_t kPteWritable = 1U << 1;
+inline constexpr std::uint32_t kPteUser = 1U << 2;
+inline constexpr std::uint32_t kPteExecutable = 1U << 3;
+inline constexpr std::uint32_t kPteAccessed = 1U << 4;
+inline constexpr std::uint32_t kPteDirty = 1U << 5;
+inline constexpr std::uint32_t kPteGlobal = 1U << 6;
+inline constexpr std::uint32_t kPtePageSize = 1U << 7;
+
+inline constexpr std::uint32_t kMctlPaging = 1U << 0;
+inline constexpr std::uint32_t kMctlWriteProtect = 1U << 1;
 
 enum class FaultKind {
     None,
     InvalidOpcode,
     DivideByZero,
     Breakpoint,
-    Alignment,
+    PageFault,
     GeneralProtection,
+    Alignment,
+    DoubleFault,
+    SoftwareInterrupt,
     Limit,
 };
 
@@ -50,6 +71,7 @@ struct StepResult {
         Retired,
         Halted,
         Raised,
+        FaultDelivered,
     };
 
     Kind kind = Kind::Retired;
@@ -60,12 +82,18 @@ class Machine {
 public:
     struct Options {
         std::uint32_t ram_size = kDefaultRamSize;
+        std::uint32_t core_id = 0;
+        bool exceptions_enabled = true;
     };
 
     Machine();
     explicit Machine(Options options);
 
-    void reset(std::uint32_t pc = kRamBase, std::uint32_t sp = 0);
+    // Boot reset: PC comes from the first ROM word, SP/KSP are top of RAM.
+    void reset();
+
+    // Explicit reset used by raw-image tests and the CLI.
+    void reset(std::uint32_t pc, std::uint32_t sp = 0);
 
     [[nodiscard]] bool load_image(std::uint32_t address,
                                   const std::uint8_t* data,
@@ -92,10 +120,18 @@ public:
     [[nodiscard]] bool halted() const { return halted_; }
     [[nodiscard]] const Fault& fault() const { return fault_; }
 
+    [[nodiscard]] bool paging_enabled() const { return (mctl_ & kMctlPaging) != 0; }
+    [[nodiscard]] bool kernel_mode() const { return flag(kFlagK); }
+    [[nodiscard]] std::uint32_t core_id() const { return core_id_; }
+
+    // Inter-processor block hook: set a pending hardware interrupt line.
+    void raise_interrupt(std::uint32_t line);
+
     [[nodiscard]] std::uint32_t ram_base() const { return kRamBase; }
     [[nodiscard]] std::uint32_t ram_size() const { return static_cast<std::uint32_t>(ram_.size()); }
-    [[nodiscard]] std::uint32_t stack_top() const { return (kRamBase + ram_size()) & ~3U; }
+    [[nodiscard]] std::uint32_t stack_top() const { return (kRamBase + ram_size()) & ~15U; }
 
+    // Virtual accesses use the current mode and page tables.
     [[nodiscard]] bool read8(std::uint32_t address, std::uint8_t& value) const;
     [[nodiscard]] bool write8(std::uint32_t address, std::uint8_t value);
     [[nodiscard]] bool read16(std::uint32_t address, std::uint16_t& value) const;
@@ -103,7 +139,24 @@ public:
     [[nodiscard]] bool read32(std::uint32_t address, std::uint32_t& value) const;
     [[nodiscard]] bool write32(std::uint32_t address, std::uint32_t value);
 
+    // Physical accesses bypass translation; used for page-table setup/debug.
+    [[nodiscard]] bool read_physical8(std::uint32_t address, std::uint8_t& value) const;
+    [[nodiscard]] bool write_physical8(std::uint32_t address, std::uint8_t value);
+    [[nodiscard]] bool read_physical16(std::uint32_t address, std::uint16_t& value) const;
+    [[nodiscard]] bool write_physical16(std::uint32_t address, std::uint16_t value);
+    [[nodiscard]] bool read_physical32(std::uint32_t address, std::uint32_t& value) const;
+    [[nodiscard]] bool write_physical32(std::uint32_t address, std::uint32_t value);
+
+    [[nodiscard]] bool read_control_register(std::uint32_t number, std::uint32_t& value) const;
+    [[nodiscard]] bool write_control_register(std::uint32_t number, std::uint32_t value);
+
 private:
+    enum class Access {
+        Fetch,
+        Load,
+        Store,
+    };
+
     [[nodiscard]] StepResult execute(const isa::Instruction& instruction,
                                      std::uint32_t instruction_pc,
                                      std::uint32_t next_pc);
@@ -111,6 +164,38 @@ private:
                                    std::uint32_t vector,
                                    std::uint32_t address,
                                    std::uint32_t code = 0);
+    [[nodiscard]] StepResult handle_fault(Fault fault, std::uint32_t victim_pc);
+    [[nodiscard]] bool deliver(std::uint32_t vector,
+                               std::uint32_t code,
+                               std::uint32_t victim_pc);
+    [[nodiscard]] bool translate(std::uint32_t virtual_address,
+                                 Access access,
+                                 std::uint32_t& physical_address,
+                                 Fault& fault);
+    [[nodiscard]] bool read_virtual8(std::uint32_t address,
+                                     Access access,
+                                     std::uint8_t& value,
+                                     Fault& fault);
+    [[nodiscard]] bool read_virtual16(std::uint32_t address,
+                                      Access access,
+                                      std::uint16_t& value,
+                                      Fault& fault);
+    [[nodiscard]] bool read_virtual32(std::uint32_t address,
+                                      Access access,
+                                      std::uint32_t& value,
+                                      Fault& fault);
+    [[nodiscard]] bool write_virtual8(std::uint32_t address,
+                                      std::uint8_t value,
+                                      Fault& fault);
+    [[nodiscard]] bool write_virtual16(std::uint32_t address,
+                                       std::uint16_t value,
+                                       Fault& fault);
+    [[nodiscard]] bool write_virtual32(std::uint32_t address,
+                                       std::uint32_t value,
+                                       Fault& fault);
+    [[nodiscard]] bool push32(std::uint32_t value);
+    [[nodiscard]] bool pop32(std::uint32_t& value);
+
     [[nodiscard]] std::uint32_t payload(const isa::Instruction& instruction) const;
     [[nodiscard]] bool effective_address(const isa::Instruction& instruction,
                                          std::uint32_t instruction_pc,
@@ -123,16 +208,35 @@ private:
     void set_zn(std::uint32_t result);
     void set_add_flags(std::uint32_t left, std::uint32_t right, std::uint32_t result);
     void set_sub_flags(std::uint32_t left, std::uint32_t right, std::uint32_t result);
+    [[nodiscard]] Fault memory_fault(FaultKind kind,
+                                     std::uint32_t vector,
+                                     std::uint32_t address,
+                                     std::uint32_t code) const;
 
     std::vector<std::uint8_t> ram_;
     std::vector<std::uint8_t> rom_;
     std::uint32_t regs_[16] = {};
-    std::uint32_t pc_ = kRamBase;
+    std::uint32_t pc_ = kRomBase;
     std::uint32_t sp_ = 0;
     std::uint32_t flags_ = kFlagK;
     std::uint64_t ticks_ = 0;
     bool halted_ = false;
     Fault fault_{};
+
+    std::uint32_t vtbr_ = 0;
+    std::uint32_t esr_ = 0;
+    std::uint32_t ksp_ = 0;
+    std::uint32_t ptbr_ = 0;
+    std::uint32_t far_ = 0;
+    std::uint32_t mctl_ = 0;
+    std::uint32_t imr_ = 0;
+    std::uint32_t irq_ = 0;
+    std::uint32_t core_id_ = 0;
+    std::uint32_t tsp_ = 0;
+    bool exceptions_enabled_ = true;
+
+    bool reservation_valid_ = false;
+    std::uint32_t reservation_address_ = 0;
 };
 
 } // namespace kr32::core

@@ -8,10 +8,11 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M1 complete (2026-11-02). The integer machine, two-pass assembler,
-disassembler, symbol listings, and raw-image CLI work. `examples/demo.asm`
-assembles, runs, and reports its registers and exit code. The privileged
-machine, MMU, boot ROM, linker, compilers, and windowed debugger arrive in later
+**Status:** M2 complete (2026-11-02). The integer machine now has user/kernel
+mode, two-level paging, exception delivery, `IRET`, control registers,
+interrupts, `LL`/`SC`, and a BIOS boot path. The boot test enters user code,
+traps through `SYSCALL`, and halts in a kernel handler. The assembler,
+disassembler, toolchain, compilers, and windowed debugger continue in later
 milestones.
 
 ## Build
@@ -63,6 +64,8 @@ kr32 as examples/demo.asm -o demo.bin --listing demo.lst
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/demo.asm --trace --stats
+kr32 as examples/boot-halt.asm -o boot-halt.bin --base 0xFFFF0000
+kr32 vm examples/demo.asm --bios boot-halt.bin
 kr32 version
 kr32 help
 kr32 --smoke-ui     # initialize and tear down the SDL2 platform
@@ -79,7 +82,7 @@ milestones.
 
 ```text
 include/kr32/      public headers
-src/core/          ISA encoding and, later, CPU/machine
+src/core/          ISA encoding and CPU/machine
 src/asm/           assembler
 src/container/     .k32 object/image format
 src/link/          linker
