@@ -319,10 +319,20 @@ core::StepResult Session::step_out() {
 }
 
 const Line* Session::line_at(std::uint32_t pc) const {
+    const Function* function = function_at(pc);
+    if (function == nullptr) {
+        return nullptr;
+    }
+    const auto begin = std::lower_bound(
+        info_.lines.begin(), info_.lines.end(), function->start,
+        [](const Line& line, std::uint32_t address) { return line.address < address; });
+    const auto end = std::lower_bound(
+        begin, info_.lines.end(), function->end,
+        [](const Line& line, std::uint32_t address) { return line.address < address; });
     const auto next = std::upper_bound(
-        info_.lines.begin(), info_.lines.end(), pc,
+        begin, end, pc,
         [](std::uint32_t address, const Line& line) { return address < line.address; });
-    if (next == info_.lines.begin()) {
+    if (next == begin) {
         return nullptr;
     }
     return &*(next - 1);

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:35 -08:00
+> **Last updated:** 2026-11-02 12:38 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -964,6 +964,10 @@ Newest entries at the bottom. Use the local time zone.
       `<stdio.h>`/`<stdlib.h>`/`<string.h>`/`<stdarg.h>`/`<stddef.h>`/`<math.h>`
       injection now occupies exactly one source line, so debugger line mappings
       no longer shift after an include. Added a regression test with `stdio.h`.
+- **2026-11-02 12:38 -08:00** — Scoped debug line lookup to the containing
+      function. Runtime/libc addresses with no line records no longer inherit
+      the last line of `main`, which caused line 71 to flash when stepping into
+      `printf`.
 
 ## 10. Updating this file
 

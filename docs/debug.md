@@ -20,7 +20,9 @@ Types include `float` (4 bytes) and `double` (8 bytes) alongside the integer,
 pointer, array, struct, union, and function types emitted by the C compiler.
 Floating-point variables and globals use the same `V`/`G` records with their
 size and type name, so the debugger can identify them without changing the
-container format.
+container format. Source-line lookup is scoped to a function’s `F` range:
+addresses in runtime/libc code without debug records do not inherit the last
+line of the previous user function.
 
 Labels are resolved against the linked image's symbol table when the debug info
 is loaded. This keeps the format relocatable without changing the object model;

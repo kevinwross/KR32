@@ -146,6 +146,27 @@ TEST_CASE("synthetic header includes preserve source line numbers") {
     }
 }
 
+TEST_CASE("line lookup is scoped to known functions") {
+    const container::Image image = compile_debug_image(
+        "int main(void) {\n"
+        "    return 0;\n"
+        "}\n");
+
+    debug::Session session;
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Function* function = nullptr;
+    for (const debug::Function& candidate : session.info().functions) {
+        if (candidate.name == "main") {
+            function = &candidate;
+            break;
+        }
+    }
+    REQUIRE(function != nullptr);
+    session.machine().set_pc(function->end);
+    CHECK(session.line_at(function->end) == nullptr);
+}
+
 TEST_CASE("DebugSession stops at breakpoints and inspects frames") {
     const container::Image image = compile_debug_image(
         "int add(int a, int b) {\n"
