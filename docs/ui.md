@@ -41,7 +41,7 @@ executables load directly.
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
-| Memory | Four-line address/hex/ASCII dump, always visible |
+| Memory | Four-line address/hex/ASCII dump docked under the source pane |
 | Variables | Current function, locals, and globals, always visible |
 | Call stack | Current frames, always visible |
 | Console | Guest console output, always visible |
@@ -49,9 +49,14 @@ executables load directly.
 The right-hand **CORES** panel lists one row per core and is expandable. The
 expanded row shows that core's PC/SP/FLAGS, GPRs, F0-F15, TSP and T0 tile,
 paging registers, and control registers. Click a core row to select it or
-collapse/expand its details. The bottom row keeps **MEMORY**, **VARIABLES**,
-**CALL STACK**, and **CONSOLE** visible at all times; MEMORY is a fixed four-line
-dump with an address, hex bytes, and printable ASCII.
+collapse/expand its details. The **MEMORY** panel is docked beneath the source
+pane and shows four address/hex/ASCII lines. **VARIABLES**, **CALL STACK**, and
+**CONSOLE** remain visible along the bottom row, with the extra width freed by
+moving memory into the source column.
+
+The memory starting address is editable: click the address field and type up to
+eight hex digits, then press Enter; Escape cancels. **PTR** follows the current
+SP, and the **^** / **v** buttons move the dump up or down one 16-byte row.
 
 ## Gutter behavior
 
@@ -84,6 +89,8 @@ dump with an address, hex bytes, and printable ASCII.
 - `F9` toggle a breakpoint at the current source line.
 - `R` restart/reload; `Esc` quits.
 - Left-click a core row to select it and toggle its expanded state.
+- Click the memory **ADDR** field to edit the starting address; Enter commits and
+  Escape cancels. **PTR** follows SP; **^** / **v** scroll by 16 bytes.
 - Left-click a source or disassembly gutter row to toggle a breakpoint; right-click
   it for the gutter menu.
 

@@ -17,6 +17,8 @@ inline constexpr int Left = 262;
 inline constexpr int Right = 263;
 inline constexpr int Up = 264;
 inline constexpr int Down = 265;
+inline constexpr int Enter = 266;
+inline constexpr int Backspace = 267;
 } // namespace key
 
 struct Event {

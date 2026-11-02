@@ -19,6 +19,9 @@ int map_key(SDL_Keycode key) {
     case SDLK_RIGHT: return key::Right;
     case SDLK_UP: return key::Up;
     case SDLK_DOWN: return key::Down;
+    case SDLK_RETURN:
+    case SDLK_KP_ENTER: return key::Enter;
+    case SDLK_BACKSPACE: return key::Backspace;
     default: break;
     }
     if (key >= 32 && key < 127) {

@@ -69,6 +69,8 @@ private:
     void draw_call_stack(Canvas& canvas, Rect rect);
     void draw_memory(Canvas& canvas, Rect rect);
     void draw_console(Canvas& canvas, Rect rect);
+    void begin_memory_address_edit();
+    void finish_memory_address_edit(bool commit);
     void draw_asm_tooltip(Canvas& canvas);
     void draw_error(Canvas& canvas);
     [[nodiscard]] std::string format_hex(std::uint32_t value, int digits = 8) const;
@@ -87,6 +89,14 @@ private:
     std::vector<CoreRow> core_rows_;
     std::size_t expanded_core_ = 0;
     std::size_t selected_core_ = 0;
+    std::uint32_t memory_address_ = 0;
+    bool memory_address_editing_ = false;
+    std::string memory_edit_;
+    bool memory_edit_fresh_ = true;
+    Rect memory_address_rect_{};
+    Rect memory_pointer_rect_{};
+    Rect memory_up_rect_{};
+    Rect memory_down_rect_{};
     int source_scroll_ = 0;
 
     struct ContextMenu {

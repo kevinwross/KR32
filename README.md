@@ -15,7 +15,8 @@ cluster, IPIs, and LL/SC spinlock runs are implemented. The debugger opens at
 and instruction stepping controls, responsive resizing, KR16-style gutters with
 breakpoint toggles and a Run to line/address context menu, a HEX word column,
 disassembly hover help for instructions and addressing modes, an expandable
-CORES panel, and always-visible memory, variables, call-stack, and console
+CORES panel, a four-line memory dump docked under the source pane with an
+editable start address, and always-visible variables, call-stack, and console
 panels. See
 [docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++
 toolchain is the remaining planned milestone.

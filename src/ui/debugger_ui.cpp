@@ -168,6 +168,7 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     source_scroll_ = 0;
     error_.clear();
     prepare_initial_stop();
+    memory_address_ = session_.machine().sp() & ~0xFU;
     status_ = "paused at " + hex(session_.machine().pc(), 8);
     return true;
 }
@@ -757,18 +758,34 @@ void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
 }
 
 void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
-    const int bytes_per_row = rect.width >= 520 ? 16 : 8;
-    constexpr int rows = 4;
-    const std::uint32_t sp = session_.machine().sp();
-    const std::uint32_t span = static_cast<std::uint32_t>(bytes_per_row * rows + 16);
-    std::uint32_t base = sp > span ? sp - span : session_.machine().ram_base();
-    base &= ~0xFU;
-    if (base < session_.machine().ram_base()) {
-        base = session_.machine().ram_base();
+    draw_panel(canvas, rect, "MEMORY");
+    canvas.text(rect.x + 70, rect.y + 7, "ADDR", kDim, FontRole::MonoSmall);
+    memory_address_rect_ =
+        Rect{rect.x + 108, rect.y + 3, std::max(120, rect.width - 224), 18};
+    memory_pointer_rect_ = Rect{rect.x + rect.width - 96, rect.y + 3, 30, 18};
+    memory_up_rect_ = Rect{rect.x + rect.width - 62, rect.y + 3, 20, 18};
+    memory_down_rect_ = Rect{rect.x + rect.width - 38, rect.y + 3, 20, 18};
+    canvas.fill(memory_address_rect_, kPanelAlt);
+    canvas.frame(memory_address_rect_, memory_address_editing_ ? kAccent : kBorder);
+    canvas.text(memory_address_rect_.x + 6, memory_address_rect_.y + 3,
+                "0x" + (memory_address_editing_ ? memory_edit_ : hex(memory_address_, 8)),
+                memory_address_editing_ ? kAccent : kText, FontRole::MonoSmall);
+    for (const Rect& button : {memory_pointer_rect_, memory_up_rect_, memory_down_rect_}) {
+        canvas.fill(button, kPanelAlt);
+        canvas.frame(button, kBorder);
     }
-    draw_panel(canvas, rect, "MEMORY  ADDR " + hex(base, 8));
+    canvas.text(memory_pointer_rect_.x + 5, memory_pointer_rect_.y + 3, "PTR", kText,
+                FontRole::MonoSmall);
+    canvas.text(memory_up_rect_.x + 6, memory_up_rect_.y + 3, "^", kText,
+                FontRole::MonoSmall);
+    canvas.text(memory_down_rect_.x + 6, memory_down_rect_.y + 3, "v", kText,
+                FontRole::MonoSmall);
+
+    const int bytes_per_row = rect.width >= 600 ? 16 : 8;
+    constexpr int rows = 4;
     for (int row = 0; row < rows; ++row) {
-        const std::uint32_t address = base + static_cast<std::uint32_t>(row * bytes_per_row);
+        const std::uint32_t address =
+            memory_address_ + static_cast<std::uint32_t>(row * bytes_per_row);
         std::string hex_part = "0x" + hex(address, 8) + "  ";
         std::string ascii_part;
         for (int column = 0; column < bytes_per_row; ++column) {
@@ -781,9 +798,41 @@ void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
                                      ? static_cast<char>(value)
                                      : '.');
         }
-        canvas.text(rect.x + 6, rect.y + 26 + row * 18,
+        canvas.text(rect.x + 6, rect.y + 28 + row * 18,
                     hex_part + "  " + ascii_part, kText, FontRole::MonoSmall);
     }
+}
+
+void DebuggerUI::begin_memory_address_edit() {
+    memory_address_editing_ = true;
+    memory_edit_ = hex(memory_address_, 8);
+    memory_edit_fresh_ = true;
+}
+
+void DebuggerUI::finish_memory_address_edit(bool commit) {
+    if (!memory_address_editing_) return;
+    if (commit) {
+        unsigned value = 0;
+        bool valid = !memory_edit_.empty();
+        for (char ch : memory_edit_) {
+            const int digit = std::isdigit(static_cast<unsigned char>(ch)) != 0
+                                  ? ch - '0'
+                                  : (std::isxdigit(static_cast<unsigned char>(ch)) != 0
+                                         ? std::tolower(static_cast<unsigned char>(ch)) - 'a' + 10
+                                         : -1);
+            if (digit < 0) {
+                valid = false;
+                break;
+            }
+            value = (value << 4) | static_cast<unsigned>(digit);
+        }
+        if (valid) {
+            memory_address_ = value & ~0xFU;
+        }
+    }
+    memory_address_editing_ = false;
+    memory_edit_.clear();
+    memory_edit_fresh_ = false;
 }
 
 void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
@@ -803,7 +852,7 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
 
 DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
     const int right_width = std::clamp(width * 23 / 100, 230, 360);
-    int source_width = std::clamp(width * 36 / 100, 240, width - right_width - 300);
+    int source_width = std::clamp(width * 42 / 100, 240, width - right_width - 300);
     int disassembly_width = width - source_width - right_width;
     if (disassembly_width < 300) {
         disassembly_width = 300;
@@ -812,22 +861,22 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
     const int bottom_height = std::clamp(height * 24 / 100, 190, 230);
     const int bottom_top = height - bottom_height;
     const int top_height = bottom_top - kToolbarHeight;
-    const int memory_width = width * 40 / 100;
-    const int variables_width = width * 20 / 100;
-    const int stack_width = width * 18 / 100;
-    const int console_width = width - memory_width - variables_width - stack_width;
+    constexpr int memory_height = 112;
+    const int source_height = std::max(120, top_height - memory_height);
+    const int variables_width = width * 42 / 100;
+    const int stack_width = width * 28 / 100;
+    const int console_width = width - variables_width - stack_width;
 
     Layout result;
-    result.source = Rect{0, kToolbarHeight, source_width, top_height};
+    result.source = Rect{0, kToolbarHeight, source_width, source_height};
     result.disassembly = Rect{source_width, kToolbarHeight, disassembly_width, top_height};
     result.cores = Rect{source_width + disassembly_width, kToolbarHeight, right_width,
                         top_height};
-    result.memory = Rect{0, bottom_top, memory_width, bottom_height};
-    result.variables = Rect{memory_width, bottom_top, variables_width, bottom_height};
-    result.call_stack = Rect{memory_width + variables_width, bottom_top, stack_width,
-                             bottom_height};
-    result.console = Rect{memory_width + variables_width + stack_width, bottom_top,
-                          console_width, bottom_height};
+    result.memory = Rect{0, kToolbarHeight + source_height, source_width, memory_height};
+    result.variables = Rect{0, bottom_top, variables_width, bottom_height};
+    result.call_stack = Rect{variables_width, bottom_top, stack_width, bottom_height};
+    result.console = Rect{variables_width + stack_width, bottom_top, console_width,
+                          bottom_height};
     return result;
 }
 
@@ -1143,6 +1192,25 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         }
         return true;
     }
+    if (memory_address_editing_ && !memory_address_rect_.contains(x, y)) {
+        finish_memory_address_edit(true);
+    }
+    if (memory_address_rect_.contains(x, y)) {
+        begin_memory_address_edit();
+        return true;
+    }
+    if (memory_up_rect_.contains(x, y)) {
+        memory_address_ = memory_address_ >= 16 ? (memory_address_ - 16) & ~0xFU : 0;
+        return true;
+    }
+    if (memory_down_rect_.contains(x, y)) {
+        memory_address_ = std::min(memory_address_ + 16U, 0xFFFF'FFF0U) & ~0xFU;
+        return true;
+    }
+    if (memory_pointer_rect_.contains(x, y)) {
+        memory_address_ = session_.machine().sp() & ~0xFU;
+        return true;
+    }
     if (y >= kToolbarHeight) {
         for (const CoreRow& row : core_rows_) {
             if (!row.row.contains(x, y)) continue;
@@ -1197,6 +1265,37 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
 }
 
 bool DebuggerUI::key(int key_value, bool shift) {
+    if (memory_address_editing_) {
+        if (key_value == kr32::platform::key::Escape) {
+            finish_memory_address_edit(false);
+            return true;
+        }
+        if (key_value == kr32::platform::key::Enter) {
+            finish_memory_address_edit(true);
+            return true;
+        }
+        if (key_value == kr32::platform::key::Backspace) {
+            if (memory_edit_fresh_) {
+                memory_edit_.clear();
+                memory_edit_fresh_ = false;
+            } else if (!memory_edit_.empty()) {
+                memory_edit_.pop_back();
+            }
+            return true;
+        }
+        const bool digit =
+            (key_value >= '0' && key_value <= '9') ||
+            (key_value >= 'a' && key_value <= 'f') ||
+            (key_value >= 'A' && key_value <= 'F');
+        if (digit && memory_edit_.size() < 8) {
+            if (memory_edit_fresh_) {
+                memory_edit_.clear();
+                memory_edit_fresh_ = false;
+            }
+            memory_edit_.push_back(static_cast<char>(key_value));
+        }
+        return true;
+    }
     if (key_value == kr32::platform::key::Escape) {
         if (menu_.open) {
             menu_.open = false;

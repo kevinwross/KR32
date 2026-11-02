@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 08:49 -08:00
+> **Last updated:** 2026-11-02 09:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -849,6 +849,12 @@ Newest entries at the bottom. Use the local time zone.
       select/collapse/expand hit testing and a `Session::core_count()`/`core()`
       seam for future multicore sessions. Updated headless rendering to one
       1440x900 frame and refreshed docs/screenshots.
+- **2026-11-02 09:02 -08:00** — Docked the four-line MEMORY dump beneath the
+      source pane, leaving VARIABLES, CALL STACK, and CONSOLE as the wider
+      always-visible bottom row. Added an editable memory start address with
+      Enter/Escape handling, a PTR-to-SP button, and ^/v 16-byte scrolling
+      buttons. Added Enter/Backspace platform key mappings and refreshed the
+      layout screenshot/docs.
 
 ## 10. Updating this file
 
