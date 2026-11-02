@@ -308,29 +308,22 @@ std::string preprocess(std::string_view source) {
                     directive.find("stdlib.h") != std::string::npos ||
                     directive.find("string.h") != std::string::npos) {
                     result +=
-                        "int putchar(int c);\n"
-                        "void exit(int code);\n"
-                        "int getchar(void);\n"
-                        "int open(const char *path, int flags);\n"
-                        "int close(int fd);\n"
-                        "int read(int fd, void *buffer, int count);\n"
-                        "int write(int fd, const void *buffer, int count);\n"
-                        "int seek(int fd, int offset, int whence);\n"
-                        "int sys_time(void);\n"
-                        "int sys_random(void);\n"
-                        "int sys_argc(void);\n"
-                        "int sys_arg(int index, char *buffer, int size);\n"
-                        "int printf(const char *format, ...);\n"
-                        "void *malloc(int size);\n"
-                        "void free(void *pointer);\n"
-                        "void *calloc(int count, int size);\n"
-                        "void *realloc(void *pointer, int size);\n"
-                        "void *memcpy(void *destination, const void *source, int count);\n"
-                        "void *memset(void *destination, int value, int count);\n"
-                        "int strlen(const char *text);\n";
+                        "int putchar(int c); void exit(int code); int getchar(void); "
+                        "int open(const char *path, int flags); int close(int fd); "
+                        "int read(int fd, void *buffer, int count); "
+                        "int write(int fd, const void *buffer, int count); "
+                        "int seek(int fd, int offset, int whence); int sys_time(void); "
+                        "int sys_random(void); int sys_argc(void); "
+                        "int sys_arg(int index, char *buffer, int size); "
+                        "int printf(const char *format, ...); void *malloc(int size); "
+                        "void free(void *pointer); void *calloc(int count, int size); "
+                        "void *realloc(void *pointer, int size); "
+                        "void *memcpy(void *destination, const void *source, int count); "
+                        "void *memset(void *destination, int value, int count); "
+                        "int strlen(const char *text);";
                 }
                 if (directive.find("stdarg.h") != std::string::npos) {
-                    result += "typedef char *va_list;\n";
+                    result += "typedef char *va_list;";
                     function_macros["va_start"] =
                         FunctionMacro{{"ap", "last"}, "__builtin_va_start(ap)"};
                     function_macros["va_arg"] =
@@ -341,8 +334,7 @@ std::string preprocess(std::string_view source) {
                 }
                 if (directive.find("stddef.h") != std::string::npos) {
                     result +=
-                        "typedef unsigned int size_t;\n"
-                        "typedef int ptrdiff_t;\n";
+                        "typedef unsigned int size_t; typedef int ptrdiff_t;";
                     macros["NULL"] = "0";
                     function_macros["offsetof"] =
                         FunctionMacro{{"type", "member"},
@@ -350,14 +342,12 @@ std::string preprocess(std::string_view source) {
                 }
                 if (directive.find("math.h") != std::string::npos) {
                     result +=
-                        "double sqrt(double value);\n"
-                        "float sqrtf(float value);\n"
-                        "double fabs(double value);\n"
-                        "float fabsf(float value);\n"
-                        "double fmin(double left, double right);\n"
-                        "float fminf(float left, float right);\n"
-                        "double fmax(double left, double right);\n"
-                        "float fmaxf(float left, float right);\n";
+                        "double sqrt(double value); float sqrtf(float value); "
+                        "double fabs(double value); float fabsf(float value); "
+                        "double fmin(double left, double right); "
+                        "float fminf(float left, float right); "
+                        "double fmax(double left, double right); "
+                        "float fmaxf(float left, float right);";
                     macros["M_PI"] = "3.14159265358979323846";
                 }
             }

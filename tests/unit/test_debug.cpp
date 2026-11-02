@@ -126,6 +126,26 @@ TEST_CASE("debug info records float and double symbols") {
     CHECK(found_double_global);
 }
 
+TEST_CASE("synthetic header includes preserve source line numbers") {
+    const container::Image image = compile_debug_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    int value = 7;\n"
+        "    printf(\"%d\\n\", value);\n"
+        "    return value;\n"
+        "}\n");
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    REQUIRE(find_line(info, 3) != nullptr);
+    REQUIRE(find_line(info, 4) != nullptr);
+    CHECK(find_line(info, 23) == nullptr);
+    for (const debug::Line& line : info.lines) {
+        CHECK(line.line <= 6);
+    }
+}
+
 TEST_CASE("DebugSession stops at breakpoints and inspects frames") {
     const container::Image image = compile_debug_image(
         "int add(int a, int b) {\n"

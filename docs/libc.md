@@ -14,7 +14,8 @@ user code.
 ## Headers
 
 Headers are compiler-provided shims; there are no header files in the include
-search path.
+search path. Each synthetic include expands to a single source line so original
+source line numbers and debugger line mappings are preserved.
 
 | Include | Contents |
 | --- | --- |

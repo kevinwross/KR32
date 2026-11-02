@@ -82,7 +82,8 @@ one 16-byte row.
 - **Floating-point registers** use a popup editor. Accepted forms include
   `3.14152`, `100.00`, `100`, and `1E2`; Enter commits and Escape cancels.
   The **DOUBLE / FLOAT** toggle selects whether the value is interpreted as a
-  64-bit double or the low 32-bit float from `.S` operations.
+  64-bit double or the low 32-bit float from `.S` operations. Float-like values
+  (zero upper half) are also labelled `f32` in DOUBLE view.
   Hovering an FPR shows the signed decimal value, signed scientific value,
   the float interpretation when the upper half is zero, and the raw 64-bit hex
   encoding.
