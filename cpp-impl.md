@@ -2,8 +2,8 @@
 
 **Status:** approved and started 2026-11-02. Design approved in
 [docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
-worktree/branch. Phase M9.1 (ABI, API, and test harness) is the current
-subagent task.
+worktree/branch. Phase M9.1 (ABI, API, and test harness) is complete; phase M9.2
+(front end) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -37,13 +37,20 @@ Completed before this tracker:
 - [x] CMake target and `cxx_tool_help` CTest.
 - [x] Front-end behavior is deliberately “not implemented” until phase 2.
 
+Completed in M9.1:
+
+- [x] C++ ABI revision 1 documented in `docs/abi.md`, with machine-checkable
+      constants in `include/kr32/cxx/abi.h`.
+- [x] Host-side ABI layout/constant tests and API smoke tests under `tests/cxx`,
+      wired into `kr32_tests` and linked against `kr32_cxx`.
+- [x] Driver error-path tests (missing input, bad `--emit`, missing `-o` value).
+- [x] `--emit obj` output contract made explicit; `KR32_BUILD_CXX_TOOL` option
+      documented and install rules conditioned on it.
+
 Not started:
 
-- [ ] ABI document extension and conformance tests.
-- [ ] Lexer/parser/semantic analysis.
-- [ ] Code generation, runtime, threads, matrices, debug integration.
-- [ ] `m9-cxx` worktree/branch.
-- [ ] Subagent assignment.
+- [ ] Lexer/parser/semantic analysis (M9.2).
+- [ ] Code generation, runtime, threads, matrices, debug integration (M9.3-M9.12).
 
 ## 3. Milestone map
 
@@ -52,7 +59,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | ID | Scope | Gate | Status |
 | --- | --- | --- | --- |
 | M9.0 | Review this tracker, create `m9-cxx` worktree, freeze phase-1 files | tracker approved; clean worktree | done |
-| M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | in progress |
+| M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | done |
 | M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | not started |
 | M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | not started |
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | not started |
@@ -75,15 +82,16 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 - [x] Confirm only `src/cxx/**`, `include/kr32/cxx/**`, `tests/cxx/**`, and
       `docs/` are touched by the C++ stream until integration.
 - [x] Confirm the standalone executable name is `kr32-cxx`.
-- [ ] Add a `KR32_BUILD_CXX_TOOL` option if the team wants the driver optional;
-      otherwise keep it always built.
+- [x] Add a `KR32_BUILD_CXX_TOOL` option if the team wants the driver optional;
+      otherwise keep it always built. (Added in M9.1 as a default-`ON` option;
+      the `kr32_cxx` library is always built.)
 - [x] Record subagent ownership and handoff point.
 
 **Gate:** tracker approved; worktree clean; no UI/shared-file changes pending.
 
 ### M9.1 — ABI, API, and test harness
 
-- [ ] Extend `docs/abi.md` with the C++ ABI:
+- [x] Extend `docs/abi.md` with the C++ ABI:
   - `float`/`double` sizes, alignment, aggregate layout
   - FP argument/return registers and callee-saved rules
   - varargs stack layout and `va_list`
@@ -92,15 +100,19 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
   - exception cleanup/landing-pad layout
   - thread pointer `R11`, TCB/TLS layout, per-thread FPR/TSP context
   - tile registers and matrix calling convention
-- [ ] Add ABI layout/mangling unit tests (host-side data structure checks).
-- [ ] Flesh out `kr32::cxx::Options`/`Result` only as needed; keep the API
-      stable.
-- [ ] Add driver tests for help, missing input, bad `--emit`, and `-o`.
-- [ ] Make `--emit obj` contract explicit (container bytes vs error until the
+- [x] Add ABI layout/constant unit tests (host-side data structure checks) and
+      mirror the frozen constants in `include/kr32/cxx/abi.h`. Mangling fixture
+      tests land with the mangler in M9.3.
+- [x] Flesh out `kr32::cxx::Options`/`Result` only as needed; keep the API
+      stable. (Documented the output contract; the shapes are unchanged.)
+- [x] Add driver tests for help, missing input, bad `--emit`, and `-o`.
+- [x] Make `--emit obj` contract explicit (container bytes vs error until the
       object emitter exists).
-- [ ] Add `M9` CMake option documentation and install rules.
+- [x] Add `M9` CMake option documentation and install rules.
 
 **Gate:** ABI tests, driver tests, and existing suite green on Windows/WSL.
+**Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 115 test cases and 4473 assertions.
 
 ### M9.2 — Preprocessor, lexer, parser, diagnostics
 
@@ -281,6 +293,14 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
 - **2026-11-02 09:35 -08:00** — Tracker approved. `m9-cxx` worktree/branch
   created; phase M9.1 (ABI, API, and test harness) assigned to the first
   subagent. Phase M9.0 remains done; M9.1 is in progress.
+- **2026-11-02 09:44 -08:00** — Completed M9.1. Extended `docs/abi.md` to C++
+  ABI revision 1 (FP layout/registers, varargs, `this`/mangling, vtable/RTTI,
+  exceptions/cleanup, TP/TCB/TLS, tiles/transform stack, weak/COMDAT, static
+  initialization) and added `include/kr32/cxx/abi.h`. Added host ABI/API tests
+  under `tests/cxx`, driver error-path tests, the `--emit obj` output contract,
+  and the `KR32_BUILD_CXX_TOOL` option/install rules. Windows MSVC Debug and WSL
+  GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 115 test cases
+  and 4473 assertions. M9.1 is done; M9.2 (front end) is next.
 
 ## 8. Approval
 

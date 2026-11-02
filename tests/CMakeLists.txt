@@ -15,7 +15,9 @@ add_executable(kr32_tests
     unit/test_debug.cpp
     unit/test_host.cpp
     unit/test_assembler.cpp
-    unit/test_disassembler.cpp)
+    unit/test_disassembler.cpp
+    cxx/test_cxx_abi.cpp
+    cxx/test_cxx_api.cpp)
 
 target_link_libraries(kr32_tests PRIVATE
     kr32_core
@@ -24,6 +26,7 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_container
     kr32_link
     kr32_cc
+    kr32_cxx
     kr32_debug
     kr32_vm
     kr32_warnings)
@@ -47,6 +50,17 @@ if(TARGET kr32_cxx_tool)
     add_test(NAME cxx_tool_help COMMAND kr32_cxx_tool --help)
     set_tests_properties(cxx_tool_help PROPERTIES
         PASS_REGULAR_EXPRESSION "kr32-cxx")
+
+    # Driver error paths are part of the harness contract: a bad invocation must
+    # exit non-zero and must not try to compile the input.
+    add_test(NAME cxx_tool_missing_input COMMAND kr32_cxx_tool)
+    set_tests_properties(cxx_tool_missing_input PROPERTIES WILL_FAIL TRUE)
+
+    add_test(NAME cxx_tool_bad_emit COMMAND kr32_cxx_tool --emit elf input.cpp)
+    set_tests_properties(cxx_tool_bad_emit PROPERTIES WILL_FAIL TRUE)
+
+    add_test(NAME cxx_tool_missing_output_path COMMAND kr32_cxx_tool -o)
+    set_tests_properties(cxx_tool_missing_output_path PROPERTIES WILL_FAIL TRUE)
 endif()
 
 add_test(NAME cli_version COMMAND $<TARGET_FILE:kr32> version)

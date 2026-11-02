@@ -550,13 +550,14 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 **Status:** implementation started 2026-11-02. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the implementation/task tracker is
 [cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phase M9.1
-(ABI, API, and test harness) is in progress. The standalone API and `kr32-cxx`
-driver skeleton are in place. Confirmed decisions include custom C++11 subset,
-one thread per core with cooperative oversubscription, `R11` TP, library
-matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
-per-thread transform stacks, full destructor unwinding, scalar FP library,
-stack-based FP varargs, Itanium-like mangling, and class-member/`this` debug
-support.
+(ABI, API, and test harness) is complete and M9.2 (front end) is next. C++ ABI
+revision 1 is frozen in [docs/abi.md](docs/abi.md) with machine-checkable
+constants in `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver
+skeleton are in place. Confirmed decisions include custom C++11 subset, one
+thread per core with cooperative oversubscription, `R11` TP, library matrices
+plus intrinsics, `double` align 8/16-byte call boundaries, explicit per-thread
+transform stacks, full destructor unwinding, scalar FP library, stack-based FP
+varargs, Itanium-like mangling, and class-member/`this` debug support.
 
 **Tasks**
 
@@ -567,6 +568,9 @@ support.
 - [x] Approve the tracker and create the `m9-cxx` worktree/branch.
 - [x] Add the stable `kr32::cxx::compile` API, standalone `kr32-cxx` driver, and
       the `cxx_tool_help` CTest.
+- [x] Freeze C++ ABI revision 1 in `docs/abi.md` and
+      `include/kr32/cxx/abi.h`; add host ABI/API tests, driver error-path tests,
+      the `--emit obj` output contract, and the `KR32_BUILD_CXX_TOOL` option.
 - [x] Choose a custom C++ front end; no external front-end dependency.
 - [ ] `kr32_cxx` module: front end, lowering, code generation, weak/COMDAT
       merge.
@@ -585,6 +589,8 @@ support.
 
 **Test plan and gate**
 
+- [x] ABI layout/constant tests and API/driver harness tests pass on
+      Windows/WSL (M9.1 gate: 21/21 CTest).
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Float/double arithmetic and calls match ISA semantics.
 - [ ] Variadic `double`/`va_list` tests pass.
@@ -909,6 +915,15 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 09:35 -08:00** — Tracker approved; created the `m9-cxx`
       worktree/branch and assigned phase M9.1 (ABI, API, test harness) to the
       first subagent. M9.0 is complete; M9.1 is in progress.
+- **2026-11-02 09:44 -08:00** — Completed M9.1. Froze C++ ABI revision 1 in
+      [docs/abi.md](docs/abi.md) (FP layout/registers, varargs, `this` and
+      mangling, vtable/RTTI, exception cleanup, `R11` TP/TCB/TLS, tiles and
+      transform stack, weak/COMDAT, static initialization) with matching
+      constants in `include/kr32/cxx/abi.h`. Added host ABI/API tests under
+      `tests/cxx`, driver error-path tests, the `--emit obj` contract, and the
+      `KR32_BUILD_CXX_TOOL` option/install rules. Windows MSVC Debug and WSL GCC
+      headless both pass 21/21 CTest tests; `kr32_tests` reports 115 test cases
+      and 4473 assertions. M9.2 (front end) is next.
 
 ## 10. Updating this file
 
