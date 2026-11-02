@@ -4,6 +4,10 @@
 compiled, assembled, linked, and loaded in memory; `.k32` executables load
 directly.
 
+![KR32 debugger](screenshots/m6-debugger.png)
+
+![KR32 machine panel](screenshots/m6-machine.png)
+
 ## Architecture
 
 - `ui::Canvas` is a 32-bit RGBA software canvas (`0xAARRGGBB`) with rectangles,
