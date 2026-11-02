@@ -40,6 +40,10 @@ executables load directly.
 | Area | Contents |
 | --- | --- |
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
+
+**Load** opens the platform file picker (the native common dialog on Windows;
+`zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
+a selected `.c` source. **Build** reloads/recompiles the currently loaded source.
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |

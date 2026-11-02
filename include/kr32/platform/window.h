@@ -57,4 +57,7 @@ private:
 // Initializes and tears down the SDL2 platform. Used by `kr32 --smoke-ui`.
 [[nodiscard]] bool smoke_test();
 
+// Shows the platform file picker. Returns false when canceled or unavailable.
+[[nodiscard]] bool open_file_dialog(std::string& path);
+
 } // namespace kr32::platform

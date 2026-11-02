@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 11:46 -08:00
+> **Last updated:** 2026-11-02 12:11 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -948,6 +948,10 @@ Newest entries at the bottom. Use the local time zone.
       `realloc`); `printf` with integer/string/pointer and FP (`f/e/g`) formats;
       FP math builtins; LL/SC/FENCE; BSWAP/CLZ/CTZ/POPCNT and overflow builtins;
       ISA/object-assembler/disassembler support for `0x62`; and tests/docs.
+- **2026-11-02 12:11 -08:00** — Fixed the GUI LOAD button: it now opens the
+      platform file picker (Windows `GetOpenFileName`, Linux zenity/kdialog)
+      and loads the selected `.k32` or `.c` file. Previously LOAD and BUILD both
+      called `restart()`.
 
 ## 10. Updating this file
 

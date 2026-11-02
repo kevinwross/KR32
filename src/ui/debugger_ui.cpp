@@ -1706,7 +1706,17 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         } else if (x >= 310 && x < 344) {
             restart();
         } else if (x >= 348 && x < 392) {
-            restart();
+            std::string selected;
+            if (platform::open_file_dialog(selected)) {
+                std::string error;
+                if (load(selected, error)) {
+                    status_ = "loaded " + selected;
+                } else {
+                    error_ = error;
+                }
+            } else {
+                status_ = "load canceled";
+            }
         } else if (x >= 396 && x < 444) {
             restart();
         }

@@ -97,6 +97,9 @@ if(KR32_BUILD_UI)
     kr32_add_library(kr32_platform src/platform/sdl2/platform.cpp)
     target_compile_definitions(kr32_platform PRIVATE SDL_MAIN_HANDLED)
     target_link_libraries(kr32_platform PUBLIC ${KR32_SDL2_TARGET})
+    if(WIN32)
+        target_link_libraries(kr32_platform PUBLIC comdlg32)
+    endif()
 
     kr32_add_library(kr32_ui src/ui/app.cpp src/ui/canvas.cpp src/ui/debugger_ui.cpp
         src/ui/help.cpp src/resources/embedded_fonts.cpp)

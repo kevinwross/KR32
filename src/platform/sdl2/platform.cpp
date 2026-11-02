@@ -3,6 +3,13 @@
 #include <SDL.h>
 
 #include <cstdio>
+#include <string>
+#include <utility>
+
+#ifdef _WIN32
+#include <windows.h>
+#include <commdlg.h>
+#endif
 
 namespace kr32::platform {
 namespace {
@@ -192,6 +199,65 @@ bool smoke_test() {
 
     SDL_Quit();
     return version.major == 2;
+}
+
+bool open_file_dialog(std::string& path) {
+#ifdef _WIN32
+    wchar_t file[32768] = L"";
+    OPENFILENAMEW dialog{};
+    dialog.lStructSize = sizeof(dialog);
+    dialog.hwndOwner = GetActiveWindow();
+    dialog.lpstrFilter =
+        L"KR32 images (*.k32;*.c)\0*.k32;*.c\0All files (*.*)\0*.*\0";
+    dialog.lpstrFile = file;
+    dialog.nMaxFile = 32768;
+    dialog.lpstrDefExt = L"k32";
+    dialog.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST |
+                   OFN_NOCHANGEDIR;
+    if (GetOpenFileNameW(&dialog) == 0) {
+        return false;
+    }
+    const int length = WideCharToMultiByte(CP_UTF8, 0, file, -1, nullptr, 0,
+                                           nullptr, nullptr);
+    if (length <= 1) {
+        return false;
+    }
+    std::string converted(static_cast<std::size_t>(length - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, file, -1, converted.data(), length,
+                        nullptr, nullptr);
+    path = std::move(converted);
+    return true;
+#else
+    const char* commands[] = {
+        "zenity --file-selection --title='Load KR32 image' "
+        "--file-filter='KR32 images | *.k32 *.c' --file-filter='All files | *' 2>/dev/null",
+        "kdialog --getopenfilename . 'KR32 images (*.k32 *.c)|All files (*)' 2>/dev/null",
+    };
+    for (const char* command : commands) {
+        FILE* pipe = popen(command, "r");
+        if (pipe == nullptr) {
+            continue;
+        }
+        std::string result;
+        char buffer[4096];
+        while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+            result += buffer;
+        }
+        const int status = pclose(pipe);
+        if (status != 0) {
+            continue;
+        }
+        while (!result.empty() &&
+               (result.back() == '\n' || result.back() == '\r')) {
+            result.pop_back();
+        }
+        if (!result.empty()) {
+            path = std::move(result);
+            return true;
+        }
+    }
+    return false;
+#endif
 }
 
 } // namespace kr32::platform
