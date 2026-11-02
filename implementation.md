@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 09:35 -08:00
+> **Last updated:** 2026-11-02 11:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -549,15 +549,18 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 
 **Status:** implementation started 2026-11-02. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the implementation/task tracker is
-[cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phase M9.1
-(ABI, API, and test harness) is complete and M9.2 (front end) is next. C++ ABI
-revision 1 is frozen in [docs/abi.md](docs/abi.md) with machine-checkable
-constants in `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver
-skeleton are in place. Confirmed decisions include custom C++11 subset, one
-thread per core with cooperative oversubscription, `R11` TP, library matrices
-plus intrinsics, `double` align 8/16-byte call boundaries, explicit per-thread
-transform stacks, full destructor unwinding, scalar FP library, stack-based FP
-varargs, Itanium-like mangling, and class-member/`this` debug support.
+[cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phases M9.1
+(ABI/API/test harness) and M9.2 (preprocessor, lexer, AST, parser, diagnostics)
+are complete, and M9.3 (semantic analysis, mangling, integer code generation) is
+next. C++ ABI revision 1 is frozen in [docs/abi.md](docs/abi.md) with
+machine-checkable constants in `include/kr32/cxx/abi.h`. The standalone API and
+`kr32-cxx` driver skeleton are in place, and `compile()` now runs the front end
+before reporting the missing backend. Confirmed decisions include custom C++11
+subset, one thread per core with cooperative oversubscription, `R11` TP, library
+matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
+per-thread transform stacks, full destructor unwinding, scalar FP library,
+stack-based FP varargs, Itanium-like mangling, and class-member/`this` debug
+support.
 
 **Tasks**
 
@@ -572,6 +575,8 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       `include/kr32/cxx/abi.h`; add host ABI/API tests, driver error-path tests,
       the `--emit obj` output contract, and the `KR32_BUILD_CXX_TOOL` option.
 - [x] Choose a custom C++ front end; no external front-end dependency.
+- [x] C++ preprocessor, lexer, AST, recursive-descent parser, and diagnostics
+      (M9.2); host parser tests including a malformed-input corpus.
 - [ ] `kr32_cxx` module: front end, lowering, code generation, weak/COMDAT
       merge.
 - [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
@@ -591,6 +596,8 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
 
 - [x] ABI layout/constant tests and API/driver harness tests pass on
       Windows/WSL (M9.1 gate: 21/21 CTest).
+- [x] Preprocessor/lexer/parser/AST tests, including malformed input, pass on
+      Windows/WSL (M9.2 gate: 131 cases / 4617 assertions).
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Float/double arithmetic and calls match ISA semantics.
 - [ ] Variadic `double`/`va_list` tests pass.
@@ -931,6 +938,13 @@ Newest entries at the bottom. Use the local time zone.
       alias, bare-pointer `va_list`, `KR32_BUILD_CXX_TOOL` default ON). No ABI
       contract change; [docs/abi.md](docs/abi.md) now records the approved review
       decisions and [cpp-impl.md](cpp-impl.md) remains M9.1 done. M9.2 is next.
+- **2026-11-02 11:10 -08:00** — Completed M9.2. Added the C++ preprocessor,
+      lexer, AST, and recursive-descent parser under `src/cxx`, wired
+      `kr32::cxx::compile` through preprocess → lex → parse, and added host
+      parser tests including a malformed-input corpus. Windows MSVC Debug and WSL
+      GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 131 test
+      cases and 4617 assertions. M9.3 (semantic analysis, mangling, integer
+      code generation) is next.
 
 ## 10. Updating this file
 

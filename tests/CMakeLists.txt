@@ -17,7 +17,8 @@ add_executable(kr32_tests
     unit/test_assembler.cpp
     unit/test_disassembler.cpp
     cxx/test_cxx_abi.cpp
-    cxx/test_cxx_api.cpp)
+    cxx/test_cxx_api.cpp
+    cxx/test_cxx_parser.cpp)
 
 target_link_libraries(kr32_tests PRIVATE
     kr32_core
@@ -31,6 +32,7 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_vm
     kr32_warnings)
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
+target_include_directories(kr32_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
 
 if(TARGET kr32_ui)

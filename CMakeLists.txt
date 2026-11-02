@@ -59,8 +59,14 @@ target_link_libraries(kr32_link PUBLIC kr32_core kr32_container)
 kr32_add_library(kr32_cc src/cc/cc.cpp)
 target_link_libraries(kr32_cc PUBLIC kr32_asm kr32_container)
 
-kr32_add_library(kr32_cxx src/cxx/cxx.cpp)
+kr32_add_library(kr32_cxx
+    src/cxx/cxx.cpp
+    src/cxx/ast.cpp
+    src/cxx/lexer.cpp
+    src/cxx/preprocessor.cpp
+    src/cxx/parser.cpp)
 target_link_libraries(kr32_cxx PUBLIC kr32_asm kr32_container)
+target_include_directories(kr32_cxx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
 if(KR32_BUILD_CXX_TOOL)
     add_executable(kr32_cxx_tool src/cxx/tool/main.cpp)

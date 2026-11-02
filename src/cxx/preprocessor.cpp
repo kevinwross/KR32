@@ -1,0 +1,796 @@
+#include "cxx/preprocessor.h"
+
+#include <cctype>
+#include <cstdint>
+#include <cstdlib>
+#include <map>
+#include <set>
+#include <sstream>
+#include <string>
+#include <string_view>
+#include <vector>
+
+namespace kr32::cxx {
+
+namespace {
+
+struct Macro {
+    bool function_like = false;
+    std::vector<std::string> parameters;
+    std::string body;
+};
+
+std::string_view trim(std::string_view text) {
+    while (!text.empty() && (text.front() == ' ' || text.front() == '\t' ||
+                             text.front() == '\r')) {
+        text.remove_prefix(1);
+    }
+    while (!text.empty() && (text.back() == ' ' || text.back() == '\t' ||
+                             text.back() == '\r')) {
+        text.remove_suffix(1);
+    }
+    return text;
+}
+
+bool identifier_start(char c) {
+    return std::isalpha(static_cast<unsigned char>(c)) != 0 || c == '_';
+}
+
+bool identifier_continue(char c) {
+    return std::isalnum(static_cast<unsigned char>(c)) != 0 || c == '_';
+}
+
+// Translation-phase 2/3 subset: splice continued lines and replace comments
+// with spaces while preserving newlines and literals.
+std::string clean_source(std::string_view source) {
+    std::string result;
+    result.reserve(source.size());
+    std::size_t index = 0;
+    enum class State { Normal, LineComment, BlockComment, String, Character };
+    State state = State::Normal;
+    while (index < source.size()) {
+        const char c = source[index];
+        if (state == State::Normal) {
+            if (c == '\\' && index + 1 < source.size() && source[index + 1] == '\n') {
+                // Joining lines shifts later diagnostics; keep a newline so the
+                // source line count is retained, and let the directive parser
+                // treat the continuation as whitespace.
+                result += " \n";
+                index += 2;
+                continue;
+            }
+            if (c == '/' && index + 1 < source.size() && source[index + 1] == '/') {
+                state = State::LineComment;
+                ++index;
+                continue;
+            }
+            if (c == '/' && index + 1 < source.size() && source[index + 1] == '*') {
+                state = State::BlockComment;
+                result += ' ';
+                ++index;
+                continue;
+            }
+            if (c == '"') {
+                state = State::String;
+                result += c;
+                ++index;
+                continue;
+            }
+            if (c == '\'') {
+                state = State::Character;
+                result += c;
+                ++index;
+                continue;
+            }
+            result += c;
+            ++index;
+            continue;
+        }
+        if (state == State::LineComment) {
+            if (c == '\n') {
+                result += '\n';
+                state = State::Normal;
+            }
+            ++index;
+            continue;
+        }
+        if (state == State::BlockComment) {
+            if (c == '*' && index + 1 < source.size() && source[index + 1] == '/') {
+                state = State::Normal;
+                index += 2;
+                continue;
+            }
+            if (c == '\n') {
+                result += '\n';
+            }
+            ++index;
+            continue;
+        }
+        if (state == State::String || state == State::Character) {
+            result += c;
+            if (c == '\\' && index + 1 < source.size()) {
+                result += source[index + 1];
+                index += 2;
+                continue;
+            }
+            if ((state == State::String && c == '"') ||
+                (state == State::Character && c == '\'')) {
+                state = State::Normal;
+            }
+            ++index;
+            continue;
+        }
+    }
+    return result;
+}
+
+class IfExpression {
+public:
+    IfExpression(std::string_view text, std::string_view source_name,
+                 std::vector<Diagnostic>& diagnostics, int line)
+        : text_(text), source_name_(source_name), diagnostics_(diagnostics), line_(line) {
+        tokenize();
+    }
+
+    std::int64_t evaluate() {
+        position_ = 0;
+        const std::int64_t value = parse_or();
+        if (position_ != tokens_.size()) {
+            std::string joined;
+            for (const std::string& token : tokens_) {
+                joined += token;
+                joined += ' ';
+            }
+            error("unexpected token in preprocessor condition: " + tokens_[position_] +
+                  " [" + joined + "]");
+        }
+        return value;
+    }
+
+private:
+    void tokenize() {
+        std::size_t index = 0;
+        while (index < text_.size()) {
+            const char c = text_[index];
+            if (std::isspace(static_cast<unsigned char>(c)) != 0) {
+                ++index;
+                continue;
+            }
+            if (identifier_start(c)) {
+                const std::size_t start = index;
+                while (index < text_.size() && identifier_continue(text_[index])) {
+                    ++index;
+                }
+                tokens_.push_back(std::string(text_.substr(start, index - start)));
+                continue;
+            }
+            if (std::isdigit(static_cast<unsigned char>(c)) != 0) {
+                const std::size_t start = index;
+                while (index < text_.size() &&
+                       (std::isalnum(static_cast<unsigned char>(text_[index])) != 0 ||
+                        text_[index] == '\'')) {
+                    ++index;
+                }
+                tokens_.push_back(std::string(text_.substr(start, index - start)));
+                continue;
+            }
+            static const std::vector<std::string> two = {
+                "&&", "||", "==", "!=", "<=", ">=", "<<", ">>"};
+            bool matched = false;
+            for (const std::string& op : two) {
+                if (text_.substr(index, op.size()) == op) {
+                    tokens_.push_back(op);
+                    index += op.size();
+                    matched = true;
+                    break;
+                }
+            }
+            if (!matched) {
+                tokens_.push_back(std::string(1, c));
+                ++index;
+            }
+        }
+    }
+
+    void error(std::string message) {
+        diagnostics_.push_back({line_, 1, std::move(message)});
+    }
+
+    const std::string& peek() const {
+        static const std::string empty;
+        return position_ < tokens_.size() ? tokens_[position_] : empty;
+    }
+
+    bool match(std::string_view text) {
+        if (peek() == text) {
+            ++position_;
+            return true;
+        }
+        return false;
+    }
+
+    std::int64_t parse_or() {
+        std::int64_t value = parse_and();
+        while (match("||")) {
+            const std::int64_t right = parse_and();
+            value = (value != 0 || right != 0) ? 1 : 0;
+        }
+        return value;
+    }
+
+    std::int64_t parse_and() {
+        std::int64_t value = parse_bitor();
+        while (match("&&")) {
+            const std::int64_t right = parse_bitor();
+            value = (value != 0 && right != 0) ? 1 : 0;
+        }
+        return value;
+    }
+
+    std::int64_t parse_bitor() {
+        std::int64_t value = parse_bitxor();
+        while (match("|")) {
+            value |= parse_bitxor();
+        }
+        return value;
+    }
+
+    std::int64_t parse_bitxor() {
+        std::int64_t value = parse_bitand();
+        while (match("^")) {
+            value ^= parse_bitand();
+        }
+        return value;
+    }
+
+    std::int64_t parse_bitand() {
+        std::int64_t value = parse_equality();
+        while (match("&")) {
+            value &= parse_equality();
+        }
+        return value;
+    }
+
+    std::int64_t parse_equality() {
+        std::int64_t value = parse_relational();
+        while (true) {
+            if (match("==")) {
+                value = value == parse_relational() ? 1 : 0;
+            } else if (match("!=")) {
+                value = value != parse_relational() ? 1 : 0;
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
+
+    std::int64_t parse_relational() {
+        std::int64_t value = parse_shift();
+        while (true) {
+            if (match("<=")) {
+                value = value <= parse_shift() ? 1 : 0;
+            } else if (match(">=")) {
+                value = value >= parse_shift() ? 1 : 0;
+            } else if (match("<")) {
+                value = value < parse_shift() ? 1 : 0;
+            } else if (match(">")) {
+                value = value > parse_shift() ? 1 : 0;
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
+
+    std::int64_t parse_shift() {
+        std::int64_t value = parse_additive();
+        while (true) {
+            if (match("<<")) {
+                value <<= parse_additive();
+            } else if (match(">>")) {
+                value >>= parse_additive();
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
+
+    std::int64_t parse_additive() {
+        std::int64_t value = parse_multiplicative();
+        while (true) {
+            if (match("+")) {
+                value += parse_multiplicative();
+            } else if (match("-")) {
+                value -= parse_multiplicative();
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
+
+    std::int64_t parse_multiplicative() {
+        std::int64_t value = parse_unary();
+        while (true) {
+            if (match("*")) {
+                value *= parse_unary();
+            } else if (match("/")) {
+                const std::int64_t right = parse_unary();
+                value = right == 0 ? 0 : value / right;
+            } else if (match("%")) {
+                const std::int64_t right = parse_unary();
+                value = right == 0 ? 0 : value % right;
+            } else {
+                break;
+            }
+        }
+        return value;
+    }
+
+    std::int64_t parse_unary() {
+        if (match("!")) {
+            return parse_unary() == 0 ? 1 : 0;
+        }
+        if (match("~")) {
+            return ~parse_unary();
+        }
+        if (match("-")) {
+            return -parse_unary();
+        }
+        if (match("+")) {
+            return parse_unary();
+        }
+        if (match("(")) {
+            const std::int64_t value = parse_or();
+            if (!match(")")) {
+                error("missing ')' in preprocessor condition");
+            }
+            return value;
+        }
+        if (peek().empty()) {
+            error("unexpected end of preprocessor condition");
+            return 0;
+        }
+        const std::string token = peek();
+        ++position_;
+        if (std::isdigit(static_cast<unsigned char>(token[0])) != 0) {
+            return static_cast<std::int64_t>(std::strtoll(token.c_str(), nullptr, 0));
+        }
+        // Identifiers that survived macro expansion evaluate to zero.
+        (void)source_name_;
+        return 0;
+    }
+
+    std::string_view text_;
+    std::string_view source_name_;
+    std::vector<Diagnostic>& diagnostics_;
+    int line_ = 0;
+    std::vector<std::string> tokens_;
+    std::size_t position_ = 0;
+};
+
+class Preprocessor {
+public:
+    Preprocessor(std::string_view source, std::string_view source_name,
+                 std::vector<Diagnostic>& diagnostics)
+        : source_name_(source_name), diagnostics_(diagnostics) {
+        source_ = clean_source(source);
+    }
+
+    std::string run() {
+        macros_["__cplusplus"] = Macro{false, {}, "201103L"};
+        macros_["__KR32__"] = Macro{false, {}, "1"};
+        std::istringstream lines(source_);
+        std::string line;
+        int line_number = 0;
+        while (std::getline(lines, line)) {
+            ++line_number;
+            process_line(line, line_number);
+        }
+        while (!conditions_.empty()) {
+            diagnostics_.push_back({line_number, 1, "unterminated preprocessor conditional"});
+            conditions_.pop_back();
+        }
+        return result_;
+    }
+
+private:
+    bool active() const { return conditions_.empty() || conditions_.back().active; }
+
+    void append_line(const std::string& text) {
+        result_ += text;
+        result_ += '\n';
+    }
+
+    void error(int line, int column, std::string message) {
+        diagnostics_.push_back({line, column, std::move(message)});
+    }
+
+    void process_line(const std::string& raw_line, int line_number) {
+        std::string_view line = trim(raw_line);
+        if (line.empty() || line.front() != '#') {
+            if (active()) {
+                append_line(expand(raw_line, line_number, 0));
+            } else {
+                append_line("");
+            }
+            return;
+        }
+        line.remove_prefix(1);
+        line = trim(line);
+        const std::size_t name_end = line.find_first_of(" \t(");
+        const std::string directive(line.substr(0, name_end));
+        std::string_view rest =
+            name_end == std::string_view::npos ? std::string_view() : trim(line.substr(name_end));
+        handle_directive(directive, rest, line_number);
+        append_line("");
+    }
+
+    void handle_directive(const std::string& directive, std::string_view rest,
+                          int line_number) {
+        if (directive == "define") {
+            if (!active()) {
+                return;
+            }
+            define_macro(rest, line_number);
+            return;
+        }
+        if (directive == "undef") {
+            if (!active()) {
+                return;
+            }
+            macros_.erase(std::string(trim(rest)));
+            return;
+        }
+        if (directive == "ifdef" || directive == "ifndef") {
+            const std::string name(trim(rest));
+            const bool defined = macros_.find(name) != macros_.end();
+            start_conditional(directive == "ifdef" ? defined : !defined, line_number);
+            return;
+        }
+        if (directive == "if") {
+            const bool condition = evaluate_condition(std::string(rest), line_number);
+            start_conditional(condition, line_number);
+            return;
+        }
+        if (directive == "elif") {
+            if (conditions_.empty()) {
+                error(line_number, 1, "#elif without #if");
+                return;
+            }
+            Conditional& current = conditions_.back();
+            if (current.saw_else) {
+                error(line_number, 1, "#elif after #else");
+            }
+            if (!current.taken && current.parent_active) {
+                const bool condition = evaluate_condition(std::string(rest), line_number);
+                current.active = condition;
+                current.taken = condition;
+            } else {
+                current.active = false;
+            }
+            return;
+        }
+        if (directive == "else") {
+            if (conditions_.empty()) {
+                error(line_number, 1, "#else without #if");
+                return;
+            }
+            Conditional& current = conditions_.back();
+            if (current.saw_else) {
+                error(line_number, 1, "duplicate #else");
+            }
+            current.saw_else = true;
+            current.active = current.parent_active && !current.taken;
+            current.taken = current.taken || current.active;
+            return;
+        }
+        if (directive == "endif") {
+            if (conditions_.empty()) {
+                error(line_number, 1, "#endif without #if");
+                return;
+            }
+            conditions_.pop_back();
+            return;
+        }
+        if (!active()) {
+            return;
+        }
+        if (directive == "include") {
+            const std::string header(trim(rest));
+            error(line_number, 1,
+                  "freestanding C++ header set is not implemented yet: " + header);
+            return;
+        }
+        if (directive == "error") {
+            error(line_number, 1, std::string(trim(rest)));
+            return;
+        }
+        if (directive == "pragma" || directive == "line") {
+            return;
+        }
+        if (directive.empty()) {
+            return;
+        }
+        error(line_number, 1, "unknown preprocessor directive: #" + directive);
+    }
+
+    void start_conditional(bool condition, int line_number) {
+        (void)line_number;
+        const bool parent = active();
+        conditions_.push_back({parent, condition && parent, condition && parent, false});
+    }
+
+    void define_macro(std::string_view rest, int line_number) {
+        rest = trim(rest);
+        if (rest.empty()) {
+            error(line_number, 1, "missing macro name");
+            return;
+        }
+        std::size_t index = 0;
+        while (index < rest.size() && identifier_continue(rest[index])) {
+            ++index;
+        }
+        const std::string name(rest.substr(0, index));
+        if (name.empty() || !identifier_start(name[0])) {
+            error(line_number, 1, "invalid macro name");
+            return;
+        }
+        Macro macro;
+        if (index < rest.size() && rest[index] == '(') {
+            macro.function_like = true;
+            ++index;
+            std::string parameter;
+            int depth = 1;
+            while (index < rest.size() && depth > 0) {
+                const char c = rest[index++];
+                if (c == '(') {
+                    ++depth;
+                    parameter.push_back(c);
+                } else if (c == ')') {
+                    --depth;
+                    if (depth == 0) {
+                        const std::string_view trimmed = trim(parameter);
+                        if (!trimmed.empty()) {
+                            macro.parameters.push_back(std::string(trimmed));
+                        }
+                        parameter.clear();
+                    } else {
+                        parameter.push_back(c);
+                    }
+                } else if (c == ',' && depth == 1) {
+                    const std::string_view trimmed = trim(parameter);
+                    if (!trimmed.empty()) {
+                        macro.parameters.push_back(std::string(trimmed));
+                    }
+                    parameter.clear();
+                } else {
+                    parameter.push_back(c);
+                }
+            }
+            if (depth != 0) {
+                error(line_number, 1, "unterminated macro parameter list");
+            }
+            rest = trim(rest.substr(index));
+        }
+        if (!macro.function_like) {
+            macro.body = std::string(trim(rest.substr(index)));
+        } else {
+            macro.body = std::string(rest);
+        }
+        macros_[name] = std::move(macro);
+    }
+
+    bool evaluate_condition(std::string text, int line_number) {
+        // Resolve `defined` before macro expansion so a macro named in
+        // `defined(X)` is not expanded.
+        std::string resolved;
+        for (std::size_t index = 0; index < text.size();) {
+            if (text.compare(index, 7, "defined") == 0 &&
+                (index == 0 || !identifier_continue(text[index - 1]))) {
+                std::size_t cursor = index + 7;
+                while (cursor < text.size() &&
+                       std::isspace(static_cast<unsigned char>(text[cursor])) != 0) {
+                    ++cursor;
+                }
+                bool parenthesized = false;
+                if (cursor < text.size() && text[cursor] == '(') {
+                    parenthesized = true;
+                    ++cursor;
+                    while (cursor < text.size() &&
+                           std::isspace(static_cast<unsigned char>(text[cursor])) != 0) {
+                        ++cursor;
+                    }
+                }
+                const std::size_t name_start = cursor;
+                while (cursor < text.size() && identifier_continue(text[cursor])) {
+                    ++cursor;
+                }
+                const std::string name = text.substr(name_start, cursor - name_start);
+                if (parenthesized) {
+                    while (cursor < text.size() &&
+                           std::isspace(static_cast<unsigned char>(text[cursor])) != 0) {
+                        ++cursor;
+                    }
+                    if (cursor < text.size() && text[cursor] == ')') {
+                        ++cursor;
+                    }
+                }
+                resolved += macros_.find(name) != macros_.end() ? " 1 " : " 0 ";
+                index = cursor;
+                continue;
+            }
+            resolved.push_back(text[index++]);
+        }
+        resolved = expand(resolved, line_number, 0);
+        IfExpression expression(resolved, source_name_, diagnostics_, line_number);
+        return expression.evaluate() != 0;
+    }
+
+    std::string expand(const std::string& text, int line_number, int depth) {
+        if (depth > 64) {
+            error(line_number, 1, "macro expansion too deep");
+            return text;
+        }
+        std::string result;
+        std::size_t index = 0;
+        while (index < text.size()) {
+            const char c = text[index];
+            if (c == '"' || c == '\'') {
+                const char quote = c;
+                result.push_back(c);
+                ++index;
+                while (index < text.size()) {
+                    const char ch = text[index++];
+                    result.push_back(ch);
+                    if (ch == '\\' && index < text.size()) {
+                        result.push_back(text[index++]);
+                    } else if (ch == quote) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (!identifier_start(c)) {
+                result.push_back(c);
+                ++index;
+                continue;
+            }
+            const std::size_t start = index;
+            while (index < text.size() && identifier_continue(text[index])) {
+                ++index;
+            }
+            const std::string name = text.substr(start, index - start);
+            if (name == "__LINE__") {
+                result += std::to_string(line_number);
+                continue;
+            }
+            if (name == "__FILE__") {
+                result += "\"" + std::string(source_name_) + "\"";
+                continue;
+            }
+            const auto macro = macros_.find(name);
+            if (macro == macros_.end() || expanding_.find(name) != expanding_.end()) {
+                result += name;
+                continue;
+            }
+            if (macro->second.function_like) {
+                std::size_t cursor = index;
+                while (cursor < text.size() &&
+                       std::isspace(static_cast<unsigned char>(text[cursor])) != 0) {
+                    ++cursor;
+                }
+                if (cursor >= text.size() || text[cursor] != '(') {
+                    result += name;
+                    continue;
+                }
+                ++cursor;
+                std::vector<std::string> arguments;
+                std::string argument;
+                int parens = 1;
+                bool closed = false;
+                while (cursor < text.size()) {
+                    const char ch = text[cursor++];
+                    if (ch == '(') {
+                        ++parens;
+                        argument.push_back(ch);
+                    } else if (ch == ')') {
+                        --parens;
+                        if (parens == 0) {
+                            closed = true;
+                            break;
+                        }
+                        argument.push_back(ch);
+                    } else if (ch == ',' && parens == 1) {
+                        arguments.push_back(std::string(trim(argument)));
+                        argument.clear();
+                    } else if (ch == '"' || ch == '\'') {
+                        const char quote = ch;
+                        argument.push_back(ch);
+                        while (cursor < text.size()) {
+                            const char inner = text[cursor++];
+                            argument.push_back(inner);
+                            if (inner == '\\' && cursor < text.size()) {
+                                argument.push_back(text[cursor++]);
+                            } else if (inner == quote) {
+                                break;
+                            }
+                        }
+                    } else {
+                        argument.push_back(ch);
+                    }
+                }
+                if (!closed) {
+                    error(line_number, 1, "unterminated macro invocation");
+                }
+                const std::string_view trimmed = trim(argument);
+                if (!trimmed.empty() || !macro->second.parameters.empty()) {
+                    arguments.push_back(std::string(trimmed));
+                }
+                std::string body = macro->second.body;
+                for (std::size_t parameter = 0;
+                     parameter < macro->second.parameters.size(); ++parameter) {
+                    const std::string& parameter_name = macro->second.parameters[parameter];
+                    const std::string value =
+                        parameter < arguments.size() ? arguments[parameter] : "";
+                    body = substitute(body, parameter_name, value);
+                }
+                index = cursor;
+                expanding_.insert(name);
+                result += expand(body, line_number, depth + 1);
+                expanding_.erase(name);
+                continue;
+            }
+            expanding_.insert(name);
+            result += expand(macro->second.body, line_number, depth + 1);
+            expanding_.erase(name);
+        }
+        return result;
+    }
+
+    static std::string substitute(const std::string& body, const std::string& parameter,
+                                  const std::string& value) {
+        std::string result;
+        std::size_t index = 0;
+        while (index < body.size()) {
+            if (!identifier_start(body[index])) {
+                result.push_back(body[index++]);
+                continue;
+            }
+            const std::size_t start = index;
+            while (index < body.size() && identifier_continue(body[index])) {
+                ++index;
+            }
+            const std::string name = body.substr(start, index - start);
+            result += name == parameter ? value : name;
+        }
+        return result;
+    }
+
+    struct Conditional {
+        bool parent_active = true;
+        bool active = true;
+        bool taken = false;
+        bool saw_else = false;
+    };
+
+    std::string_view source_name_;
+    std::vector<Diagnostic>& diagnostics_;
+    std::string source_;
+    std::string result_;
+    std::map<std::string, Macro> macros_;
+    std::set<std::string> expanding_;
+    std::vector<Conditional> conditions_;
+};
+
+} // namespace
+
+std::string preprocess(std::string_view source, std::string_view source_name,
+                       std::vector<Diagnostic>& diagnostics) {
+    Preprocessor preprocessor(source, source_name, diagnostics);
+    return preprocessor.run();
+}
+
+} // namespace kr32::cxx

@@ -2,8 +2,9 @@
 
 **Status:** approved and started 2026-11-02. Design approved in
 [docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
-worktree/branch. Phase M9.1 (ABI, API, and test harness) is complete; phase M9.2
-(front end) is next.
+worktree/branch. Phases M9.1 (ABI/API/test harness) and M9.2 (preprocessor,
+lexer, parser, AST, diagnostics) are complete; phase M9.3 (semantic analysis,
+mangling, and integer code generation) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -47,10 +48,28 @@ Completed in M9.1:
 - [x] `--emit obj` output contract made explicit; `KR32_BUILD_CXX_TOOL` option
       documented and install rules conditioned on it.
 
+Completed in M9.2:
+
+- [x] C++ preprocessor subset (`src/cxx/preprocessor.*`): comments, line
+      splices, object/function macros, `#if`/`#ifdef`/`#elif`/`#else`/`#endif`,
+      built-in macros, and explicit diagnostics for unavailable headers.
+- [x] Lexer (`src/cxx/lexer.*`): C++ keywords, identifiers, integer/float/
+      character/string literals, raw strings, comments, and the full punctuator
+      set with source locations.
+- [x] AST (`src/cxx/ast.*`) for declarations, types, expressions, statements,
+      classes, namespaces, templates, lambdas, and initializer lists.
+- [x] Recursive-descent parser (`src/cxx/parser.*`) with error recovery and
+      sorted diagnostics; `compile()` now runs preprocess → lex → parse and
+      reports the missing backend only after a successful parse.
+- [x] Host parser tests under `tests/cxx/test_cxx_parser.cpp`, including a
+      malformed-input corpus.
+
 Not started:
 
-- [ ] Lexer/parser/semantic analysis (M9.2).
-- [ ] Code generation, runtime, threads, matrices, debug integration (M9.3-M9.12).
+- [ ] Semantic analysis, symbol tables, overload resolution, mangling, and
+      integer code generation (M9.3).
+- [ ] Scalar FP, classes, virtual dispatch/RTTI, matrices, templates, exceptions,
+      threads, debug, and CLI integration (M9.4-M9.12).
 
 ## 3. Milestone map
 
@@ -60,7 +79,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | --- | --- | --- | --- |
 | M9.0 | Review this tracker, create `m9-cxx` worktree, freeze phase-1 files | tracker approved; clean worktree | done |
 | M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | done |
-| M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | not started |
+| M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | done |
 | M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | not started |
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | not started |
 | M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | not started |
@@ -118,16 +137,20 @@ ABI review decisions were accepted 2026-11-02; all recommended choices are in
 
 ### M9.2 — Preprocessor, lexer, parser, diagnostics
 
-- [ ] Reuse/extend the C preprocessor; add C++ tokens (`::`, `->*`, templates,
-      references, `new`, `delete`, `try`, `catch`, `throw`, lambdas).
-- [ ] Build a C++ declaration/expression AST separate from the C parser.
-- [ ] Track source locations for diagnostics and debug line records.
-- [ ] Parse translation units, namespaces, classes, functions, declarations.
-- [ ] Recover from common errors and emit sorted diagnostics.
-- [ ] Add unit tests for tokens, precedence, declarations, and errors.
-- [ ] Add a parser-only mode or test hook that does not emit code.
+- [x] Reuse/extend the C preprocessor rules; add C++ tokens (`::`, `->*`,
+      templates, references, `new`, `delete`, `try`, `catch`, `throw`, lambdas).
+- [x] Build a C++ declaration/expression AST separate from the C parser.
+- [x] Track source locations for diagnostics and debug line records.
+- [x] Parse translation units, namespaces, classes, functions, declarations.
+- [x] Recover from common errors and emit sorted diagnostics.
+- [x] Add unit tests for tokens, precedence, declarations, and errors.
+- [x] Add a parser-only mode or test hook that does not emit code
+      (`kr32::cxx::parse`/`parse_tokens`, used by `tests/cxx`).
 
 **Gate:** no crashes on malformed input; parser/AST tests pass.
+**Status:** done 2026-11-02. Windows MSVC Debug and WSL GCC headless both pass
+21/21 CTest tests; `kr32_tests` reports 131 test cases and 4617 assertions,
+including the malformed-input corpus. M9.3 is next.
 
 ### M9.3 — Functions, namespaces, references, overloads
 
@@ -311,6 +334,13 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   `double` alias, the bare-pointer `va_list`, and `KR32_BUILD_CXX_TOOL` default
   `ON`. No ABI contract change; `docs/abi.md` now records the approved review
   decisions. M9.1 remains done.
+- **2026-11-02 11:10 -08:00** — Completed M9.2. Added the C++ preprocessor,
+  lexer, AST, and recursive-descent parser under `src/cxx` (`preprocessor.*`,
+  `lexer.*`, `ast.*`, `parser.*`), wired `compile()` through preprocess → lex →
+  parse, and added host parser tests including a malformed-input corpus.
+  Windows MSVC Debug and WSL GCC headless both pass 21/21 CTest tests;
+  `kr32_tests` reports 131 test cases and 4617 assertions. M9.3 (semantic
+  analysis, mangling, integer code generation) is next.
 
 ## 8. Approval
 
