@@ -7,10 +7,14 @@ for the C++ compiler in M9.
 
 - `char`, `_Bool`: 1 byte.
 - `int`, pointers: 4 bytes.
+- `float`: 4 bytes, 4-byte alignment.
+- `double`: 8 bytes, 8-byte alignment. `long double` is not yet accepted by the M4
+  C front end; the C++ plan aliases it to `double`.
 - Little-endian.
-- Aggregates are laid out with members aligned to `min(size, 4)`; structs are
-  padded to their maximum member alignment; unions place every member at offset
-  zero and take the largest member size.
+- Aggregates are laid out with members aligned to their natural alignment
+  (`min(size, 4)` for integer members, 4 for `float`, 8 for `double`); structs
+  are padded to their maximum member alignment; unions place every member at
+  offset zero and take the largest member size.
 - Arrays are contiguous; a pointer is 4 bytes.
 
 ## Registers
@@ -44,17 +48,22 @@ POP R7
 RET
 ```
 
-The bootstrap uses 4-byte stack alignment. Future C++ support will preserve the
-same frame shape and enforce 16-byte alignment at public call boundaries.
+The bootstrap uses 4-byte stack alignment for integer objects; `double` locals
+and variables are aligned to 8 bytes within the frame. C++ will enforce 16-byte
+alignment at public call boundaries.
 
 ## Calls and aggregates
 
-- Up to four scalar arguments travel in `R0..R3`; the return value is in `R0`.
+- Up to four scalar arguments are supported. Integer/pointer arguments travel in
+  `R0..R3`; `float`/`double` arguments travel in `F0..F7` in declaration order.
+- Integer return values are in `R0`; `float`/`double` returns are in `F0`.
+  (`F1` is reserved for C++ two-register FP returns.)
 - Struct/union values are not passed or returned by value in the bootstrap; pass
   pointers instead. The object/debug model is language-neutral, so M9 can add a
   by-value aggregate convention without changing `.k32`.
-- The caller evaluates arguments left-to-right and pushes each result; the
-  sequence is popped into `R0..Rn-1` before `CALL`.
+- The caller stages evaluated arguments in frame slots and loads the integer and
+  FP register banks separately before `CALL`. This preserves left-to-right
+  evaluation and mixed integer/FP argument lists.
 
 ## Runtime
 

@@ -107,6 +107,14 @@ add_test(NAME build_c_types
 set_tests_properties(build_c_types PROPERTIES
     PASS_REGULAR_EXPRESSION "unsigned int 10 squared = 100")
 
+add_test(NAME build_c_floats
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/floats.c
+        -o ${CMAKE_BINARY_DIR}/floats-c.k32 --run)
+set_tests_properties(build_c_floats PROPERTIES
+    PASS_REGULAR_EXPRESSION "global 4.5 squared = 20")
+
+
 add_test(NAME debug_dump
     COMMAND $<TARGET_FILE:kr32> debug ${CMAKE_BINARY_DIR}/hello-c.k32)
 set_tests_properties(debug_dump PROPERTIES

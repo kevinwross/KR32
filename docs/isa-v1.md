@@ -557,6 +557,10 @@ The extension word is little-endian and is always the word after the base word.
   add coverage for every opcode and both extension widths.
 - **Pseudo-ops.** `JZ`/`JNZ`/…, `VLOAD`/`VSTORE`, and `NEG`-style aliases belong
   to the assembler, not the ISA.
+- **Data directives.** `.byte`, `.word`, `.float`, and `.double` emit scalar
+  data; `.float` writes one little-endian binary32 word per value and `.double`
+  writes two little-endian binary64 words per value. The object assembler keeps
+  the same encoding.
 - **FP determinism.** The policy is host IEEE with canonical NaNs and no traps;
   the open question is whether to require a soft-float library for bit-exact
   results on every host (`KR32-plan.md` Q10).

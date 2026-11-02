@@ -115,6 +115,46 @@ TEST_CASE("a compiled C program supports recursion") {
     CHECK(program.result == 55);
 }
 
+TEST_CASE("a compiled C program supports float and double scalars") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    float f = 2.5f;\n"
+        "    double d = 3.25;\n"
+        "    float sum = f + (float)d;\n"
+        "    return (int)(f * f) + (int)(d * d) + (int)sum;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 6 + 10 + 5);
+}
+
+TEST_CASE("a compiled C program uses the floating-point function ABI") {
+    const ProgramResult program = compile_and_run(
+        "float DoubleFloat(float x) { return x * x; }\n"
+        "double DoubleDouble(double x) { return x * x; }\n"
+        "double Mix(int n, double d, float f) { return n + d + f; }\n"
+        "int main(void) {\n"
+        "    return (int)DoubleFloat(2.5f) + (int)DoubleDouble(3.25) +\n"
+        "           (int)Mix(3, 2.5, 1.25f);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 6 + 10 + 6);
+}
+
+TEST_CASE("a compiled C program supports FP globals and comparisons") {
+    const ProgramResult program = compile_and_run(
+        "double value = 4.5;\n"
+        "int main(void) {\n"
+        "    float f = 2.5f;\n"
+        "    double d = 3.25;\n"
+        "    if (d > f && value == 4.5) {\n"
+        "        return (int)(value * value);\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 20);
+}
+
 TEST_CASE("a compiled C program supports arrays and indexing") {
     const ProgramResult program = compile_and_run(
         "int sum(int *values, int count) {\n"

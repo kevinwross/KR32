@@ -1,6 +1,7 @@
 #include "kr32/cc/cc.h"
 
 #include <algorithm>
+#include <bit>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -337,12 +338,14 @@ std::string preprocess(std::string_view source) {
     return result;
 }
 
-enum class TokenKind { End, Identifier, Number, String, Character, Punct };
+enum class TokenKind { End, Identifier, Number, Float, String, Character, Punct };
 
 struct Token {
     TokenKind kind = TokenKind::End;
     std::string text;
     std::int64_t value = 0;
+    double real = 0.0;
+    bool is_float = false;
     int line = 1;
     int column = 1;
 };
@@ -411,19 +414,71 @@ private:
             }
             return token;
         }
-        if (std::isdigit(static_cast<unsigned char>(c)) != 0) {
-            token.kind = TokenKind::Number;
+        if (std::isdigit(static_cast<unsigned char>(c)) != 0 ||
+            (c == '.' && std::isdigit(static_cast<unsigned char>(peek(1))) != 0)) {
+            if (c == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
+                std::string number;
+                while (std::isalnum(static_cast<unsigned char>(peek())) != 0 ||
+                       peek() == '\'') {
+                    number.push_back(peek());
+                    advance();
+                }
+                token.kind = TokenKind::Number;
+                token.text = number;
+                char* end = nullptr;
+                token.value = std::strtoll(number.c_str(), &end, 0);
+                if (end == nullptr || *end != '\0') {
+                    throw CompileError(token.line, token.column, "invalid number: " + number);
+                }
+                return token;
+            }
             std::string number;
-            while (std::isalnum(static_cast<unsigned char>(peek())) != 0 ||
-                   peek() == '\'') {
+            bool floating = false;
+            while (std::isdigit(static_cast<unsigned char>(peek())) != 0 ||
+                   peek() == '\'' || peek() == '.') {
+                if (peek() == '.') {
+                    floating = true;
+                }
                 number.push_back(peek());
                 advance();
             }
+            if (peek() == 'e' || peek() == 'E') {
+                floating = true;
+                number.push_back(peek());
+                advance();
+                if (peek() == '+' || peek() == '-') {
+                    number.push_back(peek());
+                    advance();
+                }
+                while (std::isdigit(static_cast<unsigned char>(peek())) != 0) {
+                    number.push_back(peek());
+                    advance();
+                }
+            }
+            bool float_suffix = false;
+            if (peek() == 'f' || peek() == 'F') {
+                float_suffix = true;
+                floating = true;
+                advance();
+            } else if (peek() == 'l' || peek() == 'L') {
+                advance();
+            }
             token.text = number;
-            char* end = nullptr;
-            token.value = std::strtoll(number.c_str(), &end, 0);
-            if (end == nullptr || *end != '\0') {
-                throw CompileError(token.line, token.column, "invalid number: " + number);
+            if (floating) {
+                token.kind = TokenKind::Float;
+                char* end = nullptr;
+                token.real = std::strtod(number.c_str(), &end);
+                if (end == nullptr || *end != '\0') {
+                    throw CompileError(token.line, token.column, "invalid number: " + number);
+                }
+                token.is_float = float_suffix;
+            } else {
+                token.kind = TokenKind::Number;
+                char* end = nullptr;
+                token.value = std::strtoll(number.c_str(), &end, 0);
+                if (end == nullptr || *end != '\0') {
+                    throw CompileError(token.line, token.column, "invalid number: " + number);
+                }
             }
             return token;
         }
@@ -509,7 +564,7 @@ struct Member {
 };
 
 struct Type {
-    enum class Kind { Void, Char, Int, Bool, Pointer, Array, Struct, Union };
+    enum class Kind { Void, Char, Int, Bool, Float, Double, Pointer, Array, Struct, Union };
 
     Kind kind = Kind::Int;
     TypePtr base;
@@ -529,6 +584,8 @@ struct Type {
         case Kind::Char: return 1;
         case Kind::Bool: return 1;
         case Kind::Int: return 4;
+        case Kind::Float: return 4;
+        case Kind::Double: return 8;
         case Kind::Pointer: return 4;
         case Kind::Array: return base ? base->size() * count : 0;
         case Kind::Struct:
@@ -543,6 +600,8 @@ struct Type {
         case Kind::Char: return 1;
         case Kind::Bool: return 1;
         case Kind::Int: return 4;
+        case Kind::Float: return 4;
+        case Kind::Double: return 8;
         case Kind::Pointer: return 4;
         case Kind::Array: return base ? base->alignment() : 1;
         case Kind::Struct:
@@ -563,12 +622,27 @@ struct Type {
 TypePtr type_int() { return std::make_shared<Type>(Type{Type::Kind::Int, nullptr, 0}); }
 TypePtr type_char() { return std::make_shared<Type>(Type{Type::Kind::Char, nullptr, 0}); }
 TypePtr type_bool() { return std::make_shared<Type>(Type{Type::Kind::Bool, nullptr, 0}); }
+TypePtr type_float() { return std::make_shared<Type>(Type{Type::Kind::Float, nullptr, 0}); }
+TypePtr type_double() { return std::make_shared<Type>(Type{Type::Kind::Double, nullptr, 0}); }
 TypePtr type_void() { return std::make_shared<Type>(Type{Type::Kind::Void, nullptr, 0}); }
 TypePtr type_pointer(TypePtr base) {
     return std::make_shared<Type>(Type{Type::Kind::Pointer, std::move(base), 0});
 }
 TypePtr type_array(TypePtr base, int count) {
     return std::make_shared<Type>(Type{Type::Kind::Array, std::move(base), count});
+}
+
+bool is_fp_type(const TypePtr& type) {
+    return type != nullptr &&
+           (type->kind == Type::Kind::Float || type->kind == Type::Kind::Double);
+}
+
+TypePtr common_fp_type(const TypePtr& left, const TypePtr& right) {
+    if ((left != nullptr && left->kind == Type::Kind::Double) ||
+        (right != nullptr && right->kind == Type::Kind::Double)) {
+        return type_double();
+    }
+    return type_float();
 }
 
 struct Variable {
@@ -677,6 +751,29 @@ private:
         return ".L" + std::string(prefix) + "_" + std::to_string(label_counter_++);
     }
 
+    TypePtr emit_fp_constant(double value, bool is_float) {
+        const std::string label = ".Lfp_" + std::to_string(string_counter_++);
+        if (is_float) {
+            const std::uint32_t bits =
+                std::bit_cast<std::uint32_t>(static_cast<float>(value));
+            char buffer[32] = {};
+            std::snprintf(buffer, sizeof(buffer), "    .word 0x%08X\n", bits);
+            rodata_ += label + ":\n" + buffer;
+            emit("    FLOAD.W F0, [" + label + "]");
+            return type_float();
+        }
+        const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+        char low[32] = {};
+        char high[32] = {};
+        std::snprintf(low, sizeof(low), "    .word 0x%08X\n",
+                      static_cast<std::uint32_t>(bits & 0xFFFFFFFFU));
+        std::snprintf(high, sizeof(high), "    .word 0x%08X\n",
+                      static_cast<std::uint32_t>(bits >> 32));
+        rodata_ += label + ":\n" + low + high;
+        emit("    FLOAD.D F0, [" + label + "]");
+        return type_double();
+    }
+
     std::string type_name(const TypePtr& type) const {
         if (type == nullptr) {
             return "int";
@@ -686,6 +783,8 @@ private:
         case Type::Kind::Char: return "char";
         case Type::Kind::Int: return "int";
         case Type::Kind::Bool: return "_Bool";
+        case Type::Kind::Float: return "float";
+        case Type::Kind::Double: return "double";
         case Type::Kind::Pointer: return "ptr";
         case Type::Kind::Array: return "array";
         case Type::Kind::Struct: return "struct:" + type->tag;
@@ -705,6 +804,7 @@ private:
     bool is_type_start() const {
         const std::string& text = peek().text;
         return text == "int" || text == "char" || text == "void" || text == "_Bool" ||
+               text == "float" || text == "double" ||
                text == "struct" || text == "union" || text == "enum" ||
                text == "const" || text == "unsigned" || text == "signed" ||
                text == "static" || text == "extern" || text == "volatile" ||
@@ -840,6 +940,10 @@ private:
             base = type_char();
         } else if (match("_Bool")) {
             base = type_bool();
+        } else if (match("float")) {
+            base = type_float();
+        } else if (match("double")) {
+            base = type_double();
         } else if (match("void")) {
             base = type_void();
         } else {
@@ -893,20 +997,53 @@ private:
             if (actual->kind == Type::Kind::Array) {
                 error("array initializers are not supported yet");
             }
-            if (peek().kind != TokenKind::Number && peek().kind != TokenKind::Character) {
-                error("global initializer must be a constant");
-            }
-            const std::int64_t value = take().value;
-            data_ += ".global " + name + "\n" + name + ":\n";
-            if (actual->kind == Type::Kind::Char) {
-                data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+            if (peek().kind == TokenKind::Float) {
+                const Token token = take();
+                if (actual->kind != Type::Kind::Float &&
+                    actual->kind != Type::Kind::Double) {
+                    error("floating-point initializer requires a float or double");
+                }
+                if (actual->kind == Type::Kind::Double) {
+                    data_ += ".align 8\n";
+                }
+                data_ += ".global " + name + "\n" + name + ":\n";
+                if (actual->kind == Type::Kind::Float) {
+                    const std::uint32_t bits =
+                        std::bit_cast<std::uint32_t>(static_cast<float>(token.real));
+                    char buffer[32] = {};
+                    std::snprintf(buffer, sizeof(buffer), "    .word 0x%08X\n", bits);
+                    data_ += buffer;
+                } else {
+                    const std::uint64_t bits = std::bit_cast<std::uint64_t>(token.real);
+                    char low[32] = {};
+                    char high[32] = {};
+                    std::snprintf(low, sizeof(low), "    .word 0x%08X\n",
+                                  static_cast<std::uint32_t>(bits & 0xFFFFFFFFU));
+                    std::snprintf(high, sizeof(high), "    .word 0x%08X\n",
+                                  static_cast<std::uint32_t>(bits >> 32));
+                    data_ += low;
+                    data_ += high;
+                }
+                expect(";");
             } else {
-                data_ += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
+                if (peek().kind != TokenKind::Number && peek().kind != TokenKind::Character) {
+                    error("global initializer must be a constant");
+                }
+                const std::int64_t value = take().value;
+                data_ += ".global " + name + "\n" + name + ":\n";
+                if (actual->kind == Type::Kind::Char) {
+                    data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                } else {
+                    data_ += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
+                }
+                expect(";");
             }
-            expect(";");
         } else {
             expect(";");
             bss_ += ".global " + name + "\n" + name + ":\n";
+            if (actual->kind == Type::Kind::Double) {
+                bss_ += "    .align 8\n";
+            }
             bss_ += "    .space " + std::to_string(actual->size()) + "\n";
         }
         globals_.emplace(name, Variable{name, actual, 0, name, true});
@@ -917,9 +1054,10 @@ private:
 
     int allocate_local(const TypePtr& type) {
         const int size = std::max(1, type->size());
-        frame_size_ = (frame_size_ + 3) & ~3;
+        const int alignment = std::max(4, type->alignment());
+        frame_size_ = align_up(frame_size_, alignment);
         const int offset = frame_size_;
-        frame_size_ += (size + 3) & ~3;
+        frame_size_ += align_up(size, alignment);
         return offset;
     }
 
@@ -967,6 +1105,7 @@ private:
 
         functions_[name].defined = true;
         current_function_ = name;
+        current_result_type_ = result_type;
         frame_size_ = 0;
         locals_.clear();
         return_label_ = ".Lreturn_" + name;
@@ -976,12 +1115,23 @@ private:
         emit("    ADJSP #-__FRAME_" + name + "__");
         emit("    LEA R7, [SP]");
 
+        int integer_register = 0;
+        int fp_register = 0;
         for (std::size_t index = 0; index < parameters.size(); ++index) {
             const int offset = allocate_local(parameters[index]);
             locals_.emplace(parameter_names[index],
                             Variable{parameter_names[index], parameters[index], offset, "", false});
-            emit("    STORE R" + std::to_string(index) + ", [R7 + " +
-                 std::to_string(offset) + "]");
+            if (is_fp_type(parameters[index])) {
+                emit(std::string("    FSTORE") +
+                     (parameters[index]->kind == Type::Kind::Double ? ".D" : ".W") +
+                     " F" + std::to_string(fp_register) + ", [R7 + " +
+                     std::to_string(offset) + "]");
+                ++fp_register;
+            } else {
+                emit("    STORE R" + std::to_string(integer_register) + ", [R7 + " +
+                     std::to_string(offset) + "]");
+                ++integer_register;
+            }
             debug_type(parameters[index]);
             debug_record("V " + name + " " + parameter_names[index] + " " +
                          std::to_string(offset) + " " + type_name(parameters[index]) + " " +
@@ -989,7 +1139,15 @@ private:
         }
 
         parse_block_contents();
-        emit("    MOV R0, #0");
+        if (result_type->kind == Type::Kind::Float) {
+            emit("    MOV R0, #0");
+            emit("    FCVT.S.W F0, R0");
+        } else if (result_type->kind == Type::Kind::Double) {
+            emit("    MOV R0, #0");
+            emit("    FCVT.D.W F0, R0");
+        } else {
+            emit("    MOV R0, #0");
+        }
         emit(return_label_ + ":");
         emit("    ADJSP #__FRAME_" + name + "__");
         emit("    POP R7");
@@ -1079,7 +1237,7 @@ private:
         }
         if (match("if")) {
             expect("(");
-            gen_expression();
+            gen_condition();
             expect(")");
             const std::string else_label = new_label("else");
             const std::string end_label = new_label("endif");
@@ -1099,7 +1257,7 @@ private:
             const std::string end = new_label("endwhile");
             emit(start + ":");
             expect("(");
-            gen_expression();
+            gen_condition();
             expect(")");
             emit("    CMP R0, #0");
             emit("    JZ " + end);
@@ -1127,7 +1285,7 @@ private:
             const std::string increment = new_label("forinc");
             emit(start + ":");
             if (!match(";")) {
-                gen_expression();
+                gen_condition();
                 expect(";");
                 emit("    CMP R0, #0");
                 emit("    JZ " + end);
@@ -1157,8 +1315,17 @@ private:
         }
         if (match("return")) {
             if (!match(";")) {
-                gen_expression();
+                TypePtr type = gen_expression();
+                convert_value(type, current_result_type_);
                 expect(";");
+            } else if (current_result_type_ != nullptr &&
+                       current_result_type_->kind == Type::Kind::Float) {
+                emit("    MOV R0, #0");
+                emit("    FCVT.S.W F0, R0");
+            } else if (current_result_type_ != nullptr &&
+                       current_result_type_->kind == Type::Kind::Double) {
+                emit("    MOV R0, #0");
+                emit("    FCVT.D.W F0, R0");
             } else {
                 emit("    MOV R0, #0");
             }
@@ -1216,7 +1383,8 @@ private:
         if (match("=")) {
             gen_lvalue_address(name);
             emit("    PUSH R0");
-            gen_expression();
+            TypePtr value_type = gen_expression();
+            convert_value(value_type, actual);
             emit("    POP R1");
             gen_store(actual);
         }
@@ -1267,7 +1435,8 @@ private:
             TypePtr type;
             if (gen_lvalue(type) && match("=")) {
                 emit("    PUSH R0");
-                gen_expression();
+                TypePtr value_type = gen_expression();
+                convert_value(value_type, type);
                 emit("    POP R1");
                 gen_store(type);
                 return;
@@ -1306,6 +1475,10 @@ private:
     void gen_load(const TypePtr& type) {
         if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
             emit("    LOAD8S R0, [R0]");
+        } else if (type->kind == Type::Kind::Float) {
+            emit("    FLOAD.W F0, [R0]");
+        } else if (type->kind == Type::Kind::Double) {
+            emit("    FLOAD.D F0, [R0]");
         } else if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
                    type->kind == Type::Kind::Union) {
             // Array and aggregate expressions are addresses.
@@ -1317,6 +1490,10 @@ private:
     void gen_store(const TypePtr& type) {
         if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
             emit("    STORE8 R0, [R1]");
+        } else if (type->kind == Type::Kind::Float) {
+            emit("    FSTORE.W F0, [R1]");
+        } else if (type->kind == Type::Kind::Double) {
+            emit("    FSTORE.D F0, [R1]");
         } else if (type->kind == Type::Kind::Struct || type->kind == Type::Kind::Union) {
             error("aggregate assignment is not supported yet");
         } else {
@@ -1324,11 +1501,152 @@ private:
         }
     }
 
+    void convert_value(const TypePtr& from, const TypePtr& to) {
+        if (from == nullptr || to == nullptr || from->kind == to->kind) {
+            return;
+        }
+        const bool from_fp = is_fp_type(from);
+        if (to->kind == Type::Kind::Float || to->kind == Type::Kind::Double) {
+            const bool wide = to->kind == Type::Kind::Double;
+            if (from_fp) {
+                if (from->kind == Type::Kind::Float && wide) {
+                    emit("    FCVT.D.S F0, F0");
+                } else if (from->kind == Type::Kind::Double && !wide) {
+                    emit("    FCVT.S.D F0, F0");
+                }
+            } else {
+                emit(std::string("    ") + (wide ? "FCVT.D.W" : "FCVT.S.W") + " F0, R0");
+            }
+            return;
+        }
+        if (from_fp) {
+            emit(std::string("    ") +
+                 (from->kind == Type::Kind::Double ? "FCVT.W.D" : "FCVT.W.S") + " R0, F0");
+        }
+        if (to->kind == Type::Kind::Char) {
+            emit("    AND R0, R0, #255");
+            emit("    SHL R0, R0, #24");
+            emit("    SAR R0, R0, #24");
+        } else if (to->kind == Type::Kind::Bool) {
+            const std::string nonzero = new_label("bool");
+            const std::string done = new_label("boolend");
+            emit("    CMP R0, #0");
+            emit("    JNZ " + nonzero);
+            emit("    MOV R0, #0");
+            emit("    JMP " + done);
+            emit(nonzero + ":");
+            emit("    MOV R0, #1");
+            emit(done + ":");
+        }
+    }
+
+    void value_to_integer(const TypePtr& type) {
+        if (type != nullptr && type->kind == Type::Kind::Double) {
+            emit("    FCVT.W.D R0, F0");
+        } else if (type != nullptr && type->kind == Type::Kind::Float) {
+            emit("    FCVT.W.S R0, F0");
+        }
+    }
+
+    TypePtr gen_condition() {
+        TypePtr type = gen_expression();
+        value_to_integer(type);
+        return type;
+    }
+
     TypePtr gen_expression() {
         return parse_logical_or();
     }
 
+    void push_value(const TypePtr& type) {
+        if (is_fp_type(type)) {
+            emit("    ADJSP #-8");
+            emit("    FSTORE.D F0, [SP]");
+        } else {
+            emit("    PUSH R0");
+        }
+    }
+
+    void gen_fp_binary(const std::string& op, const TypePtr& left, const TypePtr& right) {
+        if (is_fp_type(left)) {
+            emit("    FLOAD.D F1, [SP]");
+            emit("    ADJSP #8");
+        } else {
+            emit("    POP R1");
+        }
+        const TypePtr common = common_fp_type(left, right);
+        const std::string suffix = common->kind == Type::Kind::Double ? ".D" : ".S";
+        if (is_fp_type(left)) {
+            if (left->kind == Type::Kind::Float && common->kind == Type::Kind::Double) {
+                emit("    FCVT.D.S F1, F1");
+            } else if (left->kind == Type::Kind::Double &&
+                       common->kind == Type::Kind::Float) {
+                emit("    FCVT.S.D F1, F1");
+            }
+        } else {
+            emit(std::string("    FCVT") + suffix + ".W F1, R1");
+        }
+        if (is_fp_type(right)) {
+            if (right->kind == Type::Kind::Float && common->kind == Type::Kind::Double) {
+                emit("    FCVT.D.S F0, F0");
+            } else if (right->kind == Type::Kind::Double &&
+                       common->kind == Type::Kind::Float) {
+                emit("    FCVT.S.D F0, F0");
+            }
+        } else {
+            emit(std::string("    FCVT") + suffix + ".W F0, R0");
+        }
+
+        if (op == "+") {
+            emit("    FADD" + suffix + " F0, F1, F0");
+            return;
+        }
+        if (op == "-") {
+            emit("    FSUB" + suffix + " F0, F1, F0");
+            return;
+        }
+        if (op == "*") {
+            emit("    FMUL" + suffix + " F0, F1, F0");
+            return;
+        }
+        if (op == "/") {
+            emit("    FDIV" + suffix + " F0, F1, F0");
+            return;
+        }
+        if (op == "==") {
+            emit("    FEQ" + suffix + " R0, F1, F0");
+            return;
+        }
+        if (op == "!=") {
+            emit("    FEQ" + suffix + " R0, F1, F0");
+            emit("    XOR R0, R0, #1");
+            return;
+        }
+        if (op == "<") {
+            emit("    FLT" + suffix + " R0, F1, F0");
+            return;
+        }
+        if (op == "<=") {
+            emit("    FLE" + suffix + " R0, F1, F0");
+            return;
+        }
+        if (op == ">") {
+            emit("    FLT" + suffix + " R0, F0, F1");
+            return;
+        }
+        if (op == ">=") {
+            emit("    FLE" + suffix + " R0, F0, F1");
+            return;
+        }
+        error("operator '" + op + "' is not supported for floating-point values");
+    }
+
     void gen_binary(const std::string& op, const TypePtr& left, const TypePtr& right) {
+        if (is_fp_type(left) || is_fp_type(right)) {
+            gen_fp_binary(op, left, right);
+            return;
+        }
+        emit("    POP R1");
         if (op == "+" || op == "-") {
             if (left->is_pointer() && !right->is_pointer()) {
                 const int size = left->element() ? left->element()->size() : 1;
@@ -1411,14 +1729,16 @@ private:
             for (const std::string& op : ops) {
                 if (peek().text == op) {
                     take();
-                    emit("    PUSH R0");
+                    push_value(left);
                     TypePtr right = (this->*next)();
-                    emit("    POP R1");
+                    const bool comparison = op == "==" || op == "!=" || op == "<" ||
+                                            op == "<=" || op == ">" || op == ">=";
                     gen_binary(op, left, right);
-                    left = (op == "==" || op == "!=" || op == "<" || op == "<=" ||
-                            op == ">" || op == ">=")
+                    left = comparison
                                ? type_int()
-                               : left;
+                               : (is_fp_type(left) || is_fp_type(right)
+                                      ? common_fp_type(left, right)
+                                      : left);
                     matched = true;
                     break;
                 }
@@ -1440,12 +1760,14 @@ private:
 
     TypePtr parse_logical_and() {
         TypePtr left = parse_bit_or_real();
+        value_to_integer(left);
         while (match("&&")) {
             const std::string false_label = new_label("andfalse");
             const std::string end_label = new_label("andend");
             emit("    CMP R0, #0");
             emit("    JZ " + false_label);
-            parse_bit_or_real();
+            TypePtr right = parse_bit_or_real();
+            value_to_integer(right);
             emit("    CMP R0, #0");
             emit("    JZ " + false_label);
             emit("    MOV R0, #1");
@@ -1460,12 +1782,14 @@ private:
 
     TypePtr parse_logical_or() {
         TypePtr left = parse_logical_and();
+        value_to_integer(left);
         while (match("||")) {
             const std::string true_label = new_label("ortrue");
             const std::string end_label = new_label("orend");
             emit("    CMP R0, #0");
             emit("    JNZ " + true_label);
-            parse_logical_and();
+            TypePtr right = parse_logical_and();
+            value_to_integer(right);
             emit("    CMP R0, #0");
             emit("    JNZ " + true_label);
             emit("    MOV R0, #0");
@@ -1558,11 +1882,20 @@ private:
     TypePtr parse_unary() {
         if (match("-")) {
             TypePtr type = parse_unary();
-            emit("    NEG R0, R0");
+            if (is_fp_type(type)) {
+                emit(type->kind == Type::Kind::Double ? "    FNEG.D F0, F0"
+                                                      : "    FNEG.S F0, F0");
+            } else {
+                emit("    NEG R0, R0");
+            }
             return type;
         }
         if (match("!")) {
-            parse_unary();
+            TypePtr type = parse_unary();
+            if (is_fp_type(type)) {
+                emit(type->kind == Type::Kind::Double ? "    FCVT.W.D R0, F0"
+                                                      : "    FCVT.W.S R0, F0");
+            }
             const std::string true_label = new_label("nottrue");
             const std::string end_label = new_label("notend");
             emit("    CMP R0, #0");
@@ -1596,6 +1929,10 @@ private:
             const Variable* variable = lookup(name);
             return variable != nullptr ? type_pointer(variable->type) : type_pointer(type_int());
         }
+        if (peek().kind == TokenKind::Float) {
+            const Token& token = take();
+            return emit_fp_constant(token.real, token.is_float);
+        }
         if (peek().kind == TokenKind::Number) {
             const std::int64_t value = take().value;
             emit("    MOV R0, #" + std::to_string(value));
@@ -1623,22 +1960,8 @@ private:
             if (is_type_start()) {
                 TypePtr target = parse_type();
                 expect(")");
-                parse_unary();
-                if (target->kind == Type::Kind::Char) {
-                    emit("    AND R0, R0, #255");
-                    emit("    SHL R0, R0, #24");
-                    emit("    SAR R0, R0, #24");
-                } else if (target->kind == Type::Kind::Bool) {
-                    const std::string nonzero = new_label("bool");
-                    const std::string done = new_label("boolend");
-                    emit("    CMP R0, #0");
-                    emit("    JNZ " + nonzero);
-                    emit("    MOV R0, #0");
-                    emit("    JMP " + done);
-                    emit(nonzero + ":");
-                    emit("    MOV R0, #1");
-                    emit(done + ":");
-                }
+                TypePtr source = parse_unary();
+                convert_value(source, target);
                 return target;
             }
             TypePtr type = gen_expression();
@@ -1655,10 +1978,29 @@ private:
             const std::string name = take().text;
             if (match("(")) {
                 std::vector<TypePtr> arguments;
+                std::vector<int> slots;
+                std::vector<TypePtr> target_types;
+                const auto signature = functions_.find(name);
                 if (!match(")")) {
                     while (true) {
-                        arguments.push_back(gen_expression());
-                        emit("    PUSH R0");
+                        TypePtr argument = gen_expression();
+                        TypePtr target = argument;
+                        if (signature != functions_.end() &&
+                            arguments.size() < signature->second.parameters.size()) {
+                            target = signature->second.parameters[arguments.size()];
+                        }
+                        convert_value(argument, target);
+                        const int slot = allocate_local(target);
+                        if (is_fp_type(target)) {
+                            emit(std::string("    FSTORE") +
+                                 (target->kind == Type::Kind::Double ? ".D" : ".W") +
+                                 " F0, [R7 + " + std::to_string(slot) + "]");
+                        } else {
+                            emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                        }
+                        arguments.push_back(argument);
+                        target_types.push_back(target);
+                        slots.push_back(slot);
                         if (!match(",")) {
                             break;
                         }
@@ -1668,10 +2010,25 @@ private:
                 if (arguments.size() > 4) {
                     error("more than four arguments are not supported yet");
                 }
-                for (std::size_t index = arguments.size(); index > 0; --index) {
-                    emit("    POP R" + std::to_string(index - 1));
+                int integer_register = 0;
+                int fp_register = 0;
+                for (std::size_t index = 0; index < slots.size(); ++index) {
+                    if (is_fp_type(target_types[index])) {
+                        emit(std::string("    FLOAD") +
+                             (target_types[index]->kind == Type::Kind::Double ? ".D" : ".W") +
+                             " F" + std::to_string(fp_register) + ", [R7 + " +
+                             std::to_string(slots[index]) + "]");
+                        ++fp_register;
+                    } else {
+                        emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
+                             std::to_string(slots[index]) + "]");
+                        ++integer_register;
+                    }
                 }
                 emit("    CALL " + name);
+                if (signature != functions_.end()) {
+                    return signature->second.result;
+                }
                 return type_int();
             }
             const Variable* variable = lookup(name);
@@ -1709,14 +2066,16 @@ private:
             for (const std::string& op : ops) {
                 if (peek().text == op) {
                     take();
-                    emit("    PUSH R0");
+                    push_value(left);
                     TypePtr right = (this->*next)();
-                    emit("    POP R1");
+                    const bool comparison = op == "==" || op == "!=" || op == "<" ||
+                                            op == "<=" || op == ">" || op == ">=";
                     gen_binary(op, left, right);
-                    left = (op == "==" || op == "!=" || op == "<" || op == "<=" ||
-                            op == ">" || op == ">=")
+                    left = comparison
                                ? type_int()
-                               : left;
+                               : (is_fp_type(left) || is_fp_type(right)
+                                      ? common_fp_type(left, right)
+                                      : left);
                     matched = true;
                     break;
                 }
@@ -1779,6 +2138,7 @@ private:
     std::vector<std::string> break_labels_;
     std::vector<std::string> continue_labels_;
     std::string current_function_;
+    TypePtr current_result_type_;
     std::string return_label_;
     std::string debug_;
     std::string* output_ = nullptr;

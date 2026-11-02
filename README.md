@@ -10,14 +10,15 @@ checklists, dependency notes, test gates, and running log are in
 
 **Status:** M8 complete (2026-11-02). MMIO timer/block/console devices, an IRQ
 route table, tick-driven device timing, DMA, a cooperative shared-RAM multicore
-cluster, IPIs, and LL/SC spinlock runs are implemented. The debugger opens at
-1440x900 and uses embedded Inter and JetBrains Mono fonts, separate source-line
-and instruction stepping controls, responsive resizing, KR16-style gutters with
-breakpoint toggles and a Run to line/address context menu, a HEX word column,
-disassembly hover help for instructions and addressing modes, an expandable
-CORES panel, a four-line memory dump docked under the source pane with an
-editable start address, and always-visible variables, call-stack, and console
-panels. See
+cluster, IPIs, and LL/SC spinlock runs are implemented. The C compiler supports
+integer, `float`, and `double` scalars with FP calls, expressions, and debug
+types. The debugger opens at 1440x900 and uses embedded Inter and JetBrains Mono
+fonts, separate source-line and instruction stepping controls, responsive
+resizing, KR16-style gutters with breakpoint toggles and a Run to line/address
+context menu, a HEX word column, disassembly hover help for instructions and
+addressing modes, an expandable CORES panel, a four-line memory dump docked under
+the source pane with an editable start address, and always-visible variables,
+call-stack, and console panels. See
 [docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++
 toolchain is the remaining planned milestone.
 
@@ -74,7 +75,8 @@ kr32 build examples/hello.s -o hello.k32 --run
 kr32 cc examples/hello.c -S -o hello.s
 kr32 build examples/hello.c -o hello-c.k32 --run
 kr32 build examples/types.c -o types-c.k32 --run
-kr32 gui examples/types.c
+kr32 build examples/floats.c -o floats-c.k32 --run
+kr32 gui examples/floats.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm

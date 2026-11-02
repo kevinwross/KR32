@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 10:59 -08:00
+> **Last updated:** 2026-11-02 11:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -930,6 +930,12 @@ Newest entries at the bottom. Use the local time zone.
       with per-type square functions, console output, and a `build_c_types`
       CTest. The example builds/runs under the M4 C compiler and can be loaded
       into the GUI.
+- **2026-11-02 11:09 -08:00** — Added `float`/`double` to the M4 C compiler:
+      literals and exponents, FPR locals/globals, arithmetic/comparisons/casts,
+      mixed conversions, FP function arguments/returns, FP conditions, and
+      globals. Added `.float`/`.double` data directives to both assemblers, FP
+      opcode support to the object assembler, FP debug type/variable records,
+      `examples/floats.c`, and FP unit/integration tests.
 
 ## 10. Updating this file
 

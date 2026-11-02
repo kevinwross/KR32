@@ -3,6 +3,7 @@
 #include "kr32/isa/encoding.h"
 
 #include <algorithm>
+#include <bit>
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -55,6 +56,21 @@ std::string lower(std::string_view text) {
         return static_cast<char>(std::tolower(c));
     });
     return result;
+}
+
+bool parse_fp_literal(std::string_view raw, double& value, Error& error, int line) {
+    std::string text = trim(raw);
+    if (!text.empty() && (text.back() == 'f' || text.back() == 'F' ||
+                          text.back() == 'l' || text.back() == 'L')) {
+        text.pop_back();
+    }
+    char* end = nullptr;
+    value = std::strtod(text.c_str(), &end);
+    if (end == nullptr || *end != '\0') {
+        error = {"invalid floating-point literal: " + std::string(raw), line};
+        return false;
+    }
+    return true;
 }
 
 bool is_identifier_start(char c) {
@@ -758,6 +774,12 @@ private:
         }
         if (name == ".word") {
             return advance(static_cast<std::uint32_t>(statement.operands.size() * 4U), statement.line);
+        }
+        if (name == ".float") {
+            return advance(static_cast<std::uint32_t>(statement.operands.size() * 4U), statement.line);
+        }
+        if (name == ".double") {
+            return advance(static_cast<std::uint32_t>(statement.operands.size() * 8U), statement.line);
         }
         if (name == ".asciz" || name == ".ascii") {
             std::uint32_t total = 0;
@@ -1511,6 +1533,28 @@ private:
                     return false;
                 }
                 emit32(static_cast<std::uint32_t>(value.value));
+            }
+            return true;
+        }
+        if (name == ".float") {
+            for (const std::string& operand : statement.operands) {
+                double value = 0.0;
+                if (!parse_fp_literal(operand, value, error_, statement.line)) {
+                    return false;
+                }
+                emit32(std::bit_cast<std::uint32_t>(static_cast<float>(value)));
+            }
+            return true;
+        }
+        if (name == ".double") {
+            for (const std::string& operand : statement.operands) {
+                double value = 0.0;
+                if (!parse_fp_literal(operand, value, error_, statement.line)) {
+                    return false;
+                }
+                const std::uint64_t bits = std::bit_cast<std::uint64_t>(value);
+                emit32(static_cast<std::uint32_t>(bits & 0xFFFFFFFFU));
+                emit32(static_cast<std::uint32_t>(bits >> 32));
             }
             return true;
         }

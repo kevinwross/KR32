@@ -16,6 +16,12 @@ The compiler emits NUL-terminated text records into `.debug_info`:
 | `G <name> <label> <type> <size>` | Global at the address of `label` |
 | `T <name> <size>` | Type table entry |
 
+Types include `float` (4 bytes) and `double` (8 bytes) alongside the integer,
+pointer, array, struct, union, and function types emitted by the C compiler.
+Floating-point variables and globals use the same `V`/`G` records with their
+size and type name, so the debugger can identify them without changing the
+container format.
+
 Labels are resolved against the linked image's symbol table when the debug info
 is loaded. This keeps the format relocatable without changing the object model;
 the linker already preserves the local labels unless `--strip` is used.

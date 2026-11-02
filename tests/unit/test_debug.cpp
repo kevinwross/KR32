@@ -82,6 +82,50 @@ TEST_CASE("debug info maps functions, variables, and source lines") {
     CHECK(line->column > 0);
 }
 
+TEST_CASE("debug info records float and double symbols") {
+    const container::Image image = compile_debug_image(
+        "double global_value = 4.5;\n"
+        "double mix(int n, double d) {\n"
+        "    float local_float = 1.5f;\n"
+        "    return d + local_float + n;\n"
+        "}\n"
+        "int main(void) { return (int)mix(2, 3.5); }\n");
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    bool found_float_type = false;
+    bool found_double_type = false;
+    for (const debug::TypeInfo& type : info.types) {
+        found_float_type = found_float_type || (type.name == "float" && type.size == 4);
+        found_double_type = found_double_type || (type.name == "double" && type.size == 8);
+    }
+    CHECK(found_float_type);
+    CHECK(found_double_type);
+
+    bool found_float_local = false;
+    bool found_double_local = false;
+    for (const debug::Variable& variable : info.variables) {
+        found_float_local = found_float_local ||
+                            (variable.name == "local_float" && variable.type == "float" &&
+                             variable.size == 4);
+        found_double_local = found_double_local ||
+                             (variable.name == "d" && variable.type == "double" &&
+                              variable.size == 8);
+    }
+    CHECK(found_float_local);
+    CHECK(found_double_local);
+
+    bool found_double_global = false;
+    for (const debug::Global& global : info.globals) {
+        found_double_global = found_double_global ||
+                              (global.name == "global_value" && global.type == "double" &&
+                               global.size == 8);
+    }
+    CHECK(found_double_global);
+}
+
 TEST_CASE("DebugSession stops at breakpoints and inspects frames") {
     const container::Image image = compile_debug_image(
         "int add(int a, int b) {\n"
