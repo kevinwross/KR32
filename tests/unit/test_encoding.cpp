@@ -3,6 +3,7 @@
 #include "kr32/isa/encoding.h"
 
 #include <cstdint>
+#include <random>
 
 using kr32::isa::Encoded;
 using kr32::isa::Instruction;
@@ -91,4 +92,32 @@ TEST_CASE("decode requires the extension word") {
     REQUIRE(decode(words, 2, instruction));
     CHECK(instruction.extension);
     CHECK(instruction.extension_word == 0x00400000);
+}
+
+TEST_CASE("every base opcode keeps the documented field layout") {
+    for (std::uint32_t opcode = 0x00; opcode <= 0x4C; ++opcode) {
+        const std::uint32_t base =
+            (opcode << 25) | (1U << 21) | (2U << 17) | (3U << 13) | (1U << 11) | 4U;
+        expect_encoding(make(static_cast<std::uint8_t>(opcode), 1, 2, 3, false, true, 4), base);
+
+        const std::uint32_t extended =
+            (opcode << 25) | (1U << 21) | (2U << 17) | (3U << 13) | (1U << 12) | (1U << 11);
+        expect_encoding(make(static_cast<std::uint8_t>(opcode), 1, 2, 3, true, true, 0,
+                             0x1234'5678U),
+                        extended, 0x1234'5678U, 2);
+    }
+}
+
+TEST_CASE("random instruction words decode without crashing") {
+    std::mt19937 generator(0x4B52'3332U);
+    for (int index = 0; index < 100'000; ++index) {
+        std::uint32_t words[2] = {
+            static_cast<std::uint32_t>(generator()),
+            static_cast<std::uint32_t>(generator()),
+        };
+        Instruction instruction{};
+        (void)decode(words, 1, instruction);
+        (void)decode(words, 2, instruction);
+    }
+    CHECK(true);
 }

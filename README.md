@@ -8,11 +8,11 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M0 complete (2026-11-02). The binary builds on Windows and WSL, the
-CLI dispatcher and version/help commands work, the platform-boundary check runs,
-the encoding harness pins the first golden vectors, and the test/CI scaffolding
-is in place. The machine, assembler, linker, compilers, and windowed debugger
-arrive in M1 onward.
+**Status:** M1 complete (2026-11-02). The integer machine, two-pass assembler,
+disassembler, symbol listings, and raw-image CLI work. `examples/demo.asm`
+assembles, runs, and reports its registers and exit code. The privileged
+machine, MMU, boot ROM, linker, compilers, and windowed debugger arrive in later
+milestones.
 
 ## Build
 
@@ -59,14 +59,20 @@ ctest --preset linux-asan
 ## Commands
 
 ```text
+kr32 as examples/demo.asm -o demo.bin --listing demo.lst
+kr32 dis demo.bin
+kr32 run examples/demo.asm
+kr32 run examples/demo.asm --trace --stats
 kr32 version
 kr32 help
 kr32 --smoke-ui     # initialize and tear down the SDL2 platform
-kr32 gui            # M0 placeholder for the windowed debugger
+kr32 gui            # M6 placeholder for the windowed debugger
 ```
 
-The tool commands (`as`, `ld`, `build`, `cc`, `cxx`, `vm`, `dis`, `size`,
-`debug`, `dap`, `shell`) are present as M0 stubs and gain behaviour in later
+`as` writes a raw image and an optional symbol listing. `dis` reads a raw image.
+`run`/`vm` assemble a `.asm`/`.s` source or load a raw image, then execute it;
+the process exit code is `R0 & 0xFF`. The remaining tool commands (`ld`,
+`build`, `cc`, `cxx`, `size`, `debug`, `dap`, `shell`) are stubs for later
 milestones.
 
 ## Layout

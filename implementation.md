@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 00:54 -08:00
+> **Last updated:** 2026-11-02 01:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -260,39 +260,42 @@ is configured yet.
 **Goal:** execute a hand-written integer program headless and round-trip every
 base encoding.
 
+**Status:** complete 2026-11-02. The integer machine, assembler, disassembler,
+raw-image CLI, symbol listings, demo, and tests pass on Windows and WSL.
+
 **Tasks**
 
-- [ ] `kr32_core`: GPRs, PC, SP, FLAGS, tick counter, reset state.
-- [ ] Memory map and identity access; guard region; RAM and ROM.
-- [ ] Base integer ISA from `docs/isa-v1.md`: `MOV`, loads/stores (all widths
+- [x] `kr32_core`: GPRs, PC, SP, FLAGS, tick counter, reset state.
+- [x] Memory map and identity access; guard region; RAM and ROM.
+- [x] Base integer ISA from `docs/isa-v1.md`: `MOV`, loads/stores (all widths
       and indexed forms), `LEA`, ALU (`SLT`/`SLTU`/`MULH`/`MULHU`/`DIVS`/
       `MODS`), shifts, `JCOND`/`JMP`/`CALL`/`RET`, `PUSH`/`POP`/`ADJSP`, `NOP`,
       `BRK`, `HALT`.
-- [ ] Flag semantics for every ALU and shift instruction; `#DIV0`, `#UD`,
+- [x] Flag semantics for every ALU and shift instruction; `#DIV0`, `#UD`,
       `#ALIGN` stubs.
-- [ ] Assembler: case-insensitive mnemonics, labels, `#` immediates, memory
+- [x] Assembler: case-insensitive mnemonics, labels, `#` immediates, memory
       forms, `.word`, `.byte`, `.org`, `.text`, `.data`, `.align`, `.space`,
       `.asciz`, `.equ`, `.global`, `.extern`.
-- [ ] Disassembler: base ISA, symbol labels, optional hex bytes.
-- [ ] CLI: `kr32 as`, `kr32 dis`, `kr32 vm`/`run` with `--max-steps`,
+- [x] Disassembler: base ISA, symbol labels, optional hex bytes.
+- [x] CLI: `kr32 as`, `kr32 dis`, `kr32 vm`/`run` with `--max-steps`,
       `--trace`, `--stats`.
-- [ ] Golden vectors for every base opcode, including 4-byte and 8-byte forms.
-- [ ] Unit tests: ALU flags, multiply/divide edge cases, shifts, stack,
+- [x] Golden vectors for every base opcode, including 4-byte and 8-byte forms.
+- [x] Unit tests: ALU flags, multiply/divide edge cases, shifts, stack,
       addressing modes, branch conditions.
-- [ ] Property test: random instruction words decode without crashing.
-- [ ] Integration: an assembly demo that computes a result and exits; the VM
+- [x] Property test: random instruction words decode without crashing.
+- [x] Integration: an assembly demo that computes a result and exits; the VM
       reports registers and exit code.
-- [ ] Determinism: the same image and inputs produce identical state twice.
+- [x] Determinism: the same image and inputs produce identical state twice.
 
 **Test plan and gate**
 
-- [ ] Golden encode/decode tests pass.
-- [ ] ALU/shift/branch/stack unit tests pass.
-- [ ] Assembler/disassembler round-trip every opcode.
-- [ ] `kr32 run examples/demo.asm` reaches the expected result.
-- [ ] Property test runs at least 10^5 random words.
-- [ ] Windows and WSL test suites pass.
-- [ ] Commit and tag `m1`; log entry added.
+- [x] Golden encode/decode tests pass.
+- [x] ALU/shift/branch/stack unit tests pass.
+- [x] Assembler/disassembler round-trip every opcode.
+- [x] `kr32 run examples/demo.asm` reaches the expected result.
+- [x] Property test runs at least 10^5 random words.
+- [x] Windows and WSL test suites pass.
+- [x] Commit and tag `m1`; log entry added.
 
 ### M2 — Privilege, exceptions, MMU, boot, multicore hooks
 
@@ -668,6 +671,15 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 00:54 -08:00** — CI workflow is committed; its first remote run is
   pending because the repository has no remote yet.
 - **2026-11-02 00:54 -08:00** — Tagged `m0`.
+- **2026-11-02 01:08 -08:00** — M1 implemented: integer machine with RAM/ROM/guard,
+      flags, faults, branches, stack, loads/stores, shifts, multiply/divide;
+      two-pass assembler with labels and directives; disassembler with symbol
+      listings; `as`, `dis`, `vm`, and `run`; `examples/demo.asm`.
+- **2026-11-02 01:08 -08:00** — M1 gate passed: 31 unit cases and 3166
+      assertions, 100k-word decode property test, assembler/disassembler
+      round-trip, demo run, determinism; Windows MSVC Debug/Release and Ninja;
+      WSL GCC/Clang and ASan/UBSan.
+- **2026-11-02 01:08 -08:00** — Tagged `m1`.
 
 ## 10. Updating this file
 
