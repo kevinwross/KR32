@@ -9,8 +9,9 @@ conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), and M9.8 (function templates, weak symbols, and
 static initialization) are complete; phase M9.9 (`new`/`delete` and exceptions)
-is in progress, with `new`/`delete` implemented and exception support still
-outstanding.
+is in progress, with `new`/`delete`, scalar/pointer exception propagation, and
+destructor cleanup implemented; the table-driven ABI exception runtime, class
+exceptions, class arrays, and static destruction remain outstanding.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -154,15 +155,19 @@ Completed in M9.8:
 In progress:
 
 - [x] `new`/`delete` for scalars, objects, and scalar arrays, including
-      constructor/destructor calls. Exceptions, cleanup tables, class-array
-      helpers, and static destruction remain.
+      constructor/destructor calls.
+- [x] Scalar/pointer throw, catch, rethrow, nested handlers, cross-function
+      propagation, and destructor cleanup (return-based; table-driven ABI
+      runtime deferred).
+- [ ] Table-driven `.cpp_except`/LSDA/`__cxa_*`, class exceptions, class-array
+      helpers, static destruction, and constructor-completion flags.
 
 Not started:
 
-- [ ] Exceptions, threads, debug, and CLI integration (M9.9-M9.12). Class
-      templates, COMDAT section groups, static destruction, guarded local
-      statics, a full tile allocator/spill pass, matrix optimization/fusion,
-      and by-value class parameters/returns remain deferred.
+- [ ] Threads, debug, and CLI integration (M9.10-M9.12). Class templates,
+      COMDAT section groups, static destruction, guarded local statics, a full
+      tile allocator/spill pass, matrix optimization/fusion, and by-value class
+      parameters/returns remain deferred.
 
 ## 3. Milestone map
 
@@ -380,17 +385,26 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
       failure behavior and class-array constructor/destructor helpers remain
       deferred.
 - [ ] Constructor/destructor array helpers.
-- [ ] Exception object layout, throw/catch/rethrow (deferred; no exception
-      code generation yet).
-- [ ] Table-driven cleanup and full destructor unwinding.
+- [x] Scalar/pointer exception propagation, catch by type, catch-all, nested
+      try/catch, `throw;`, cross-function propagation, and destructor cleanup
+      using return-based pending checks and weak per-image exception slots.
+      The ABI's table-driven `.cpp_except`/LSDA/`__cxa_*` runtime and class
+      exception objects remain deferred.
+- [x] Destructor unwinding for live locals and caller frames on the supported
+      exception path; constructor-completion flags and temporaries remain
+      deferred.
 - [ ] `__cxa_atexit`-style static destruction.
-- [x] Tests: scalar/object/array `new`, `delete`, and destructor invocation.
+- [x] Tests: scalar/object/array `new`, `delete`, destructor invocation, nested
+      try/catch, cross-function propagation, rethrow, and RAII cleanup.
 
 **Gate:** exception/cleanup tests pass with no leaks in the guest allocator.
-**Status:** in progress 2026-11-02. `new`/`delete` works for scalars, objects,
-and scalar arrays; exceptions, cleanup tables, class-array helpers, and static
-destruction remain. Windows MSVC Debug and WSL GCC headless both pass 21/21
-CTest tests; `kr32_tests` reports 171 test cases and 4753 assertions.
+**Status:** in progress 2026-11-02. `new`/`delete` and a functional
+scalar/pointer exception path are implemented and tested, including
+cross-function unwinding and destructor cleanup. The table-driven ABI runtime
+(`.cpp_except`, LSDA, `__cxa_*`), class exceptions, class-array helpers, static
+destruction, and constructor-completion flags remain. Windows MSVC Debug and
+WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 174 test
+cases and 4765 assertions.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
@@ -556,6 +570,14 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   CTest tests; `kr32_tests` reports 171 test cases and 4753 assertions.
   Exceptions, table-driven cleanup/full unwinding, class-array helpers, and
   static destruction remain; M9.9 stays in progress.
+- **2026-11-02 12:51 -08:00** — Extended M9.9 with scalar/pointer exceptions.
+  Added throw, catch-by-type, catch-all, nested try/catch, `throw;`, cross-
+  function propagation via per-call pending checks, and destructor unwinding
+  for live locals/caller frames. Added nested, rethrow, RAII, and cross-function
+  tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 174 test
+  cases and 4765 assertions. M9.9 remains in progress for the table-driven
+  `.cpp_except`/LSDA/`__cxa_*` ABI runtime, class exceptions, class arrays,
+  static destruction, and constructor-completion flags.
 
 ## 8. Approval
 

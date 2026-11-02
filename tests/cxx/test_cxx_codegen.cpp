@@ -541,6 +541,86 @@ TEST_CASE("matrix transpose, multiply-add, and transform stack run") {
     CHECK(alias.result == 42);
 }
 
+TEST_CASE("try/catch handles thrown scalars and nested handlers") {
+    const ProgramResult scalar = compile_and_run(
+        "int main() {\n"
+        "    try { throw 42; } catch (int value) { return value; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(scalar.diagnostics);
+    REQUIRE(scalar.ok);
+    CHECK(scalar.result == 42);
+
+    const ProgramResult nested = compile_and_run(
+        "int main() {\n"
+        "    try {\n"
+        "        try { throw 42; } catch (double value) { return 1; }\n"
+        "    } catch (int value) { return value; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(nested.diagnostics);
+    REQUIRE(nested.ok);
+    CHECK(nested.result == 42);
+
+    const ProgramResult rethrow = compile_and_run(
+        "int main() {\n"
+        "    try {\n"
+        "        try { throw 42; } catch (int value) { throw; }\n"
+        "    } catch (int value) { return value; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(rethrow.diagnostics);
+    REQUIRE(rethrow.ok);
+    CHECK(rethrow.result == 42);
+}
+
+TEST_CASE("exceptions propagate across function calls") {
+    const ProgramResult program = compile_and_run(
+        "int risky() { throw 42; }\n"
+        "int main() {\n"
+        "    try { return risky(); }\n"
+        "    catch (int value) { return value; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+
+    const ProgramResult cleanup = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    Guard() { }\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int risky() { Guard guard; throw 1; }\n"
+        "int main() {\n"
+        "    try { risky(); } catch (int value) { return result; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(cleanup.diagnostics);
+    REQUIRE(cleanup.ok);
+    CHECK(cleanup.result == 42);
+}
+
+TEST_CASE("throw unwinds live destructors before catch") {
+    const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    Guard() { }\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Guard guard; throw 1; }\n"
+        "    catch (int value) { return result; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("new and delete allocate and construct objects") {
     const ProgramResult scalar = compile_and_run(
         "int main() { int* value = new int(42); int result = *value; delete value; "

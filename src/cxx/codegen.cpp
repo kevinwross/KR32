@@ -352,6 +352,12 @@ public:
             }
         }
         emit_rtti();
+        bss_ += ".weak __kr32_exception_value\n";
+        bss_ += "__kr32_exception_value:\n    .space 8\n";
+        bss_ += ".weak __kr32_exception_type\n";
+        bss_ += "__kr32_exception_type:\n    .space 4\n";
+        bss_ += ".weak __kr32_exception_pending\n";
+        bss_ += "__kr32_exception_pending:\n    .space 4\n";
         std::string result = text_;
         if (!rodata_.empty()) {
             result += ".rodata\n" + rodata_;
@@ -2167,6 +2173,7 @@ private:
                  std::to_string(fp_temps[index].first) + "]");
         }
         emit("    CALL " + constructor->symbol);
+        emit_pending_check();
     }
 
     TypePtr gen_new(const Expr& expression) {
@@ -2226,6 +2233,153 @@ private:
         emit("    CALL free");
         emit("    MOV R0, #0");
         return Type::make_builtin(BuiltinKind::Void);
+    }
+
+    std::string exception_type_key(const TypePtr& type) {
+        return mangle_type(decay(resolve_type(type)));
+    }
+
+    int exception_type_id(const TypePtr& type) {
+        const std::string key = exception_type_key(type);
+        const auto found = exception_type_ids_.find(key);
+        if (found != exception_type_ids_.end()) {
+            return found->second;
+        }
+        const int id = static_cast<int>(exception_type_ids_.size()) + 1;
+        exception_type_ids_[key] = id;
+        return id;
+    }
+
+    void emit_destructors_from(std::size_t depth) {
+        for (std::size_t index = local_destructors_.size(); index > depth; --index) {
+            auto& scope = local_destructors_[index - 1];
+            for (auto entry = scope.rbegin(); entry != scope.rend(); ++entry) {
+                emit("    LEA R0, [R7 + " + std::to_string(entry->first) + "]");
+                emit("    CALL " + entry->second->symbol);
+            }
+        }
+    }
+
+    void emit_pending_check() {
+        if (return_label_.empty()) {
+            return;
+        }
+        const std::string clear_label = new_label("noexc");
+        emit("    LOAD R2, [__kr32_exception_pending]");
+        emit("    CMP R2, #0");
+        emit("    JZ " + clear_label);
+        if (!exception_handlers_.empty()) {
+            const ExceptionHandler handler = exception_handlers_.back();
+            emit_destructors_from(handler.scope_depth);
+            emit("    JMP " + handler.label);
+        } else {
+            emit_destructors_from(0);
+            if (current_function_ != nullptr &&
+                current_function_->qualified == "main") {
+                emit("    MOV R0, #1");
+                emit("    CALL exit");
+            } else {
+                emit("    JMP " + return_label_);
+            }
+        }
+        emit(clear_label + ":");
+    }
+
+    void gen_throw(const Stmt& statement) {
+        uses_exceptions_ = true;
+        if (statement.expression) {
+            const TypePtr type = type_of(*statement.expression);
+            gen_expr(*statement.expression);
+            if (is_fp(type)) {
+                emit(std::string("    FSTORE.") +
+                     (is_float32(type) ? "W" : "D") +
+                     " F0, [__kr32_exception_value]");
+            } else {
+                emit("    STORE R0, [__kr32_exception_value]");
+            }
+            emit("    MOV R0, #" + std::to_string(exception_type_id(type)));
+            emit("    STORE R0, [__kr32_exception_type]");
+        }
+        emit("    MOV R0, #1");
+        emit("    STORE R0, [__kr32_exception_pending]");
+        if (exception_handlers_.empty()) {
+            emit_destructors_from(0);
+            if (current_function_ != nullptr &&
+                current_function_->qualified == "main") {
+                emit("    MOV R0, #1");
+                emit("    CALL exit");
+            } else {
+                emit("    JMP " + return_label_);
+            }
+            return;
+        }
+        const ExceptionHandler handler = exception_handlers_.back();
+        emit_destructors_from(handler.scope_depth);
+        emit("    JMP " + handler.label);
+    }
+
+    void gen_try(const Stmt& statement) {
+        uses_exceptions_ = true;
+        const std::string catch_label = new_label("catch");
+        const std::string end_label = new_label("try_end");
+        ExceptionHandler handler;
+        handler.label = catch_label;
+        handler.scope_depth = local_destructors_.size();
+        exception_handlers_.push_back(handler);
+        if (statement.body) {
+            gen_statement(*statement.body);
+        }
+        emit("    JMP " + end_label);
+        emit(catch_label + ":");
+        exception_handlers_.pop_back();
+        for (const CatchHandler& clause : statement.handlers) {
+            const std::string next_label = new_label("catch_next");
+            if (clause.parameter && clause.parameter->type) {
+                const TypePtr type = resolve_type(clause.parameter->type);
+                const int id = exception_type_id(type);
+                emit("    LOAD R0, [__kr32_exception_type]");
+                emit("    CMP R0, #" + std::to_string(id));
+                emit("    JNZ " + next_label);
+            }
+            emit("    MOV R0, #0");
+            emit("    STORE R0, [__kr32_exception_pending]");
+            push_scope();
+            if (clause.parameter && clause.parameter->type) {
+                const TypePtr type = resolve_type(clause.parameter->type);
+                Local local;
+                local.type = type;
+                local.offset = allocate_local(type);
+                if (!clause.parameter->name.parts.empty()) {
+                    local_scopes_.back()[clause.parameter->name.parts.back()] = local;
+                }
+                if (is_fp(type)) {
+                    emit(std::string("    FLOAD.") +
+                         (is_float32(type) ? "W" : "D") +
+                         " F0, [__kr32_exception_value]");
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(type) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(local.offset) + "]");
+                } else {
+                    emit("    LOAD R0, [__kr32_exception_value]");
+                    emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                }
+            }
+            if (clause.body) {
+                gen_statement(*clause.body);
+            }
+            pop_scope();
+            emit("    JMP " + end_label);
+            emit(next_label + ":");
+        }
+        if (exception_handlers_.empty()) {
+            emit("    MOV R0, #1");
+            emit("    CALL exit");
+        } else {
+            const ExceptionHandler outer = exception_handlers_.back();
+            emit_destructors_from(outer.scope_depth);
+            emit("    JMP " + outer.label);
+        }
+        emit(end_label + ":");
     }
 
     TypePtr gen_expr(const Expr& expression) {
@@ -2993,6 +3147,9 @@ private:
         if (stack_bytes != 0) {
             emit("    ADJSP #" + std::to_string(stack_bytes));
         }
+        if (!function->is_destructor) {
+            emit_pending_check();
+        }
         return resolve_type(function->result);
     }
 
@@ -3153,8 +3310,10 @@ private:
             error(statement.location, "range-for is not supported until M9.7");
             return;
         case StmtKind::Throw:
+            gen_throw(statement);
+            return;
         case StmtKind::Try:
-            error(statement.location, "exceptions are not supported until M9.9");
+            gen_try(statement);
             return;
         case StmtKind::Goto:
             error(statement.location, "goto is not supported in M9.3");
@@ -3234,6 +3393,7 @@ private:
                  std::to_string(fp_temps[index].first) + "]");
         }
         emit("    CALL " + constructor->symbol);
+        emit_pending_check();
     }
 
     Function* find_destructor(ClassInfo* info) {
@@ -3283,6 +3443,7 @@ private:
             if (Function* base_constructor = find_constructor(info->base, 0)) {
                 emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
                 emit("    CALL " + base_constructor->symbol);
+                emit_pending_check();
             }
         }
         set_vptr(*info);
@@ -3487,11 +3648,13 @@ private:
         if (!function.decl || !function.decl->body) {
             return;
         }
+        current_function_ = &function;
         current_prefix_ = function.qualified;
         const std::size_t separator = current_prefix_.rfind("::");
         current_prefix_ =
             separator == std::string::npos ? "" : current_prefix_.substr(0, separator);
         local_scopes_.clear();
+        exception_handlers_.clear();
         break_labels_.clear();
         continue_labels_.clear();
         call_targets_.clear();
@@ -3808,9 +3971,17 @@ private:
     std::map<const Expr*, Function*> call_targets_;
     std::set<const Expr*> diagnosed_expressions_;
     std::set<Function*> emitted_functions_;
+    struct ExceptionHandler {
+        std::string label;
+        std::size_t scope_depth = 0;
+    };
+    std::vector<ExceptionHandler> exception_handlers_;
+    std::map<std::string, int> exception_type_ids_;
+    bool uses_exceptions_ = false;
     std::string current_prefix_;
     ClassInfo* current_class_ = nullptr;
     int this_offset_ = -1;
+    Function* current_function_ = nullptr;
     std::string return_label_;
     std::string va_base_placeholder_;
     std::string text_;
