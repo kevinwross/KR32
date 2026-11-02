@@ -26,6 +26,7 @@ public:
     [[nodiscard]] bool click(int x, int y, int width, int height);
     [[nodiscard]] bool context_menu(int x, int y, int width, int height);
     void hover(int x, int y, int width, int height);
+    [[nodiscard]] bool wheel(int x, int y, int width, int height, int delta);
     [[nodiscard]] bool key(int key, bool shift);
     [[nodiscard]] bool quit_requested() const { return quit_; }
     [[nodiscard]] const std::string& status() const { return status_; }
@@ -71,6 +72,11 @@ private:
     void draw_console(Canvas& canvas, Rect rect);
     void begin_memory_address_edit();
     void finish_memory_address_edit(bool commit);
+    void begin_register_edit(int index);
+    void finish_register_edit(bool commit);
+    void draw_variable_tooltip(Canvas& canvas);
+    void draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total, int visible,
+                        Rect& track, Rect& thumb);
     void draw_asm_tooltip(Canvas& canvas);
     void draw_error(Canvas& canvas);
     [[nodiscard]] std::string format_hex(std::uint32_t value, int digits = 8) const;
@@ -97,7 +103,49 @@ private:
     Rect memory_pointer_rect_{};
     Rect memory_up_rect_{};
     Rect memory_down_rect_{};
+    Rect memory_header_rect_{};
     int source_scroll_ = 0;
+    bool source_follow_ = true;
+    int asm_scroll_ = 0;
+    int cores_scroll_ = 0;
+    int variables_scroll_ = 0;
+    int stack_scroll_ = 0;
+    int console_scroll_ = 0;
+    Rect source_scroll_track_{};
+    Rect source_scroll_thumb_{};
+    Rect asm_scroll_track_{};
+    Rect asm_scroll_thumb_{};
+    Rect cores_scroll_track_{};
+    Rect cores_scroll_thumb_{};
+    Rect variables_scroll_track_{};
+    Rect variables_scroll_thumb_{};
+    Rect stack_scroll_track_{};
+    Rect stack_scroll_thumb_{};
+    Rect console_scroll_track_{};
+    Rect console_scroll_thumb_{};
+
+    int editing_register_ = -1;
+    std::string register_edit_;
+    bool register_edit_fresh_ = true;
+    std::vector<Rect> register_cells_;
+    Rect pc_cell_{};
+    Rect sp_cell_{};
+    Rect flags_value_cell_{};
+    std::vector<Rect> flag_cells_;
+    int hover_flag_ = -1;
+
+    struct VarHoverRow {
+        Rect row{};
+        std::string name;
+        std::string type;
+        std::uint32_t address = 0;
+        std::uint32_t value = 0;
+        std::uint32_t size = 0;
+        bool local = false;
+        bool ok = false;
+    };
+    std::vector<VarHoverRow> var_hover_rows_;
+    int hover_var_ = -1;
 
     struct ContextMenu {
         bool open = false;

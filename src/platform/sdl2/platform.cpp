@@ -22,6 +22,16 @@ int map_key(SDL_Keycode key) {
     case SDLK_RETURN:
     case SDLK_KP_ENTER: return key::Enter;
     case SDLK_BACKSPACE: return key::Backspace;
+    case SDLK_KP_0: return '0';
+    case SDLK_KP_1: return '1';
+    case SDLK_KP_2: return '2';
+    case SDLK_KP_3: return '3';
+    case SDLK_KP_4: return '4';
+    case SDLK_KP_5: return '5';
+    case SDLK_KP_6: return '6';
+    case SDLK_KP_7: return '7';
+    case SDLK_KP_8: return '8';
+    case SDLK_KP_9: return '9';
     default: break;
     }
     if (key >= 32 && key < 127) {
@@ -124,10 +134,16 @@ bool Window::poll(Event& event) {
             event.x = sdl_event.motion.x;
             event.y = sdl_event.motion.y;
             return true;
-        case SDL_MOUSEWHEEL:
+        case SDL_MOUSEWHEEL: {
+            int mouse_x = 0;
+            int mouse_y = 0;
+            SDL_GetMouseState(&mouse_x, &mouse_y);
             event.kind = Event::Kind::Wheel;
             event.wheel = sdl_event.wheel.y;
+            event.x = mouse_x;
+            event.y = mouse_y;
             return true;
+        }
         default:
             break;
         }

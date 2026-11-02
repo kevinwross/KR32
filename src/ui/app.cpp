@@ -101,7 +101,11 @@ int run(int argc, char** argv) {
                 debugger.hover(event.x, event.y, canvas->width(), canvas->height());
                 break;
             case kr32::platform::Event::Kind::MouseUp:
+                break;
             case kr32::platform::Event::Kind::Wheel:
+                (void)debugger.wheel(event.x, event.y, canvas->width(), canvas->height(),
+                                     event.wheel);
+                break;
             case kr32::platform::Event::Kind::None:
                 break;
             }

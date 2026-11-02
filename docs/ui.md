@@ -26,8 +26,8 @@ executables load directly.
   source pane switches to the 13 px mono role when narrow and returns to 15 px
   when it has room.
   Both font families are SIL OFL 1.1; see `third_party/fonts/`.
-- `ui::DebuggerUI` owns a `debug::Session`, source text, breakpoints, tab state,
-  and all painting/hit-testing. It is usable headlessly.
+- `ui::DebuggerUI` owns a `debug::Session`, source text, breakpoints, panel scroll
+  state, and all painting/hit-testing. It is usable headlessly.
 - `platform::Window` is the SDL2 boundary: one window, one streaming ARGB8888
   texture, keyboard/mouse event mapping, and the `SDL_VIDEODRIVER=dummy` smoke
   path. Resizing the window recreates the software surface and texture at the
@@ -54,9 +54,25 @@ pane and shows four address/hex/ASCII lines. **VARIABLES**, **CALL STACK**, and
 **CONSOLE** remain visible along the bottom row, with the extra width freed by
 moving memory into the source column.
 
-The memory starting address is editable: click the address field and type up to
-eight hex digits, then press Enter; Escape cancels. **PTR** follows the current
-SP, and the **^** / **v** buttons move the dump up or down one 16-byte row.
+The memory starting address is editable: click anywhere on the **ADDR** field or
+label, type up to eight hex digits, then press Enter; Escape cancels. **PTR**
+follows the current SP, and the **^** / **v** buttons move the dump up or down
+one 16-byte row.
+
+## Panel scrolling and editing
+
+- Source, disassembly, cores, variables, call stack, and console panels have
+  vertical scrollbars when their content exceeds the visible area.
+- Mouse-wheel scrolling works over every panel; clicking above or below a
+  scrollbar thumb pages the corresponding panel. Source auto-follow suspends
+  after manual scrolling and resumes on the next step/run.
+- **Registers** are editable: click a GPR row, the PC cell, or the SP cell,
+  type up to eight hex digits, and press Enter. Escape cancels. The active cell
+  shows a highlighted edit cursor.
+- The core flag row shows **Z N C V I K**. Click Z/N/C/V/I to toggle the bit;
+  K is the current privilege mode and is read-only.
+- Hovering a variable row shows a tooltip with its local/global kind, type,
+  size, address, and value.
 
 ## Gutter behavior
 
@@ -88,9 +104,12 @@ SP, and the **^** / **v** buttons move the dump up or down one 16-byte row.
 - The disassembly-pane **OVER / IN / OUT** buttons step by instruction.
 - `F9` toggle a breakpoint at the current source line.
 - `R` restart/reload; `Esc` quits.
-- Left-click a core row to select it and toggle its expanded state.
-- Click the memory **ADDR** field to edit the starting address; Enter commits and
-  Escape cancels. **PTR** follows SP; **^** / **v** scroll by 16 bytes.
+- Click a core row to select it and toggle its expanded state.
+- Click a GPR/PC/SP cell to edit it; click a Z/N/C/V/I flag to toggle it.
+- Hover a variable row for type/address/value details.
+- Click the memory **ADDR** field or label to edit the starting address; Enter
+  commits and Escape cancels. **PTR** follows SP; **^** / **v** scroll by 16 bytes.
+- Use the mouse wheel over a panel to scroll it; click a scrollbar track to page.
 - Left-click a source or disassembly gutter row to toggle a breakpoint; right-click
   it for the gutter menu.
 

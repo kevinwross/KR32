@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 09:35 -08:00
+> **Last updated:** 2026-11-02 09:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -909,6 +909,12 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 09:35 -08:00** — Tracker approved; created the `m9-cxx`
       worktree/branch and assigned phase M9.1 (ABI, API, test harness) to the
       first subagent. M9.0 is complete; M9.1 is in progress.
+- **2026-11-02 09:55 -08:00** — UI interaction pass: made the memory address
+      field/label reliably clickable (including keypad input), added register
+      cell editing for GPR/PC/SP, clickable Z/N/C/V/I flag boxes, variable
+      type/address/value hover tooltips, and wheel/scrollbar scrolling across
+      source, disassembly, cores, variables, call stack, and console. Updated
+      screenshots and UI docs.
 
 ## 10. Updating this file
 
