@@ -22,3 +22,6 @@ CMakeUserPresets.json
 # OS noise
 Thumbs.db
 .DS_Store
+
+# Local third-party SDK installs (scripts re-create these)
+/third_party/SDL2/

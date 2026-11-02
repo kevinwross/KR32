@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 00:43 -08:00
+> **Last updated:** 2026-11-02 00:46 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -58,9 +58,8 @@ Notes:
   GCC/Clang C++20 plus an SDL2 link test succeed.
 - Windows dependency check on 2026-11-02: CMake, Ninja, `ctest`, MSVC, Python
   3.14.6, and Git are present, and a C++20 concepts smoke test compiles and runs.
-  **SDL2 development files are missing:** `VCPKG_ROOT` and `SDL2_DIR` are unset,
-  no `SDL2Config.cmake`, `SDL.h`, or `SDL2.dll` was found, and the
-  Visual-Studio-bundled vcpkg has no installed tree.
+  SDL2 2.32.10 is installed at `third_party/SDL2`, `SDL2_DIR` is set, and a
+  minimal CMake + SDL2 link/run test prints `SDL 2.32.10`.
 - WSL is available with full local access; Linux builds run directly in Ubuntu.
   This machine is the reference Windows/WSL development host.
 - The repository is local and uses the global Git identity. No remote is
@@ -76,7 +75,7 @@ Notes:
 | CMake | 3.25+ (4.3.1 / 4.2.3 present) | build | bundled with VS | `apt install cmake` |
 | Ninja | 1.11+ (1.13.2 present) | build | bundled with VS | `apt install ninja-build` |
 | C++20 compiler | MSVC 2022+, GCC 12+, Clang 15+ | build | VS 2026 workload | `build-essential`, `clang` |
-| SDL2 development | 2.0.20+ (WSL 2.32.10 installed; Windows missing) | GUI | vcpkg or `SDL2-devel` | `apt install libsdl2-dev` |
+| SDL2 development | 2.0.20+ (2.32.10, both platforms) | GUI | `scripts/install-sdl2.ps1` or `SDL2-devel` | `apt install libsdl2-dev` |
 | pkg-config | any | Linux SDL2 discovery | not needed | `apt install pkg-config` |
 | doctest | 2.4.x, vendored | unit tests | `third_party/doctest.h` | same |
 | Python 3 | 3.10+ | helper scripts, only if used | python.org or VS | `apt install python3` |
@@ -92,21 +91,21 @@ Notes:
 
 ### 2.3 Windows setup
 
-**Status 2026-11-02:** SDL2 is the only missing Windows dependency. CMake,
-Ninja, MSVC, Python, and Git are ready. Install SDL2 before
-`KR32_BUILD_UI=ON`; the headless build does not need it.
+**Status 2026-11-02:** all required dependencies are installed. SDL2 2.32.10 is
+in `third_party/SDL2`, `SDL2_DIR` points at `third_party/SDL2/cmake`, and a
+CMake link/run test succeeds.
 
 1. Visual Studio Installer → **Desktop development with C++** and the CMake
    tools component. VS 2026 Community is already installed.
 2. Prefer the bundled CMake/Ninja paths above, or add them to the user `PATH`.
-3. SDL2, choose one:
-   - **Prebuilt (recommended for least friction)**: download
-     `SDL2-devel-2.32.10-VC.zip` from the SDL releases, unpack it to a stable
-     location such as `C:\Users\kevin\libs\SDL2`, and set `SDL2_DIR` to its
-     `cmake` directory.
-   - **vcpkg**: the Visual-Studio-bundled vcpkg is manifest-only and has no
-     installed tree. Add a `vcpkg.json` manifest with `sdl2`, or use a standalone
-     vcpkg checkout and `vcpkg install sdl2:x64-windows`.
+3. SDL2:
+   - Run `powershell -ExecutionPolicy Bypass -File scripts/install-sdl2.ps1`.
+     It downloads `SDL2-devel-2.32.10-VC.zip` and extracts it to
+     `third_party/SDL2` (gitignored).
+   - Set `SDL2_DIR` to `third_party/SDL2/cmake`, or let the CMake preset do it
+     with `${sourceDir}/third_party/SDL2/cmake`.
+   - Define `SDL_MAIN_HANDLED` for the normal `main` entry point and link
+     `SDL2::SDL2`; the DLL must be next to the executable at run time.
 4. Confirm:
    ```powershell
    & "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe" --version
@@ -203,8 +202,8 @@ with the module boundaries, CI, and test harness in place.
 - [x] Verify the Windows and WSL toolchains (2026-11-02): CMake, Ninja, MSVC,
       GCC, Clang, Python, Git, and WSL SDL2 are present; Windows C++20 and WSL
       C++20/SDL2 smoke tests pass.
-- [ ] Install SDL2 development files on Windows (prebuilt `2.32.10` or vcpkg)
-      and record `SDL2_DIR`.
+- [x] Install SDL2 development files on Windows: 2.32.10 in
+      `third_party/SDL2` via `scripts/install-sdl2.ps1`; `SDL2_DIR` set.
 - [ ] Add `README.md` with the one-command build quick start.
 - [ ] Add `CMakeLists.txt` and `CMakePresets.json`:
   - `windows-msvc`, `windows-ninja`
@@ -241,8 +240,7 @@ with the module boundaries, CI, and test harness in place.
       passes.
 - [ ] WSL: configure and build `linux-gcc` and `linux-clang`; `ctest` passes.
 - [ ] `KR32_BUILD_UI=OFF` configures and builds without SDL2.
-- [ ] `KR32_BUILD_UI=ON` configures and builds with SDL2 (blocked on the Windows
-      SDL2 install above).
+- [ ] `KR32_BUILD_UI=ON` configures and builds with SDL2.
 - [ ] `kr32 version` prints the version tuple.
 - [ ] `kr32 help` lists every command.
 - [ ] Boundary check fails on an intentional OS include in `src/ui` and passes
@@ -649,6 +647,11 @@ Newest entries at the bottom. Use the local time zone.
   test pass.
 - **2026-11-02 00:43 -08:00** — Windows SDL2 is the only open dependency before
   `KR32_BUILD_UI=ON`; the headless M0 build can proceed without it.
+- **2026-11-02 00:46 -08:00** — SDL2 2.32.10 installed at `third_party/SDL2`
+  via `scripts/install-sdl2.ps1`; the directory is gitignored, `SDL2_DIR` is
+  set, and a minimal CMake + SDL2 link/run test prints `SDL 2.32.10`.
+- **2026-11-02 00:46 -08:00** — Windows dependencies are complete; the headless
+  and UI builds can both proceed.
 
 ## 10. Updating this file
 
