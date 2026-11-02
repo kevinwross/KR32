@@ -1,0 +1,7 @@
+#pragma once
+
+namespace kr32::cc::libc_source {
+
+inline constexpr const char* kLibcSource = R"KR32LIBC(@KR32_LIBC_SOURCE@)KR32LIBC";
+
+} // namespace kr32::cc::libc_source

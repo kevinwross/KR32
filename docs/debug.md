@@ -24,6 +24,11 @@ container format. Source-line lookup is scoped to a function’s `F` range:
 addresses in runtime/libc code without debug records do not inherit the last
 line of the previous user function.
 
+The libc is compiled with its own source id and `src/cc/libc.c` source records.
+The GUI loads all debug sources and switches the SOURCE panel to the file
+containing the current PC, so stepping into `printf` or `malloc` displays the C
+source and libc locals instead of only assembly.
+
 Labels are resolved against the linked image's symbol table when the debug info
 is loaded. This keeps the format relocatable without changing the object model;
 the linker already preserves the local labels unless `--strip` is used.

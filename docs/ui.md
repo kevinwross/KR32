@@ -40,10 +40,6 @@ executables load directly.
 | Area | Contents |
 | --- | --- |
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
-
-**Load** opens the platform file picker (the native common dialog on Windows;
-`zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
-a selected `.c` source. **Build** reloads/recompiles the currently loaded source.
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
@@ -51,6 +47,14 @@ a selected `.c` source. **Build** reloads/recompiles the currently loaded source
 | Variables | Current function, locals, and globals, always visible |
 | Call stack | Current frames, always visible |
 | Console | Guest console output, always visible |
+
+**Load** opens the platform file picker (the native common dialog on Windows;
+`zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
+a selected `.c` source. **Build** reloads/recompiles the currently loaded source.
+
+The **SOURCE** panel follows the current PC across debug source files. Stepping
+into libc functions such as `printf` or `malloc` switches the title and text to
+`src/cc/libc.c`, and the **VARIABLES** panel shows the active libc locals.
 
 The right-hand **CORES** panel lists one row per core and is expandable. The
 expanded row shows that core's PC/SP/FLAGS, GPRs, F0-F15, TSP and T0 tile,

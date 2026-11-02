@@ -1,5 +1,6 @@
 #pragma once
 
+#include <map>
 #include <string>
 #include <vector>
 
@@ -90,6 +91,9 @@ private:
     [[nodiscard]] std::string source_line(int line) const;
     [[nodiscard]] int current_source_line() const;
     [[nodiscard]] bool source_line_to_address(int line, std::uint32_t& address) const;
+    void load_source_files();
+    void ensure_source_for_current();
+    [[nodiscard]] std::string source_path_for(int source_id) const;
 
     container::Image image_;
     debug::Session session_;
@@ -99,6 +103,9 @@ private:
     std::string status_ = "load a .k32 image";
     std::string error_;
     std::vector<std::string> source_lines_;
+    std::map<int, std::vector<std::string>> source_cache_;
+    int source_view_id_ = -1;
+    std::string source_view_path_;
     std::vector<CoreRow> core_rows_;
     std::size_t expanded_core_ = 0;
     std::size_t selected_core_ = 0;

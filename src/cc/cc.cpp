@@ -689,14 +689,15 @@ struct FunctionSignature {
 
 class Compiler {
 public:
-    Compiler(std::string_view source, std::string_view name)
-        : source_name_(name), tokens_(Lexer(preprocess(source)).tokenize()) {}
+    Compiler(std::string_view source, std::string_view name, int source_id = 0)
+        : source_name_(name), source_id_(source_id),
+          tokens_(Lexer(preprocess(source)).tokenize()) {}
 
     Result run() {
         Result result;
         try {
             emit(".text");
-            debug_record("S 0 " + source_name_);
+            debug_record("S " + std::to_string(source_id_) + " " + source_name_);
             while (!at_end()) {
                 parse_top_level();
             }
@@ -1410,7 +1411,8 @@ private:
             const std::string line_label =
                 ".Lline_" + current_function_ + "_" + std::to_string(line_counter_++);
             emit(line_label + ":");
-            debug_record("L " + line_label + " 0 " + std::to_string(peek().line) + " " +
+            debug_record("L " + line_label + " " + std::to_string(source_id_) + " " +
+                         std::to_string(peek().line) + " " +
                          std::to_string(peek().column));
         }
         if (match("_Static_assert")) {
@@ -2706,6 +2708,7 @@ private:
     }
 
     std::string source_name_;
+    int source_id_ = 0;
     std::vector<Token> tokens_;
     std::size_t position_ = 0;
     std::string text_;
@@ -2733,14 +2736,18 @@ private:
 
 } // namespace
 
-Result compile(std::string_view source, std::string_view source_name) {
-    Compiler compiler(source, source_name);
+Result compile(std::string_view source, std::string_view source_name, int source_id) {
+    Compiler compiler(source, source_name, source_id);
     return compiler.run();
+}
+
+Result compile(std::string_view source, std::string_view source_name) {
+    return compile(source, source_name, 0);
 }
 
 std::string libc_assembly() {
     static const std::string assembly = [] {
-        const Result result = compile(libc_source::kLibcSource, "<libc>");
+        const Result result = compile(libc_source::kLibcSource, "src/cc/libc.c", 1);
         if (!result.ok) {
             const std::string diagnostic =
                 result.diagnostics.empty()
@@ -2750,12 +2757,7 @@ std::string libc_assembly() {
                           ": " + result.diagnostics.front().message;
             throw std::runtime_error(diagnostic);
         }
-        std::string text = result.assembly;
-        const std::size_t debug = text.find(".debug_info");
-        if (debug != std::string::npos) {
-            text.resize(debug);
-        }
-        return text;
+        return result.assembly;
     }();
     return assembly;
 }

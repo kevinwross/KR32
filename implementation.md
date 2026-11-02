@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:38 -08:00
+> **Last updated:** 2026-11-02 12:48 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -968,6 +968,10 @@ Newest entries at the bottom. Use the local time zone.
       function. Runtime/libc addresses with no line records no longer inherit
       the last line of `main`, which caused line 71 to flash when stepping into
       `printf`.
+- **2026-11-02 12:48 -08:00** — Made libc source-steppable: moved the C libc to
+      `src/cc/libc.c`, embed it via CMake, keep its debug records with source id
+      1, and load/switch between all debug source files in the GUI. Stepping
+      into `printf`/`malloc` now shows `src/cc/libc.c` and its locals.
 
 ## 10. Updating this file
 

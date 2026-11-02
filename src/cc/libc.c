@@ -1,8 +1,4 @@
-#pragma once
 
-namespace kr32::cc::libc_source {
-
-inline constexpr const char* kLibcSource = R"KR32LIBC(
 #include <stdarg.h>
 #include <stddef.h>
 
@@ -830,6 +826,3 @@ int printf(const char *format, ...) {
     va_end(arguments);
     return total;
 }
-)KR32LIBC";
-
-} // namespace kr32::cc::libc_source

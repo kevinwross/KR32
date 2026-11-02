@@ -178,22 +178,44 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     }
     path_ = path;
     source_lines_.clear();
-    if (source_path.empty() && !session_.info().sources.empty()) {
-        source_path = session_.info().sources.front().path;
+    source_cache_.clear();
+    source_view_id_ = -1;
+    source_view_path_.clear();
+    load_source_files();
+    int initial_source = -1;
+    if (!session_.info().sources.empty()) {
+        initial_source = session_.info().sources.front().id;
     }
     if (!source_path.empty()) {
-        std::ifstream source(source_path);
-        if (!source) {
-            source.open("../" + source_path);
-        }
-        if (!source) {
-            source.open("../../" + source_path);
-        }
-        if (source) {
-            std::string line;
-            while (std::getline(source, line)) {
-                source_lines_.push_back(line);
+        for (const debug::Source& source : session_.info().sources) {
+            if (source.path == source_path) {
+                initial_source = source.id;
+                break;
             }
+        }
+        if (initial_source < 0) {
+            std::ifstream source(source_path);
+            if (!source) {
+                source.open("../" + source_path);
+            }
+            if (!source) {
+                source.open("../../" + source_path);
+            }
+            if (source) {
+                std::string line;
+                while (std::getline(source, line)) {
+                    source_lines_.push_back(line);
+                }
+                source_view_path_ = source_path;
+            }
+        }
+    }
+    if (initial_source >= 0) {
+        const auto cached = source_cache_.find(initial_source);
+        if (cached != source_cache_.end()) {
+            source_lines_ = cached->second;
+            source_view_id_ = initial_source;
+            source_view_path_ = source_path_for(initial_source);
         }
     }
     loaded_ = true;
@@ -316,6 +338,62 @@ void DebuggerUI::set_status_from_result(const core::StepResult& result) {
     status_ = "paused at " + hex(session_.machine().pc(), 8);
 }
 
+std::string DebuggerUI::source_path_for(int source_id) const {
+    for (const debug::Source& source : session_.info().sources) {
+        if (source.id == source_id) {
+            return source.path;
+        }
+    }
+    return {};
+}
+
+void DebuggerUI::load_source_files() {
+    for (const debug::Source& source : session_.info().sources) {
+        if (source.path.empty() || source_cache_.find(source.id) != source_cache_.end()) {
+            continue;
+        }
+        std::ifstream input(source.path);
+        if (!input) {
+            input.open("../" + source.path);
+        }
+        if (!input) {
+            input.open("../../" + source.path);
+        }
+        std::vector<std::string> lines;
+        if (input) {
+            std::string line;
+            while (std::getline(input, line)) {
+                lines.push_back(line);
+            }
+        }
+        source_cache_[source.id] = std::move(lines);
+    }
+}
+
+void DebuggerUI::ensure_source_for_current() {
+    const debug::Line* line = session_.line_at(session_.machine().pc());
+    if (line == nullptr) {
+        return;
+    }
+    const int source_id = line->source;
+    if (source_id == source_view_id_) {
+        return;
+    }
+    auto cached = source_cache_.find(source_id);
+    if (cached == source_cache_.end()) {
+        load_source_files();
+        cached = source_cache_.find(source_id);
+    }
+    if (cached == source_cache_.end()) {
+        return;
+    }
+    source_view_id_ = source_id;
+    source_view_path_ = source_path_for(source_id);
+    source_lines_ = cached->second;
+    source_scroll_ = 0;
+    source_follow_ = true;
+}
+
 int DebuggerUI::current_source_line() const {
     if (!loaded_) {
         return 0;
@@ -326,7 +404,7 @@ int DebuggerUI::current_source_line() const {
 
 bool DebuggerUI::source_line_to_address(int line, std::uint32_t& address) const {
     for (const debug::Line& candidate : session_.info().lines) {
-        if (candidate.line == line) {
+        if (candidate.source == source_view_id_ && candidate.line == line) {
             address = candidate.address;
             return true;
         }
@@ -394,8 +472,11 @@ void DebuggerUI::draw_toolbar(Canvas& canvas) {
 }
 
 void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
+    ensure_source_for_current();
     std::string title = "SOURCE";
-    if (!session_.info().sources.empty()) {
+    if (!source_view_path_.empty()) {
+        title += "  " + source_view_path_;
+    } else if (!session_.info().sources.empty()) {
         title += "  " + session_.info().sources.front().path;
     }
     draw_panel(canvas, rect, title);

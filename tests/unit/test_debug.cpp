@@ -38,7 +38,7 @@ container::Image compile_debug_image(std::string_view source) {
 
 const debug::Line* find_line(const debug::Info& info, int line) {
     for (const debug::Line& candidate : info.lines) {
-        if (candidate.line == line) {
+        if (candidate.source == 0 && candidate.line == line) {
             return &candidate;
         }
     }
@@ -63,9 +63,14 @@ TEST_CASE("debug info maps functions, variables, and source lines") {
     REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
     REQUIRE_FALSE(info.sources.empty());
     CHECK(info.sources.front().path == "debug-test.c");
-    CHECK(info.functions.size() == 2);
-    CHECK(info.variables.size() == 4);
     CHECK_FALSE(info.lines.empty());
+    std::size_t user_variables = 0;
+    for (const debug::Variable& variable : info.variables) {
+        if (variable.function == "add" || variable.function == "main") {
+            ++user_variables;
+        }
+    }
+    CHECK(user_variables == 4);
 
     bool found_add = false;
     bool found_main = false;
@@ -142,7 +147,9 @@ TEST_CASE("synthetic header includes preserve source line numbers") {
     REQUIRE(find_line(info, 4) != nullptr);
     CHECK(find_line(info, 23) == nullptr);
     for (const debug::Line& line : info.lines) {
-        CHECK(line.line <= 6);
+        if (line.source == 0) {
+            CHECK(line.line <= 6);
+        }
     }
 }
 
@@ -165,6 +172,42 @@ TEST_CASE("line lookup is scoped to known functions") {
     REQUIRE(function != nullptr);
     session.machine().set_pc(function->end);
     CHECK(session.line_at(function->end) == nullptr);
+}
+
+TEST_CASE("libc functions carry switchable source records") {
+    const container::Image image = compile_debug_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    printf(\"ok\\n\");\n"
+        "    return 0;\n"
+        "}\n");
+
+    debug::Session session;
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Function* printf_function = nullptr;
+    for (const debug::Function& candidate : session.info().functions) {
+        if (candidate.name == "printf") {
+            printf_function = &candidate;
+            break;
+        }
+    }
+    REQUIRE(printf_function != nullptr);
+    bool found_libc_source = false;
+    int libc_source_id = -1;
+    for (const debug::Source& source : session.info().sources) {
+        if (source.path == "src/cc/libc.c") {
+            found_libc_source = true;
+            libc_source_id = source.id;
+        }
+    }
+    CHECK(found_libc_source);
+    REQUIRE(libc_source_id >= 0);
+
+    session.machine().set_pc(printf_function->start + 16);
+    const debug::Line* line = session.line_at(session.machine().pc());
+    REQUIRE(line != nullptr);
+    CHECK(line->source == libc_source_id);
 }
 
 TEST_CASE("DebugSession stops at breakpoints and inspects frames") {

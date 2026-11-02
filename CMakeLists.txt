@@ -57,6 +57,14 @@ target_link_libraries(kr32_link PUBLIC kr32_core kr32_container)
 
 kr32_add_library(kr32_cc src/cc/cc.cpp)
 target_link_libraries(kr32_cc PUBLIC kr32_asm kr32_container)
+file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc.c" KR32_LIBC_SOURCE)
+set(KR32_LIBC_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
+file(MAKE_DIRECTORY "${KR32_LIBC_GENERATED_DIR}")
+configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc_runtime.h.in"
+               "${KR32_LIBC_GENERATED_DIR}/libc_runtime.h" @ONLY)
+target_include_directories(kr32_cc PRIVATE "${KR32_LIBC_GENERATED_DIR}")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
+             "${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc.c")
 
 kr32_add_library(kr32_cxx src/cxx/cxx.cpp)
 target_link_libraries(kr32_cxx PUBLIC kr32_asm kr32_container)

@@ -6,10 +6,10 @@ dynamic linking. Every C executable built with `kr32 build` receives:
 1. a small assembly runtime for startup and host syscalls, and
 2. a libc layer written in KR32 C and compiled by the KR32 C compiler.
 
-The C libc source lives in `src/cc/libc_runtime.h` as source text and is
-embedded into the compiler at build time. It is compiled by the KR32 compiler
-when a program is built, so it uses the same C ABI and calling conventions as
-user code.
+The C libc source lives in `src/cc/libc.c`. At configure time CMake embeds that
+file into `libc_runtime.h`, and the KR32 compiler compiles the embedded text
+with the same C ABI as user code. Debug builds retain the `src/cc/libc.c`
+source path and line records so the debugger can switch into libc source.
 
 ## Headers
 
