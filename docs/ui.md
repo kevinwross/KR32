@@ -1,10 +1,12 @@
 # Windowed debugger (M6)
 
-`kr32 gui <image.k32|source.c>` opens the portable debugger. A C source is
-compiled, assembled, linked, and loaded in memory; `.k32` executables load
-directly.
+`kr32 gui <image.k32|source.c>` opens the portable debugger at 1440x900. A C
+source is compiled, assembled, linked, and loaded in memory; `.k32`
+executables load directly.
 
 ![KR32 debugger](screenshots/m6-debugger.png)
+
+![KR32 HEX column](screenshots/m6-hex.png)
 
 ![KR32 machine panel](screenshots/m6-machine.png)
 
@@ -24,14 +26,16 @@ directly.
   frames, lines, PPM output, a deterministic frame hash, and TTF glyph
   rasterization. It has no OS or SDL dependency. Fonts are embedded with
   `stb_truetype`: Inter Regular/Bold 14 px for UI text and JetBrains Mono
-  Regular 15/13 px for source, disassembly, registers, and small labels.
+  Regular 15/13 px for source, disassembly, registers, and small labels. The
+  source pane switches to the 13 px mono role when narrow and returns to 15 px
+  when it has room.
   Both font families are SIL OFL 1.1; see `third_party/fonts/`.
 - `ui::DebuggerUI` owns a `debug::Session`, source text, breakpoints, tab state,
   and all painting/hit-testing. It is usable headlessly.
 - `platform::Window` is the SDL2 boundary: one window, one streaming ARGB8888
   texture, keyboard/mouse event mapping, and the `SDL_VIDEODRIVER=dummy` smoke
   path. Resizing the window recreates the software surface and texture at the
-  new size; the pane layout adapts instead of scaling the old 1024×640 frame.
+  new size; the pane layout adapts instead of scaling the initial frame.
 
 ## Layout
 
@@ -39,7 +43,7 @@ directly.
 | --- | --- |
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
-| Disassembly | Address/breakpoint gutter, instruction bytes/mnemonics, current-PC highlight, instruction-step Over/In/Out |
+| Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Registers | R0-R15, PC, SP, FLAGS, mode, ticks, core |
 | Variables | Locals, globals/watch values, call stack |
 | Bottom tabs | Memory hex dump, machine state, console |
@@ -62,6 +66,9 @@ directly.
   branch targets).
 - The help text covers core integer, control, FP, and matrix instructions; the
   tooltip wraps to a 360 px line width and stays inside the window.
+- The **HEX** column shows the raw instruction word as eight uppercase hex
+  digits. When an instruction carries an extension word, both words are shown
+  concatenated (sixteen digits), so the full encoding is always visible.
 
 ## Controls
 

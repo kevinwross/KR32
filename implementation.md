@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 08:15 -08:00
+> **Last updated:** 2026-11-02 08:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -831,6 +831,12 @@ Newest entries at the bottom. Use the local time zone.
       description; operand hover highlights the operand and describes every
       operand's addressing mode. Added `help.cpp` and help unit tests; verified
       live with PUSH and R7 hover tooltips.
+- **2026-11-02 08:30 -08:00** — Added the raw instruction-encoding column:
+      the disassembly now shows a labelled HEX word column (and extension word
+      when present) between the address gutter and mnemonic, with a responsive
+      1024/1440 layout. Changed the initial window and headless surface to
+      1440x900 so source, HEX, and mnemonic columns have room; narrow layouts
+      switch the source pane to the 13 px mono role.
 
 ## 10. Updating this file
 

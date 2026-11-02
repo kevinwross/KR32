@@ -10,6 +10,10 @@
 #include <thread>
 
 namespace kr32::ui {
+namespace {
+constexpr int kInitialWidth = 1440;
+constexpr int kInitialHeight = 900;
+}
 
 bool smoke_test() {
     return kr32::platform::smoke_test();
@@ -57,7 +61,7 @@ int run(int argc, char** argv) {
     }
 
     kr32::platform::Window window;
-    if (!window.create("KR32 Debugger", 1024, 640)) {
+    if (!window.create("KR32 Debugger", kInitialWidth, kInitialHeight)) {
         return 1;
     }
 
@@ -69,7 +73,7 @@ int run(int argc, char** argv) {
         }
     }
 
-    auto canvas = std::make_unique<Canvas>(1024, 640);
+    auto canvas = std::make_unique<Canvas>(kInitialWidth, kInitialHeight);
     bool running = true;
     while (running) {
         kr32::platform::Event event;

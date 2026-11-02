@@ -35,6 +35,10 @@ constexpr int kSourceBreakGutter = 18;
 constexpr int kAsmGutter = 104;
 constexpr int kAsmBreakGutter = 18;
 
+int source_line_height(int width) {
+    return width < 380 ? 16 : 18;
+}
+
 std::string hex(std::uint32_t value, int digits) {
     char buffer[24] = {};
     if (digits == 2) {
@@ -372,7 +376,9 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
         canvas.frame(Rect{x, rect.y + 2, button_width, 18}, kBorder);
         canvas.text(x + 5, rect.y + 3, labels[index], kText, FontRole::MonoSmall);
     }
-    const int line_height = 18;
+    const int line_height = source_line_height(rect.width);
+    const FontRole source_role =
+        rect.width < 380 ? FontRole::MonoSmall : FontRole::Mono;
     const int top = rect.y + 24;
     const int visible = std::max(1, (rect.height - 28) / line_height);
     canvas.fill(Rect{rect.x + 1, top, kSourceGutter - 1, rect.height - 26}, kPanelAlt);
@@ -412,14 +418,15 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
             canvas.fill(Rect{rect.x + 7, y + 5, 7, 8}, kBad);
         }
         const std::string number = std::to_string(line_number);
-        const int number_width = Canvas::text_width(number, FontRole::Mono);
+        const int number_width = Canvas::text_width(number, source_role);
         canvas.text(rect.x + kSourceGutter - 8 - number_width, y, number,
-                    line_number == current ? kText : kDim, FontRole::Mono);
+                    line_number == current ? kText : kDim, source_role);
         canvas.text(rect.x + kSourceGutter + 6, y,
                     trim_to(source_lines_[static_cast<std::size_t>(index)],
-                            static_cast<std::size_t>((rect.width - kSourceGutter - 12) / 8)),
+                            static_cast<std::size_t>((rect.width - kSourceGutter - 12) /
+                                                     (rect.width < 380 ? 7 : 8))),
                     line_number == current ? kText : Color{180, 194, 206, 255},
-                    FontRole::Mono);
+                    source_role);
     }
 }
 
@@ -443,10 +450,14 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     std::uint32_t start = pc >= before ? pc - before : 0;
     start = std::max(start, session_.machine().ram_base());
     const int address_width = Canvas::text_width("00000000", FontRole::Mono);
-    const int instruction_x = rect.x + kAsmGutter + 6;
+    const int bytes_width = std::clamp(rect.width - kAsmGutter - 160, 100, 125);
+    const int bytes_x = rect.x + kAsmGutter + 6;
+    const int instruction_x = bytes_x + bytes_width + 4;
     asm_rows_.clear();
     canvas.fill(Rect{rect.x + 1, rect.y + 24, kAsmGutter - 1, rect.height - 26}, kPanelAlt);
     canvas.fill(Rect{rect.x + kAsmGutter, rect.y + 24, 1, rect.height - 26}, kBorder);
+    canvas.fill(Rect{instruction_x - 4, rect.y + 24, 1, rect.height - 26}, kBorder);
+    canvas.text(bytes_x, rect.y + 7, "HEX", kDim, FontRole::MonoSmall);
     for (int row = 0; row < rows; ++row) {
         const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
         const int y = rect.y + 24 + row * line_height;
@@ -504,6 +515,22 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         } else {
             text = "??";
         }
+        std::string encoded;
+        if (read_ok) {
+            const bool extended = (bytes[1] & 0x10U) != 0;
+            const auto word_at = [&](int offset) {
+                return static_cast<std::uint32_t>(bytes[offset]) |
+                       (static_cast<std::uint32_t>(bytes[offset + 1]) << 8) |
+                       (static_cast<std::uint32_t>(bytes[offset + 2]) << 16) |
+                       (static_cast<std::uint32_t>(bytes[offset + 3]) << 24);
+            };
+            encoded = hex(word_at(0), 8);
+            if (extended) {
+                encoded += hex(word_at(4), 8);
+            }
+        } else {
+            encoded = "??";
+        }
         const bool has_breakpoint =
             session_.breakpoints().find(address) != session_.breakpoints().end();
         if (has_breakpoint) {
@@ -533,7 +560,10 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
             AsmRow{address, Rect{rect.x, y - 1, rect.width, line_height}, mnemonic_rect,
                    operand_rect, text});
         canvas.text(rect.x + kAsmGutter - 10 - address_width, y, hex(address, 8),
-                    address == pc ? kAccent : kDim, FontRole::Mono);        canvas.text(instruction_x, y,
+                    address == pc ? kAccent : kDim, FontRole::Mono);
+        canvas.text(bytes_x, y, trim_to(encoded, static_cast<std::size_t>(bytes_width / 7)),
+                    address == pc ? kText : kDim, FontRole::MonoSmall);
+        canvas.text(instruction_x, y,
                     trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
                     address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);
     }
@@ -542,10 +572,11 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
 void DebuggerUI::draw_registers(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "REGISTERS");
     const core::Machine& machine = session_.machine();
+    const int column_width = std::max(110, (rect.width - 16) / 2);
     for (int index = 0; index < 16; ++index) {
         const int column = index / 8;
         const int row = index % 8;
-        const int x = rect.x + 8 + column * 145;
+        const int x = rect.x + 8 + column * column_width;
         const int y = rect.y + 24 + row * 14;
         canvas.text(x, y, "R" + std::to_string(index), kDim, FontRole::MonoSmall);
         canvas.text(x + 26, y, hex(machine.reg(static_cast<std::size_t>(index)), 8), kText,
@@ -731,11 +762,11 @@ void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
 }
 
 DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
-    const int right_width = std::clamp(width * 28 / 100, 260, 360);
-    int source_width = std::clamp(width * 42 / 100, 300, width - right_width - 240);
+    const int right_width = std::clamp(width * 23 / 100, 230, 360);
+    int source_width = std::clamp(width * 36 / 100, 240, width - right_width - 300);
     int disassembly_width = width - source_width - right_width;
-    if (disassembly_width < 240) {
-        disassembly_width = 240;
+    if (disassembly_width < 300) {
+        disassembly_width = 300;
         source_width = width - disassembly_width - right_width;
     }
     const int bottom_height = std::clamp(height / 3, 170, 240);
@@ -817,7 +848,7 @@ void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
     std::uint32_t address = 0;
     if (x >= areas.source.x && x < areas.source.x + kSourceGutter &&
         y >= areas.source.y + 24 && y < areas.source.y + areas.source.height) {
-        const int row = (y - (areas.source.y + 24)) / 18;
+        const int row = (y - (areas.source.y + 24)) / source_line_height(areas.source.width);
         line = source_scroll_ + row + 1;
         if (line < 1 || line > static_cast<int>(source_lines_.size())) {
             return;
@@ -977,7 +1008,7 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     hover_asm_operand_ = false;
     if (x >= areas.source.x && x < areas.source.x + kSourceGutter &&
         y >= areas.source.y + 24 && y < areas.source.y + areas.source.height) {
-        hover_row_ = (y - (areas.source.y + 24)) / 18;
+        hover_row_ = (y - (areas.source.y + 24)) / source_line_height(areas.source.width);
         hover_source_ = true;
     } else if (x >= areas.disassembly.x && x < areas.disassembly.x + kAsmGutter &&
                y >= areas.disassembly.y + 24 &&
@@ -990,8 +1021,13 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
                y < areas.disassembly.y + areas.disassembly.height) {
         for (std::size_t index = 0; index < asm_rows_.size(); ++index) {
             if (!asm_rows_[index].row.contains(x, y)) continue;
-            hover_asm_index_ = static_cast<int>(index);
-            hover_asm_operand_ = asm_rows_[index].operand.contains(x, y);
+            if (asm_rows_[index].operand.contains(x, y)) {
+                hover_asm_index_ = static_cast<int>(index);
+                hover_asm_operand_ = true;
+            } else if (asm_rows_[index].mnemonic.contains(x, y)) {
+                hover_asm_index_ = static_cast<int>(index);
+                hover_asm_operand_ = false;
+            }
             break;
         }
     }
@@ -1092,7 +1128,7 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
     }
     if (x < areas.source.x + kSourceGutter && y >= areas.source.y + 24 &&
         y < areas.source.y + areas.source.height) {
-        const int row = (y - (areas.source.y + 24)) / 18;
+        const int row = (y - (areas.source.y + 24)) / source_line_height(areas.source.width);
         const int line = source_scroll_ + row + 1;
         toggle_source_breakpoint(line);
         return true;
@@ -1153,7 +1189,7 @@ bool DebuggerUI::key(int key_value, bool shift) {
 
 bool DebuggerUI::headless(const std::string& ppm_path) {
     const Tab original_tab = tab_;
-    Canvas canvas(1024, 640);
+    Canvas canvas(1440, 900);
 
     tab_ = Tab::Memory;
     render(canvas);
@@ -1197,7 +1233,7 @@ bool render_headless(const std::string& image_path,
     if (!debugger.load(image_path, error)) {
         return false;
     }
-    Canvas canvas(1024, 640);
+    Canvas canvas(1440, 900);
     debugger.render(canvas);
     if (!ppm_path.empty() && !canvas.write_ppm(ppm_path)) {
         error = "cannot write " + ppm_path;
