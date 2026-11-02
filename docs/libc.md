@@ -59,6 +59,21 @@ The allocator is a boundary-tag allocator with address-ordered free lists:
   already-free block; there is no validation of arbitrary pointers.
 - The allocator is not thread-safe; the initial libc layer targets one thread.
 
+## String and memory functions
+
+The runtime currently provides only three string/memory routines:
+
+| Function | Signature | Notes |
+| --- | --- | --- |
+| `strlen` | `int strlen(const char *text)` | Scans to the first NUL |
+| `memcpy` | `void *memcpy(void *dst, const void *src, int count)` | Non-overlapping regions; returns `dst` |
+| `memset` | `void *memset(void *dst, int value, int count)` | Uses the low byte of `value`; returns `dst` |
+
+There is no `strcpy`, `strncpy`, `strcmp`, `strncmp`, `strcat`, `strncat`,
+`strchr`, `strrchr`, `strstr`, `strtok`, `strdup`, `memmove`, `memcmp`, or
+`memchr` yet. `<string.h>` is a synthetic header that exposes the three existing
+prototypes. All sizes and lengths are 32-bit `int` values in the current libc.
+
 ## printf
 
 `printf` supports:
