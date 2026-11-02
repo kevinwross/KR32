@@ -8,11 +8,11 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M6 complete (2026-11-02). The portable SDL2 debugger renders source,
-disassembly, registers, variables/watches, memory, call stack, console, and
-KR32 FPR/tile/MMU/transform panels. It opens `.k32` images or builds C sources
-directly, and supports breakpoints, stepping, and headless screenshots. See
-[docs/ui.md](docs/ui.md). Host services, shell, and DAP are next.
+**Status:** M7 complete (2026-11-02). Hosted `SYSCALL` services provide console,
+file I/O, time, random, arguments, and exit behind a sandbox root with
+read-only/quota/path rules. `kr32 shell` provides commands and history, and
+`kr32 dap` serves the shared `DebugSession` over stdio or loopback TCP. See
+[docs/host.md](docs/host.md). Devices and full multicore are next.
 
 ## Build
 
@@ -78,6 +78,9 @@ kr32 help
 kr32 --smoke-ui     # initialize and tear down the SDL2 platform
 kr32 gui examples/hello.c
 kr32 gui build/hello.k32 --headless --screenshot hello-ui.ppm
+kr32 shell
+kr32 dap --stdio build/hello-c.k32
+kr32 vm build/fileio.k32 --fs-root sandbox --read-only
 ```
 
 `as` writes a raw image or, with `--object`, a relocatable `.k32` object. `ld`
@@ -86,8 +89,9 @@ merges objects, resolves symbols and relocations, and writes an executable
 object. `build` runs compile/assemble, link, and optional `--run` in one
 command. `size` reports `.k32` sections and `debug` dumps the `.debug_info`
 records. `gui` opens the source/disassembly debugger or renders headless PPM
-screenshots. The remaining tool commands (`cxx`, `dap`, `shell`) are stubs for
-later milestones.
+screenshots. `shell` runs tool commands interactively or from piped input, and
+`dap` exposes the debugger to DAP clients. The `cxx` command remains a stub for
+M9.
 
 ## Layout
 

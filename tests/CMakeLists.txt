@@ -12,6 +12,7 @@ add_executable(kr32_tests
     unit/test_linker.cpp
     unit/test_cc.cpp
     unit/test_debug.cpp
+    unit/test_host.cpp
     unit/test_assembler.cpp
     unit/test_disassembler.cpp)
 
@@ -23,6 +24,7 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_link
     kr32_cc
     kr32_debug
+    kr32_vm
     kr32_warnings)
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
@@ -96,6 +98,26 @@ add_test(NAME debug_dump
 set_tests_properties(debug_dump PROPERTIES
     DEPENDS build_c_hello
     PASS_REGULAR_EXPRESSION "function main")
+
+add_test(NAME host_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunHostSmoke.cmake)
+
+add_test(NAME dap_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunDapSmoke.cmake)
+set_tests_properties(dap_smoke PROPERTIES DEPENDS build_c_hello)
+
+add_test(NAME shell_smoke
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunShellSmoke.cmake)
 
 if(KR32_BUILD_UI)
     add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)

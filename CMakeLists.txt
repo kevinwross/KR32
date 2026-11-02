@@ -67,11 +67,14 @@ target_link_libraries(kr32_dis PUBLIC kr32_core kr32_container)
 kr32_add_library(kr32_debug src/debug/debug.cpp)
 target_link_libraries(kr32_debug PUBLIC kr32_core kr32_container)
 
-kr32_add_library(kr32_vm src/vm/vm.cpp)
+kr32_add_library(kr32_vm src/vm/vm.cpp src/vm/host.cpp)
 target_link_libraries(kr32_vm PUBLIC kr32_core)
 
 kr32_add_library(kr32_dap src/dap/dap.cpp)
 target_link_libraries(kr32_dap PUBLIC kr32_debug kr32_vm)
+if(WIN32)
+    target_link_libraries(kr32_dap PUBLIC ws2_32)
+endif()
 
 if(KR32_BUILD_UI)
     find_package(SDL2 CONFIG QUIET)

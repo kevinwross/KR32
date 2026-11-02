@@ -5,20 +5,29 @@
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
+#include "kr32/dap/dap.h"
 #include "kr32/debug/debug.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/link/linker.h"
 #include "kr32/version.h"
+#include "kr32/vm/host.h"
 
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <fstream>
+#include <iostream>
 #include <iterator>
 #include <string>
 #include <string_view>
 #include <vector>
+
+#if defined(_WIN32)
+#include <io.h>
+#else
+#include <unistd.h>
+#endif
 
 #if defined(KR32_HAS_UI)
 #include "kr32/ui/app.h"
@@ -193,18 +202,10 @@ void write_map(const linker::Map& map, std::string& text) {
 int run_machine(core::Machine& machine,
                 std::uint64_t max_steps,
                 bool trace,
-                bool stats) {
-    machine.set_syscall_handler([](core::Machine& current, std::uint32_t vector) {
-        if (vector == 33) {
-            std::putchar(static_cast<int>(current.reg(0) & 0xFFU));
-            return true;
-        }
-        if (vector == 32) {
-            current.halt(current.reg(0));
-            return true;
-        }
-        return false;
-    });
+                bool stats,
+                const vm::HostOptions& host_options = {}) {
+    vm::Host host(host_options);
+    host.install(machine);
 
     bool halted = false;
     for (std::uint64_t step = 0; step < max_steps; ++step) {
@@ -278,7 +279,7 @@ void print_machine(const core::Machine& machine) {
 }
 
 void print_version() {
-    std::printf("kr32 %s (ISA %s, container %s, M4 C bootstrap)\n",
+    std::printf("kr32 %s (ISA %s, container %s, M7 host services)\n",
                 kr32::kVersion, kr32::kIsaVersion, kr32::kContainerVersion);
 }
 
@@ -299,8 +300,8 @@ void print_help() {
         "  cxx <file>           compile C++ (M9)\n"
         "  size <file>          print .k32 section sizes\n"
         "  debug <file>         dump debug information (M5)\n"
-        "  dap <file>           Debug Adapter Protocol server (M7)\n"
-        "  shell                interactive shell (M7)\n"
+        "  dap <file>           Debug Adapter Protocol server (stdio or --port)\n"
+        "  shell                interactive command shell\n"
 #if defined(KR32_HAS_UI)
         "  gui                  open the windowed debugger (M6)\n"
         "  --smoke-ui           initialize and tear down the GUI platform\n"
@@ -311,9 +312,11 @@ void print_help() {
         "\n"
         "Options for as:  -o <path> --object --base <addr> --listing <path>\n"
         "Options for ld:  -o <image.k32> --map <path> --base <addr> --strip\n"
-        "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip\n"
+        "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip "
+        "--fs-root <dir> --read-only --quota <bytes> --arg <value>\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
-        "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats\n");
+        "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats "
+        "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n");
 }
 
 void print_as_usage() {
@@ -325,11 +328,13 @@ void print_dis_usage() {
 }
 
 void print_vm_usage() {
-    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--base <addr>] [--max-steps <n>] [--ram-size <n>] [--trace] [--stats]\n");
+    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--base <addr>] [--max-steps <n>] "
+                "[--ram-size <n>] [--trace] [--stats] [--fs-root <dir>] [--read-only] "
+                "[--quota <bytes>] [--arg <value>] [--input <text>]\n");
 }
 
 int not_implemented(std::string_view command) {
-    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M4 C bootstrap).\n",
+    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M9 C++ toolchain).\n",
                  static_cast<int>(command.size()), command.data());
     return 2;
 }
@@ -514,7 +519,9 @@ void print_ld_usage() {
 }
 
 void print_build_usage() {
-    std::printf("Usage: kr32 build <file.s> [-o <image.k32>] [--map <path>] [--base <addr>] [--run] [--strip]\n");
+    std::printf("Usage: kr32 build <file.s> [-o <image.k32>] [--map <path>] [--base <addr>] "
+                "[--run] [--strip] [--fs-root <dir>] [--read-only] [--quota <bytes>] "
+                "[--arg <value>] [--input <text>]\n");
 }
 
 int command_ld(int argc, char** argv) {
@@ -649,6 +656,7 @@ int command_build(int argc, char** argv) {
     linker::Options options;
     bool run = false;
     bool strip = false;
+    vm::HostOptions host_options;
 
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -662,6 +670,31 @@ int command_build(int argc, char** argv) {
         }
         if (argument == "--strip") {
             strip = true;
+            continue;
+        }
+        if (argument == "--read-only") {
+            host_options.read_only = true;
+            continue;
+        }
+        if (argument == "--fs-root" || argument == "--quota" || argument == "--arg" ||
+            argument == "--input") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 build: %.*s needs a value\n",
+                             static_cast<int>(argument.size()), argument.data());
+                return 2;
+            }
+            const std::string value = argv[++index];
+            if (argument == "--fs-root") host_options.fs_root = value;
+            if (argument == "--input") host_options.input = value;
+            if (argument == "--arg") host_options.args.push_back(value);
+            if (argument == "--quota") {
+                std::uint32_t quota = 0;
+                if (!parse_u32(value, quota)) {
+                    std::fprintf(stderr, "kr32 build: invalid --quota\n");
+                    return 2;
+                }
+                host_options.quota = quota;
+            }
             continue;
         }
         if (argument == "-o" || argument == "--map") {
@@ -773,7 +806,7 @@ int command_build(int argc, char** argv) {
         std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
         return 1;
     }
-    return run_machine(machine, kDefaultMaxSteps, false, false);
+    return run_machine(machine, kDefaultMaxSteps, false, false, host_options);
 }
 
 void print_cc_usage() {
@@ -888,6 +921,42 @@ int command_debug(int argc, char** argv) {
     return 0;
 }
 
+int command_dap(int argc, char** argv) {
+    dap::Options options;
+    for (int index = 2; index < argc; ++index) {
+        const std::string_view argument(argv[index]);
+        if (argument == "--help" || argument == "-h") {
+            std::printf("Usage: kr32 dap [<image.k32>] [--port <n>] [--stdio]\n");
+            return 0;
+        }
+        if (argument == "--stdio") {
+            options.stdio = true;
+            options.port = 0;
+            continue;
+        }
+        if (argument == "--port") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 dap: --port needs a value\n");
+                return 2;
+            }
+            std::uint32_t port = 0;
+            if (!parse_u32(argv[++index], port) || port == 0 || port > 65535) {
+                std::fprintf(stderr, "kr32 dap: invalid port\n");
+                return 2;
+            }
+            options.port = static_cast<int>(port);
+            options.stdio = false;
+            continue;
+        }
+        if (!options.image_path.empty()) {
+            std::fprintf(stderr, "kr32 dap: unexpected argument\n");
+            return 2;
+        }
+        options.image_path = std::string(argument);
+    }
+    return dap::run(options);
+}
+
 int command_vm(int argc, char** argv) {
     std::string program;
     std::string bios;
@@ -896,6 +965,7 @@ int command_vm(int argc, char** argv) {
     std::uint64_t max_steps = kDefaultMaxSteps;
     bool trace = false;
     bool stats = false;
+    vm::HostOptions host_options;
 
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -909,6 +979,31 @@ int command_vm(int argc, char** argv) {
         }
         if (argument == "--stats") {
             stats = true;
+            continue;
+        }
+        if (argument == "--read-only") {
+            host_options.read_only = true;
+            continue;
+        }
+        if (argument == "--fs-root" || argument == "--quota" || argument == "--arg" ||
+            argument == "--input") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 vm: %.*s needs a value\n",
+                             static_cast<int>(argument.size()), argument.data());
+                return 2;
+            }
+            const std::string value = argv[++index];
+            if (argument == "--fs-root") host_options.fs_root = value;
+            if (argument == "--input") host_options.input = value;
+            if (argument == "--arg") host_options.args.push_back(value);
+            if (argument == "--quota") {
+                std::uint32_t quota = 0;
+                if (!parse_u32(value, quota)) {
+                    std::fprintf(stderr, "kr32 vm: invalid --quota\n");
+                    return 2;
+                }
+                host_options.quota = quota;
+            }
             continue;
         }
         if (argument == "--bios") {
@@ -987,7 +1082,134 @@ int command_vm(int argc, char** argv) {
         machine.reset();
     }
 
-    return run_machine(machine, max_steps, trace, stats);
+    return run_machine(machine, max_steps, trace, stats, host_options);
+}
+
+std::vector<std::string> tokenize_shell(const std::string& line) {
+    std::vector<std::string> tokens;
+    std::string current;
+    bool in_single = false;
+    bool in_double = false;
+    for (std::size_t index = 0; index < line.size(); ++index) {
+        const char c = line[index];
+        if (in_single) {
+            if (c == '\'') {
+                in_single = false;
+            } else {
+                current.push_back(c);
+            }
+            continue;
+        }
+        if (in_double) {
+            if (c == '"') {
+                in_double = false;
+            } else if (c == '\\' && index + 1 < line.size()) {
+                current.push_back(line[++index]);
+            } else {
+                current.push_back(c);
+            }
+            continue;
+        }
+        if (c == '\'') {
+            in_single = true;
+        } else if (c == '"') {
+            in_double = true;
+        } else if (std::isspace(static_cast<unsigned char>(c)) != 0) {
+            if (!current.empty()) {
+                tokens.push_back(current);
+                current.clear();
+            }
+        } else {
+            current.push_back(c);
+        }
+    }
+    if (!current.empty()) {
+        tokens.push_back(current);
+    }
+    return tokens;
+}
+
+bool shell_interactive() {
+#if defined(_WIN32)
+    return _isatty(_fileno(stdin)) != 0;
+#else
+    return isatty(fileno(stdin)) != 0;
+#endif
+}
+
+int command_shell(int argc, char** argv) {
+    (void)argc;
+    (void)argv;
+    std::vector<std::string> history;
+    const bool interactive = shell_interactive();
+    std::printf("KR32 shell. Type 'help' for commands, 'exit' to leave.\n");
+    std::string line;
+    while (true) {
+        if (interactive) {
+            std::printf("kr32> ");
+            std::fflush(stdout);
+        }
+        if (!std::getline(std::cin, line)) {
+            break;
+        }
+        const std::vector<std::string> tokens = tokenize_shell(line);
+        if (tokens.empty()) {
+            continue;
+        }
+        history.push_back(line);
+        const std::string& command = tokens.front();
+        if (command == "exit" || command == "quit") {
+            break;
+        }
+        if (command == "help") {
+            std::printf(
+                "commands: as, build, cc, debug, dis, ld, run, size, vm, version, "
+                "history, clear, exit\n");
+            continue;
+        }
+        if (command == "history") {
+            for (std::size_t index = 0; index < history.size(); ++index) {
+                std::printf("%3zu  %s\n", index + 1, history[index].c_str());
+            }
+            continue;
+        }
+        if (command == "clear") {
+            std::printf("\x1b[2J\x1b[H");
+            continue;
+        }
+        if (command == "version") {
+            print_version();
+            continue;
+        }
+
+        std::vector<std::string> arguments;
+        arguments.push_back("kr32");
+        if (command == "run") {
+            arguments.push_back("vm");
+        } else {
+            arguments.push_back(command);
+        }
+        arguments.insert(arguments.end(), tokens.begin() + 1, tokens.end());
+        std::vector<char*> raw;
+        raw.reserve(arguments.size());
+        for (std::string& argument : arguments) {
+            raw.push_back(argument.data());
+        }
+        int result = 2;
+        const std::string& mode = arguments[1];
+        if (mode == "as") result = command_as(static_cast<int>(raw.size()), raw.data());
+        if (mode == "dis") result = command_dis(static_cast<int>(raw.size()), raw.data());
+        if (mode == "ld") result = command_ld(static_cast<int>(raw.size()), raw.data());
+        if (mode == "size") result = command_size(static_cast<int>(raw.size()), raw.data());
+        if (mode == "build") result = command_build(static_cast<int>(raw.size()), raw.data());
+        if (mode == "cc") result = command_cc(static_cast<int>(raw.size()), raw.data());
+        if (mode == "debug") result = command_debug(static_cast<int>(raw.size()), raw.data());
+        if (mode == "vm") result = command_vm(static_cast<int>(raw.size()), raw.data());
+        if (result != 0) {
+            std::printf("[exit %d]\n", result);
+        }
+    }
+    return 0;
 }
 
 } // namespace
@@ -1053,9 +1275,15 @@ int run(int argc, char** argv) {
     if (command == "debug") {
         return command_debug(argc, argv);
     }
+    if (command == "shell") {
+        return command_shell(argc, argv);
+    }
+    if (command == "dap") {
+        return command_dap(argc, argv);
+    }
 
     for (const std::string_view candidate :
-         {"cxx", "dap", "shell"}) {
+         {"cxx"}) {
         if (command == candidate) {
             return not_implemented(command);
         }

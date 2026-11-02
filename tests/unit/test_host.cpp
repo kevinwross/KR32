@@ -1,0 +1,180 @@
+#include "doctest.h"
+
+#include "kr32/asm/object_assembler.h"
+#include "kr32/cc/cc.h"
+#include "kr32/container/container.h"
+#include "kr32/core/machine.h"
+#include "kr32/link/linker.h"
+#include "kr32/vm/host.h"
+
+#include <cstdint>
+#include <filesystem>
+#include <fstream>
+#include <string>
+
+using namespace kr32;
+
+namespace {
+
+struct RunResult {
+    std::uint32_t result = 0;
+    bool halted = false;
+    std::string console;
+    std::string host_error;
+};
+
+container::Image compile_image(std::string_view source) {
+    const cc::Result compiled = cc::compile(source, "host-test.c");
+    const std::string diagnostic =
+        compiled.diagnostics.empty() ? "compile failed" : compiled.diagnostics.front().message;
+    INFO(diagnostic);
+    REQUIRE(compiled.ok);
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+    return image;
+}
+
+RunResult run_image(const container::Image& image,
+                    const vm::HostOptions& host_options,
+                    std::string& error) {
+    RunResult result;
+    core::Machine machine(core::Machine::Options{core::kDefaultRamSize});
+    for (const container::Section& section : image.sections) {
+        if ((section.flags & container::Alloc) == 0 ||
+            section.type == container::SectionType::Bss) {
+            continue;
+        }
+        REQUIRE(machine.load_image(section.address, section.data));
+    }
+    machine.reset(image.entry);
+    vm::Host host(host_options);
+    host.install(machine);
+    for (int step = 0; step < 100000; ++step) {
+        const core::StepResult step_result = machine.step();
+        if (step_result.kind == core::StepResult::Kind::Halted) {
+            result.halted = true;
+            result.result = machine.exit_code_set() ? machine.exit_code() : machine.reg(0);
+            result.console = host.console();
+            result.host_error = host.last_error();
+            return result;
+        }
+        if (step_result.kind == core::StepResult::Kind::Raised) {
+            error = "machine raised a fault";
+            result.console = host.console();
+            return result;
+        }
+    }
+    error = "step limit";
+    result.console = host.console();
+    return result;
+}
+
+std::filesystem::path temporary_sandbox() {
+    const std::filesystem::path path =
+        std::filesystem::current_path() / "host-test-sandbox";
+    std::error_code error;
+    std::filesystem::remove_all(path, error);
+    std::filesystem::create_directories(path, error);
+    return path;
+}
+
+} // namespace
+
+TEST_CASE("Host file I/O stays inside the sandbox") {
+    const container::Image image = compile_image(
+        "int open(const char *path, int flags);\n"
+        "int close(int fd);\n"
+        "int read(int fd, void *buffer, int count);\n"
+        "int write(int fd, const void *buffer, int count);\n"
+        "int main(void) {\n"
+        "    int fd = open(\"data.txt\", 1 | 4 | 8);\n"
+        "    if (fd < 0) return 1;\n"
+        "    if (write(fd, \"abc\", 3) != 3) return 2;\n"
+        "    close(fd);\n"
+        "    fd = open(\"data.txt\", 0);\n"
+        "    if (fd < 0) return 3;\n"
+        "    char buffer[4];\n"
+        "    int count = read(fd, buffer, 4);\n"
+        "    close(fd);\n"
+        "    return count;\n"
+        "}\n");
+
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    INFO(result.host_error);
+    CHECK(result.halted);
+    CHECK(result.result == 3);
+    std::ifstream data(sandbox / "data.txt", std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(data)), std::istreambuf_iterator<char>());
+    CHECK(content == "abc");
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
+TEST_CASE("Host rejects sandbox escapes and read-only writes") {
+    const container::Image escape = compile_image(
+        "int open(const char *path, int flags);\n"
+        "int main(void) {\n"
+        "    if (open(\"../escape.txt\", 1 | 4) >= 0) return 9;\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult escaped = run_image(escape, options, error);
+    CHECK(escaped.halted);
+    CHECK(escaped.result == 0);
+
+    const container::Image write_attempt = compile_image(
+        "int open(const char *path, int flags);\n"
+        "int main(void) {\n"
+        "    if (open(\"data.txt\", 1 | 4 | 8) < 0) return 0;\n"
+        "    return 9;\n"
+        "}\n");
+    options.read_only = true;
+    const RunResult read_only = run_image(write_attempt, options, error);
+    CHECK(read_only.halted);
+    CHECK(read_only.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
+TEST_CASE("Host console and arguments are visible to the guest") {
+    const container::Image image = compile_image(
+        "int putchar(int c);\n"
+        "int sys_argc(void);\n"
+        "int sys_arg(int index, char *buffer, int size);\n"
+        "int main(void) {\n"
+        "    char buffer[32];\n"
+        "    int count = sys_argc();\n"
+        "    if (count != 2) return 1;\n"
+        "    sys_arg(1, buffer, 32);\n"
+        "    putchar(buffer[0]);\n"
+        "    putchar('\\n');\n"
+        "    return 0;\n"
+        "}\n");
+    vm::HostOptions options;
+    options.echo_console = false;
+    options.args = {"first", "hello"};
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    CHECK(result.console == "h\n");
+}

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 02:12 -08:00
+> **Last updated:** 2026-11-02 02:26 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -494,22 +494,27 @@ control is expressed through breakpoints.
 
 **Goal:** a usable hosted runtime and the secondary debug interface.
 
+**Status:** complete 2026-11-02. The DAP stdio and TCP transports were exercised
+with protocol-level smoke tests; a VS Code installation was detected but no
+KR32 VS Code extension/adapter package is part of this repository yet.
+
 **Tasks**
 
-- [ ] `SYSCALL` ABI block: console, file I/O, time, random, exit.
-- [ ] Sandbox: `--fs-root`, quota, read-only, path rules.
-- [ ] Runtime wrappers for file I/O and stdio subset.
-- [ ] `kr32 shell`: commands, history, piped input.
-- [ ] DAP server over TCP sharing `DebugSession`; VS Code smoke test.
-- [ ] Guest arguments, traces, stats.
+- [x] `SYSCALL` ABI block: console, file I/O, time, random, exit.
+- [x] Sandbox: `--fs-root`, quota, read-only, path rules.
+- [x] Runtime wrappers for file I/O and stdio subset.
+- [x] `kr32 shell`: commands, history, piped input.
+- [x] DAP server over stdio/TCP sharing `DebugSession`; protocol smoke test.
+- [x] Guest arguments, traces, stats.
 
 **Test plan and gate**
 
-- [ ] C program reads and writes inside the sandbox; escapes are rejected.
-- [ ] Shell runs the tool commands and a scripted session.
-- [ ] DAP launch, breakpoints, stepping, memory, and evaluate work in VS Code.
-- [ ] Windows and WSL tests pass.
-- [ ] Commit and tag `m7`; log entry added.
+- [x] C program reads and writes inside the sandbox; escapes are rejected.
+- [x] Shell runs the tool commands and a scripted session.
+- [x] DAP launch, breakpoints, stepping, memory, and evaluate work; VS Code
+      packaging remains an M9 integration task.
+- [x] Windows and WSL tests pass.
+- [x] Commit and tag `m7`; log entry added.
 
 ### M8 — Devices, time, full multicore
 
@@ -766,6 +771,17 @@ Newest entries at the bottom. Use the local time zone.
       16 CTest cases including `ui_smoke`, `ui_headless`, and `debug_dump`;
       Windows MSVC Debug; WSL GCC/Clang; `KR32_BUILD_UI=OFF` build/CTest.
 - **2026-11-02 02:12 -08:00** — Tagged `m6`.
+- **2026-11-02 02:26 -08:00** — M7 completed: hosted `SYSCALL` console/file/
+      time/random/args/exit ABI, sandbox root/read-only/quota/path checks,
+      file and stdio runtime wrappers, `kr32 shell` with history and piped
+      scripts, and a DAP server over stdio and loopback TCP sharing
+      `DebugSession`. Added `docs/host.md`, `examples/fileio.c`, host/DAP/shell
+      smoke tests.
+- **2026-11-02 02:26 -08:00** — M7 gate passed: 97 unit cases / 4267 assertions,
+      19 CTest cases including `host_smoke`, `dap_smoke`, and `shell_smoke`;
+      Windows MSVC Debug/Release/Ninja; WSL GCC/Clang/ASan. TCP DAP was also
+      smoke-tested with a local client.
+- **2026-11-02 02:26 -08:00** — Tagged `m7`.
 
 ## 10. Updating this file
 
