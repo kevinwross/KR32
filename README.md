@@ -8,12 +8,12 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M4 in progress (2026-11-02). The bootstrap C compiler handles
-integers, chars, pointers, arrays, functions, control flow, strings, and
-recursion; `kr32 cc` emits assembly or an object, and `kr32 build file.c --run`
-links the `_start`/`putchar`/`exit` runtime and runs the result. Structs,
-`switch`/`goto`, the full preprocessor, and the remaining M4 gate are still
-being completed.
+**Status:** M4 complete (2026-11-02). The bootstrap C compiler handles the M4
+scalar and aggregate subset, the preprocessor and built-in headers, structs,
+unions, enums, typedefs, arrays, recursion, `switch`, and `goto`. `kr32 cc`
+emits assembly or an object; `kr32 build file.c --run` links the runtime and
+runs the program. The ABI is documented in [docs/abi.md](docs/abi.md). The
+debugger and full host services are next.
 
 ## Build
 

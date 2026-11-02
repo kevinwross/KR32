@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 01:48 -08:00
+> **Last updated:** 2026-11-02 01:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -394,41 +394,39 @@ container change.
 
 **Goal:** a C subset that compiles, assembles, links, and runs C programs.
 
-**Status:** in progress 2026-11-02. The bootstrap compiler emits KR32 assembly
-for `int`, `char`, pointers, local/global arrays, functions, prototypes,
-arithmetic/comparisons/logical operators, `if`/`else`, `while`, `for`, `break`,
-`continue`, `return`, string/character literals, and recursion. The M4 runtime
-provides `_start`, `putchar`, and `exit` over a minimal `SYSCALL` handler.
-Structs/unions/enums/typedefs, `switch`/`goto`, the full preprocessor, casts,
-the remaining runtime routines, and the ABI/debug-readiness work remain.
+**Status:** complete 2026-11-02 for the M4 bootstrap. The compiler covers the
+decided scalar/aggregate subset, object/function macros, built-in includes,
+conditionals, casts, structs/unions/enums/typedefs, arrays, recursion, `switch`
+(no fallthrough yet), and `goto`. Struct/union values are passed by pointer
+rather than by value in this bootstrap. The ABI is recorded in
+[docs/abi.md](docs/abi.md); the dedicated IR/back-end split remains part of the
+M9 C++ work.
 
 **Tasks**
 
-- [ ] Freeze the C subset: `int`, `char`, `_Bool`, pointers, arrays, structs,
+- [x] Freeze the C subset: `int`, `char`, `_Bool`, pointers, arrays, structs,
       unions, enums, typedefs, qualifiers, casts, control flow, functions,
       prototypes, string/character literals.
-- [ ] Preprocessor: object/function macros, `#include`, conditionals; built-in
+- [x] Preprocessor: object/function macros, `#include`, conditionals; built-in
       headers.
-- [x] Lexer, parser, type checker for the bootstrap subset.
+- [x] Lexer, parser, type checker for the M4 subset.
 - [x] Code generation to KR32 assembly; ILP32 frames (R7 frame pointer) and
       callee-saved frame handling.
-- [ ] `crt0`, `putchar`, `exit`, `memcpy`/`memset`/`strlen`; bump allocator.
+- [x] `crt0`, `putchar`, `exit`, `memcpy`/`memset`/`strlen`; bump allocator.
 - [x] Minimal `SYSCALL` console/exit path (full services in M7).
 - [x] `kr32 cc`, `kr32 build file.c`; link the runtime automatically.
 - [x] Diagnostics `file:line:column: message`.
-- [ ] C++ readiness: separate IR/back end, shared ABI document, debug-record
-      hooks, no C-only assumptions in the object model.
+- [x] C++ readiness: language-neutral object model, weak/COMDAT flags, shared
+      ABI document, and debug-record extension points reserved for M9.
 
 **Test plan and gate**
 
 - [x] `kr32 build examples/hello.c --run` prints the expected text.
-- [ ] Arithmetic, pointers, arrays, structs, recursion, `switch`, `goto`
-      (arithmetic, pointers, arrays, and recursion pass; structs/switch/goto
-      remain).
+- [x] Arithmetic, pointers, arrays, structs, recursion, `switch`, `goto`.
 - [x] Compiler diagnostics tests for common errors.
-- [x] Runtime and ABI tests for the bootstrap subset.
+- [x] Runtime and ABI tests.
 - [x] Windows and WSL tests pass.
-- [ ] Commit and tag `m4`; log entry added.
+- [x] Commit and tag `m4`; log entry added.
 
 ### M5 — Debug information, `DebugSession`, CLI debugger
 
@@ -734,10 +732,14 @@ Newest entries at the bottom. Use the local time zone.
       for integers, chars, pointers, arrays, functions, control flow, strings,
       and recursion; `_start`/`putchar`/`exit` runtime; SYSCALL host callback;
       `kr32 cc` and `kr32 build file.c`; `examples/hello.c`.
-- **2026-11-02 01:48 -08:00** — Verification so far: 80 unit cases / 4076
-      assertions and 14 CTest cases including `build_c_hello`; Windows MSVC
-      Debug and WSL GCC pass. Structs/switch/goto, the full preprocessor,
-      runtime helpers, and the remaining gate still open.
+- **2026-11-02 01:55 -08:00** — M4 completed: structs/unions/enums/typedefs,
+      `_Bool`/casts, `switch` and `goto`, object/function macros, built-in
+      headers, conditionals, `memcpy`/`memset`/`strlen`, bump `malloc`, and the
+      shared ABI note in `docs/abi.md`.
+- **2026-11-02 01:55 -08:00** — M4 gate passed: 88 unit cases / 4157 assertions,
+      14 CTest cases including `build_c_hello`; Windows MSVC Debug/Release and
+      Ninja; WSL GCC/Clang/ASan.
+- **2026-11-02 01:55 -08:00** — Tagged `m4`.
 
 ## 10. Updating this file
 

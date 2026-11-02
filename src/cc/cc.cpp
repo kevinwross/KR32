@@ -5,6 +5,7 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <functional>
 #include <map>
 #include <memory>
 #include <sstream>
@@ -74,6 +75,141 @@ std::string preprocess(std::string_view source) {
         }
     }
 
+    std::map<std::string, std::string> macros;
+    struct FunctionMacro {
+        std::vector<std::string> parameters;
+        std::string body;
+    };
+    std::map<std::string, FunctionMacro> function_macros;
+    struct Conditional {
+        bool parent_active = true;
+        bool condition = false;
+    };
+    std::vector<Conditional> conditions;
+    bool active = true;
+
+    std::function<std::string(const std::string&)> expand_line;
+    expand_line = [&](const std::string& line) {
+        std::string expanded;
+        std::size_t index = 0;
+        while (index < line.size()) {
+            const char c = line[index];
+            if (c == '"' || c == '\'') {
+                const char quote = c;
+                expanded.push_back(c);
+                ++index;
+                while (index < line.size()) {
+                    const char ch = line[index++];
+                    expanded.push_back(ch);
+                    if (ch == '\\' && index < line.size()) {
+                        expanded.push_back(line[index++]);
+                    } else if (ch == quote) {
+                        break;
+                    }
+                }
+                continue;
+            }
+            if (std::isalpha(static_cast<unsigned char>(c)) != 0 || c == '_') {
+                const std::size_t begin = index;
+                ++index;
+                while (index < line.size() &&
+                       (std::isalnum(static_cast<unsigned char>(line[index])) != 0 ||
+                        line[index] == '_')) {
+                    ++index;
+                }
+                const std::string name = line.substr(begin, index - begin);
+                const auto function_macro = function_macros.find(name);
+                if (function_macro != function_macros.end() && index < line.size() &&
+                    line[index] == '(') {
+                    std::size_t close = index + 1;
+                    int depth = 1;
+                    bool in_quote = false;
+                    char quote = 0;
+                    while (close < line.size() && depth > 0) {
+                        const char ch = line[close];
+                        if (in_quote) {
+                            if (ch == '\\') {
+                                close += 2;
+                                continue;
+                            }
+                            if (ch == quote) {
+                                in_quote = false;
+                            }
+                        } else if (ch == '"' || ch == '\'') {
+                            in_quote = true;
+                            quote = ch;
+                        } else if (ch == '(') {
+                            ++depth;
+                        } else if (ch == ')') {
+                            --depth;
+                        }
+                        ++close;
+                    }
+                    if (depth == 0) {
+                        const std::string argument_text = line.substr(index + 1, close - index - 2);
+                        std::vector<std::string> arguments;
+                        std::string current;
+                        int argument_depth = 0;
+                        bool argument_quote = false;
+                        char argument_quote_char = 0;
+                        for (char ch : argument_text) {
+                            if (argument_quote) {
+                                current.push_back(ch);
+                                if (ch == argument_quote_char) {
+                                    argument_quote = false;
+                                }
+                            } else if (ch == '"' || ch == '\'') {
+                                argument_quote = true;
+                                argument_quote_char = ch;
+                                current.push_back(ch);
+                            } else if (ch == '(') {
+                                ++argument_depth;
+                                current.push_back(ch);
+                            } else if (ch == ')') {
+                                --argument_depth;
+                                current.push_back(ch);
+                            } else if (ch == ',' && argument_depth == 0) {
+                                arguments.push_back(current);
+                                current.clear();
+                            } else {
+                                current.push_back(ch);
+                            }
+                        }
+                        if (!current.empty() || !argument_text.empty()) {
+                            arguments.push_back(current);
+                        }
+                        std::string substituted = function_macro->second.body;
+                        for (std::size_t parameter = 0;
+                             parameter < function_macro->second.parameters.size(); ++parameter) {
+                            const std::string needle = function_macro->second.parameters[parameter];
+                            const std::string replacement =
+                                parameter < arguments.size() ? arguments[parameter] : "";
+                            std::size_t position = 0;
+                            while ((position = substituted.find(needle, position)) !=
+                                   std::string::npos) {
+                                substituted.replace(position, needle.size(), replacement);
+                                position += replacement.size();
+                            }
+                        }
+                        expanded += "(" + substituted + ")";
+                        index = close;
+                        continue;
+                    }
+                }
+                const auto macro = macros.find(name);
+                if (macro != macros.end()) {
+                    expanded += "(" + macro->second + ")";
+                } else {
+                    expanded += name;
+                }
+                continue;
+            }
+            expanded.push_back(c);
+            ++index;
+        }
+        return expanded;
+    };
+
     std::string result;
     std::istringstream lines(without_comments);
     std::string line;
@@ -82,16 +218,110 @@ std::string preprocess(std::string_view source) {
         const std::size_t first = trimmed.find_first_not_of(" \t");
         if (first != std::string::npos && trimmed[first] == '#') {
             const std::string directive = trimmed.substr(first);
-            if (directive.rfind("#include", 0) == 0) {
+            if (directive.rfind("#define", 0) == 0) {
+                std::string rest = directive.substr(7);
+                const std::size_t rest_first = rest.find_first_not_of(" \t");
+                if (rest_first != std::string::npos) {
+                    rest = rest.substr(rest_first);
+                }
+                const std::size_t name_end = rest.find_first_of(" \t(");
+                const std::string name = rest.substr(0, name_end);
+                if (name_end != std::string::npos && rest[name_end] == '(') {
+                    const std::size_t close = rest.find(')', name_end + 1);
+                    if (close != std::string::npos) {
+                        FunctionMacro macro;
+                        std::string parameters = rest.substr(name_end + 1, close - name_end - 1);
+                        std::size_t position = 0;
+                        while (position < parameters.size()) {
+                            const std::size_t comma = parameters.find(',', position);
+                            std::string parameter = parameters.substr(
+                                position, comma == std::string::npos ? std::string::npos
+                                                                     : comma - position);
+                            const std::size_t first_char = parameter.find_first_not_of(" \t");
+                            if (first_char != std::string::npos) {
+                                macro.parameters.push_back(parameter.substr(first_char));
+                            }
+                            if (comma == std::string::npos) {
+                                break;
+                            }
+                            position = comma + 1;
+                        }
+                        std::string body = rest.substr(close + 1);
+                        const std::size_t body_first = body.find_first_not_of(" \t");
+                        macro.body = body_first == std::string::npos ? "" : body.substr(body_first);
+                        function_macros[name] = std::move(macro);
+                    }
+                } else if (!name.empty()) {
+                    std::string value = name_end == std::string::npos
+                                            ? "1"
+                                            : rest.substr(name_end);
+                    const std::size_t value_first = value.find_first_not_of(" \t");
+                    macros[name] = value_first == std::string::npos
+                                       ? "1"
+                                       : value.substr(value_first);
+                }
+            } else if (directive.rfind("#undef", 0) == 0) {
+                const std::string name = directive.substr(6);
+                const std::size_t name_first = name.find_first_not_of(" \t");
+                if (name_first != std::string::npos) {
+                    macros.erase(name.substr(name_first));
+                }
+            } else if (directive.rfind("#ifdef", 0) == 0) {
+                const std::string name = directive.substr(6);
+                const std::size_t name_first = name.find_first_not_of(" \t");
+                const bool condition = name_first != std::string::npos &&
+                                       macros.find(name.substr(name_first)) != macros.end();
+                conditions.push_back({active, condition});
+                active = active && condition;
+            } else if (directive.rfind("#ifndef", 0) == 0) {
+                const std::string name = directive.substr(7);
+                const std::size_t name_first = name.find_first_not_of(" \t");
+                const bool condition = name_first == std::string::npos ||
+                                       macros.find(name.substr(name_first)) == macros.end();
+                conditions.push_back({active, condition});
+                active = active && condition;
+            } else if (directive.rfind("#if", 0) == 0) {
+                const std::string condition_text = directive.substr(3);
+                const std::size_t condition_first = condition_text.find_first_not_of(" \t");
+                const bool condition = condition_first != std::string::npos &&
+                                       condition_text.substr(condition_first) != "0";
+                conditions.push_back({active, condition});
+                active = active && condition;
+            } else if (directive.rfind("#else", 0) == 0) {
+                if (conditions.empty()) {
+                    // Ignore unmatched #else rather than failing the lexer.
+                } else {
+                    const Conditional current = conditions.back();
+                    active = current.parent_active && !current.condition;
+                }
+            } else if (directive.rfind("#endif", 0) == 0) {
+                if (!conditions.empty()) {
+                    active = conditions.back().parent_active;
+                    conditions.pop_back();
+                }
+            } else if (directive.rfind("#include", 0) == 0 && active) {
                 if (directive.find("kr32.h") != std::string::npos ||
-                    directive.find("stdio.h") != std::string::npos) {
-                    result += "int putchar(int c);\nvoid exit(int code);\n";
+                    directive.find("stdio.h") != std::string::npos ||
+                    directive.find("stdlib.h") != std::string::npos ||
+                    directive.find("string.h") != std::string::npos) {
+                    result +=
+                        "int putchar(int c);\n"
+                        "void exit(int code);\n"
+                        "void *malloc(int size);\n"
+                        "void free(void *pointer);\n"
+                        "void *memcpy(void *destination, const void *source, int count);\n"
+                        "void *memset(void *destination, int value, int count);\n"
+                        "int strlen(const char *text);\n";
                 }
             }
             result.push_back('\n');
             continue;
         }
-        result += line;
+        if (!active) {
+            result.push_back('\n');
+            continue;
+        }
+        result += expand_line(line);
         result.push_back('\n');
     }
     return result;
@@ -262,20 +492,51 @@ private:
 struct Type;
 using TypePtr = std::shared_ptr<Type>;
 
+struct Member {
+    std::string name;
+    TypePtr type;
+    int offset = 0;
+};
+
 struct Type {
-    enum class Kind { Void, Char, Int, Pointer, Array };
+    enum class Kind { Void, Char, Int, Bool, Pointer, Array, Struct, Union };
 
     Kind kind = Kind::Int;
     TypePtr base;
     int count = 0;
+    std::vector<Member> members;
+    std::string tag;
+    int total_size = 0;
+    int struct_alignment = 1;
+
+    Type() = default;
+    Type(Kind type_kind, TypePtr type_base, int type_count)
+        : kind(type_kind), base(std::move(type_base)), count(type_count) {}
 
     [[nodiscard]] int size() const {
         switch (kind) {
         case Kind::Void: return 1;
         case Kind::Char: return 1;
+        case Kind::Bool: return 1;
         case Kind::Int: return 4;
         case Kind::Pointer: return 4;
         case Kind::Array: return base ? base->size() * count : 0;
+        case Kind::Struct:
+        case Kind::Union: return total_size;
+        }
+        return 4;
+    }
+
+    [[nodiscard]] int alignment() const {
+        switch (kind) {
+        case Kind::Void: return 1;
+        case Kind::Char: return 1;
+        case Kind::Bool: return 1;
+        case Kind::Int: return 4;
+        case Kind::Pointer: return 4;
+        case Kind::Array: return base ? base->alignment() : 1;
+        case Kind::Struct:
+        case Kind::Union: return struct_alignment;
         }
         return 4;
     }
@@ -291,6 +552,7 @@ struct Type {
 
 TypePtr type_int() { return std::make_shared<Type>(Type{Type::Kind::Int, nullptr, 0}); }
 TypePtr type_char() { return std::make_shared<Type>(Type{Type::Kind::Char, nullptr, 0}); }
+TypePtr type_bool() { return std::make_shared<Type>(Type{Type::Kind::Bool, nullptr, 0}); }
 TypePtr type_void() { return std::make_shared<Type>(Type{Type::Kind::Void, nullptr, 0}); }
 TypePtr type_pointer(TypePtr base) {
     return std::make_shared<Type>(Type{Type::Kind::Pointer, std::move(base), 0});
@@ -403,25 +665,142 @@ private:
 
     bool is_type_start() const {
         const std::string& text = peek().text;
-        return text == "int" || text == "char" || text == "void" || text == "const" ||
-               text == "unsigned" || text == "signed" || text == "static" ||
-               text == "extern" || text == "volatile" || text == "register";
+        return text == "int" || text == "char" || text == "void" || text == "_Bool" ||
+               text == "struct" || text == "union" || text == "enum" ||
+               text == "const" || text == "unsigned" || text == "signed" ||
+               text == "static" || text == "extern" || text == "volatile" ||
+               text == "register" || typedefs_.find(text) != typedefs_.end();
+    }
+
+    static int align_up(int value, int alignment) {
+        if (alignment <= 1) {
+            return value;
+        }
+        return ((value + alignment - 1) / alignment) * alignment;
+    }
+
+    TypePtr parse_struct_or_union(bool is_union) {
+        std::string tag;
+        if (peek().kind == TokenKind::Identifier) {
+            tag = take().text;
+        }
+        if (match("{")) {
+            auto type = std::make_shared<Type>();
+            type->kind = is_union ? Type::Kind::Union : Type::Kind::Struct;
+            type->tag = tag;
+            while (!match("}")) {
+                TypePtr member_type = parse_type();
+                const std::string member_name = parse_name();
+                if (match("[")) {
+                    std::int64_t count = 0;
+                    if (peek().kind == TokenKind::Number) {
+                        count = take().value;
+                    }
+                    expect("]");
+                    member_type = type_array(member_type, static_cast<int>(count));
+                }
+                expect(";");
+                type->members.push_back(Member{member_name, member_type, 0});
+            }
+            int offset = 0;
+            int max_alignment = 1;
+            int max_size = 0;
+            for (Member& member : type->members) {
+                const int alignment = std::max(1, member.type->alignment());
+                max_alignment = std::max(max_alignment, alignment);
+                if (is_union) {
+                    member.offset = 0;
+                    max_size = std::max(max_size, member.type->size());
+                } else {
+                    offset = align_up(offset, alignment);
+                    member.offset = offset;
+                    offset += member.type->size();
+                }
+            }
+            type->struct_alignment = max_alignment;
+            type->total_size = align_up(is_union ? max_size : offset, max_alignment);
+            if (type->total_size == 0) {
+                type->total_size = 1;
+            }
+            if (!tag.empty()) {
+                tags_[tag] = type;
+            }
+            return type;
+        }
+        if (tag.empty()) {
+            error("expected a struct or union body");
+        }
+        const auto found = tags_.find(tag);
+        if (found == tags_.end()) {
+            error("unknown struct/union: " + tag);
+        }
+        return found->second;
+    }
+
+    std::int64_t parse_constant_value() {
+        int sign = 1;
+        if (match("-")) {
+            sign = -1;
+        }
+        if (peek().kind == TokenKind::Number || peek().kind == TokenKind::Character) {
+            return sign * take().value;
+        }
+        if (peek().kind == TokenKind::Identifier) {
+            const std::string name = take().text;
+            const auto found = enum_constants_.find(name);
+            if (found != enum_constants_.end()) {
+                return sign * found->second;
+            }
+        }
+        error("expected a constant");
+    }
+
+    TypePtr parse_enum() {
+        if (peek().kind == TokenKind::Identifier) {
+            take();
+        }
+        if (!match("{")) {
+            error("expected an enum body");
+        }
+        std::int64_t value = 0;
+        while (!match("}")) {
+            const std::string name = parse_name();
+            if (match("=")) {
+                value = parse_constant_value();
+            }
+            enum_constants_[name] = value;
+            ++value;
+            if (!match(",")) {
+                break;
+            }
+        }
+        expect("}");
+        return type_int();
     }
 
     TypePtr parse_type() {
-        bool is_const = false;
-        (void)is_const;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
-               peek().text == "register") {
+               peek().text == "register" || peek().text == "typedef") {
             take();
         }
         TypePtr base;
-        if (match("int")) {
+        if (match("struct")) {
+            base = parse_struct_or_union(false);
+        } else if (match("union")) {
+            base = parse_struct_or_union(true);
+        } else if (match("enum")) {
+            base = parse_enum();
+        } else if (peek().kind == TokenKind::Identifier &&
+                   typedefs_.find(peek().text) != typedefs_.end()) {
+            base = typedefs_[take().text];
+        } else if (match("int")) {
             base = type_int();
         } else if (match("char")) {
             base = type_char();
+        } else if (match("_Bool")) {
+            base = type_bool();
         } else if (match("void")) {
             base = type_void();
         } else {
@@ -442,7 +821,17 @@ private:
         if (match(";")) {
             return;
         }
+        if (match("typedef")) {
+            TypePtr type = parse_type();
+            const std::string name = parse_name();
+            typedefs_[name] = type;
+            expect(";");
+            return;
+        }
         TypePtr type = parse_type();
+        if (match(";")) {
+            return;
+        }
         const std::string name = parse_name();
         if (match("(")) {
             parse_function(type, name);
@@ -570,11 +959,66 @@ private:
     }
 
     void parse_statement() {
+        if (peek().kind == TokenKind::Identifier && peek(1).text == ":") {
+            const std::string label = take().text;
+            take();
+            emit(".Luser_" + current_function_ + "_" + label + ":");
+            return;
+        }
+        if (match("goto")) {
+            const std::string label = parse_name();
+            expect(";");
+            emit("    JMP .Luser_" + current_function_ + "_" + label);
+            return;
+        }
         if (match("{")) {
             parse_block_contents();
             return;
         }
         if (match(";")) {
+            return;
+        }
+        if (match("switch")) {
+            expect("(");
+            gen_expression();
+            expect(")");
+            const int temp = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+            expect("{");
+            const std::string end = new_label("switchend");
+            while (!match("}")) {
+                if (match("case")) {
+                    const std::int64_t value = parse_constant_value();
+                    expect(":");
+                    const std::string next = new_label("case");
+                    emit("    LOAD R0, [R7 + " + std::to_string(temp) + "]");
+                    emit("    MOV R1, #" + std::to_string(value));
+                    emit("    CMP R0, R1");
+                    emit("    JNZ " + next);
+                    break_labels_.push_back(end);
+                    while (!at_end() && peek().text != "}" && peek().text != "case" &&
+                           peek().text != "default") {
+                        parse_statement();
+                    }
+                    break_labels_.pop_back();
+                    emit("    JMP " + end);
+                    emit(next + ":");
+                    continue;
+                }
+                if (match("default")) {
+                    expect(":");
+                    break_labels_.push_back(end);
+                    while (!at_end() && peek().text != "}" && peek().text != "case" &&
+                           peek().text != "default") {
+                        parse_statement();
+                    }
+                    break_labels_.pop_back();
+                    emit("    JMP " + end);
+                    continue;
+                }
+                error("expected case, default, or '}'");
+            }
+            emit(end + ":");
             return;
         }
         if (match("if")) {
@@ -681,6 +1125,13 @@ private:
             emit("    JMP " + continue_labels_.back());
             return;
         }
+        if (match("typedef")) {
+            TypePtr type = parse_type();
+            const std::string name = parse_name();
+            typedefs_[name] = type;
+            expect(";");
+            return;
+        }
         if (is_type_start()) {
             parse_local_declaration();
             return;
@@ -713,60 +1164,58 @@ private:
         expect(";");
     }
 
-    void parse_assignment_statement() {
-        // Only identifier, *expr, and identifier[index] lvalues are supported.
-        if (peek().kind == TokenKind::Identifier && peek(1).text == "=") {
-            const std::string name = take().text;
-            expect("=");
-            gen_lvalue_address(name);
-            emit("    PUSH R0");
-            gen_expression();
-            emit("    POP R1");
-            const Variable* variable = lookup(name);
-            gen_store(variable != nullptr ? variable->type : type_int());
-            return;
-        }
-        if (peek().kind == TokenKind::Identifier && peek(1).text == "[") {
+    bool gen_lvalue(TypePtr& type) {
+        if (peek().kind == TokenKind::Identifier) {
             const std::string name = take().text;
             const Variable* variable = lookup(name);
             if (variable == nullptr) {
-                error("unknown variable: " + name);
+                return false;
             }
             gen_lvalue_address(name);
-            TypePtr type = variable->type;
-            while (match("[")) {
+            type = variable->type;
+            bool address = true;
+            if (type->kind == Type::Kind::Pointer &&
+                (peek().text == "[" || peek().text == "->")) {
+                gen_load(type);
+                address = false;
+            }
+            type = apply_postfix(type, address);
+            return address;
+        }
+        if (match("*")) {
+            TypePtr pointer = gen_expression();
+            if (!pointer->is_pointer()) {
+                error("dereference of a non-pointer");
+            }
+            type = pointer->element();
+            bool address = true;
+            type = apply_postfix(type, address);
+            return address;
+        }
+        return false;
+    }
+
+    void parse_assignment_statement() {
+        const bool looks_lvalue =
+            (peek().kind == TokenKind::Identifier &&
+             (peek(1).text == "=" || peek(1).text == "[" || peek(1).text == "." ||
+              peek(1).text == "->")) ||
+            peek().text == "*";
+        if (looks_lvalue) {
+            const std::size_t saved_position = position_;
+            const std::size_t saved_text = text_.size();
+            const int saved_label = label_counter_;
+            TypePtr type;
+            if (gen_lvalue(type) && match("=")) {
                 emit("    PUSH R0");
                 gen_expression();
-                expect("]");
                 emit("    POP R1");
-                if (!type->is_pointer()) {
-                    error("subscript of a non-array");
-                }
-                const int size = type->element() ? type->element()->size() : 1;
-                if (size > 1) {
-                    emit("    MUL R0, R0, #" + std::to_string(size));
-                }
-                emit("    ADD R0, R1, R0");
-                type = type->element();
+                gen_store(type);
+                return;
             }
-            expect("=");
-            emit("    PUSH R0");
-            gen_expression();
-            emit("    POP R1");
-            gen_store(type);
-            return;
-        }
-        if (peek().text == "*") {
-            take();
-            gen_expression();
-            emit("    PUSH R0");
-            if (!match("=")) {
-                error("expected '='");
-            }
-            gen_expression();
-            emit("    POP R1");
-            gen_store(type_int());
-            return;
+            position_ = saved_position;
+            text_.resize(saved_text);
+            label_counter_ = saved_label;
         }
         gen_expression();
     }
@@ -796,18 +1245,21 @@ private:
     }
 
     void gen_load(const TypePtr& type) {
-        if (type->kind == Type::Kind::Char) {
+        if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
             emit("    LOAD8S R0, [R0]");
-        } else if (type->kind == Type::Kind::Array) {
-            // An array expression is its address; nothing to load.
+        } else if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
+                   type->kind == Type::Kind::Union) {
+            // Array and aggregate expressions are addresses.
         } else {
             emit("    LOAD R0, [R0]");
         }
     }
 
     void gen_store(const TypePtr& type) {
-        if (type->kind == Type::Kind::Char) {
+        if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
             emit("    STORE8 R0, [R1]");
+        } else if (type->kind == Type::Kind::Struct || type->kind == Type::Kind::Union) {
+            error("aggregate assignment is not supported yet");
         } else {
             emit("    STORE R0, [R1]");
         }
@@ -967,22 +1419,79 @@ private:
         return left;
     }
 
-    TypePtr apply_postfix(TypePtr type) {
-        while (match("[")) {
-            if (!type->is_pointer()) {
-                error("subscript of a non-array");
+    const Member* find_member(const TypePtr& type, const std::string& name) const {
+        if (type == nullptr) {
+            return nullptr;
+        }
+        for (const Member& member : type->members) {
+            if (member.name == name) {
+                return &member;
             }
-            emit("    PUSH R0");
-            gen_expression();
-            expect("]");
-            emit("    POP R1");
-            const int size = type->element() ? type->element()->size() : 1;
-            if (size > 1) {
-                emit("    MUL R0, R0, #" + std::to_string(size));
+        }
+        return nullptr;
+    }
+
+    TypePtr apply_postfix(TypePtr type, bool& address) {
+        while (true) {
+            if (match("[")) {
+                if (!type->is_pointer()) {
+                    error("subscript of a non-array");
+                }
+                emit("    PUSH R0");
+                gen_expression();
+                expect("]");
+                emit("    POP R1");
+                const int size = type->element() ? type->element()->size() : 1;
+                if (size > 1) {
+                    emit("    MUL R0, R0, #" + std::to_string(size));
+                }
+                emit("    ADD R0, R1, R0");
+                type = type->element();
+                address = true;
+                continue;
             }
-            emit("    ADD R0, R1, R0");
-            type = type->element();
-            gen_load(type);
+            if (match(".")) {
+                if (type->kind != Type::Kind::Struct && type->kind != Type::Kind::Union) {
+                    error("member access on a non-struct");
+                }
+                if (!address) {
+                    error("member access requires an address");
+                }
+                const std::string member_name = parse_name();
+                const Member* member = find_member(type, member_name);
+                if (member == nullptr) {
+                    error("unknown member: " + member_name);
+                }
+                if (member->offset != 0) {
+                    emit("    ADD R0, R0, #" + std::to_string(member->offset));
+                }
+                type = member->type;
+                address = true;
+                continue;
+            }
+            if (match("->")) {
+                if (type->kind != Type::Kind::Pointer ||
+                    (type->element()->kind != Type::Kind::Struct &&
+                     type->element()->kind != Type::Kind::Union)) {
+                    error("'->' requires a pointer to a struct");
+                }
+                if (address) {
+                    gen_load(type);
+                    address = false;
+                }
+                const std::string member_name = parse_name();
+                const Member* member = find_member(type->element(), member_name);
+                if (member == nullptr) {
+                    error("unknown member: " + member_name);
+                }
+                if (member->offset != 0) {
+                    emit("    ADD R0, R0, #" + std::to_string(member->offset));
+                }
+                type = member->type;
+                address = true;
+                continue;
+            }
+            break;
         }
         return type;
     }
@@ -1043,12 +1552,45 @@ private:
             const std::string label = ".Lstr_" + std::to_string(string_counter_++);
             rodata_ += label + ":\n    .asciz \"" + escape_string(bytes) + "\"\n";
             emit("    LEA R0, [" + label + "]");
-            return apply_postfix(type_pointer(type_char()));
+            bool address = false;
+            TypePtr type = apply_postfix(type_pointer(type_char()), address);
+            if (address && type->kind != Type::Kind::Struct &&
+                type->kind != Type::Kind::Union && type->kind != Type::Kind::Array) {
+                gen_load(type);
+            }
+            return type;
         }
         if (match("(")) {
+            if (is_type_start()) {
+                TypePtr target = parse_type();
+                expect(")");
+                parse_unary();
+                if (target->kind == Type::Kind::Char) {
+                    emit("    AND R0, R0, #255");
+                    emit("    SHL R0, R0, #24");
+                    emit("    SAR R0, R0, #24");
+                } else if (target->kind == Type::Kind::Bool) {
+                    const std::string nonzero = new_label("bool");
+                    const std::string done = new_label("boolend");
+                    emit("    CMP R0, #0");
+                    emit("    JNZ " + nonzero);
+                    emit("    MOV R0, #0");
+                    emit("    JMP " + done);
+                    emit(nonzero + ":");
+                    emit("    MOV R0, #1");
+                    emit(done + ":");
+                }
+                return target;
+            }
             TypePtr type = gen_expression();
             expect(")");
-            return apply_postfix(type);
+            bool address = false;
+            type = apply_postfix(type, address);
+            if (address && type->kind != Type::Kind::Struct &&
+                type->kind != Type::Kind::Union && type->kind != Type::Kind::Array) {
+                gen_load(type);
+            }
+            return type;
         }
         if (peek().kind == TokenKind::Identifier) {
             const std::string name = take().text;
@@ -1075,12 +1617,27 @@ private:
             }
             const Variable* variable = lookup(name);
             if (variable == nullptr) {
+                const auto constant = enum_constants_.find(name);
+                if (constant != enum_constants_.end()) {
+                    emit("    MOV R0, #" + std::to_string(constant->second));
+                    return type_int();
+                }
                 error("unknown variable: " + name);
             }
             const TypePtr type = variable->type;
+            bool address = type->kind == Type::Kind::Struct ||
+                           type->kind == Type::Kind::Union ||
+                           type->kind == Type::Kind::Array;
             gen_lvalue_address(name);
-            gen_load(type);
-            return apply_postfix(type);
+            if (!address) {
+                gen_load(type);
+            }
+            TypePtr result = apply_postfix(type, address);
+            if (address && result->kind != Type::Kind::Struct &&
+                result->kind != Type::Kind::Union && result->kind != Type::Kind::Array) {
+                gen_load(result);
+            }
+            return result;
         }
         error("expected an expression");
     }
@@ -1157,6 +1714,9 @@ private:
     std::map<std::string, Variable> locals_;
     std::map<std::string, Variable> globals_;
     std::map<std::string, FunctionSignature> functions_;
+    std::map<std::string, TypePtr> typedefs_;
+    std::map<std::string, TypePtr> tags_;
+    std::map<std::string, std::int64_t> enum_constants_;
     std::vector<std::string> break_labels_;
     std::vector<std::string> continue_labels_;
     std::string current_function_;
@@ -1189,7 +1749,65 @@ std::string runtime_assembly() {
         ".global exit\n"
         "exit:\n"
         "    SYSCALL #32\n"
-        "    HALT\n";
+        "    HALT\n"
+        ".global memcpy\n"
+        "memcpy:\n"
+        "    MOV R4, R0\n"
+        ".Lmemcpy_loop:\n"
+        "    CMP R2, #0\n"
+        "    JZ .Lmemcpy_done\n"
+        "    LOAD8U R3, [R1]\n"
+        "    STORE8 R3, [R0]\n"
+        "    ADD R0, R0, #1\n"
+        "    ADD R1, R1, #1\n"
+        "    SUB R2, R2, #1\n"
+        "    JMP .Lmemcpy_loop\n"
+        ".Lmemcpy_done:\n"
+        "    MOV R0, R4\n"
+        "    RET\n"
+        ".global memset\n"
+        "memset:\n"
+        "    MOV R3, R0\n"
+        ".Lmemset_loop:\n"
+        "    CMP R2, #0\n"
+        "    JZ .Lmemset_done\n"
+        "    STORE8 R1, [R0]\n"
+        "    ADD R0, R0, #1\n"
+        "    SUB R2, R2, #1\n"
+        "    JMP .Lmemset_loop\n"
+        ".Lmemset_done:\n"
+        "    MOV R0, R3\n"
+        "    RET\n"
+        ".global strlen\n"
+        "strlen:\n"
+        "    MOV R1, #0\n"
+        ".Lstrlen_loop:\n"
+        "    LOAD8U R2, [R0]\n"
+        "    CMP R2, #0\n"
+        "    JZ .Lstrlen_done\n"
+        "    ADD R0, R0, #1\n"
+        "    ADD R1, R1, #1\n"
+        "    JMP .Lstrlen_loop\n"
+        ".Lstrlen_done:\n"
+        "    MOV R0, R1\n"
+        "    RET\n"
+        ".global malloc\n"
+        "malloc:\n"
+        "    LEA R1, [__heap_ptr]\n"
+        "    LOAD R2, [R1]\n"
+        "    ADD R3, R0, #3\n"
+        "    AND R3, R3, #-4\n"
+        "    ADD R3, R2, R3\n"
+        "    STORE R3, [R1]\n"
+        "    MOV R0, R2\n"
+        "    RET\n"
+        ".global free\n"
+        "free:\n"
+        "    RET\n"
+        ".data\n"
+        ".global __heap_ptr\n"
+        "__heap_ptr:\n"
+        "    .word __heap_start\n";
 }
 
 } // namespace kr32::cc
