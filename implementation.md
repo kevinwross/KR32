@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 09:34 -08:00
+> **Last updated:** 2026-11-02 09:35 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -547,15 +547,16 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 
 **Goal:** a C++ compiler module linked into `kr32`, with C++ source debugging.
 
-**Status:** design approved 2026-11-02. The design contract is
+**Status:** implementation started 2026-11-02. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the implementation/task tracker is
-[cpp-impl.md](cpp-impl.md) and is awaiting review before the `m9-cxx` worktree
-and subagent start. The standalone API and `kr32-cxx` driver skeleton are in
-place. Confirmed decisions include custom C++11 subset, one thread per core with
-cooperative oversubscription, `R11` TP, library matrices plus intrinsics,
-`double` align 8/16-byte call boundaries, explicit per-thread transform stacks,
-full destructor unwinding, scalar FP library, stack-based FP varargs,
-Itanium-like mangling, and class-member/`this` debug support.
+[cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phase M9.1
+(ABI, API, and test harness) is in progress. The standalone API and `kr32-cxx`
+driver skeleton are in place. Confirmed decisions include custom C++11 subset,
+one thread per core with cooperative oversubscription, `R11` TP, library
+matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
+per-thread transform stacks, full destructor unwinding, scalar FP library,
+stack-based FP varargs, Itanium-like mangling, and class-member/`this` debug
+support.
 
 **Tasks**
 
@@ -563,6 +564,7 @@ Itanium-like mangling, and class-member/`this` debug support.
       runtime, threads/multicore, debug, and test gates.
 - [x] Approve the final language surface and stack-based FP varargs ABI.
 - [x] Create the M9 implementation/task tracker (`cpp-impl.md`) for review.
+- [x] Approve the tracker and create the `m9-cxx` worktree/branch.
 - [x] Add the stable `kr32::cxx::compile` API, standalone `kr32-cxx` driver, and
       the `cxx_tool_help` CTest.
 - [x] Choose a custom C++ front end; no external front-end dependency.
@@ -904,6 +906,9 @@ Newest entries at the bottom. Use the local time zone.
       phases, gates, test matrix, and the current skeleton baseline. No
       worktree or compiler implementation started; tracker review is the next
       gate.
+- **2026-11-02 09:35 -08:00** — Tracker approved; created the `m9-cxx`
+      worktree/branch and assigned phase M9.1 (ABI, API, test harness) to the
+      first subagent. M9.0 is complete; M9.1 is in progress.
 
 ## 10. Updating this file
 

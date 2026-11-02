@@ -1,8 +1,9 @@
 # KR32 C++ toolchain implementation plan (M9)
 
-**Status:** draft implementation/task tracker, 2026-11-02. Design approved in
-[docs/cpp-plan.md](docs/cpp-plan.md); no compiler implementation has started.
-This file is reviewed before the `m9-cxx` subagent/worktree is created.
+**Status:** approved and started 2026-11-02. Design approved in
+[docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
+worktree/branch. Phase M9.1 (ABI, API, and test harness) is the current
+subagent task.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -50,8 +51,8 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 
 | ID | Scope | Gate | Status |
 | --- | --- | --- | --- |
-| M9.0 | Review this tracker, create `m9-cxx` worktree, freeze phase-1 files | tracker approved; clean worktree | not started |
-| M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | not started |
+| M9.0 | Review this tracker, create `m9-cxx` worktree, freeze phase-1 files | tracker approved; clean worktree | done |
+| M9.1 | ABI doc, API/driver polish, test harness | ABI tests + driver smoke green | in progress |
 | M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | not started |
 | M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | not started |
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | not started |
@@ -68,15 +69,15 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 
 ### M9.0 — Worktree and integration boundary
 
-- [ ] Review and approve this tracker.
-- [ ] Create `m9-cxx` branch/worktree (for example
+- [x] Review and approve this tracker.
+- [x] Create `m9-cxx` branch/worktree (for example
       `git worktree add ../KR32-m9-cxx -b m9-cxx`).
-- [ ] Confirm only `src/cxx/**`, `include/kr32/cxx/**`, `tests/cxx/**`, and
+- [x] Confirm only `src/cxx/**`, `include/kr32/cxx/**`, `tests/cxx/**`, and
       `docs/` are touched by the C++ stream until integration.
-- [ ] Confirm the standalone executable name is `kr32-cxx`.
+- [x] Confirm the standalone executable name is `kr32-cxx`.
 - [ ] Add a `KR32_BUILD_CXX_TOOL` option if the team wants the driver optional;
       otherwise keep it always built.
-- [ ] Record subagent ownership and handoff point.
+- [x] Record subagent ownership and handoff point.
 
 **Gate:** tracker approved; worktree clean; no UI/shared-file changes pending.
 
@@ -277,9 +278,12 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
 - **2026-11-02 09:30 -08:00** — `docs/cpp-plan.md` approved. This implementation
   tracker created; compiler implementation and `m9-cxx` worktree not started,
   pending review of this file.
+- **2026-11-02 09:35 -08:00** — Tracker approved. `m9-cxx` worktree/branch
+  created; phase M9.1 (ABI, API, and test harness) assigned to the first
+  subagent. Phase M9.0 remains done; M9.1 is in progress.
 
 ## 8. Approval
 
-- [ ] Review this tracker.
-- [ ] Approve creation of the `m9-cxx` worktree/branch.
-- [ ] Assign the phase-1 subagent.
+- [x] Review this tracker.
+- [x] Approve creation of the `m9-cxx` worktree/branch.
+- [x] Assign the phase-1 subagent.
