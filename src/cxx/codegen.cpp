@@ -352,6 +352,7 @@ public:
             }
         }
         emit_rtti();
+        emit_static_fini();
         bss_ += ".weak __kr32_exception_value\n";
         bss_ += "__kr32_exception_value:\n    .space 8\n";
         bss_ += ".weak __kr32_exception_type\n";
@@ -835,6 +836,13 @@ private:
             function->symbol = "__cxx_static_" +
                                std::to_string(static_counter_++) + "_" +
                                function->symbol;
+        }
+        static const std::set<std::string> runtime_functions = {
+            "exit", "malloc", "free", "memcpy", "memset", "strlen", "putchar"};
+        if (owner == nullptr && runtime_functions.find(base_name) !=
+                                    runtime_functions.end()) {
+            function->extern_c = true;
+            function->symbol = base_name;
         }
         for (const auto& existing : function_storage_) {
             if (existing->symbol == function->symbol) {
@@ -3823,6 +3831,13 @@ private:
             emit("    MOV R0, #0");
         }
         emit(return_label_ + ":");
+        if (function.qualified == "main" && !static_destructors_.empty()) {
+            const int result_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(result_temp) + "]");
+            emit("    CALL __kr32_cxx_fini");
+            emit("    LOAD R0, [R7 + " + std::to_string(result_temp) + "]");
+        }
         frame_size_ = (frame_size_ + 15) / 16 * 16 + 8;
         emit("    ADJSP #" + std::to_string(frame_size_));
         emit("    POP R7");
@@ -3916,7 +3931,23 @@ private:
 
     void emit_static_initializers() {
         for (const auto& global : global_storage_) {
-            if (!global->needs_init || !global->initializer) {
+            if (!global->needs_init) {
+                continue;
+            }
+            if (ClassInfo* info = class_of(global->type)) {
+                const int address = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    LEA R0, [" + global->symbol + "]");
+                emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                std::vector<ExprPtr> empty;
+                const std::vector<ExprPtr>* arguments = &empty;
+                if (global->initializer &&
+                    global->initializer->kind == ExprKind::Call) {
+                    arguments = &global->initializer->arguments;
+                }
+                construct_object_at(info, address, *arguments);
+                continue;
+            }
+            if (!global->initializer) {
                 continue;
             }
             if (is_fp(global->type)) {
@@ -3932,6 +3963,27 @@ private:
         }
     }
 
+    void emit_static_fini() {
+        if (static_destructors_.empty()) {
+            return;
+        }
+        text_ += ".text\n.global __kr32_cxx_fini\n__kr32_cxx_fini:\n";
+        text_ += "    PUSH R7\n    ADJSP #-24\n    LEA R7, [SP]\n";
+        for (auto iterator = static_destructors_.rbegin();
+             iterator != static_destructors_.rend(); ++iterator) {
+            Global* global = *iterator;
+            ClassInfo* info = class_of(global->type);
+            if (info == nullptr) {
+                continue;
+            }
+            if (Function* destructor = find_destructor(info)) {
+                text_ += "    LEA R0, [" + global->symbol + "]\n";
+                text_ += "    CALL " + destructor->symbol + "\n";
+            }
+        }
+        text_ += "    ADJSP #24\n    POP R7\n    RET\n";
+    }
+
     void emit_globals() {
         for (const auto& global : global_storage_) {
             if (!global->defined) {
@@ -3941,6 +3993,17 @@ private:
             std::string output;
             output += ".global " + global->symbol + "\n";
             output += global->symbol + ":\n";
+            if (ClassInfo* info = class_of(global->type)) {
+                if (find_destructor(info) != nullptr) {
+                    static_destructors_.push_back(global.get());
+                }
+                if (global->initializer || find_constructor(info, 0) != nullptr) {
+                    global->needs_init = true;
+                    output += "    .space " + std::to_string(size) + "\n";
+                    bss_ += output;
+                    continue;
+                }
+            }
             if (global->initializer && !is_constant_global(*global)) {
                 global->needs_init = true;
                 output += "    .space " + std::to_string(size) + "\n";
@@ -4031,6 +4094,7 @@ private:
     std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
+    std::vector<Global*> static_destructors_;
     std::map<std::string, TypePtr> type_aliases_;
     std::map<std::string, std::set<std::string>> imports_;
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;

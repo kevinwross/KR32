@@ -9,9 +9,10 @@ conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), and M9.8 (function templates, weak symbols, and
 static initialization) are complete; phase M9.9 (`new`/`delete` and exceptions)
-is in progress, with `new`/`delete`, scalar/pointer exception propagation, and
-destructor cleanup implemented; the table-driven ABI exception runtime, class
-exceptions, class arrays, and static destruction remain outstanding.
+is in progress, with `new`/`delete`, class arrays, scalar/pointer exception
+propagation, destructor cleanup, and static construction/destruction
+implemented; the table-driven ABI exception runtime, class exceptions, and
+constructor-completion flags remain.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -159,8 +160,9 @@ In progress:
 - [x] Scalar/pointer throw, catch, rethrow, nested handlers, cross-function
       propagation, and destructor cleanup (return-based; table-driven ABI
       runtime deferred).
-- [ ] Table-driven `.cpp_except`/LSDA/`__cxa_*`, class exceptions, class-array
-      helpers, static destruction, and constructor-completion flags.
+- [x] Static construction and reverse-order destruction for global objects.
+- [ ] Table-driven `.cpp_except`/LSDA/`__cxa_*`, class exceptions, and
+      constructor-completion flags.
 
 Not started:
 
@@ -395,19 +397,22 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
 - [x] Destructor unwinding for live locals and caller frames on the supported
       exception path; constructor-completion flags and temporaries remain
       deferred.
-- [ ] `__cxa_atexit`-style static destruction.
+- [x] Static destruction via a generated `__kr32_cxx_fini` called on `main`
+      return, destroying global objects in reverse declaration order. The
+      ABI's `__cxa_atexit` registration interface remains with the table-driven
+      runtime work.
 - [x] Tests: scalar/object/array `new`, `delete`, destructor invocation, class
       array construction/destruction, nested try/catch, cross-function
-      propagation, rethrow, and RAII cleanup.
+      propagation, rethrow, RAII cleanup, and static destruction order.
 
 **Gate:** exception/cleanup tests pass with no leaks in the guest allocator.
-**Status:** in progress 2026-11-02. `new`/`delete` (including class arrays) and
-a functional scalar/pointer exception path are implemented and tested,
-including cross-function unwinding and destructor cleanup. The table-driven ABI
-runtime (`.cpp_except`, LSDA, `__cxa_*`), class exceptions, static destruction,
-and constructor-completion flags remain. Windows MSVC Debug and WSL GCC
-headless both pass 21/21 CTest tests; `kr32_tests` reports 174 test cases and
-4767 assertions.
+**Status:** in progress 2026-11-02. `new`/`delete` (including class arrays),
+static construction/destruction, and a functional scalar/pointer exception path
+are implemented and tested, including cross-function unwinding and destructor
+cleanup. The table-driven ABI runtime (`.cpp_except`, LSDA, `__cxa_*`), class
+exceptions, and constructor-completion flags remain. Windows MSVC Debug and WSL
+GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 175 test cases
+and 4769 assertions.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
@@ -587,6 +592,12 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   `kr32_tests` reports 174 test cases and 4767 assertions. M9.9 remains in
   progress for the table-driven ABI exception runtime, class exceptions, static
   destruction, and constructor-completion flags.
+- **2026-11-02 13:01 -08:00** — Added static construction and reverse-order
+  destruction for global objects via `__kr32_cxx_fini`, plus
+  `kr32/runtime.hpp` declarations with C-linkage runtime symbols. Windows/WSL
+  both pass 21/21 CTest tests; `kr32_tests` reports 175 test cases and 4769
+  assertions. M9.9 remains in progress for the table-driven ABI exception
+  runtime, class exceptions, and constructor-completion flags.
 
 ## 8. Approval
 

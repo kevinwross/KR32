@@ -737,6 +737,26 @@ TEST_CASE("static initialization runs before main in declaration order") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("static objects are destroyed after main in reverse order") {
+    const ProgramResult program = compile_and_run(
+        "#include <kr32/runtime.hpp>\n"
+        "int order = 0;\n"
+        "class Second {\n"
+        "public:\n"
+        "    ~Second() { order = 2; }\n"
+        "};\n"
+        "class First {\n"
+        "public:\n"
+        "    ~First() { if (order == 2) { exit(42); } }\n"
+        "};\n"
+        "First first;\n"
+        "Second second;\n"
+        "int main() { return 0; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("class copy construction and assignment are memberwise byte copies") {
     const ProgramResult program = compile_and_run(
         "class Pair {\n"

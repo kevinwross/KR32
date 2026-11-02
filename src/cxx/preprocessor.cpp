@@ -500,6 +500,17 @@ private:
         }
         if (directive == "include") {
             const std::string header(trim(rest));
+            if (header.find("kr32/runtime.hpp") != std::string::npos ||
+                header.find("runtime.hpp") != std::string::npos) {
+                append_line(
+                    "void exit(int code);\n"
+                    "void* malloc(int size);\n"
+                    "void free(void* pointer);\n"
+                    "void* memcpy(void* destination, const void* source, int count);\n"
+                    "void* memset(void* destination, int value, int count);\n"
+                    "int strlen(const char* text);\n");
+                return;
+            }
             if (header.find("kr32/matrix.hpp") != std::string::npos ||
                 header.find("matrix.hpp") != std::string::npos) {
                 append_line(
