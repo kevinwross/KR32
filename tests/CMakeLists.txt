@@ -5,6 +5,8 @@ add_executable(kr32_tests
     unit/test_machine.cpp
     unit/test_privilege.cpp
     unit/test_boot.cpp
+    unit/test_fp.cpp
+    unit/test_matrix.cpp
     unit/test_assembler.cpp
     unit/test_disassembler.cpp)
 
@@ -39,6 +41,14 @@ add_test(NAME run_demo
     COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)
 set_tests_properties(run_demo PROPERTIES
     PASS_REGULAR_EXPRESSION "R1=12;R3=30")
+
+add_test(NAME fp_demo
+    COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/fp-demo.asm)
+set_tests_properties(fp_demo PROPERTIES PASS_REGULAR_EXPRESSION "R1=3")
+
+add_test(NAME matrix_demo
+    COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/matrix-demo.asm)
+set_tests_properties(matrix_demo PROPERTIES PASS_REGULAR_EXPRESSION "R1=256")
 
 add_test(NAME bios_smoke
     COMMAND ${CMAKE_COMMAND}

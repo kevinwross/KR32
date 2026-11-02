@@ -1,6 +1,8 @@
 #include "kr32/core/machine.h"
 
 #include <algorithm>
+#include <bit>
+#include <cmath>
 #include <cstdint>
 #include <iterator>
 #include <limits>
@@ -10,6 +12,52 @@ namespace {
 
 constexpr std::uint32_t kWordMask = 0xFFFF'FFFFU;
 constexpr std::uint32_t kInterruptMask = 0x0000'FFFFU;
+constexpr std::uint32_t kCanonicalF32 = 0x7FC0'0000U;
+constexpr std::uint64_t kCanonicalF64 = 0x7FF8'0000'0000'0000ULL;
+
+float float_from_bits(std::uint32_t bits) {
+    return std::bit_cast<float>(bits);
+}
+
+std::uint32_t float_to_bits(float value) {
+    return std::bit_cast<std::uint32_t>(value);
+}
+
+double double_from_bits(std::uint64_t bits) {
+    return std::bit_cast<double>(bits);
+}
+
+std::uint64_t double_to_bits(double value) {
+    return std::bit_cast<std::uint64_t>(value);
+}
+
+std::uint32_t canonical_float_bits(float value) {
+    return std::isnan(value) ? kCanonicalF32 : float_to_bits(value);
+}
+
+std::uint64_t canonical_double_bits(double value) {
+    return std::isnan(value) ? kCanonicalF64 : double_to_bits(value);
+}
+
+std::int32_t saturate_i32(double value) {
+    if (std::isnan(value) || value >= 2147483647.0) {
+        return std::numeric_limits<std::int32_t>::max();
+    }
+    if (value <= -2147483648.0) {
+        return std::numeric_limits<std::int32_t>::min();
+    }
+    return static_cast<std::int32_t>(value);
+}
+
+std::uint32_t saturate_u32(double value) {
+    if (std::isnan(value) || value >= 4294967295.0) {
+        return std::numeric_limits<std::uint32_t>::max();
+    }
+    if (value <= 0.0) {
+        return 0;
+    }
+    return static_cast<std::uint32_t>(value);
+}
 
 } // namespace
 
@@ -31,6 +79,10 @@ Machine::Machine(Options options)
 
 void Machine::reset() {
     std::fill(std::begin(regs_), std::end(regs_), 0U);
+    std::fill(std::begin(fpr_), std::end(fpr_), 0U);
+    for (auto& tile : tiles_) {
+        std::fill(std::begin(tile), std::end(tile), 0.0F);
+    }
     pc_ = kRomBase;
     sp_ = stack_top();
     ksp_ = sp_;
@@ -57,6 +109,10 @@ void Machine::reset() {
 
 void Machine::reset(std::uint32_t pc, std::uint32_t sp) {
     std::fill(std::begin(regs_), std::end(regs_), 0U);
+    std::fill(std::begin(fpr_), std::end(fpr_), 0U);
+    for (auto& tile : tiles_) {
+        std::fill(std::begin(tile), std::end(tile), 0.0F);
+    }
     pc_ = pc;
     sp_ = (sp == 0) ? stack_top() : sp;
     ksp_ = sp_;
@@ -471,6 +527,29 @@ void Machine::raise_interrupt(std::uint32_t line) {
 void Machine::set_reg(std::size_t index, std::uint32_t value) {
     if (index < 16) {
         regs_[index] = value;
+    }
+}
+
+std::uint64_t Machine::fpr(std::size_t index) const {
+    return index < 16 ? fpr_[index] : 0;
+}
+
+void Machine::set_fpr(std::size_t index, std::uint64_t value) {
+    if (index < 16) {
+        fpr_[index] = value;
+    }
+}
+
+float Machine::tile_value(std::size_t tile, std::size_t index) const {
+    if (tile >= 16 || index >= 16) {
+        return 0.0F;
+    }
+    return tiles_[tile][index];
+}
+
+void Machine::set_tile_value(std::size_t tile, std::size_t index, float value) {
+    if (tile < 16 && index < 16) {
+        tiles_[tile][index] = value;
     }
 }
 
@@ -1444,6 +1523,451 @@ StepResult Machine::execute(const isa::Instruction& instruction,
 
     case 0x4C: // WRSP
         tsp_ = regs_[rd];
+        return finish_next();
+
+    case 0x50: // FLOAD
+    case 0x51: { // FSTORE
+        std::uint32_t address = 0;
+        if (!effective_address(instruction, instruction_pc, address)) {
+            return fail_ud();
+        }
+        Fault fault;
+        if (opcode == 0x50) {
+            if (instruction.literal) {
+                std::uint32_t low = 0;
+                std::uint32_t high = 0;
+                if (!read_virtual32(address, Access::Load, low, fault) ||
+                    !read_virtual32(address + 4U, Access::Load, high, fault)) {
+                    return fail_fault(fault);
+                }
+                fpr_[rd] = static_cast<std::uint64_t>(low) |
+                           (static_cast<std::uint64_t>(high) << 32);
+            } else {
+                std::uint32_t low = 0;
+                if (!read_virtual32(address, Access::Load, low, fault)) {
+                    return fail_fault(fault);
+                }
+                fpr_[rd] = low;
+            }
+        } else {
+            if (instruction.literal) {
+                if (!write_virtual32(address, static_cast<std::uint32_t>(fpr_[rd] & kWordMask),
+                                     fault) ||
+                    !write_virtual32(address + 4U,
+                                     static_cast<std::uint32_t>(fpr_[rd] >> 32), fault)) {
+                    return fail_fault(fault);
+                }
+            } else {
+                if (!write_virtual32(address,
+                                     static_cast<std::uint32_t>(fpr_[rd] & kWordMask), fault)) {
+                    return fail_fault(fault);
+                }
+            }
+        }
+        return finish_next();
+    }
+
+    case 0x52: // MLOAD
+    case 0x53: // MSTORE
+    case 0x60: // FP escape
+    case 0x61: // M escape
+        return (opcode == 0x60) ? execute_fp(instruction, instruction_pc, next_pc)
+                                : execute_matrix(instruction, instruction_pc, next_pc);
+
+    default:
+        return fail_ud();
+    }
+}
+
+StepResult Machine::execute_fp(const isa::Instruction& instruction,
+                               std::uint32_t instruction_pc,
+                               std::uint32_t next_pc) {
+    const std::uint32_t function = static_cast<std::uint32_t>(instruction.immediate) & 0x7FFU;
+    const bool is_double = (function & 0x100U) != 0;
+    const std::uint32_t base = function & 0xFFU;
+    const std::uint8_t fd = instruction.rd;
+    const std::uint8_t fs1 = instruction.rs1;
+    const std::uint8_t fs2 = instruction.field;
+
+    auto fail_ud = [&]() {
+        return raise(FaultKind::InvalidOpcode, kVectorInvalidOpcode, instruction_pc);
+    };
+    auto get_float = [&](std::uint8_t index) {
+        return float_from_bits(static_cast<std::uint32_t>(fpr_[index] & kWordMask));
+    };
+    auto get_double = [&](std::uint8_t index) {
+        return double_from_bits(fpr_[index]);
+    };
+    auto put_float = [&](std::uint8_t index, float value) {
+        fpr_[index] = canonical_float_bits(value);
+    };
+    auto put_double = [&](std::uint8_t index, double value) {
+        fpr_[index] = canonical_double_bits(value);
+    };
+    auto finish_next = [&]() {
+        pc_ = next_pc;
+        return StepResult{StepResult::Kind::Retired, {}};
+    };
+
+    switch (base) {
+    case 0x00: // FADD
+    case 0x01: // FSUB
+    case 0x02: // FMUL
+    case 0x03: // FDIV
+    case 0x05: // FMIN
+    case 0x06: { // FMAX
+        if (is_double) {
+            const double left = get_double(fs1);
+            const double right = get_double(fs2);
+            double result = 0.0;
+            if (base == 0x00) result = left + right;
+            if (base == 0x01) result = left - right;
+            if (base == 0x02) result = left * right;
+            if (base == 0x03) result = left / right;
+            if (base == 0x05) {
+                if (std::isnan(left) && std::isnan(right)) {
+                    result = double_from_bits(kCanonicalF64);
+                } else if (std::isnan(left)) {
+                    result = right;
+                } else if (std::isnan(right)) {
+                    result = left;
+                } else {
+                    result = std::fmin(left, right);
+                }
+            }
+            if (base == 0x06) {
+                if (std::isnan(left) && std::isnan(right)) {
+                    result = double_from_bits(kCanonicalF64);
+                } else if (std::isnan(left)) {
+                    result = right;
+                } else if (std::isnan(right)) {
+                    result = left;
+                } else {
+                    result = std::fmax(left, right);
+                }
+            }
+            put_double(fd, result);
+        } else {
+            const float left = get_float(fs1);
+            const float right = get_float(fs2);
+            float result = 0.0F;
+            if (base == 0x00) result = left + right;
+            if (base == 0x01) result = left - right;
+            if (base == 0x02) result = left * right;
+            if (base == 0x03) result = left / right;
+            if (base == 0x05) {
+                if (std::isnan(left) && std::isnan(right)) {
+                    result = float_from_bits(kCanonicalF32);
+                } else if (std::isnan(left)) {
+                    result = right;
+                } else if (std::isnan(right)) {
+                    result = left;
+                } else {
+                    result = std::fmin(left, right);
+                }
+            }
+            if (base == 0x06) {
+                if (std::isnan(left) && std::isnan(right)) {
+                    result = float_from_bits(kCanonicalF32);
+                } else if (std::isnan(left)) {
+                    result = right;
+                } else if (std::isnan(right)) {
+                    result = left;
+                } else {
+                    result = std::fmax(left, right);
+                }
+            }
+            put_float(fd, result);
+        }
+        return finish_next();
+    }
+
+    case 0x04: { // FSQRT
+        if (is_double) {
+            put_double(fd, std::sqrt(get_double(fs1)));
+        } else {
+            put_float(fd, std::sqrt(get_float(fs1)));
+        }
+        return finish_next();
+    }
+
+    case 0x07: // FABS
+    case 0x08: { // FNEG
+        if (is_double) {
+            std::uint64_t bits = fpr_[fs1];
+            if (base == 0x07) {
+                bits &= ~(1ULL << 63);
+            } else {
+                bits ^= (1ULL << 63);
+            }
+            fpr_[fd] = bits;
+        } else {
+            std::uint32_t bits = static_cast<std::uint32_t>(fpr_[fs1] & kWordMask);
+            if (base == 0x07) {
+                bits &= 0x7FFF'FFFFU;
+            } else {
+                bits ^= 0x8000'0000U;
+            }
+            fpr_[fd] = bits;
+        }
+        return finish_next();
+    }
+
+    case 0x09: // FEQ
+    case 0x0A: // FLT
+    case 0x0B: { // FLE
+        bool result = false;
+        if (is_double) {
+            const double left = get_double(fs1);
+            const double right = get_double(fs2);
+            if (base == 0x09) result = left == right;
+            if (base == 0x0A) result = left < right;
+            if (base == 0x0B) result = left <= right;
+        } else {
+            const float left = get_float(fs1);
+            const float right = get_float(fs2);
+            if (base == 0x09) result = left == right;
+            if (base == 0x0A) result = left < right;
+            if (base == 0x0B) result = left <= right;
+        }
+        regs_[fd] = result ? 1U : 0U;
+        set_flag(kFlagZ, regs_[fd] == 0);
+        set_flag(kFlagN, false);
+        set_flag(kFlagC, false);
+        set_flag(kFlagV, false);
+        return finish_next();
+    }
+
+    case 0x20: // FCVT.S.D
+        put_float(fd, static_cast<float>(get_double(fs1)));
+        return finish_next();
+
+    case 0x21: // FCVT.D.S
+        put_double(fd, static_cast<double>(get_float(fs1)));
+        return finish_next();
+
+    case 0x22: // FCVT.W.S
+        regs_[fd] = static_cast<std::uint32_t>(saturate_i32(get_float(fs1)));
+        return finish_next();
+
+    case 0x23: // FCVT.WU.S
+        regs_[fd] = saturate_u32(get_float(fs1));
+        return finish_next();
+
+    case 0x24: // FCVT.S.W
+        put_float(fd, static_cast<float>(static_cast<std::int32_t>(regs_[fs1])));
+        return finish_next();
+
+    case 0x25: // FCVT.S.WU
+        put_float(fd, static_cast<float>(regs_[fs1]));
+        return finish_next();
+
+    case 0x26: // FCVT.W.D
+        regs_[fd] = static_cast<std::uint32_t>(saturate_i32(get_double(fs1)));
+        return finish_next();
+
+    case 0x27: // FCVT.WU.D
+        regs_[fd] = saturate_u32(get_double(fs1));
+        return finish_next();
+
+    case 0x28: // FCVT.D.W
+        put_double(fd, static_cast<double>(static_cast<std::int32_t>(regs_[fs1])));
+        return finish_next();
+
+    case 0x29: // FCVT.D.WU
+        put_double(fd, static_cast<double>(regs_[fs1]));
+        return finish_next();
+
+    case 0x30: // FMV.W.X
+        fpr_[fd] = static_cast<std::uint64_t>(regs_[fs1] & kWordMask);
+        return finish_next();
+
+    case 0x31: // FMV.X.W
+        regs_[fd] = static_cast<std::uint32_t>(fpr_[fs1] & kWordMask);
+        return finish_next();
+
+    default:
+        return fail_ud();
+    }
+}
+
+StepResult Machine::execute_matrix(const isa::Instruction& instruction,
+                                   std::uint32_t instruction_pc,
+                                   std::uint32_t next_pc) {
+    const std::uint32_t function = static_cast<std::uint32_t>(instruction.immediate) & 0x7FFU;
+    const std::uint8_t fd = instruction.rd;
+    const std::uint8_t ta = instruction.rs1;
+    const std::uint8_t tb = instruction.field;
+
+    auto fail_ud = [&]() {
+        return raise(FaultKind::InvalidOpcode, kVectorInvalidOpcode, instruction_pc);
+    };
+    auto fail_fault = [&](const Fault& fault) {
+        return raise(fault.kind, fault.vector, fault.address, fault.code);
+    };
+    auto finish_next = [&]() {
+        pc_ = next_pc;
+        return StepResult{StepResult::Kind::Retired, {}};
+    };
+    auto read_float = [&](std::uint32_t address, float& value, Fault& fault) {
+        std::uint32_t bits = 0;
+        if (!read_virtual32(address, Access::Load, bits, fault)) {
+            return false;
+        }
+        value = float_from_bits(bits);
+        return true;
+    };
+    auto write_float = [&](std::uint32_t address, float value, Fault& fault) {
+        return write_virtual32(address, float_to_bits(value), fault);
+    };
+    auto write_result = [&](const float result[16]) {
+        for (std::size_t index = 0; index < 16; ++index) {
+            tiles_[fd][index] = result[index];
+        }
+    };
+
+    if (instruction.opcode == 0x52 || instruction.opcode == 0x53) {
+        const bool vector = instruction.literal;
+        const bool strided = instruction.extension;
+        if (vector && strided) {
+            return fail_ud();
+        }
+        if (strided && instruction.immediate != 0) {
+            return fail_ud();
+        }
+        std::uint32_t address = 0;
+        if (!effective_address(instruction, instruction_pc, address)) {
+            return fail_ud();
+        }
+        const std::uint32_t stride =
+            strided ? instruction.extension_word : 16U;
+        if ((address & 3U) != 0 || (strided && (stride & 3U) != 0)) {
+            return raise(FaultKind::Alignment, kVectorAlignment, address);
+        }
+
+        const std::size_t rows = vector ? 1U : 4U;
+        if (instruction.opcode == 0x52) {
+            float result[16] = {};
+            Fault fault;
+            for (std::size_t row = 0; row < rows; ++row) {
+                const std::uint32_t row_address =
+                    address + static_cast<std::uint32_t>(row) * (strided ? stride : 16U);
+                for (std::size_t column = 0; column < 4; ++column) {
+                    if (!read_float(row_address + static_cast<std::uint32_t>(column * 4U),
+                                    result[row * 4U + column], fault)) {
+                        return fail_fault(fault);
+                    }
+                }
+            }
+            write_result(result);
+        } else {
+            Fault fault;
+            for (std::size_t row = 0; row < rows; ++row) {
+                const std::uint32_t row_address =
+                    address + static_cast<std::uint32_t>(row) * (strided ? stride : 16U);
+                for (std::size_t column = 0; column < 4; ++column) {
+                    if (!write_float(row_address + static_cast<std::uint32_t>(column * 4U),
+                                     tiles_[fd][row * 4U + column], fault)) {
+                        return fail_fault(fault);
+                    }
+                }
+            }
+        }
+        return finish_next();
+    }
+
+    switch (function) {
+    case 0x000: // MMUL
+    case 0x001: { // MMAC
+        float result[16] = {};
+        for (std::size_t row = 0; row < 4; ++row) {
+            for (std::size_t column = 0; column < 4; ++column) {
+                float sum = function == 0x001 ? tiles_[fd][row * 4U + column] : 0.0F;
+                for (std::size_t k = 0; k < 4; ++k) {
+                    sum = std::fma(tiles_[ta][row * 4U + k],
+                                   tiles_[tb][k * 4U + column], sum);
+                }
+                result[row * 4U + column] = float_from_bits(canonical_float_bits(sum));
+            }
+        }
+        write_result(result);
+        return finish_next();
+    }
+
+    case 0x002: { // MVEC
+        float result[16] = {};
+        for (std::size_t row = 0; row < 4; ++row) {
+            float sum = 0.0F;
+            for (std::size_t k = 0; k < 4; ++k) {
+                sum = std::fma(tiles_[ta][row * 4U + k], tiles_[tb][k * 4U], sum);
+            }
+            result[row * 4U] = float_from_bits(canonical_float_bits(sum));
+        }
+        write_result(result);
+        return finish_next();
+    }
+
+    case 0x003: { // MTRANS
+        float result[16] = {};
+        for (std::size_t row = 0; row < 4; ++row) {
+            for (std::size_t column = 0; column < 4; ++column) {
+                result[column * 4U + row] = tiles_[ta][row * 4U + column];
+            }
+        }
+        write_result(result);
+        return finish_next();
+    }
+
+    case 0x004: { // VDOT
+        float sum = 0.0F;
+        for (std::size_t index = 0; index < 4; ++index) {
+            sum = std::fma(tiles_[ta][index], tiles_[tb][index], sum);
+        }
+        fpr_[fd] = canonical_float_bits(sum);
+        return finish_next();
+    }
+
+    case 0x005: { // MPUSH
+        if ((tsp_ & 63U) != 0) {
+            return raise(FaultKind::Alignment, kVectorAlignment, tsp_);
+        }
+        if (tsp_ < 64) {
+            return raise(FaultKind::GeneralProtection, kVectorGeneralProtection, tsp_);
+        }
+        const std::uint32_t new_tsp = tsp_ - 64;
+        Fault fault;
+        for (std::size_t index = 0; index < 16; ++index) {
+            if (!write_float(new_tsp + static_cast<std::uint32_t>(index * 4U),
+                             tiles_[fd][index], fault)) {
+                return fail_fault(fault);
+            }
+        }
+        tsp_ = new_tsp;
+        return finish_next();
+    }
+
+    case 0x006: { // MPOP
+        if ((tsp_ & 63U) != 0) {
+            return raise(FaultKind::Alignment, kVectorAlignment, tsp_);
+        }
+        Fault fault;
+        float result[16] = {};
+        for (std::size_t index = 0; index < 16; ++index) {
+            if (!read_float(tsp_ + static_cast<std::uint32_t>(index * 4U),
+                            result[index], fault)) {
+                return fail_fault(fault);
+            }
+        }
+        write_result(result);
+        tsp_ += 64;
+        return finish_next();
+    }
+
+    case 0x007: // MDROP
+        if ((tsp_ & 63U) != 0) {
+            return raise(FaultKind::Alignment, kVectorAlignment, tsp_);
+        }
+        tsp_ += 64;
         return finish_next();
 
     default:

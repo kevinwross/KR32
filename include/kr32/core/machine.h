@@ -124,6 +124,13 @@ public:
     [[nodiscard]] bool kernel_mode() const { return flag(kFlagK); }
     [[nodiscard]] std::uint32_t core_id() const { return core_id_; }
 
+    [[nodiscard]] std::uint64_t fpr(std::size_t index) const;
+    void set_fpr(std::size_t index, std::uint64_t value);
+    [[nodiscard]] float tile_value(std::size_t tile, std::size_t index) const;
+    void set_tile_value(std::size_t tile, std::size_t index, float value);
+    [[nodiscard]] std::uint32_t tsp() const { return tsp_; }
+    void set_tsp(std::uint32_t value) { tsp_ = value; }
+
     // Inter-processor block hook: set a pending hardware interrupt line.
     void raise_interrupt(std::uint32_t line);
 
@@ -160,6 +167,12 @@ private:
     [[nodiscard]] StepResult execute(const isa::Instruction& instruction,
                                      std::uint32_t instruction_pc,
                                      std::uint32_t next_pc);
+    [[nodiscard]] StepResult execute_fp(const isa::Instruction& instruction,
+                                        std::uint32_t instruction_pc,
+                                        std::uint32_t next_pc);
+    [[nodiscard]] StepResult execute_matrix(const isa::Instruction& instruction,
+                                            std::uint32_t instruction_pc,
+                                            std::uint32_t next_pc);
     [[nodiscard]] StepResult raise(FaultKind kind,
                                    std::uint32_t vector,
                                    std::uint32_t address,
@@ -234,6 +247,9 @@ private:
     std::uint32_t core_id_ = 0;
     std::uint32_t tsp_ = 0;
     bool exceptions_enabled_ = true;
+
+    std::uint64_t fpr_[16] = {};
+    float tiles_[16][16] = {};
 
     bool reservation_valid_ = false;
     std::uint32_t reservation_address_ = 0;

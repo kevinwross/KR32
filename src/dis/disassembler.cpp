@@ -24,6 +24,14 @@ std::string reg(std::uint32_t index) {
     return "R" + std::to_string(index);
 }
 
+std::string freg(std::uint32_t index) {
+    return "F" + std::to_string(index);
+}
+
+std::string treg(std::uint32_t index) {
+    return "T" + std::to_string(index);
+}
+
 std::uint32_t payload(const isa::Instruction& instruction) {
     if (instruction.extension) {
         return instruction.extension_word;
@@ -318,6 +326,124 @@ std::string format_instruction(const isa::Instruction& instruction,
     case 0x4C:
         out << "WRSP " << reg(instruction.rd);
         break;
+
+    case 0x50:
+    case 0x51: {
+        const bool wide = instruction.literal;
+        out << (opcode == 0x50 ? "FLOAD" : "FSTORE")
+            << (wide ? ".D " : ".W ")
+            << freg(instruction.rd) << ", " << memory_text(instruction, false);
+        break;
+    }
+
+    case 0x52:
+    case 0x53: {
+        const bool vector = instruction.literal;
+        const char* name = "MLOAD";
+        if (opcode == 0x52 && vector) name = "VLOAD";
+        if (opcode == 0x53) name = "MSTORE";
+        if (opcode == 0x53 && vector) name = "VSTORE";
+        out << name << ' ' << treg(instruction.rd) << ", "
+            << memory_text(instruction, false);
+        if (instruction.extension) {
+            out << ", #0x" << std::hex << std::setw(8) << std::setfill('0')
+                << instruction.extension_word;
+        }
+        break;
+    }
+
+    case 0x60: {
+        const std::uint32_t function =
+            static_cast<std::uint32_t>(instruction.immediate) & 0x7FFU;
+        const bool wide = (function & 0x100U) != 0;
+        const std::uint32_t base = function & 0xFFU;
+        const char* suffix = wide ? ".D" : ".S";
+        static const char* arithmetic[] = {
+            "FADD", "FSUB", "FMUL", "FDIV", "FSQRT", "FMIN", "FMAX",
+            "FABS", "FNEG", "FEQ", "FLT", "FLE",
+        };
+        if (base <= 0x00B) {
+            const bool compare = base >= 0x009;
+            const bool unary = base == 0x004 || base == 0x007 || base == 0x008;
+            out << arithmetic[base] << suffix << ' ';
+            if (compare) {
+                out << reg(instruction.rd) << ", ";
+            } else {
+                out << freg(instruction.rd) << ", ";
+            }
+            out << freg(instruction.rs1);
+            if (!unary) {
+                out << ", " << freg(instruction.field);
+            }
+        } else if (base == 0x020) {
+            out << "FCVT.S.D " << freg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x021) {
+            out << "FCVT.D.S " << freg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x022) {
+            out << "FCVT.W.S " << reg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x023) {
+            out << "FCVT.WU.S " << reg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x024) {
+            out << "FCVT.S.W " << freg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (base == 0x025) {
+            out << "FCVT.S.WU " << freg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (base == 0x026) {
+            out << "FCVT.W.D " << reg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x027) {
+            out << "FCVT.WU.D " << reg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x028) {
+            out << "FCVT.D.W " << freg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (base == 0x029) {
+            out << "FCVT.D.WU " << freg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (base == 0x030) {
+            out << "FMV.W.X " << freg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (base == 0x031) {
+            out << "FMV.X.W " << reg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else {
+            out << ".word";
+        }
+        break;
+    }
+
+    case 0x61: {
+        const std::uint32_t function =
+            static_cast<std::uint32_t>(instruction.immediate) & 0x7FFU;
+        switch (function) {
+        case 0x000:
+            out << "MMUL " << treg(instruction.rd) << ", " << treg(instruction.rs1)
+                << ", " << treg(instruction.field);
+            break;
+        case 0x001:
+            out << "MMAC " << treg(instruction.rd) << ", " << treg(instruction.rs1)
+                << ", " << treg(instruction.field);
+            break;
+        case 0x002:
+            out << "MVEC " << treg(instruction.rd) << ", " << treg(instruction.rs1)
+                << ", " << treg(instruction.field);
+            break;
+        case 0x003:
+            out << "MTRANS " << treg(instruction.rd) << ", " << treg(instruction.rs1);
+            break;
+        case 0x004:
+            out << "VDOT " << freg(instruction.rd) << ", " << treg(instruction.rs1)
+                << ", " << treg(instruction.field);
+            break;
+        case 0x005:
+            out << "MPUSH " << treg(instruction.rd);
+            break;
+        case 0x006:
+            out << "MPOP " << treg(instruction.rd);
+            break;
+        case 0x007:
+            out << "MDROP";
+            break;
+        default:
+            out << ".word";
+            break;
+        }
+        break;
+    }
+
     default:
         out << ".word";
         break;

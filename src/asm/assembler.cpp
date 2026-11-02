@@ -207,6 +207,46 @@ bool parse_control_register(std::string_view text, int& reg) {
     return true;
 }
 
+bool parse_fpr(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 2 || (value[0] != 'f' && value[0] != 'F')) {
+        return false;
+    }
+    std::size_t index = 1;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 1) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 1);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
+bool parse_tile(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 2 || (value[0] != 't' && value[0] != 'T')) {
+        return false;
+    }
+    std::size_t index = 1;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 1) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 1);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
 bool take_register(std::string_view text, int& reg, std::string& rest) {
     std::string value = trim(text);
     if (value.empty() || (value[0] != 'r' && value[0] != 'R')) {
@@ -1001,8 +1041,246 @@ private:
                                statement.line);
         }
 
-        if (mnemonic == "jmp" || mnemonic == "call") {
-            if (operands.size() != 1) {
+        {
+            static const std::map<std::string, std::uint32_t> fp_arithmetic = {
+                {"fadd", 0x000}, {"fsub", 0x001}, {"fmul", 0x002},
+                {"fdiv", 0x003}, {"fsqrt", 0x004}, {"fmin", 0x005},
+                {"fmax", 0x006}, {"fabs", 0x007}, {"fneg", 0x008},
+                {"feq", 0x009}, {"flt", 0x00A}, {"fle", 0x00B},
+            };
+            std::string fp_name = mnemonic;
+            bool is_double = false;
+            if (fp_name.size() > 2 && fp_name.substr(fp_name.size() - 2) == ".d") {
+                is_double = true;
+                fp_name.resize(fp_name.size() - 2);
+            } else if (fp_name.size() > 2 && fp_name.substr(fp_name.size() - 2) == ".s") {
+                fp_name.resize(fp_name.size() - 2);
+            }
+            const auto fp_operation = fp_arithmetic.find(fp_name);
+            if (fp_operation != fp_arithmetic.end()) {
+                const bool compare = fp_operation->second >= 0x009;
+                const bool unary = fp_operation->second == 0x004 ||
+                                   fp_operation->second == 0x007 ||
+                                   fp_operation->second == 0x008;
+                const std::size_t expected = compare ? 3U : (unary ? 2U : 3U);
+                if (operands.size() != expected) {
+                    return fail_operands("the FP operand count");
+                }
+                instruction.opcode = 0x60;
+                instruction.immediate = static_cast<std::int16_t>(
+                    fp_operation->second | (is_double ? 0x100U : 0U));
+                if (compare) {
+                    int destination = 0;
+                    int left = 0;
+                    int right = 0;
+                    if (!parse_register(operands[0], destination) ||
+                        !parse_fpr(operands[1], left) ||
+                        !parse_fpr(operands[2], right)) {
+                        return fail(statement.line, "expected Rd, Fs1, Fs2");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(destination);
+                    instruction.rs1 = static_cast<std::uint8_t>(left);
+                    instruction.field = static_cast<std::uint8_t>(right);
+                } else {
+                    int destination = 0;
+                    int left = 0;
+                    int right = 0;
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_fpr(operands[1], left) ||
+                        (operands.size() == 3 && !parse_fpr(operands[2], right))) {
+                        return fail(statement.line, "expected Fd, Fs1, Fs2");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(destination);
+                    instruction.rs1 = static_cast<std::uint8_t>(left);
+                    instruction.field = static_cast<std::uint8_t>(right);
+                }
+                return true;
+            }
+        }
+
+        {
+            static const std::map<std::string, std::uint32_t> conversions = {
+                {"fcvt.s.d", 0x020}, {"fcvt.d.s", 0x021},
+                {"fcvt.w.s", 0x022}, {"fcvt.wu.s", 0x023},
+                {"fcvt.s.w", 0x024}, {"fcvt.s.wu", 0x025},
+                {"fcvt.w.d", 0x026}, {"fcvt.wu.d", 0x027},
+                {"fcvt.d.w", 0x028}, {"fcvt.d.wu", 0x029},
+                {"fmv.w.x", 0x030}, {"fmv.x.w", 0x031},
+            };
+            const auto conversion = conversions.find(mnemonic);
+            if (conversion != conversions.end()) {
+                if (operands.size() != 2) {
+                    return fail_operands("destination, source");
+                }
+                instruction.opcode = 0x60;
+                instruction.immediate = static_cast<std::int16_t>(conversion->second);
+                const std::uint32_t function = conversion->second;
+                const bool destination_gpr =
+                    function == 0x022 || function == 0x023 ||
+                    function == 0x026 || function == 0x027 || function == 0x031;
+                const bool source_gpr =
+                    function == 0x024 || function == 0x025 ||
+                    function == 0x028 || function == 0x029 || function == 0x030;
+                int destination = 0;
+                int source = 0;
+                if (destination_gpr) {
+                    if (!parse_register(operands[0], destination) ||
+                        !parse_fpr(operands[1], source)) {
+                        return fail(statement.line, "expected Rd, Fs");
+                    }
+                } else if (source_gpr) {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_register(operands[1], source)) {
+                        return fail(statement.line, "expected Fd, Rs");
+                    }
+                } else {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_fpr(operands[1], source)) {
+                        return fail(statement.line, "expected Fd, Fs");
+                    }
+                }
+                instruction.rd = static_cast<std::uint8_t>(destination);
+                instruction.rs1 = static_cast<std::uint8_t>(source);
+                return true;
+            }
+        }
+
+        if (mnemonic == "fload.w" || mnemonic == "fload.d" ||
+            mnemonic == "fstore.w" || mnemonic == "fstore.d") {
+            if (operands.size() != 2) {
+                return fail_operands("Fd, [addr]");
+            }
+            int fpr = 0;
+            if (!parse_fpr(operands[0], fpr)) {
+                return fail(statement.line, "expected an FP register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            if (memory.indexed) {
+                return fail(statement.line, "FLOAD/FSTORE do not support base+index");
+            }
+            instruction.opcode = (mnemonic.rfind("fload", 0) == 0) ? 0x50 : 0x51;
+            instruction.rd = static_cast<std::uint8_t>(fpr);
+            instruction.literal = mnemonic.size() >= 2 &&
+                                  mnemonic.substr(mnemonic.size() - 2) == ".d";
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            return set_payload(memory.displacement,
+                               memory.uses_symbol || memory.displacement.value < -1024 ||
+                                   memory.displacement.value > 1023,
+                               instruction, statement.line);
+        }
+
+        {
+            static const std::map<std::string, std::uint32_t> matrix_ops = {
+                {"mmul", 0x000}, {"mmac", 0x001}, {"mvec", 0x002},
+                {"mtrans", 0x003}, {"vdot", 0x004}, {"mpush", 0x005},
+                {"mpop", 0x006}, {"mdrop", 0x007},
+            };
+            const auto operation = matrix_ops.find(mnemonic);
+            if (operation != matrix_ops.end()) {
+                instruction.opcode = 0x61;
+                instruction.immediate = static_cast<std::int16_t>(operation->second);
+                if (mnemonic == "mdrop") {
+                    if (!operands.empty()) {
+                        return fail_operands("no operands");
+                    }
+                    return true;
+                }
+                if (mnemonic == "mpush" || mnemonic == "mpop") {
+                    if (operands.size() != 1) {
+                        return fail_operands("Td");
+                    }
+                    int tile = 0;
+                    if (!parse_tile(operands[0], tile)) {
+                        return fail(statement.line, "expected a tile register");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(tile);
+                    return true;
+                }
+                if (operands.size() < 2 || operands.size() > 3) {
+                    return fail_operands("Td, Ta, Tb");
+                }
+                int destination = 0;
+                int left = 0;
+                int right = 0;
+                if (mnemonic == "vdot") {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_tile(operands[1], left) ||
+                        !parse_tile(operands[2], right)) {
+                        return fail(statement.line, "expected Fd, Ta, Tb");
+                    }
+                } else {
+                    if (!parse_tile(operands[0], destination) ||
+                        !parse_tile(operands[1], left) ||
+                        (operands.size() == 3 && !parse_tile(operands[2], right))) {
+                        return fail(statement.line, "expected Td, Ta, Tb");
+                    }
+                }
+                instruction.rd = static_cast<std::uint8_t>(destination);
+                instruction.rs1 = static_cast<std::uint8_t>(left);
+                instruction.field = static_cast<std::uint8_t>(right);
+                return true;
+            }
+        }
+
+        if (mnemonic == "mload" || mnemonic == "mstore" ||
+            mnemonic == "vload" || mnemonic == "vstore") {
+            if (operands.size() < 2 || operands.size() > 3) {
+                return fail_operands("Td, [addr], optional #stride");
+            }
+            int tile = 0;
+            if (!parse_tile(operands[0], tile)) {
+                return fail(statement.line, "expected a tile register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            if (memory.indexed) {
+                return fail(statement.line, "MLOAD/MSTORE do not support base+index");
+            }
+            const bool vector = mnemonic == "vload" || mnemonic == "vstore";
+            instruction.opcode = (mnemonic == "mload" || mnemonic == "vload") ? 0x52 : 0x53;
+            instruction.rd = static_cast<std::uint8_t>(tile);
+            instruction.literal = vector;
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            if (operands.size() == 3) {
+                if (vector) {
+                    return fail(statement.line, "strided VLOAD/VSTORE is reserved");
+                }
+                Expr stride;
+                std::string stride_text = trim(operands[2]);
+                if (!stride_text.empty() && stride_text.front() == '#') {
+                    stride_text = trim(std::string_view(stride_text).substr(1));
+                }
+                if (!eval_expr(stride_text, symbols_, allow_symbols, stride, error_,
+                               statement.line)) {
+                    return false;
+                }
+                if (memory.displacement.value != 0 || memory.uses_symbol) {
+                    return fail(statement.line,
+                                "strided MLOAD/MSTORE requires a zero displacement");
+                }
+                instruction.extension = true;
+                instruction.extension_word = static_cast<std::uint32_t>(stride.value);
+                instruction.immediate = 0;
+                return true;
+            }
+            return set_payload(memory.displacement,
+                               memory.uses_symbol || memory.displacement.value < -1024 ||
+                                   memory.displacement.value > 1023,
+                               instruction, statement.line);
+        }
+
+        if (mnemonic == "jmp" || mnemonic == "call") {            if (operands.size() != 1) {
                 return fail_operands("target");
             }
             instruction.opcode = (mnemonic == "jmp") ? 0x38 : 0x3A;

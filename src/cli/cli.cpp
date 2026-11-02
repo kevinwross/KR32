@@ -145,7 +145,7 @@ void print_machine(const core::Machine& machine) {
 }
 
 void print_version() {
-    std::printf("kr32 %s (ISA %s, container %s, M2 machine)\n",
+    std::printf("kr32 %s (ISA %s, container %s, M2b machine)\n",
                 kr32::kVersion, kr32::kIsaVersion, kr32::kContainerVersion);
 }
 
@@ -194,7 +194,7 @@ void print_vm_usage() {
 }
 
 int not_implemented(std::string_view command) {
-    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M2 machine).\n",
+    std::fprintf(stderr, "kr32: '%.*s' is not implemented yet (M2b machine).\n",
                  static_cast<int>(command.size()), command.data());
     return 2;
 }

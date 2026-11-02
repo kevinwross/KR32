@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 01:19 -08:00
+> **Last updated:** 2026-11-02 01:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -332,25 +332,29 @@ construction into the ROM itself is deferred to the boot/loader work in M3/M7.
 
 **Goal:** the scalar FP and 4x4 tile units from the ISA document.
 
+**Status:** complete 2026-11-02. Scalar FP uses host IEEE arithmetic with
+canonical NaNs and saturating conversions; the tile file, transform stack,
+strided loads, assembler/disassembler support, and demos are in place.
+
 **Tasks**
 
-- [ ] FPR file, `FLOAD`/`FSTORE`, FP escape, `.S`/`.D` arithmetic, compares,
+- [x] FPR file, `FLOAD`/`FSTORE`, FP escape, `.S`/`.D` arithmetic, compares,
       conversions, moves.
-- [ ] RNE, canonical NaN, denormals, no traps, saturating conversions.
-- [ ] Tile file, `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`.
-- [ ] `MLOAD`/`MSTORE`, `VLOAD`/`VSTORE`, strided loads, `MPUSH`/`MPOP`/`MDROP`.
-- [ ] FP and matrix demos: transform a vector, multiply two matrices, dot
+- [x] RNE, canonical NaN, denormals, no traps, saturating conversions.
+- [x] Tile file, `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`.
+- [x] `MLOAD`/`MSTORE`, `VLOAD`/`VSTORE`, strided loads, `MPUSH`/`MPOP`/`MDROP`.
+- [x] FP and matrix demos: transform a vector, multiply two matrices, dot
       product, push/pop a transform.
-- [ ] Unit tests for FP flags/NaN/conversions and matrix results.
+- [x] Unit tests for FP flags/NaN/conversions and matrix results.
 
 **Test plan and gate**
 
-- [ ] `FADD.S`/`FADD.D`, `FEQ`/`FLT`/`FLE`, conversions match the spec.
-- [ ] `MMUL` matches a reference 4x4 multiply; `MVEC` matches a reference.
-- [ ] Strided `MLOAD` reads a 4x4 block from a larger matrix.
-- [ ] Transform stack push/pop restores the parent matrix.
-- [ ] Windows and WSL tests pass.
-- [ ] Commit and tag `m2b`; log entry added.
+- [x] `FADD.S`/`FADD.D`, `FEQ`/`FLT`/`FLE`, conversions match the spec.
+- [x] `MMUL` matches a reference 4x4 multiply; `MVEC` matches a reference.
+- [x] Strided `MLOAD` reads a 4x4 block from a larger matrix.
+- [x] Transform stack push/pop restores the parent matrix.
+- [x] Windows and WSL tests pass.
+- [x] Commit and tag `m2b`; log entry added.
 
 ### M3 — Container, linker, build pipeline
 
@@ -692,6 +696,15 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 01:19 -08:00** — M2 gate passed: 49 unit cases / 3436 assertions,
       BIOS smoke test, and 9 CTest cases on Windows; WSL GCC/Clang/ASan pass.
 - **2026-11-02 01:19 -08:00** — Tagged `m2`.
+- **2026-11-02 01:27 -08:00** — M2b implemented: 16 FPRs, FP escape arithmetic,
+      compares, conversions and moves; canonical NaN, denormal, saturating
+      conversion, `FLOAD`/`FSTORE`; 16 4x4 tiles, `MMUL`/`MMAC`/`MVEC`/`MTRANS`/
+      `VDOT`, tile loads/stores, transform stack; assembler/disassembler and
+      `fp-demo`/`matrix-demo`.
+- **2026-11-02 01:27 -08:00** — M2b gate passed: 64 unit cases / 3887 assertions,
+      11 CTest cases including both FP/matrix demos; Windows MSVC Debug/Release
+      and Ninja; WSL GCC/Clang/ASan.
+- **2026-11-02 01:27 -08:00** — Tagged `m2b`.
 
 ## 10. Updating this file
 

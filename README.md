@@ -8,12 +8,9 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M2 complete (2026-11-02). The integer machine now has user/kernel
-mode, two-level paging, exception delivery, `IRET`, control registers,
-interrupts, `LL`/`SC`, and a BIOS boot path. The boot test enters user code,
-traps through `SYSCALL`, and halts in a kernel handler. The assembler,
-disassembler, toolchain, compilers, and windowed debugger continue in later
-milestones.
+**Status:** M2b complete (2026-11-02). The machine now has scalar FP, 4x4 tiles,
+a transform stack, and the associated loads, stores, assembler syntax, and demos.
+The next milestone is the `.k32` container, linker, and build pipeline.
 
 ## Build
 
@@ -63,6 +60,8 @@ ctest --preset linux-asan
 kr32 as examples/demo.asm -o demo.bin --listing demo.lst
 kr32 dis demo.bin
 kr32 run examples/demo.asm
+kr32 run examples/fp-demo.asm
+kr32 run examples/matrix-demo.asm
 kr32 run examples/demo.asm --trace --stats
 kr32 as examples/boot-halt.asm -o boot-halt.bin --base 0xFFFF0000
 kr32 vm examples/demo.asm --bios boot-halt.bin
