@@ -10,7 +10,7 @@ single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
 initialization), and M9.9 (`new`/`delete`, exceptions, cleanup) are complete;
 phase M9.10 (threads, TLS, atomics, synchronization) is in progress with
-stage-1 host thread/futex services done.
+stage-1 host thread/futex services and stage-2 TCB/TLS/context done.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -170,6 +170,8 @@ In progress:
 - [x] Host thread/futex services in `vm::ClusterHost` over `core::Cluster`
       (M9.10 stage 1): create/join/yield/exit, futex wait/wake, syscall vectors,
       and tests.
+- [x] Guest TCB at `R11`, per-thread stacks/TLS, guest join, and FPR/TSP
+      context save-restore (M9.10 stage 2).
 
 Not started:
 
@@ -429,8 +431,10 @@ M9.10 (threads, TLS, atomics, synchronization) is next.
       create/join/yield/exit, futex wait/wake, one thread per core, and
       `thread_create`/`yield`/`exit`/`futex`/`self` syscall vectors. Guest
       blocking `thread_join` remains stage 2.
-- [ ] TCB, `R11` thread pointer, TLS block, per-thread stack.
-- [ ] Per-thread FPR and TSP context save/restore on switch/migration.
+- [x] TCB at `R11`, frozen offsets, static TLS block, per-thread stacks, and
+      guest `thread_join`/`yield`/`exit` servicing.
+- [x] Per-thread FPR and TSP context save/restore (GPRs, SP, PC, FLAGS, all 16
+      FPRs, TSP), with a 128-byte FPR save area addressed from the TCB.
 - [ ] `std::atomic` on LL/SC, initially sequentially consistent.
 - [ ] `std::mutex`, `std::condition_variable`, `std::thread`,
       `std::this_thread` subset.
@@ -439,11 +443,10 @@ M9.10 (threads, TLS, atomics, synchronization) is next.
       deterministic scheduling.
 
 **Gate:** multi-core/thread tests pass on the cluster; debug view shows threads.
-**Status:** in progress 2026-11-02. Stage 1 (host thread/futex services and
-syscall ABI) is complete; guest TCB/TLS, context save/restore, compiler
-`thread_local`/atomics, and synchronization headers remain. Windows MSVC Debug
-and WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 183 test
-cases and 4841 assertions.
+**Status:** in progress 2026-11-02. Stages 1-2 (host thread/futex services and
+guest TCB/TLS/context) are complete; compiler `thread_local`/atomics and
+synchronization headers remain. Windows MSVC Debug and WSL GCC headless both
+pass 21/21 CTest tests; `kr32_tests` reports 186 test cases and 4885 assertions.
 
 ### M9.11 — C++ debug information and GUI/DAP
 
@@ -640,6 +643,13 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 183 test cases
   and 4841 assertions. M9.10 remains in progress for guest TCB/TLS, FPR/TSP
   context, compiler `thread_local`/atomics, and synchronization headers.
+- **2026-11-02 14:03 -08:00** — Completed M9.10 stage 2: exact TCB layout at
+  `R11` (self/id/stack/TSP/FPR-save/exception/TLS), per-thread stacks, guest
+  blocking `thread_join`, and full GPR/SP/PC/FLAGS/FPR/TSP context
+  save-restore. Added TCB-layout, context, and guest-join tests. Windows/WSL
+  both pass 21/21 CTest tests; `kr32_tests` reports 186 test cases and 4885
+  assertions. M9.10 remains in progress for compiler `thread_local`/atomics and
+  synchronization headers.
 
 ## 8. Approval
 

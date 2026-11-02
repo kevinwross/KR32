@@ -39,12 +39,16 @@ bool ClusterHost::load_image(const container::Image& image, std::string& error) 
 }
 
 void ClusterHost::start(std::uint32_t entry, std::uint32_t stack_top) {
-    core::Machine& machine = cluster_.core(0);
-    const std::uint32_t stack =
-        stack_top != 0 ? stack_top : allocate_stack(0, options_.stack_size);
-    machine.reset(entry, stack);
-    threads_[0].state = State::Running;
-    threads_[0].stack_top = stack;
+    if (stack_top != 0) {
+        core::Machine& machine = cluster_.core(0);
+        machine.reset(entry, stack_top);
+        threads_[0].state = State::Running;
+        threads_[0].stack_top = stack_top;
+        threads_[0].stack_limit = cluster_.core(0).ram_base();
+        threads_[0].tcb = 0;
+        return;
+    }
+    (void)setup_thread(0, entry, 0, options_.stack_size);
 }
 
 std::uint32_t ClusterHost::create(std::uint32_t entry, std::uint32_t arg,
@@ -54,18 +58,52 @@ std::uint32_t ClusterHost::create(std::uint32_t entry, std::uint32_t arg,
         if (thread.state != State::Free) {
             continue;
         }
-        const std::uint32_t stack =
-            allocate_stack(core, stack_size == 0 ? options_.stack_size : stack_size);
-        core::Machine& machine = cluster_.core(core);
-        machine.reset(entry, stack);
-        machine.set_reg(0, arg);
-        thread.state = State::Running;
-        thread.exit_code = 0;
-        thread.stack_top = stack;
-        thread.wait_address = 0;
+        (void)setup_thread(core, entry, arg,
+                           stack_size == 0 ? options_.stack_size : stack_size);
         return thread.handle;
     }
     return kThreadError;
+}
+
+std::uint32_t ClusterHost::setup_thread(std::uint32_t core,
+                                        std::uint32_t entry,
+                                        std::uint32_t arg,
+                                        std::uint32_t requested) {
+    Thread& thread = threads_[core];
+    const std::uint32_t minimum = 4096;
+    const std::uint32_t size = std::max(minimum, (requested + 15U) & ~15U);
+    const std::uint32_t region_base =
+        cluster_.core(0).ram_base() + cluster_.core(0).ram_size() -
+        (core + 1U) * size;
+    const std::uint32_t region_end = region_base + size;
+    const std::uint32_t tcb = (region_end - 320U) & ~15U;
+    const std::uint32_t stack_top = (tcb - 16U) & ~15U;
+    const std::uint32_t stack_limit = (region_base + 512U) & ~15U;
+    const std::uint32_t tsp = (region_base + 1024U) & ~63U;
+
+    core::Machine& machine = cluster_.core(core);
+    machine.reset(entry, stack_top);
+    machine.set_reg(0, arg);
+    machine.set_reg(11, tcb);
+    machine.set_tsp(tsp);
+
+    (void)machine.write32(tcb + tcb::Self, tcb);
+    (void)machine.write32(tcb + tcb::Id, thread.handle);
+    (void)machine.write32(tcb + tcb::StackBase, stack_top);
+    (void)machine.write32(tcb + tcb::StackLimit, stack_limit);
+    (void)machine.write32(tcb + tcb::Tsp, tsp);
+    (void)machine.write32(tcb + tcb::FprSave, tcb + tcb::HeaderSize);
+    (void)machine.write32(tcb + tcb::CurrentException, 0);
+    (void)machine.write32(tcb + tcb::Reserved, 0);
+
+    thread.state = State::Running;
+    thread.exit_code = 0;
+    thread.stack_top = stack_top;
+    thread.stack_limit = stack_limit;
+    thread.tcb = tcb;
+    thread.wait_address = 0;
+    thread.context = {};
+    return tcb;
 }
 
 bool ClusterHost::join(std::uint32_t handle, std::uint32_t& exit_code) {
@@ -150,15 +188,118 @@ core::StepResult ClusterHost::step() {
     return {};
 }
 
+core::StepResult ClusterHost::step_except(std::uint32_t skip_core) {
+    for (std::uint32_t attempt = 0; attempt < cluster_.size(); ++attempt) {
+        const std::uint32_t core =
+            (scheduler_index_++) % static_cast<std::uint32_t>(cluster_.size());
+        if (core == skip_core) {
+            continue;
+        }
+        Thread& thread = threads_[core];
+        if (thread.state != State::Running) {
+            continue;
+        }
+        core::Machine& machine = cluster_.core(core);
+        core::StepResult result = machine.step();
+        if (result.kind == core::StepResult::Kind::Halted) {
+            thread.state = State::Done;
+            thread.exit_code =
+                machine.exit_code_set() ? machine.exit_code() : machine.reg(0);
+        } else if (result.kind == core::StepResult::Kind::Raised) {
+            thread.state = State::Faulted;
+            thread.exit_code = kThreadError;
+        }
+        return result;
+    }
+    return {};
+}
+
+std::uint32_t ClusterHost::join_from_guest(std::uint32_t handle,
+                                           std::uint32_t current_core) {
+    Thread* thread = thread_for(handle);
+    if (thread == nullptr || thread->state == State::Free ||
+        handle == current_core + 1 || servicing_join_) {
+        return kThreadError;
+    }
+    servicing_join_ = true;
+    while (thread->state != State::Done && thread->state != State::Faulted) {
+        if (!has_running_thread_except(current_core)) {
+            servicing_join_ = false;
+            return kThreadError;
+        }
+        (void)step_except(current_core);
+    }
+    servicing_join_ = false;
+    return thread->exit_code;
+}
+
 bool ClusterHost::running(std::uint32_t handle) const {
     const Thread* thread = thread_for(handle);
     return thread != nullptr && thread->state == State::Running;
+}
+
+bool ClusterHost::save_context(std::uint32_t handle) {
+    Thread* thread = thread_for(handle);
+    if (thread == nullptr || thread->state == State::Free) {
+        return false;
+    }
+    core::Machine& machine = cluster_.core(handle - 1);
+    for (std::size_t index = 0; index < 16; ++index) {
+        thread->context.regs[index] = machine.reg(index);
+        thread->context.fpr[index] = machine.fpr(index);
+    }
+    thread->context.sp = machine.sp();
+    thread->context.pc = machine.pc();
+    thread->context.flags = machine.flags();
+    thread->context.tsp = machine.tsp();
+    thread->context.valid = true;
+    if (thread->tcb != 0) {
+        (void)machine.write32(thread->tcb + tcb::Tsp, thread->context.tsp);
+        for (std::size_t index = 0; index < 16; ++index) {
+            const std::uint32_t address =
+                thread->tcb + tcb::HeaderSize +
+                static_cast<std::uint32_t>(index * 8U);
+            (void)machine.write32(
+                address, static_cast<std::uint32_t>(thread->context.fpr[index]));
+            (void)machine.write32(
+                address + 4U,
+                static_cast<std::uint32_t>(thread->context.fpr[index] >> 32));
+        }
+    }
+    return true;
+}
+
+bool ClusterHost::restore_context(std::uint32_t handle) {
+    Thread* thread = thread_for(handle);
+    if (thread == nullptr || !thread->context.valid) {
+        return false;
+    }
+    core::Machine& machine = cluster_.core(handle - 1);
+    for (std::size_t index = 0; index < 16; ++index) {
+        machine.set_reg(index, thread->context.regs[index]);
+        machine.set_fpr(index, thread->context.fpr[index]);
+    }
+    machine.set_sp(thread->context.sp);
+    machine.set_pc(thread->context.pc);
+    machine.set_flags(thread->context.flags);
+    machine.set_tsp(thread->context.tsp);
+    if (thread->tcb != 0) {
+        (void)machine.write32(thread->tcb + tcb::Tsp, thread->context.tsp);
+    }
+    return true;
 }
 
 bool ClusterHost::handle(core::Machine& machine, std::uint32_t vector) {
     const std::uint32_t handle = handle_for(machine);
     Thread* thread = thread_for(handle);
     switch (vector) {
+    case syscall::Exit:
+        if (thread != nullptr) {
+            thread->state = State::Done;
+            thread->exit_code = machine.reg(0);
+        }
+        machine.halt(machine.reg(0));
+        return true;
     case thread_syscall::Create: {
         const std::uint32_t created =
             create(machine.reg(0), machine.reg(1), machine.reg(2));
@@ -166,7 +307,7 @@ bool ClusterHost::handle(core::Machine& machine, std::uint32_t vector) {
         return true;
     }
     case thread_syscall::Join:
-        machine.set_reg(0, kThreadError);
+        machine.set_reg(0, join_from_guest(machine.reg(0), machine.core_id()));
         return true;
     case thread_syscall::Yield:
         machine.set_reg(0, 0);
@@ -217,14 +358,16 @@ const ClusterHost::Thread* ClusterHost::thread_for(std::uint32_t handle) const {
     return &threads_[handle - 1];
 }
 
-std::uint32_t ClusterHost::allocate_stack(std::uint32_t core,
-                                          std::uint32_t requested) {
-    const std::uint32_t minimum = 4096;
-    const std::uint32_t size = std::max(minimum, (requested + 15U) & ~15U);
-    const std::uint32_t top = cluster_.core(0).ram_base() +
-                              cluster_.core(0).ram_size() -
-                              (core + 1U) * size;
-    return top & ~15U;
+bool ClusterHost::has_running_thread_except(std::uint32_t skip_core) const {
+    for (std::uint32_t core = 0; core < threads_.size(); ++core) {
+        if (core == skip_core) {
+            continue;
+        }
+        if (threads_[core].state == State::Running) {
+            return true;
+        }
+    }
+    return false;
 }
 
 bool ClusterHost::has_running_thread() const {

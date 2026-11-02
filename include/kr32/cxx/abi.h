@@ -206,4 +206,18 @@ inline constexpr std::uint32_t kTypeInfoBaseOffset = 8;
     return (value + alignment - 1U) / alignment * alignment;
 }
 
+// TCB layout from TP (R11); exact offsets frozen in M9.10.
+inline constexpr std::uint32_t kTcbSelf = 0;
+inline constexpr std::uint32_t kTcbThreadId = 4;
+inline constexpr std::uint32_t kTcbStackBase = 8;
+inline constexpr std::uint32_t kTcbStackLimit = 12;
+inline constexpr std::uint32_t kTcbTransformStack = 16;
+inline constexpr std::uint32_t kTcbFprSave = 20;
+inline constexpr std::uint32_t kTcbCurrentException = 24;
+inline constexpr std::uint32_t kTcbReserved = 28;
+inline constexpr std::uint32_t kTcbTls = 32;
+inline constexpr std::uint32_t kTcbHeaderSize = 160;
+inline constexpr std::uint32_t kFprContextSize = 128;
+inline constexpr std::uint32_t kTcbBlockSize = kTcbHeaderSize + kFprContextSize;
+
 } // namespace kr32::cxx::abi

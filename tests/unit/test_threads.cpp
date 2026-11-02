@@ -43,8 +43,7 @@ Program build_worker(std::string_view source, std::string_view entry_name) {
     for (const container::Symbol& symbol : program.image.symbols) {
         if (symbol.name == entry_name &&
             symbol.section != container::kUndefinedSection) {
-            program.entry = program.image.sections[symbol.section].address +
-                            symbol.value;
+            program.entry = symbol.value;
             break;
         }
     }
@@ -65,8 +64,12 @@ TEST_CASE("cluster host creates and joins a worker thread") {
     REQUIRE(host.load_image(program.image, error));
     const std::uint32_t handle = host.create(program.entry, 42);
     REQUIRE(handle != vm::kThreadError);
+    CHECK(host.cluster().core(handle - 1).reg(0) == 42);
+    CHECK(host.cluster().core(handle - 1).pc() == program.entry);
     std::uint32_t exit_code = 0;
     REQUIRE(host.join(handle, exit_code));
+    CHECK(host.cluster().core(handle - 1).halted());
+    CHECK(host.cluster().core(handle - 1).exit_code());
     CHECK(exit_code == 42);
 }
 
@@ -127,6 +130,81 @@ TEST_CASE("futex wait returns immediately when the value does not match") {
     primary.set_reg(1, 0);
     REQUIRE(host.handle(primary, vm::thread_syscall::FutexWait));
     CHECK(primary.reg(0) == vm::kThreadWouldBlock);
+}
+
+TEST_CASE("guest TCB exposes the approved R11-relative layout") {
+    const Program program = build_worker(
+        "void worker(int value) { exit(value); }\n"
+        "int main() { return 0; }\n",
+        "worker");
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    const std::uint32_t handle = host.create(program.entry, 42);
+    REQUIRE(handle != vm::kThreadError);
+    core::Machine& machine = host.cluster().core(handle - 1);
+    const std::uint32_t tcb = machine.reg(11);
+    REQUIRE(tcb != 0);
+    std::uint32_t self = 0;
+    std::uint32_t id = 0;
+    std::uint32_t stack_base = 0;
+    std::uint32_t stack_limit = 0;
+    std::uint32_t fpr_save = 0;
+    REQUIRE(machine.read32(tcb + vm::tcb::Self, self));
+    REQUIRE(machine.read32(tcb + vm::tcb::Id, id));
+    REQUIRE(machine.read32(tcb + vm::tcb::StackBase, stack_base));
+    REQUIRE(machine.read32(tcb + vm::tcb::StackLimit, stack_limit));
+    REQUIRE(machine.read32(tcb + vm::tcb::FprSave, fpr_save));
+    CHECK(self == tcb);
+    CHECK(id == handle);
+    CHECK(stack_base == machine.sp());
+    CHECK(stack_limit < stack_base);
+    CHECK(fpr_save == tcb + vm::tcb::HeaderSize);
+}
+
+TEST_CASE("thread context saves and restores GPRs, FPRs, SP, PC, and TSP") {
+    const Program program = build_worker(
+        "void worker(int value) { exit(value); }\n"
+        "int main() { return 0; }\n",
+        "worker");
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    const std::uint32_t handle = host.create(program.entry, 42);
+    REQUIRE(handle != vm::kThreadError);
+    core::Machine& machine = host.cluster().core(handle - 1);
+    machine.set_reg(3, 0x1234);
+    machine.set_fpr(2, 0x4009'21FB'5444'2D18ULL);
+    machine.set_tsp(0x2000);
+    REQUIRE(host.save_context(handle));
+    machine.set_reg(3, 0);
+    machine.set_fpr(2, 0);
+    machine.set_tsp(0);
+    REQUIRE(host.restore_context(handle));
+    CHECK(machine.reg(3) == 0x1234);
+    CHECK(machine.fpr(2) == 0x4009'21FB'5444'2D18ULL);
+    CHECK(machine.tsp() == 0x2000);
+    CHECK(machine.pc() == program.entry);
+}
+
+TEST_CASE("guest thread_join blocks until the target thread exits") {
+    const Program program = build_worker(
+        "void worker(int value) { exit(value); }\n"
+        "int main() { return 0; }\n",
+        "worker");
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    host.start(0);
+    core::Machine& primary = host.cluster().core(0);
+    const std::uint32_t created = host.create(program.entry, 42);
+    REQUIRE(created != vm::kThreadError);
+    primary.set_reg(0, created);
+    REQUIRE(host.handle(primary, vm::thread_syscall::Join));
+    CHECK(primary.reg(0) == 42);
 }
 
 TEST_CASE("thread_self reports the primary thread handle") {

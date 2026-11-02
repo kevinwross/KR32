@@ -594,8 +594,9 @@ them out.
 6. `.cpp_except` is the LSDA section name; landing pads receive the exception in
    `R0` and the selector in `R1`; the personality routine is
    `__kr32_personality_v0`.
-7. TCB field offsets in the table above are approved as direction only; the
-   exact offsets are deferred to M9.10 by review decision.
+7. TCB offsets are frozen at the table values (0/4/8/12/16/20/24/28, TLS at 32,
+   160-byte header + 128-byte FPR save area) as recorded in `abi.h`; the M9.10
+   thread runtime installs these fields.
 8. Empty base optimization is disabled in revision 1 (an empty base occupies one
    byte at offset 0).
 9. `long double` is identical to `double`, including mangling as `d`.

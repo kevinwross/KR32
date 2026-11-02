@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 13:52 -08:00
+> **Last updated:** 2026-11-02 14:03 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -557,7 +557,7 @@ M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
 weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
 cleanup) are complete; M9.10 is in progress with stage-1 host thread/futex
-services over `core::Cluster` done. C++ ABI revision 1 is frozen in
+services over `core::Cluster` and stage-2 TCB/TLS/context done. C++ ABI revision 1 is frozen in
 [docs/abi.md](docs/abi.md) with machine-checkable constants in
 `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
 in place, and `compile()` now produces assembly for the supported integer,
@@ -611,9 +611,10 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       push/pop/drop (M9.7).
 - [x] Host thread/futex services in `vm::ClusterHost` over `core::Cluster`
       (M9.10 stage 1).
-- [ ] Guest TCB/TLS, FPR/TSP context save/restore, compiler
-      `thread_local`/atomics, and mutex/condvar/thread headers (M9.10
-      remaining).
+- [x] Guest TCB at `R11`, frozen offsets, per-thread stacks/TLS, guest join,
+      and FPR/TSP context save/restore (M9.10 stage 2).
+- [ ] Compiler `thread_local`/atomics and mutex/condvar/thread headers
+      (M9.10 remaining).
 - [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
 - [ ] `kr32 cxx`, `kr32 build file.cpp`.
 - [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
@@ -649,6 +650,8 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
 - [ ] C++ hello world and a class/template demo run.
 - [x] Host thread/futex services over `core::Cluster` pass (M9.10 stage 1:
       183 cases / 4841 assertions).
+- [x] Guest TCB layout, context save/restore, and guest join pass (M9.10
+      stage 2: 186 cases / 4885 assertions).
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
@@ -1096,6 +1099,12 @@ Newest entries at the bottom. Use the local time zone.
       test cases and 4841 assertions. M9.10 remains in progress for guest
       TCB/TLS, FPR/TSP context, compiler `thread_local`/atomics, and
       synchronization headers.
+- **2026-11-02 14:03 -08:00** — Completed M9.10 stage 2: exact TCB layout at
+      `R11`, per-thread stacks/TLS, guest join, and full GPR/SP/PC/FLAGS/FPR/TSP
+      context save-restore. Added TCB, context, and guest-join tests. Windows/WSL
+      both pass 21/21 CTest tests; `kr32_tests` reports 186 test cases and 4885
+      assertions. M9.10 remains in progress for compiler `thread_local`/atomics
+      and synchronization headers.
 
 ## 10. Updating this file
 

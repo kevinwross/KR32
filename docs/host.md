@@ -29,8 +29,10 @@ The guest reaches the host through `SYSCALL` vectors 32..50. Arguments are in
 Thread services are provided by `vm::ClusterHost`, which maps one guest thread
 per `core::Cluster` core and advances one core turn at a time. A thread handle
 is `core + 1`; a mismatch in `futex_wait` returns immediately with `1`, and a
-matching wait suspends the thread until `futex_wake`. Guest `thread_join` is
-reserved for the stage-2 blocking join path.
+matching wait suspends the thread until `futex_wake`. Guest `thread_join` blocks
+by servicing other runnable cores until the target exits and returns its exit
+code. Each thread receives a TCB at `R11` with the frozen offsets in
+`docs/abi.md` and a 128-byte FPR save area.
 
 Open flags: bits 0..1 select read/write (`0` read, `1` write, `2` both),
 bit 2 creates, bit 3 truncates, bit 4 appends.
