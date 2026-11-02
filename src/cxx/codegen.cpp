@@ -273,6 +273,32 @@ std::string mangle_function(std::string_view qualified_name,
     return result;
 }
 
+std::string mangle_member(std::string_view class_name, std::string_view name,
+                          const std::vector<TypePtr>& parameter_types, bool constructor,
+                          bool destructor) {
+    const std::vector<std::string> class_parts = split_qualified(class_name);
+    std::string result = "_ZN";
+    for (const std::string& part : class_parts) {
+        result += std::to_string(part.size()) + part;
+    }
+    if (constructor) {
+        result += "C1";
+    } else if (destructor) {
+        result += "D1";
+    } else {
+        result += std::to_string(name.size()) + std::string(name);
+    }
+    result += "E";
+    if (parameter_types.empty()) {
+        result += "v";
+    } else {
+        for (const TypePtr& parameter : parameter_types) {
+            result += mangle_type(decay(parameter));
+        }
+    }
+    return result;
+}
+
 namespace {
 
 class Generator {
@@ -292,6 +318,8 @@ public:
     }
 
     std::string run(const TranslationUnit& unit) {
+        collect_classes(unit.declarations, "");
+        layout_classes();
         collect(unit.declarations, "");
         if (!diagnostics_.empty()) {
             return {};
@@ -316,6 +344,8 @@ public:
     }
 
 private:
+    struct ClassInfo;
+
     struct Function {
         const Decl* decl = nullptr;
         std::string qualified;
@@ -326,6 +356,10 @@ private:
         bool variadic = false;
         bool defined = false;
         bool is_static = false;
+        bool is_member = false;
+        bool is_constructor = false;
+        bool is_destructor = false;
+        ClassInfo* owner = nullptr;
     };
 
     struct Global {
@@ -337,6 +371,28 @@ private:
         bool defined = false;
         bool is_static = false;
         const Expr* initializer = nullptr;
+    };
+
+    struct MemberInfo {
+        std::string name;
+        TypePtr type;
+        int offset = 0;
+        bool is_static = false;
+    };
+
+    struct ClassInfo {
+        const Decl* decl = nullptr;
+        std::string qualified;
+        int size = 0;
+        int align = 1;
+        ClassInfo* base = nullptr;
+        std::vector<MemberInfo> members;
+        std::map<std::string, MemberInfo*> member_index;
+        std::map<std::string, std::vector<Function*>> methods;
+        std::vector<Function*> constructors;
+        Function* destructor = nullptr;
+        std::map<std::string, Global*> static_globals;
+        bool laid_out = false;
     };
 
     struct Local {
@@ -366,6 +422,138 @@ private:
             return parts[0];
         }
         return prefix + "::" + parts[0];
+    }
+
+    ClassInfo* find_class(const std::string& name) {
+        const auto exact = class_index_.find(name);
+        if (exact != class_index_.end()) {
+            return exact->second.get();
+        }
+        ClassInfo* match = nullptr;
+        for (const auto& entry : class_index_) {
+            const std::string& qualified = entry.first;
+            if (qualified.size() > name.size() + 2 &&
+                qualified.compare(qualified.size() - name.size(), name.size(), name) == 0 &&
+                qualified[qualified.size() - name.size() - 2] == ':' &&
+                qualified[qualified.size() - name.size() - 1] == ':') {
+                if (match != nullptr) {
+                    return nullptr;
+                }
+                match = entry.second.get();
+            }
+        }
+        return match;
+    }
+
+    ClassInfo* find_class(const Name& name) { return find_class(name.to_string()); }
+
+    ClassInfo* class_of(const TypePtr& raw) {
+        const TypePtr type = resolve_type(raw);
+        if (!type || type->kind != TypeKind::Named) {
+            return nullptr;
+        }
+        return find_class(type->name);
+    }
+
+    MemberInfo* find_member(ClassInfo* info, const std::string& name) {
+        for (ClassInfo* current = info; current != nullptr; current = current->base) {
+            const auto found = current->member_index.find(name);
+            if (found != current->member_index.end()) {
+                return found->second;
+            }
+        }
+        return nullptr;
+    }
+
+    void collect_classes(const std::vector<DeclPtr>& declarations,
+                         const std::string& prefix) {
+        for (const DeclPtr& declaration : declarations) {
+            if (!declaration) {
+                continue;
+            }
+            if (declaration->kind == DeclKind::Namespace) {
+                std::string nested = prefix;
+                if (!declaration->name.parts.empty()) {
+                    for (const std::string& part : declaration->name.parts) {
+                        if (!nested.empty()) {
+                            nested += "::";
+                        }
+                        nested += part;
+                    }
+                } else {
+                    if (!nested.empty()) {
+                        nested += "::";
+                    }
+                    nested += "$anon" + std::to_string(anonymous_counter_++);
+                }
+                collect_classes(declaration->children, nested);
+                continue;
+            }
+            if (declaration->kind != DeclKind::Class) {
+                continue;
+            }
+            auto info = std::make_unique<ClassInfo>();
+            info->decl = declaration.get();
+            info->qualified = qualify(prefix, declaration->name);
+            if (class_index_.find(info->qualified) != class_index_.end()) {
+                error(*declaration, "class already defined: " + info->qualified);
+                continue;
+            }
+            ClassInfo* raw = info.get();
+            class_index_[info->qualified] = std::move(info);
+            collect_classes(declaration->children, raw->qualified);
+        }
+    }
+
+    void layout_classes() {
+        for (auto& entry : class_index_) {
+            layout_class(*entry.second);
+        }
+    }
+
+    void layout_class(ClassInfo& info) {
+        if (info.laid_out) {
+            return;
+        }
+        info.laid_out = true;
+        if (!info.decl->base_names.empty()) {
+            ClassInfo* base = find_class(info.decl->base_names.front());
+            if (!base) {
+                error(*info.decl, "unknown base class: " +
+                                       info.decl->base_names.front().to_string());
+            } else {
+                layout_class(*base);
+                info.base = base;
+                info.align = base->align;
+                info.size = base->size;
+            }
+        }
+        for (const DeclPtr& member : info.decl->children) {
+            if (!member || member->kind != DeclKind::Variable || member->is_static) {
+                continue;
+            }
+            TypePtr type = resolve_type(member->type);
+            const int alignment = std::max(1, type_align(type));
+            const int size = std::max(1, type_size(type));
+            info.size = (info.size + alignment - 1) / alignment * alignment;
+            MemberInfo field;
+            field.name = member->name.to_string();
+            field.type = type;
+            field.offset = info.size;
+            info.size += size;
+            info.align = std::max(info.align, alignment);
+            info.member_index[field.name] = nullptr;
+            info.members.push_back(std::move(field));
+        }
+        if (info.members.empty() && info.base == nullptr) {
+            info.size = 1;
+            info.align = 1;
+        } else {
+            info.size = (info.size + info.align - 1) / info.align * info.align;
+        }
+        for (MemberInfo& member : info.members) {
+            info.member_index[member.name] = &member;
+        }
     }
 
     TypePtr resolve_type(TypePtr type) {
@@ -417,13 +605,23 @@ private:
             const int element = type_size(type->element);
             return element * static_cast<int>(type->array_size);
         }
-        case TypeKind::Named: return 4;
+        case TypeKind::Named: {
+            if (ClassInfo* info = find_class(type->name)) {
+                return info->size;
+            }
+            return 4;
+        }
         case TypeKind::Function: return 4;
         }
         return 4;
     }
 
     int type_align(const TypePtr& type) {
+        if (type && type->kind == TypeKind::Named) {
+            if (ClassInfo* info = find_class(type->name)) {
+                return info->align;
+            }
+        }
         const int size = type_size(type);
         if (size >= 8) {
             return 8;
@@ -476,9 +674,12 @@ private:
                 error(*declaration, "templates are not supported until M9.8");
                 break;
             case DeclKind::Class:
+                collect_class_members(*declaration,
+                                      qualify(prefix, declaration->name));
+                break;
             case DeclKind::Enum:
                 error(*declaration,
-                      "classes and enums are not supported until M9.5");
+                      "enums are not supported until a later M9 phase");
                 break;
             case DeclKind::Parameter:
             case DeclKind::Access:
@@ -489,33 +690,74 @@ private:
         }
     }
 
-    void collect_function(const Decl& declaration, const std::string& prefix) {
+    Function* collect_function(const Decl& declaration, const std::string& prefix) {
         if (declaration.is_template) {
             error(declaration, "function templates are not supported until M9.8");
-            return;
+            return nullptr;
         }
-        if (declaration.is_constructor || declaration.is_destructor ||
-            declaration.is_operator || !declaration.name.parts.empty()) {
-            if (declaration.is_constructor || declaration.is_destructor ||
-                declaration.is_operator) {
-                error(declaration,
-                      "member/operator functions are not supported until M9.5");
-                return;
+        ClassInfo* owner = nullptr;
+        std::string base_name = declaration.name.parts.empty()
+                                    ? std::string()
+                                    : declaration.name.parts.back();
+        std::string qualified;
+        bool constructor = declaration.is_constructor;
+        bool destructor = declaration.is_destructor;
+        if (declaration.name.parts.size() > 1) {
+            Name class_name;
+            class_name.parts.assign(declaration.name.parts.begin(),
+                                    declaration.name.parts.end() - 1);
+            owner = find_class(class_name);
+            if (owner) {
+                qualified = owner->qualified + "::" + base_name;
+                if (base_name == owner->qualified.substr(
+                                     owner->qualified.find_last_of(':') + 1) &&
+                    !destructor) {
+                    constructor = true;
+                }
+            } else {
+                qualified = declaration.name.to_string();
             }
+        } else {
+            owner = find_class(prefix);
+            qualified = owner ? owner->qualified + "::" + base_name
+                              : qualify(prefix, declaration.name);
         }
+        if ((constructor || destructor) && !owner) {
+            error(declaration, "member function has no class context");
+            return nullptr;
+        }
+        if (declaration.is_operator) {
+            error(declaration, "operator overloads are not supported until M9.6");
+            return nullptr;
+        }
+
         auto function = std::make_unique<Function>();
         function->decl = &declaration;
-        function->qualified = qualify(prefix, declaration.name);
+        function->qualified = qualified;
         function->extern_c = declaration.is_extern_c;
         function->is_static = declaration.is_static;
         function->defined = declaration.body != nullptr;
         function->variadic = declaration.variadic;
-        function->result = resolve_type(declaration.type);
+        function->owner = owner;
+        function->is_member = owner != nullptr && !declaration.is_static;
+        function->is_constructor = constructor;
+        function->is_destructor = destructor;
+        function->result = (constructor || destructor)
+                               ? Type::make_builtin(BuiltinKind::Void)
+                               : resolve_type(declaration.type);
         for (const Param& parameter : declaration.parameters) {
             function->parameters.push_back(decay(resolve_type(parameter.type)));
         }
-        function->symbol = mangle_function(function->qualified, function->parameters,
-                                           function->extern_c, function->variadic);
+        if (owner && (constructor || destructor)) {
+            function->symbol = mangle_member(owner->qualified, base_name,
+                                             function->parameters, constructor,
+                                             destructor);
+        } else {
+            function->symbol = mangle_function(function->qualified,
+                                               function->parameters,
+                                               function->extern_c,
+                                               function->variadic);
+        }
         if (function->is_static) {
             function->symbol = "__cxx_static_" +
                                std::to_string(static_counter_++) + "_" +
@@ -526,17 +768,56 @@ private:
                 if (existing->defined && function->defined) {
                     error(declaration, "function already defined: " +
                                            function->qualified);
-                    return;
+                    return existing.get();
                 }
                 if (function->defined) {
                     existing->defined = true;
                     existing->decl = &declaration;
                 }
-                return;
+                return existing.get();
             }
         }
-        function_index_[function->qualified].push_back(function.get());
+        Function* raw = function.get();
+        function_index_[function->qualified].push_back(raw);
+        if (owner) {
+            if (constructor) {
+                owner->constructors.push_back(raw);
+            } else if (destructor) {
+                owner->destructor = raw;
+            } else {
+                owner->methods[base_name].push_back(raw);
+            }
+        }
         function_storage_.push_back(std::move(function));
+        return raw;
+    }
+
+    void collect_class_members(const Decl& declaration, const std::string& prefix) {
+        ClassInfo* info = find_class(prefix);
+        if (!info) {
+            return;
+        }
+        for (const DeclPtr& child : declaration.children) {
+            if (!child) {
+                continue;
+            }
+            if (child->kind == DeclKind::Function) {
+                collect_function(*child, prefix);
+            } else if (child->kind == DeclKind::Variable && child->is_static) {
+                collect_global(*child, prefix);
+                const auto found = global_index_.find(
+                    qualify(prefix, child->name));
+                if (found != global_index_.end()) {
+                    info->static_globals[child->name.to_string()] = found->second;
+                }
+            } else if (child->kind == DeclKind::Class) {
+                collect_class_members(*child,
+                                      qualify(prefix, child->name));
+            } else if (child->kind == DeclKind::TypeAlias ||
+                       child->kind == DeclKind::Using) {
+                collect_using(*child, prefix);
+            }
+        }
     }
 
     void collect_global(const Decl& declaration, const std::string& prefix) {
@@ -588,8 +869,21 @@ private:
         using_aliases_[prefix][alias] = declaration.name.to_string();
     }
 
-    void push_scope() { local_scopes_.emplace_back(); }
-    void pop_scope() { local_scopes_.pop_back(); }
+    void push_scope() {
+        local_scopes_.emplace_back();
+        local_destructors_.emplace_back();
+    }
+    void pop_scope() {
+        if (!local_destructors_.empty()) {
+            for (auto entry = local_destructors_.back().rbegin();
+                 entry != local_destructors_.back().rend(); ++entry) {
+                emit("    LEA R0, [R7 + " + std::to_string(entry->first) + "]");
+                emit("    CALL " + entry->second->symbol);
+            }
+            local_destructors_.pop_back();
+        }
+        local_scopes_.pop_back();
+    }
 
     Local* lookup_local(const Name& name) {
         if (name.parts.size() != 1) {
@@ -724,6 +1018,12 @@ private:
                 }
                 return type;
             }
+            if (current_class_ != nullptr && expression.name.parts.size() == 1) {
+                if (MemberInfo* member =
+                        find_member(current_class_, expression.name.parts[0])) {
+                    return member->type;
+                }
+            }
             if (!lookup_functions(expression.name, current_prefix_).empty()) {
                 return Type::make_pointer(Type::make_builtin(BuiltinKind::Int));
             }
@@ -811,13 +1111,51 @@ private:
         case ExprKind::Sizeof:
         case ExprKind::Alignof:
             return Type::make_builtin(BuiltinKind::Int);
-        case ExprKind::Member:
+        case ExprKind::This: {
+            TypePtr type = Type::make_builtin(BuiltinKind::Void);
+            if (current_class_ != nullptr) {
+                Name name;
+                name.parts = split_qualified(current_class_->qualified);
+                type = Type::make_named(name);
+            }
+            return Type::make_pointer(type);
+        }
+        case ExprKind::Member: {
+            const TypePtr base_type = type_of(*expression.children[0], false);
+            TypePtr object_type = base_type;
+            if (expression.is_arrow) {
+                if (object_type && (object_type->kind == TypeKind::Pointer ||
+                                    object_type->kind == TypeKind::LValueRef ||
+                                    object_type->kind == TypeKind::RValueRef)) {
+                    object_type = object_type->element;
+                } else {
+                    diagnose_once(expression, "'->' requires a pointer");
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
+            }
+            ClassInfo* info = class_of(object_type);
+            if (!info) {
+                diagnose_once(expression, "member access on a non-class type");
+                return Type::make_builtin(BuiltinKind::Int);
+            }
+            const std::string member_name = expression.name.to_string();
+            if (MemberInfo* member = find_member(info, member_name)) {
+                return member->type;
+            }
+            for (ClassInfo* current = info; current != nullptr; current = current->base) {
+                const auto global = current->static_globals.find(member_name);
+                if (global != current->static_globals.end()) {
+                    return global->second->type;
+                }
+            }
+            diagnose_once(expression, "unknown member: " + member_name);
+            return Type::make_builtin(BuiltinKind::Int);
+        }
         case ExprKind::Scope:
         case ExprKind::New:
         case ExprKind::Delete:
         case ExprKind::Typeid:
         case ExprKind::Lambda:
-        case ExprKind::This:
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
             diagnose_once(expression, "expression is not supported until a later M9 phase");
@@ -884,20 +1222,52 @@ private:
         return 100;
     }
 
+    std::vector<Function*> class_methods(ClassInfo* info,
+                                         const std::string& name) {
+        for (ClassInfo* current = info; current != nullptr; current = current->base) {
+            const auto found = current->methods.find(name);
+            if (found != current->methods.end()) {
+                return found->second;
+            }
+        }
+        return {};
+    }
+
     Function* resolve_call(const Expr& call) {
         const auto cached = call_targets_.find(&call);
         if (cached != call_targets_.end()) {
             return cached->second;
         }
         call_targets_[&call] = nullptr;
-        if (call.children.empty() || call.children[0]->kind != ExprKind::Name) {
-            diagnose_once(call, "only direct function calls are supported in M9.3");
+        std::vector<Function*> candidates;
+        if (!call.children.empty() &&
+            call.children[0]->kind == ExprKind::Name) {
+            const Name& name = call.children[0]->name;
+            candidates = lookup_functions(name, current_prefix_);
+            if (candidates.empty() && current_class_ != nullptr &&
+                name.parts.size() == 1) {
+                candidates = class_methods(current_class_, name.parts[0]);
+            }
+        } else if (!call.children.empty() &&
+                   call.children[0]->kind == ExprKind::Member) {
+            const Expr& member = *call.children[0];
+            TypePtr object_type = type_of(*member.children[0], false);
+            if (member.is_arrow && object_type &&
+                (object_type->kind == TypeKind::Pointer ||
+                 object_type->kind == TypeKind::LValueRef ||
+                 object_type->kind == TypeKind::RValueRef)) {
+                object_type = object_type->element;
+            }
+            ClassInfo* info = class_of(object_type);
+            if (info) {
+                candidates = class_methods(info, member.name.to_string());
+            }
+        } else {
+            diagnose_once(call, "unsupported call target");
             return nullptr;
         }
-        const Name& name = call.children[0]->name;
-        std::vector<Function*> candidates = lookup_functions(name, current_prefix_);
         if (candidates.empty()) {
-            diagnose_once(call, "unknown function: " + name.to_string());
+            diagnose_once(call, "unknown function");
             return nullptr;
         }
         std::vector<TypePtr> argument_types;
@@ -947,11 +1317,11 @@ private:
             }
         }
         if (!best) {
-            diagnose_once(call, "no matching function for: " + name.to_string());
+            diagnose_once(call, "no matching function for call");
             return nullptr;
         }
         if (ambiguous) {
-            diagnose_once(call, "ambiguous call to: " + name.to_string());
+            diagnose_once(call, "ambiguous function call");
             return nullptr;
         }
         call_targets_[&call] = best;
@@ -963,6 +1333,9 @@ private:
             return true;
         }
         if (expression.kind == ExprKind::Index) {
+            return true;
+        }
+        if (expression.kind == ExprKind::Member) {
             return true;
         }
         if (expression.kind == ExprKind::Unary && expression.text == "*") {
@@ -1186,6 +1559,21 @@ private:
                 emit("    LEA R0, [" + global->symbol + "]");
                 return;
             }
+            if (current_class_ != nullptr && expression.name.parts.size() == 1) {
+                if (MemberInfo* member =
+                        find_member(current_class_, expression.name.parts[0])) {
+                    if (this_offset_ < 0) {
+                        diagnose_once(expression, "member used outside a member function");
+                        emit("    MOV R0, #0");
+                        return;
+                    }
+                    emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
+                    if (member->offset != 0) {
+                        emit("    ADD R0, R0, #" + std::to_string(member->offset));
+                    }
+                    return;
+                }
+            }
             diagnose_once(expression, "unknown variable: " + expression.name.to_string());
             emit("    MOV R0, #0");
             return;
@@ -1208,6 +1596,53 @@ private:
         }
         if (expression.kind == ExprKind::Unary && expression.text == "*") {
             gen_expr(*expression.children[0]);
+            return;
+        }
+        if (expression.kind == ExprKind::This) {
+            if (this_offset_ < 0) {
+                diagnose_once(expression, "'this' is only valid in a member function");
+                emit("    MOV R0, #0");
+            } else {
+                emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
+            }
+            return;
+        }
+        if (expression.kind == ExprKind::Member) {
+            const std::string member_name = expression.name.to_string();
+            const TypePtr base_type = type_of(*expression.children[0], false);
+            TypePtr object_type = base_type;
+            if (expression.is_arrow && object_type &&
+                (object_type->kind == TypeKind::Pointer ||
+                 object_type->kind == TypeKind::LValueRef ||
+                 object_type->kind == TypeKind::RValueRef)) {
+                object_type = object_type->element;
+            }
+            ClassInfo* info = class_of(object_type);
+            if (!info) {
+                diagnose_once(expression, "member access on a non-class type");
+                emit("    MOV R0, #0");
+                return;
+            }
+            if (MemberInfo* member = find_member(info, member_name)) {
+                if (expression.is_arrow) {
+                    gen_expr(*expression.children[0]);
+                } else {
+                    gen_address(*expression.children[0]);
+                }
+                if (member->offset != 0) {
+                    emit("    ADD R0, R0, #" + std::to_string(member->offset));
+                }
+                return;
+            }
+            for (ClassInfo* current = info; current != nullptr; current = current->base) {
+                const auto global = current->static_globals.find(member_name);
+                if (global != current->static_globals.end()) {
+                    emit("    LEA R0, [" + global->second->symbol + "]");
+                    return;
+                }
+            }
+            diagnose_once(expression, "unknown member: " + member_name);
+            emit("    MOV R0, #0");
             return;
         }
         diagnose_once(expression, "expression is not an lvalue in M9.3");
@@ -1270,6 +1705,21 @@ private:
                 }
                 load_value(type);
                 return type;
+            }
+            if (current_class_ != nullptr && expression.name.parts.size() == 1) {
+                if (MemberInfo* member =
+                        find_member(current_class_, expression.name.parts[0])) {
+                    gen_address(expression);
+                    if (member->type && member->type->kind == TypeKind::Array) {
+                        return member->type;
+                    }
+                    if (is_fp(member->type)) {
+                        load_fp(member->type);
+                    } else {
+                        load_value(member->type);
+                    }
+                    return member->type;
+                }
             }
             if (const std::vector<Function*> functions =
                     lookup_functions(expression.name, current_prefix_);
@@ -1335,13 +1785,27 @@ private:
         case ExprKind::Alignof:
             emit("    MOV R0, #4");
             return Type::make_builtin(BuiltinKind::Int);
-        case ExprKind::Member:
+        case ExprKind::This:
+            gen_address(expression);
+            return type_of(expression);
+        case ExprKind::Member: {
+            gen_address(expression);
+            const TypePtr type = type_of(expression);
+            if (type && type->kind == TypeKind::Array) {
+                return type;
+            }
+            if (is_fp(type)) {
+                load_fp(type);
+            } else {
+                load_value(type);
+            }
+            return type;
+        }
         case ExprKind::Scope:
         case ExprKind::New:
         case ExprKind::Delete:
         case ExprKind::Typeid:
         case ExprKind::Lambda:
-        case ExprKind::This:
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
             diagnose_once(expression, "expression is not supported until a later M9 phase");
@@ -1631,6 +2095,18 @@ private:
 
     TypePtr gen_assignment(const Expr& expression) {
         const TypePtr lhs_type = type_of(*expression.children[0], false);
+        if (ClassInfo* info = class_of(lhs_type)) {
+            gen_address(*expression.children[0]);
+            const int destination =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(destination) + "]");
+            gen_address(*expression.children[1]);
+            emit("    MOV R1, R0");
+            emit("    LOAD R0, [R7 + " + std::to_string(destination) + "]");
+            emit("    MOV R2, #" + std::to_string(info->size));
+            emit("    CALL memcpy");
+            return lhs_type;
+        }
         if (is_fp(lhs_type)) {
             return gen_fp_assignment(expression, lhs_type);
         }
@@ -1742,6 +2218,25 @@ private:
             emit("    MOV R0, #0");
             return Type::make_builtin(BuiltinKind::Int);
         }
+        const bool member_call = function->is_member;
+        int this_temp = -1;
+        if (member_call) {
+            this_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            if (expression.children[0]->kind == ExprKind::Member) {
+                const Expr& member = *expression.children[0];
+                if (member.is_arrow) {
+                    gen_expr(*member.children[0]);
+                } else {
+                    gen_address(*member.children[0]);
+                }
+            } else if (this_offset_ >= 0) {
+                emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
+            } else {
+                diagnose_once(expression, "member call outside a member function");
+                emit("    MOV R0, #0");
+            }
+            emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+        }
         struct ArgumentSlot {
             int offset = 0;
             bool fp = false;
@@ -1749,7 +2244,7 @@ private:
         };
         std::vector<ArgumentSlot> slots;
         std::vector<int> stack_temps;
-        int integer_argument = 0;
+        int integer_argument = member_call ? 1 : 0;
         int fp_argument = 0;
         const std::size_t named_parameters = function->parameters.size();
         for (std::size_t index = 0; index < expression.arguments.size(); ++index) {
@@ -1818,8 +2313,11 @@ private:
                 emit("    STORE R4, [SP + " + std::to_string(offset + 4) + "]");
             }
         }
-        int integer_register = 0;
+        int integer_register = member_call ? 1 : 0;
         int fp_register = 0;
+        if (member_call) {
+            emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
+        }
         for (const ArgumentSlot& slot : slots) {
             if (slot.fp) {
                 emit(std::string("    FLOAD.") +
@@ -1958,14 +2456,36 @@ private:
                 emit("    JMP " + continue_labels_.back());
             }
             return;
-        case StmtKind::Return:
+        case StmtKind::Return: {
+            TypePtr result_type;
+            int value_temp = -1;
             if (statement.expression) {
+                result_type = type_of(*statement.expression);
                 gen_expr(*statement.expression);
+                value_temp = allocate_local(result_type);
+                if (is_fp(result_type)) {
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(result_type) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(value_temp) + "]");
+                } else {
+                    emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+                }
             } else {
                 emit("    MOV R0, #0");
             }
+            emit_all_local_destructors();
+            if (value_temp >= 0) {
+                if (is_fp(result_type)) {
+                    emit(std::string("    FLOAD.") +
+                         (is_float32(result_type) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(value_temp) + "]");
+                } else {
+                    emit("    LOAD R0, [R7 + " + std::to_string(value_temp) + "]");
+                }
+            }
             emit("    JMP " + return_label_);
             return;
+        }
         case StmtKind::Switch:
         case StmtKind::Case:
         case StmtKind::Default:
@@ -1987,6 +2507,175 @@ private:
         }
     }
 
+    Function* find_constructor(ClassInfo* info, std::size_t argument_count) {
+        for (ClassInfo* current = info; current != nullptr; current = current->base) {
+            for (Function* constructor : current->constructors) {
+                if (constructor->parameters.size() == argument_count) {
+                    return constructor;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    void zero_object(int offset, int size) {
+        for (int cursor = 0; cursor < size; cursor += 4) {
+            emit("    MOV R0, #0");
+            emit("    STORE R0, [R7 + " + std::to_string(offset + cursor) + "]");
+        }
+    }
+
+    void construct_object(ClassInfo* info, int offset,
+                          const std::vector<ExprPtr>& arguments) {
+        Function* constructor = find_constructor(info, arguments.size());
+        if (!constructor) {
+            if (arguments.empty()) {
+                zero_object(offset, info->size);
+                return;
+            }
+            error(*info->decl, "no matching constructor for " + info->qualified);
+            return;
+        }
+        std::vector<int> integer_temps;
+        std::vector<std::pair<int, TypePtr>> fp_temps;
+        for (std::size_t index = 0; index < arguments.size(); ++index) {
+            const TypePtr parameter = resolve_type(constructor->parameters[index]);
+            if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                              parameter->kind == TypeKind::RValueRef)) {
+                gen_address(*arguments[index]);
+                const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
+            } else if (is_fp(parameter)) {
+                gen_as_fp(*arguments[index], parameter);
+                const int temp = allocate_local(parameter);
+                emit(std::string("    FSTORE.") +
+                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                     std::to_string(temp) + "]");
+                fp_temps.emplace_back(temp, parameter);
+            } else {
+                gen_expr(*arguments[index]);
+                const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
+            }
+        }
+        emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+        for (std::size_t index = 0; index < integer_temps.size(); ++index) {
+            emit("    LOAD R" + std::to_string(index + 1) + ", [R7 + " +
+                 std::to_string(integer_temps[index]) + "]");
+        }
+        for (std::size_t index = 0; index < fp_temps.size(); ++index) {
+            emit(std::string("    FLOAD.") +
+                 (is_float32(fp_temps[index].second) ? "W" : "D") + " F" +
+                 std::to_string(index) + ", [R7 + " +
+                 std::to_string(fp_temps[index].first) + "]");
+        }
+        emit("    CALL " + constructor->symbol);
+    }
+
+    Function* find_destructor(ClassInfo* info) {
+        for (ClassInfo* current = info; current != nullptr; current = current->base) {
+            if (current->destructor != nullptr) {
+                return current->destructor;
+            }
+        }
+        return nullptr;
+    }
+
+    const Initializer* find_initializer(const Decl& declaration,
+                                        const std::string& name) {
+        for (const Initializer& initializer : declaration.initializers) {
+            if (initializer.name.to_string() == name) {
+                return &initializer;
+            }
+        }
+        return nullptr;
+    }
+
+    void emit_constructor_prefix(Function& function) {
+        ClassInfo* info = function.owner;
+        if (!info) {
+            return;
+        }
+        if (info->base != nullptr) {
+            if (Function* base_constructor = find_constructor(info->base, 0)) {
+                emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
+                emit("    CALL " + base_constructor->symbol);
+            }
+        }
+        for (const DeclPtr& child : info->decl->children) {
+            if (!child || child->kind != DeclKind::Variable || child->is_static) {
+                continue;
+            }
+            const std::string name = child->name.to_string();
+            MemberInfo* member = find_member(info, name);
+            if (!member) {
+                continue;
+            }
+            const Initializer* initializer =
+                find_initializer(*function.decl, name);
+            ClassInfo* member_class = class_of(member->type);
+            if (member_class) {
+                const std::vector<ExprPtr> empty;
+                const std::vector<ExprPtr>* arguments = &empty;
+                if (initializer != nullptr) {
+                    if (initializer->arguments.size() == 1 &&
+                        initializer->arguments[0]->kind == ExprKind::InitializerList) {
+                        arguments = &initializer->arguments[0]->children;
+                    } else {
+                        arguments = &initializer->arguments;
+                    }
+                }
+                construct_object(member_class, this_offset_ + member->offset,
+                                 *arguments);
+            } else if (initializer != nullptr &&
+                       !initializer->arguments.empty()) {
+                if (is_fp(member->type)) {
+                    gen_as_fp(*initializer->arguments[0], member->type);
+                    emit("    LOAD R1, [R7 + " + std::to_string(this_offset_) + "]");
+                    if (member->offset != 0) {
+                        emit("    ADD R1, R1, #" + std::to_string(member->offset));
+                    }
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(member->type) ? "W" : "D") + " F0, [R1]");
+                } else {
+                    gen_expr(*initializer->arguments[0]);
+                    emit("    LOAD R1, [R7 + " + std::to_string(this_offset_) + "]");
+                    if (member->offset != 0) {
+                        emit("    ADD R1, R1, #" + std::to_string(member->offset));
+                    }
+                    store_value(member->type);
+                }
+            }
+        }
+    }
+
+    void emit_destructor_suffix(Function& function) {
+        ClassInfo* info = function.owner;
+        if (!info) {
+            return;
+        }
+        for (auto member = info->members.rbegin(); member != info->members.rend();
+             ++member) {
+            ClassInfo* member_class = class_of(member->type);
+            if (!member_class) {
+                continue;
+            }
+            if (Function* destructor = find_destructor(member_class)) {
+                emit("    LEA R0, [R7 + " +
+                     std::to_string(this_offset_ + member->offset) + "]");
+                emit("    CALL " + destructor->symbol);
+            }
+        }
+        if (info->base != nullptr) {
+            if (Function* base_destructor = find_destructor(info->base)) {
+                emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
+                emit("    CALL " + base_destructor->symbol);
+            }
+        }
+    }
+
     void declare_local(const Decl& declaration) {
         if (local_scopes_.empty()) {
             push_scope();
@@ -1999,6 +2688,33 @@ private:
         local.offset = allocate_local(type);
         if (!declaration.name.parts.empty()) {
             local_scopes_.back()[declaration.name.parts.back()] = local;
+        }
+        if (ClassInfo* info = class_of(type)) {
+            const std::vector<ExprPtr> empty;
+            const std::vector<ExprPtr>* arguments = &empty;
+            if (declaration.initializer) {
+                if (declaration.initializer->kind == ExprKind::Call) {
+                    arguments = &declaration.initializer->arguments;
+                } else if (declaration.initializer->kind ==
+                           ExprKind::InitializerList) {
+                    arguments = &declaration.initializer->children;
+                } else {
+                    gen_address(*declaration.initializer);
+                    emit("    MOV R1, R0");
+                    emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    MOV R2, #" + std::to_string(info->size));
+                    emit("    CALL memcpy");
+                    if (Function* destructor = find_destructor(info)) {
+                        local_destructors_.back().push_back({local.offset, destructor});
+                    }
+                    return;
+                }
+            }
+            construct_object(info, local.offset, *arguments);
+            if (Function* destructor = find_destructor(info)) {
+                local_destructors_.back().push_back({local.offset, destructor});
+            }
+            return;
         }
         if (local.is_reference) {
             if (!declaration.initializer) {
@@ -2039,15 +2755,37 @@ private:
             return;
         }
         if (declaration.initializer) {
+            const Expr* initializer = declaration.initializer.get();
+            if (initializer->kind == ExprKind::Call) {
+                if (initializer->arguments.size() == 1) {
+                    initializer = initializer->arguments[0].get();
+                } else if (initializer->arguments.empty()) {
+                    zero_object(local.offset, std::max(1, type_size(type)));
+                    return;
+                } else {
+                    error(declaration, "invalid scalar initializer");
+                    return;
+                }
+            }
             if (is_fp(type)) {
-                gen_as_fp(*declaration.initializer, type);
+                gen_as_fp(*initializer, type);
                 emit(std::string("    FSTORE.") + (is_float32(type) ? "W" : "D") +
                      " F0, [R7 + " + std::to_string(local.offset) + "]");
                 return;
             }
-            gen_expr(*declaration.initializer);
+            gen_expr(*initializer);
             emit("    LEA R1, [R7 + " + std::to_string(local.offset) + "]");
             store_value(type);
+        }
+    }
+
+    void emit_all_local_destructors() {
+        for (auto scope = local_destructors_.rbegin();
+             scope != local_destructors_.rend(); ++scope) {
+            for (auto entry = scope->rbegin(); entry != scope->rend(); ++entry) {
+                emit("    LEA R0, [R7 + " + std::to_string(entry->first) + "]");
+                emit("    CALL " + entry->second->symbol);
+            }
         }
     }
 
@@ -2083,8 +2821,19 @@ private:
         emit("    ADJSP #-" + placeholder);
         emit("    LEA R7, [SP]");
 
+        current_class_ = function.owner;
+        this_offset_ = -1;
         int integer_argument = 0;
         int fp_argument = 0;
+        if (function.is_member) {
+            Local local;
+            local.type = Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
+            local.offset = allocate_local(local.type);
+            local.is_parameter = true;
+            emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+            this_offset_ = local.offset;
+            integer_argument = 1;
+        }
         for (std::size_t index = 0; index < function.decl->parameters.size(); ++index) {
             const Param& parameter = function.decl->parameters[index];
             Local local;
@@ -2122,7 +2871,13 @@ private:
         }
 
         if (function.decl->body) {
+            if (function.is_constructor) {
+                emit_constructor_prefix(function);
+            }
             gen_statement(*function.decl->body);
+            if (function.is_destructor) {
+                emit_destructor_suffix(function);
+            }
         }
         if (is_fp(resolve_type(function.result))) {
             const TypePtr result = resolve_type(function.result);
@@ -2247,13 +3002,17 @@ private:
     std::map<std::string, TypePtr> type_aliases_;
     std::map<std::string, std::set<std::string>> imports_;
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;
+    std::map<std::string, std::unique_ptr<ClassInfo>> class_index_;
 
     std::vector<std::map<std::string, Local>> local_scopes_;
+    std::vector<std::vector<std::pair<int, Function*>>> local_destructors_;
     std::vector<std::string> break_labels_;
     std::vector<std::string> continue_labels_;
     std::map<const Expr*, Function*> call_targets_;
     std::set<const Expr*> diagnosed_expressions_;
     std::string current_prefix_;
+    ClassInfo* current_class_ = nullptr;
+    int this_offset_ = -1;
     std::string return_label_;
     std::string va_base_placeholder_;
     std::string text_;

@@ -569,6 +569,31 @@ private:
         return peek(index).text == "{" || peek(index).text == ":";
     }
 
+    bool looks_like_parameter_type() const {
+        if (!at("(")) {
+            return false;
+        }
+        if (peek(1).text == ")" || peek(1).text == "...") {
+            return true;
+        }
+        if (is_decl_specifier_text(peek(1).text) || peek(1).text == "::") {
+            return true;
+        }
+        if (peek(1).kind == TokenKind::Identifier) {
+            if (is_known_type(peek(1).text)) {
+                return true;
+            }
+            if (peek(2).kind == TokenKind::Identifier ||
+                peek(2).kind == TokenKind::Keyword) {
+                return true;
+            }
+            const std::string_view next = peek(2).text;
+            return next == "::" || next == "*" || next == "&" || next == "&&" ||
+                   next == "<";
+        }
+        return false;
+    }
+
     bool parse_declarator(TypePtr base, Declarator& declarator, bool allow_function,
                           bool allow_abstract) {
         TypePtr type = std::move(base);
@@ -629,7 +654,7 @@ private:
             return false;
         }
 
-        if (at("(") && allow_function) {
+        if (at("(") && allow_function && looks_like_parameter_type()) {
             declarator.is_function = true;
             parse_parameter_list(declarator.parameters, declarator.variadic);
             parse_function_suffix(declarator);
@@ -981,7 +1006,19 @@ private:
                 return;
             }
 
-            if (consume("=")) {
+            if (at("(") && declaration->kind == DeclKind::Variable) {
+                auto call = std::make_unique<Expr>();
+                call->kind = ExprKind::Call;
+                call->location = {peek().line, peek().column};
+                auto callee = std::make_unique<Expr>();
+                callee->kind = ExprKind::Name;
+                if (declaration->type && declaration->type->kind == TypeKind::Named) {
+                    callee->name = declaration->type->name;
+                }
+                call->children.push_back(std::move(callee));
+                call->arguments = parse_argument_list();
+                declaration->initializer = std::move(call);
+            } else if (consume("=")) {
                 if (at("default")) {
                     declaration->is_defaulted = true;
                     advance();

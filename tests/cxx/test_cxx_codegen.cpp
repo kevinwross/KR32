@@ -376,11 +376,121 @@ TEST_CASE("long double is a double alias and NaN comparisons run") {
     CHECK(nan.result == 42);
 }
 
-TEST_CASE("unsupported class code is diagnosed instead of miscompiled") {
-    const cxx::Result result = cxx::compile(
-        "class Widget { public: int value; };\n"
-        "int main() { return 0; }\n");
-    CHECK_FALSE(result.ok);
-    REQUIRE_FALSE(result.diagnostics.empty());
-    CHECK(result.diagnostics.front().message.find("M9.5") != std::string::npos);
+TEST_CASE("class copy construction and assignment are memberwise byte copies") {
+    const ProgramResult program = compile_and_run(
+        "class Pair {\n"
+        "public:\n"
+        "    int a;\n"
+        "    int b;\n"
+        "};\n"
+        "int main() {\n"
+        "    Pair first; first.a = 20; first.b = 22;\n"
+        "    Pair second = first;\n"
+        "    Pair third; third = first;\n"
+        "    return second.a + second.b + third.a + third.b - 42;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("classes lay out members and call member functions") {
+    const ProgramResult program = compile_and_run(
+        "class Point {\n"
+        "public:\n"
+        "    int x;\n"
+        "    int y;\n"
+        "    int sum() { return x + y; }\n"
+        "};\n"
+        "int main() { Point point; point.x = 20; point.y = 22; return point.sum(); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("constructors, this, and member initializer lists run") {
+    const ProgramResult program = compile_and_run(
+        "class Point {\n"
+        "public:\n"
+        "    int x;\n"
+        "    int y;\n"
+        "    Point(int value) : x(value) { y = 1; }\n"
+        "    int sum() { return this->x + this->y; }\n"
+        "};\n"
+        "int main() { Point point(41); return point.sum(); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("destructors run at scope exit") {
+    const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int main() { { Guard guard; } return result; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("single inheritance lays out the base at offset zero") {
+    const ProgramResult program = compile_and_run(
+        "class Base {\n"
+        "public:\n"
+        "    int a;\n"
+        "    Base() { a = 40; }\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    int b;\n"
+        "    Derived() { b = 2; }\n"
+        "    int sum() { return a + b; }\n"
+        "};\n"
+        "int main() { Derived value; return value.sum(); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("member access through pointers and FP members run") {
+    const ProgramResult pointer = compile_and_run(
+        "class Point {\n"
+        "public:\n"
+        "    int x;\n"
+        "    int sum() { return x; }\n"
+        "};\n"
+        "int main() { Point point; point.x = 42; Point* pointer = &point; "
+        "return pointer->sum(); }\n");
+    INFO(pointer.diagnostics);
+    REQUIRE(pointer.ok);
+    CHECK(pointer.result == 42);
+
+    const ProgramResult fp = compile_and_run(
+        "class Value {\n"
+        "public:\n"
+        "    double x;\n"
+        "    Value(double value) : x(value) { }\n"
+        "    double get() { return x; }\n"
+        "};\n"
+        "int main() { Value value(21.0); return (int)(value.get() * 2.0); }\n");
+    INFO(fp.diagnostics);
+    REQUIRE(fp.ok);
+    CHECK(fp.result == 42);
+}
+
+TEST_CASE("static data members and static member functions run") {
+    const ProgramResult program = compile_and_run(
+        "class Counter {\n"
+        "public:\n"
+        "    static int value;\n"
+        "    static int get() { return value; }\n"
+        "};\n"
+        "int Counter::value = 42;\n"
+        "int main() { return Counter::get(); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
 }

@@ -4,9 +4,9 @@
 [docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
 worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
 lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
-mangling, integer code generation), and M9.4 (scalar `float`/`double`, FP calls,
-conversions, and stack varargs) are complete; phase M9.5 (classes, constructors
-and destructors, single inheritance) is next.
+mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
+conversions, and stack varargs), and M9.5 (classes, constructors/destructors,
+single inheritance) are complete; phase M9.6 (virtual dispatch and RTTI) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -97,11 +97,25 @@ Completed in M9.4:
       conversions, references to `double`, `float` returns, and integer/double
       varargs.
 
+Completed in M9.5:
+
+- [x] Class registry and layout: base at offset zero, member natural alignment,
+      empty-class size/alignment, FP members, nested namespaces.
+- [x] `this` in `R0`, unqualified member resolution, `obj.member`,
+      `ptr->member`, member calls, and static member calls.
+- [x] Constructors (default and argument forms, member initializer lists),
+      destructors at scope exit and return paths, object construction order,
+      and memberwise copy construction/assignment.
+- [x] Single inheritance with base constructor/destructor order.
+- [x] Static data members and static member functions.
+- [x] Tests: layout/member access, constructors/`this`, destructors,
+      inheritance, pointer/FP members, static members, and copy.
+
 Not started:
 
-- [ ] Classes, structs, virtual dispatch/RTTI, matrices, templates, exceptions,
-      threads, debug, and CLI integration (M9.5-M9.12). Struct fields containing
-      FP values follow the M9.5 aggregate-layout work.
+- [ ] Virtual dispatch/RTTI, matrices, templates, exceptions, threads, debug,
+      and CLI integration (M9.6-M9.12). By-value class parameters/returns and
+      debug member/`this` records remain deferred.
 
 ## 3. Milestone map
 
@@ -114,7 +128,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.2 | Preprocessor, lexer, parser, declarations, diagnostics | parser unit/golden tests | done |
 | M9.3 | Functions, namespaces, references, overloads, name mangling | simple C++ links/runs | done |
 | M9.4 | Scalar `float`/`double`, FP calls, spills, varargs | FP ABI/varargs tests | done |
-| M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | not started |
+| M9.5 | Classes, constructors/destructors, `this`, single inheritance | class demo runs; layout tests | done |
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | not started |
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | not started |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | not started |
@@ -224,15 +238,25 @@ M9.5 (classes, constructors/destructors, single inheritance) is next.
 
 ### M9.5 — Classes, constructors/destructors, single inheritance
 
-- [ ] Class layout, access control, member offsets, empty classes.
-- [ ] Constructors, destructors, copy construction/assignment, `this`.
-- [ ] Member functions and mangling; static members.
-- [ ] Single inheritance, base layout, constructor/destructor order.
-- [ ] Aggregate copy/return rules for the supported subset.
-- [ ] Debug records for members and `this`.
-- [ ] Tests: object lifetime, member access, inheritance, copy.
+- [x] Class layout, member offsets, empty classes. (Access is recorded by the
+      parser; enforcement is deferred.)
+- [x] Constructors, destructors, `this`, and memberwise copy
+      construction/assignment.
+- [x] Member functions and mangling; static data members and static member
+      functions.
+- [x] Single inheritance, base layout at offset zero, constructor/destructor
+      order.
+- [x] Aggregate memberwise copy/assignment for locals; by-value aggregate
+      parameters/returns remain deferred to the ABI aggregate work.
+- [ ] Debug records for members and `this` move to M9.11 with the debug format.
+- [x] Tests: object lifetime, member access, inheritance, FP members, static
+      members, and copy.
 
 **Gate:** class/inheritance demo runs; layout/debug tests pass.
+**Status:** done 2026-11-02 for the codegen gate; debug member/`this` records are
+tracked in M9.11. Windows MSVC Debug and WSL GCC headless both pass 21/21 CTest
+tests; `kr32_tests` reports 159 test cases and 4702 assertions. M9.6 (virtual
+dispatch/RTTI) is next.
 
 ### M9.6 — Virtual dispatch and RTTI
 
@@ -404,6 +428,15 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 153 test cases
   and 4689 assertions. M9.5 (classes, constructors/destructors, single
   inheritance) is next; FP struct fields follow the M9.5 aggregate layout.
+- **2026-11-02 12:15 -08:00** — Completed M9.5. Added class registry/layout
+  (base at offset zero, natural member alignment, empty classes, FP members),
+  `this` in `R0`, member access and calls, constructors with member initializer
+  lists, destructors at scope exit and return paths, single inheritance with
+  base constructor/destructor order, static members, and memberwise copy
+  construction/assignment. Added class codegen tests. Windows/WSL both pass
+  21/21 CTest tests; `kr32_tests` reports 159 test cases and 4702 assertions.
+  M9.6 (virtual dispatch and RTTI) is next; by-value class parameters/returns
+  and debug member/`this` records remain deferred.
 
 ## 8. Approval
 

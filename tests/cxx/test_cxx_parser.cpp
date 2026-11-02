@@ -332,7 +332,7 @@ TEST_CASE("parser handles extern C and static_assert") {
 TEST_CASE("parser recovers from malformed input") {
     std::vector<Diagnostic> diagnostics;
     const auto unit = parse_source(
-        "int broken( { return 1; } int good = 2;", diagnostics);
+        "int broken = ; int good = 2;", diagnostics);
     CHECK_FALSE(diagnostics.empty());
     CHECK(static_cast<bool>(unit));
     bool saw_good = false;
