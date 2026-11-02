@@ -12,7 +12,8 @@ checklists, dependency notes, test gates, and running log are in
 route table, tick-driven device timing, DMA, a cooperative shared-RAM multicore
 cluster, IPIs, and LL/SC spinlock runs are implemented. The debugger now uses
 embedded Inter and JetBrains Mono fonts with separate source-line and
-instruction stepping controls. See [docs/devices.md](docs/devices.md) and
+instruction stepping controls, and resizes its software surface instead of
+stretching the original frame. See [docs/devices.md](docs/devices.md) and
 [docs/ui.md](docs/ui.md). The C++ toolchain is the remaining planned milestone.
 
 ## Build

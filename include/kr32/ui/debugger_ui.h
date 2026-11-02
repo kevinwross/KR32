@@ -23,7 +23,7 @@ public:
     void toggle_breakpoint_at_current_line();
 
     void render(Canvas& canvas);
-    [[nodiscard]] bool click(int x, int y);
+    [[nodiscard]] bool click(int x, int y, int width, int height);
     [[nodiscard]] bool key(int key, bool shift);
     [[nodiscard]] bool quit_requested() const { return quit_; }
     [[nodiscard]] const std::string& status() const { return status_; }
@@ -32,8 +32,17 @@ public:
     [[nodiscard]] bool headless(const std::string& ppm_path);
 
 private:
+    struct Layout {
+        Rect source;
+        Rect disassembly;
+        Rect registers;
+        Rect variables;
+        Rect bottom;
+    };
+
     enum class Tab { Memory, Machine, Console };
 
+    [[nodiscard]] Layout layout(int width, int height) const;
     void set_status_from_result(const core::StepResult& result);
     void prepare_initial_stop();
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);

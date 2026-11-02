@@ -5,6 +5,7 @@
 
 #include <chrono>
 #include <cstdio>
+#include <memory>
 #include <string>
 #include <thread>
 
@@ -68,7 +69,7 @@ int run(int argc, char** argv) {
         }
     }
 
-    Canvas canvas(1024, 640);
+    auto canvas = std::make_unique<Canvas>(1024, 640);
     bool running = true;
     while (running) {
         kr32::platform::Event event;
@@ -77,11 +78,16 @@ int run(int argc, char** argv) {
             case kr32::platform::Event::Kind::Quit:
                 running = false;
                 break;
+            case kr32::platform::Event::Kind::Resize:
+                if (event.x >= 800 && event.y >= 520) {
+                    canvas = std::make_unique<Canvas>(event.x, event.y);
+                }
+                break;
             case kr32::platform::Event::Kind::KeyDown:
                 (void)debugger.key(event.key, event.shift);
                 break;
             case kr32::platform::Event::Kind::MouseDown:
-                (void)debugger.click(event.x, event.y);
+                (void)debugger.click(event.x, event.y, canvas->width(), canvas->height());
                 break;
             case kr32::platform::Event::Kind::MouseMove:
             case kr32::platform::Event::Kind::MouseUp:
@@ -93,8 +99,8 @@ int run(int argc, char** argv) {
                 running = false;
             }
         }
-        debugger.render(canvas);
-        window.present(canvas);
+        debugger.render(*canvas);
+        window.present(*canvas);
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
     return 0;

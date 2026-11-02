@@ -20,7 +20,8 @@ directly.
   and all painting/hit-testing. It is usable headlessly.
 - `platform::Window` is the SDL2 boundary: one window, one streaming ARGB8888
   texture, keyboard/mouse event mapping, and the `SDL_VIDEODRIVER=dummy` smoke
-  path.
+  path. Resizing the window recreates the software surface and texture at the
+  new size; the pane layout adapts instead of scaling the old 1024×640 frame.
 
 ## Layout
 

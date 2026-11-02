@@ -20,7 +20,7 @@ inline constexpr int Down = 265;
 } // namespace key
 
 struct Event {
-    enum class Kind { None, Quit, KeyDown, MouseDown, MouseUp, MouseMove, Wheel };
+    enum class Kind { None, Quit, Resize, KeyDown, MouseDown, MouseUp, MouseMove, Wheel };
     Kind kind = Kind::None;
     int key = 0;
     bool shift = false;

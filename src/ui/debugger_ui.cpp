@@ -29,7 +29,6 @@ constexpr Color kAccent{76, 170, 255, 255};
 constexpr Color kBad{255, 104, 104, 255};
 
 constexpr int kToolbarHeight = 30;
-constexpr int kBottomTop = 438;
 
 std::string hex(std::uint32_t value, int digits) {
     char buffer[24] = {};
@@ -561,14 +560,15 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
 }
 
 void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
-    constexpr std::uint32_t kRows = 9;
+    const std::uint32_t rows = std::max<std::uint32_t>(
+        3, static_cast<std::uint32_t>(std::max(0, rect.height - 8) / 18));
     const std::uint32_t sp = session_.machine().sp();
-    std::uint32_t base = sp > kRows * 16U + 16U ? sp - kRows * 16U - 16U : session_.machine().ram_base();
+    std::uint32_t base = sp > rows * 16U + 16U ? sp - rows * 16U - 16U : session_.machine().ram_base();
     base &= 0xFFFF'FFF0U;
     if (base < session_.machine().ram_base()) {
         base = session_.machine().ram_base();
     }
-    for (std::uint32_t row = 0; row < kRows; ++row) {
+    for (std::uint32_t row = 0; row < rows; ++row) {
         const std::uint32_t address = base + row * 16U;
         const int y = rect.y + 4 + static_cast<int>(row) * 18;
         std::string line = hex(address, 8) + "  ";
@@ -677,6 +677,31 @@ void DebuggerUI::draw_bottom(Canvas& canvas, Rect rect) {
     }
 }
 
+DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
+    const int right_width = std::clamp(width * 28 / 100, 260, 360);
+    int source_width = std::clamp(width * 42 / 100, 300, width - right_width - 240);
+    int disassembly_width = width - source_width - right_width;
+    if (disassembly_width < 240) {
+        disassembly_width = 240;
+        source_width = width - disassembly_width - right_width;
+    }
+    const int bottom_height = std::clamp(height / 3, 170, 240);
+    const int bottom_top = height - bottom_height;
+    const int top_height = bottom_top - kToolbarHeight;
+    int registers_height = std::clamp(top_height / 3, 190, 220);
+
+    Layout result;
+    result.source = Rect{0, kToolbarHeight, source_width, top_height};
+    result.disassembly = Rect{source_width, kToolbarHeight, disassembly_width, top_height};
+    result.registers =
+        Rect{source_width + disassembly_width, kToolbarHeight, right_width, registers_height};
+    result.variables = Rect{source_width + disassembly_width,
+                            kToolbarHeight + registers_height, right_width,
+                            top_height - registers_height};
+    result.bottom = Rect{0, bottom_top, width, bottom_height};
+    return result;
+}
+
 void DebuggerUI::draw_error(Canvas& canvas) {
     if (error_.empty()) {
         return;
@@ -694,24 +719,27 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_toolbar(canvas);
     if (!loaded_) {
         canvas.text(40, 100, "KR32 WINDOWED DEBUGGER", kAccent, FontRole::UiBold);
-        canvas.text(40, 140, "usage: kr32 gui <image.k32>", kText);
-        canvas.text(40, 160, "F5 run  F10 over  F11 step  shift+F11 out  F9 breakpoint", kDim);
+        canvas.text(40, 140, "usage: kr32 gui <image.k32>", kText, FontRole::Mono);
+        canvas.text(40, 160, "F5 run  F10 over  F11 step  shift+F11 out  F9 breakpoint",
+                    kDim, FontRole::MonoSmall);
         draw_error(canvas);
         return;
     }
-    draw_source(canvas, Rect{0, kToolbarHeight, 420, 330});
-    draw_disassembly(canvas, Rect{420, kToolbarHeight, 300, 330});
-    draw_registers(canvas, Rect{720, kToolbarHeight, 304, 198});
-    draw_variables(canvas, Rect{720, 228, 304, 132});
-    draw_bottom(canvas, Rect{0, kBottomTop, 1024, 202});
+    const Layout areas = layout(canvas.width(), canvas.height());
+    draw_source(canvas, areas.source);
+    draw_disassembly(canvas, areas.disassembly);
+    draw_registers(canvas, areas.registers);
+    draw_variables(canvas, areas.variables);
+    draw_bottom(canvas, areas.bottom);
     draw_error(canvas);
 }
 
-bool DebuggerUI::click(int x, int y) {
+bool DebuggerUI::click(int x, int y, int width, int height) {
     if (!error_.empty()) {
         error_.clear();
         return true;
     }
+    const Layout areas = layout(width, height);
     if (y < kToolbarHeight) {
         if (x >= 82 && x < 122) {
             run();
@@ -732,36 +760,39 @@ bool DebuggerUI::click(int x, int y) {
         }
         return true;
     }
-    if (y >= kBottomTop + 2 && y < kBottomTop + 20) {
-        if (x < 106) {
+    if (y >= areas.bottom.y + 2 && y < areas.bottom.y + 22) {
+        if (x < areas.bottom.x + 106) {
             tab_ = Tab::Memory;
-        } else if (x < 206) {
+        } else if (x < areas.bottom.x + 206) {
             tab_ = Tab::Machine;
-        } else if (x < 306) {
+        } else if (x < areas.bottom.x + 306) {
             tab_ = Tab::Console;
         }
         return true;
     }
-    if (y >= kToolbarHeight + 2 && y < kToolbarHeight + 20) {
-        const int source_start = 420 - 3 * 42 - 4;
-        const int disassembly_start = 420 + 300 - 3 * 40 - 4;
-        if (x >= source_start && x < source_start + 3 * 42) {
-            const int index = (x - source_start) / 42;
+    if (y >= areas.source.y + 2 && y < areas.source.y + 20) {
+        const int button_start = areas.source.x + areas.source.width - 3 * 42 - 4;
+        if (x >= button_start && x < button_start + 3 * 42) {
+            const int index = (x - button_start) / 42;
             if (index == 0) step_line_over();
             if (index == 1) step_line_in();
             if (index == 2) step_line_out();
             return true;
         }
-        if (x >= disassembly_start && x < disassembly_start + 3 * 40) {
-            const int index = (x - disassembly_start) / 40;
+    }
+    if (y >= areas.disassembly.y + 2 && y < areas.disassembly.y + 20) {
+        const int button_start = areas.disassembly.x + areas.disassembly.width - 3 * 40 - 4;
+        if (x >= button_start && x < button_start + 3 * 40) {
+            const int index = (x - button_start) / 40;
             if (index == 0) step_over();
             if (index == 1) step();
             if (index == 2) step_out();
             return true;
         }
     }
-    if (x < 420 && y >= kToolbarHeight && y < kToolbarHeight + 330) {
-        const int row = (y - (kToolbarHeight + 20)) / 9;
+    if (x < areas.source.x + areas.source.width && y >= areas.source.y + 24 &&
+        y < areas.source.y + areas.source.height) {
+        const int row = (y - (areas.source.y + 24)) / 18;
         const int line = source_scroll_ + row + 1;
         std::uint32_t address = 0;
         if (source_line_to_address(line, address)) {
@@ -773,11 +804,15 @@ bool DebuggerUI::click(int x, int y) {
         }
         return true;
     }
-    if (x >= 420 && x < 720 && y >= kToolbarHeight && y < kToolbarHeight + 330) {
-        const int row = (y - (kToolbarHeight + 20)) / 9;
+    if (x >= areas.disassembly.x &&
+        x < areas.disassembly.x + areas.disassembly.width &&
+        y >= areas.disassembly.y + 24 && y < areas.disassembly.y + areas.disassembly.height) {
+        const int row = (y - (areas.disassembly.y + 24)) / 20;
         const std::uint32_t pc = session_.machine().pc();
-        const std::uint32_t before = 16U * 4U;
-        const std::uint32_t start = pc >= before ? pc - before : 0;
+        const int rows = std::max(1, (areas.disassembly.height - 28) / 20);
+        const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
+        std::uint32_t start = pc >= before ? pc - before : 0;
+        start = std::max(start, session_.machine().ram_base());
         const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
         if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
             session_.clear_breakpoint(address);

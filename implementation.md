@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 07:03 -08:00
+> **Last updated:** 2026-11-02 07:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -804,6 +804,13 @@ Newest entries at the bottom. Use the local time zone.
       Over/In/Out controls. Added `DebugSession` line stepping and tests.
       Verification: 104 unit cases / 4346 assertions, 19 CTest on Windows and
       WSL UI builds, 17 CTest headless UI-off/ASan.
+- **2026-11-02 07:10 -08:00** — Made the debugger window genuinely resizable:
+      SDL resize events create a new software canvas and texture at the client
+      size; the layout now computes pane widths/heights responsively instead of
+      stretching the original 1024x640 surface. Verification: 104 unit cases /
+      4346 assertions, 19 CTest Windows Debug/Release/Ninja and WSL GCC/Clang,
+      17 headless UI-off/ASan; a 1280x900 live-window capture confirmed the
+      non-stretched layout.
 
 ## 10. Updating this file
 

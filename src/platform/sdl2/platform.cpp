@@ -90,6 +90,15 @@ bool Window::poll(Event& event) {
         case SDL_QUIT:
             event.kind = Event::Kind::Quit;
             return true;
+        case SDL_WINDOWEVENT:
+            if (sdl_event.window.event == SDL_WINDOWEVENT_RESIZED ||
+                sdl_event.window.event == SDL_WINDOWEVENT_SIZE_CHANGED) {
+                event.kind = Event::Kind::Resize;
+                event.x = sdl_event.window.data1;
+                event.y = sdl_event.window.data2;
+                return true;
+            }
+            break;
         case SDL_KEYDOWN:
             event.kind = Event::Kind::KeyDown;
             event.key = map_key(sdl_event.key.keysym.sym);
@@ -123,8 +132,22 @@ bool Window::poll(Event& event) {
 }
 
 void Window::present(const ui::Canvas& canvas) {
-    if (texture_ == nullptr || renderer_ == nullptr) {
+    if (renderer_ == nullptr) {
         return;
+    }
+    if (texture_ == nullptr || width_ != canvas.width() || height_ != canvas.height()) {
+        if (texture_ != nullptr) {
+            SDL_DestroyTexture(static_cast<SDL_Texture*>(texture_));
+            texture_ = nullptr;
+        }
+        width_ = canvas.width();
+        height_ = canvas.height();
+        texture_ = SDL_CreateTexture(static_cast<SDL_Renderer*>(renderer_),
+                                     SDL_PIXELFORMAT_ARGB8888, SDL_TEXTUREACCESS_STREAMING,
+                                     width_, height_);
+        if (texture_ == nullptr) {
+            return;
+        }
     }
     SDL_UpdateTexture(static_cast<SDL_Texture*>(texture_), nullptr, canvas.pixels().data(),
                       canvas.width() * static_cast<int>(sizeof(std::uint32_t)));
