@@ -87,9 +87,15 @@ int run(int argc, char** argv) {
                 (void)debugger.key(event.key, event.shift);
                 break;
             case kr32::platform::Event::Kind::MouseDown:
-                (void)debugger.click(event.x, event.y, canvas->width(), canvas->height());
+                if (event.button == 3) {
+                    (void)debugger.context_menu(event.x, event.y, canvas->width(), canvas->height());
+                } else {
+                    (void)debugger.click(event.x, event.y, canvas->width(), canvas->height());
+                }
                 break;
             case kr32::platform::Event::Kind::MouseMove:
+                debugger.hover(event.x, event.y, canvas->width(), canvas->height());
+                break;
             case kr32::platform::Event::Kind::MouseUp:
             case kr32::platform::Event::Kind::Wheel:
             case kr32::platform::Event::Kind::None:

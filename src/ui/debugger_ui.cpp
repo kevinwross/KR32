@@ -29,6 +29,8 @@ constexpr Color kAccent{76, 170, 255, 255};
 constexpr Color kBad{255, 104, 104, 255};
 
 constexpr int kToolbarHeight = 30;
+constexpr int kSourceGutter = 54;
+constexpr int kAsmGutter = 90;
 
 std::string hex(std::uint32_t value, int digits) {
     char buffer[24] = {};
@@ -370,6 +372,8 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
     const int line_height = 18;
     const int top = rect.y + 24;
     const int visible = std::max(1, (rect.height - 28) / line_height);
+    canvas.fill(Rect{rect.x + 1, top, kSourceGutter - 1, rect.height - 26}, kPanelAlt);
+    canvas.fill(Rect{rect.x + kSourceGutter, top, 1, rect.height - 26}, kBorder);
     const int current = current_source_line();
     if (current > 0 && (current - 1 < source_scroll_ || current - 1 >= source_scroll_ + visible)) {
         source_scroll_ = std::max(0, current - visible / 2);
@@ -385,6 +389,10 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
         }
         const int line_number = index + 1;
         const int y = top + row * line_height;
+        if (hover_source_ && hover_row_ == row) {
+            canvas.fill(Rect{rect.x + 1, y - 1, kSourceGutter - 1, line_height},
+                        Color{32, 46, 58, 255});
+        }
         if (line_number == current) {
             canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height},
                         Color{38, 66, 92, 255});
@@ -393,13 +401,16 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
         const bool has_breakpoint =
             source_line_to_address(line_number, address) &&
             session_.breakpoints().find(address) != session_.breakpoints().end();
-        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim,
-                    FontRole::Mono);
+        if (has_breakpoint) {
+            canvas.fill(Rect{rect.x + 8, y + 5, 7, 8}, kBad);
+        }
         const std::string number = std::to_string(line_number);
-        canvas.text(rect.x + 16, y, number, line_number == current ? kText : kDim, FontRole::Mono);
-        canvas.text(rect.x + 52, y,
+        const int number_width = Canvas::text_width(number, FontRole::Mono);
+        canvas.text(rect.x + kSourceGutter - 8 - number_width, y, number,
+                    line_number == current ? kText : kDim, FontRole::Mono);
+        canvas.text(rect.x + kSourceGutter + 6, y,
                     trim_to(source_lines_[static_cast<std::size_t>(index)],
-                            static_cast<std::size_t>((rect.width - 58) / 8)),
+                            static_cast<std::size_t>((rect.width - kSourceGutter - 12) / 8)),
                     line_number == current ? kText : Color{180, 194, 206, 255},
                     FontRole::Mono);
     }
@@ -425,10 +436,16 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     std::uint32_t start = pc >= before ? pc - before : 0;
     start = std::max(start, session_.machine().ram_base());
     const int address_width = Canvas::text_width("00000000", FontRole::Mono);
-    const int instruction_x = rect.x + 12 + address_width + 10;
+    const int instruction_x = rect.x + kAsmGutter + 6;
+    canvas.fill(Rect{rect.x + 1, rect.y + 24, kAsmGutter - 1, rect.height - 26}, kPanelAlt);
+    canvas.fill(Rect{rect.x + kAsmGutter, rect.y + 24, 1, rect.height - 26}, kBorder);
     for (int row = 0; row < rows; ++row) {
         const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
         const int y = rect.y + 24 + row * line_height;
+        if (!hover_source_ && hover_row_ == row) {
+            canvas.fill(Rect{rect.x + 1, y - 1, kAsmGutter - 1, line_height},
+                        Color{32, 46, 58, 255});
+        }
         if (address == pc) {
             canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 2, line_height},
                         Color{38, 66, 92, 255});
@@ -476,10 +493,11 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         }
         const bool has_breakpoint =
             session_.breakpoints().find(address) != session_.breakpoints().end();
-        canvas.text(rect.x + 5, y, has_breakpoint ? "*" : " ", has_breakpoint ? kBad : kDim,
-                    FontRole::Mono);
-        canvas.text(rect.x + 12, y, hex(address, 8), address == pc ? kAccent : kDim,
-                    FontRole::Mono);
+        if (has_breakpoint) {
+            canvas.fill(Rect{rect.x + 6, y + 5, 7, 8}, kBad);
+        }
+        canvas.text(rect.x + kAsmGutter - 8 - address_width, y, hex(address, 8),
+                    address == pc ? kAccent : kDim, FontRole::Mono);
         canvas.text(instruction_x, y,
                     trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
                     address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);
@@ -714,6 +732,167 @@ void DebuggerUI::draw_error(Canvas& canvas) {
     canvas.text(dialog.x + 12, dialog.y + 78, "click to dismiss", kDim);
 }
 
+void DebuggerUI::toggle_source_breakpoint(int line) {
+    std::uint32_t address = 0;
+    if (line <= 0 || !source_line_to_address(line, address)) {
+        status_ = "no executable address on line " + std::to_string(line);
+        return;
+    }
+    toggle_instruction_breakpoint(address);
+}
+
+void DebuggerUI::toggle_instruction_breakpoint(std::uint32_t address) {
+    if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
+        session_.clear_breakpoint(address);
+        status_ = "breakpoint cleared at " + hex(address, 8);
+    } else {
+        session_.set_breakpoint(address);
+        status_ = "breakpoint set at " + hex(address, 8);
+    }
+}
+
+void DebuggerUI::run_to(std::uint32_t address) {
+    if (!loaded_ || address == 0) {
+        return;
+    }
+    if (session_.machine().pc() == address) {
+        status_ = "already at " + hex(address, 8);
+        return;
+    }
+    const bool owned = session_.breakpoints().find(address) == session_.breakpoints().end();
+    if (owned) {
+        session_.set_breakpoint(address);
+    }
+    set_status_from_result(session_.run(200000));
+    if (owned) {
+        session_.clear_breakpoint(address);
+    }
+    if (session_.machine().pc() == address) {
+        status_ = "stopped at " + hex(address, 8);
+    }
+}
+
+void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
+    if (!loaded_) {
+        return;
+    }
+    const Layout areas = layout(width, height);
+    bool source = false;
+    int line = 0;
+    std::uint32_t address = 0;
+    if (x >= areas.source.x && x < areas.source.x + kSourceGutter &&
+        y >= areas.source.y + 24 && y < areas.source.y + areas.source.height) {
+        const int row = (y - (areas.source.y + 24)) / 18;
+        line = source_scroll_ + row + 1;
+        if (line < 1 || line > static_cast<int>(source_lines_.size())) {
+            return;
+        }
+        source = true;
+    } else if (x >= areas.disassembly.x && x < areas.disassembly.x + kAsmGutter &&
+               y >= areas.disassembly.y + 24 &&
+               y < areas.disassembly.y + areas.disassembly.height) {
+        const int row = (y - (areas.disassembly.y + 24)) / 20;
+        const int rows = std::max(1, (areas.disassembly.height - 28) / 20);
+        const std::uint32_t pc = session_.machine().pc();
+        const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
+        std::uint32_t start = pc >= before ? pc - before : 0;
+        start = std::max(start, session_.machine().ram_base());
+        address = start + static_cast<std::uint32_t>(row * 4);
+    } else {
+        return;
+    }
+    const int menu_width = 220;
+    const int menu_height = 58;
+    const int menu_x = std::clamp(x, 4, std::max(4, width - menu_width - 4));
+    const int menu_y = std::clamp(y, 4, std::max(4, height - menu_height - 4));
+    menu_ = ContextMenu{};
+    menu_.open = true;
+    menu_.source = source;
+    menu_.line = line;
+    menu_.address = address;
+    menu_.rect = Rect{menu_x, menu_y, menu_width, menu_height};
+    menu_.toggle_rect = Rect{menu_x + 1, menu_y + 2, menu_width - 2, 25};
+    menu_.run_rect = Rect{menu_x + 1, menu_y + 29, menu_width - 2, 27};
+    menu_.hover = -1;
+}
+
+void DebuggerUI::draw_context_menu(Canvas& canvas) {
+    if (!menu_.open) {
+        return;
+    }
+    canvas.fill(menu_.rect, kPanelAlt);
+    canvas.frame(menu_.rect, kAccent);
+    canvas.fill(menu_.toggle_rect, menu_.hover == 0 ? Color{38, 66, 92, 255} : kPanelAlt);
+    canvas.fill(menu_.run_rect, menu_.hover == 1 ? Color{38, 66, 92, 255} : kPanelAlt);
+    canvas.text(menu_.rect.x + 10, menu_.toggle_rect.y + 4, "Toggle breakpoint", kText,
+                FontRole::MonoSmall);
+    const std::string run_label = menu_.source
+                                      ? "Run to line " + std::to_string(menu_.line)
+                                      : "Run to " + hex(menu_.address, 8);
+    canvas.text(menu_.rect.x + 10, menu_.run_rect.y + 4, run_label, kText,
+                FontRole::MonoSmall);
+}
+
+void DebuggerUI::activate_context_menu(bool run_to_address) {
+    if (!menu_.open) {
+        return;
+    }
+    const bool source = menu_.source;
+    const int line = menu_.line;
+    const std::uint32_t address = menu_.address;
+    menu_.open = false;
+    if (!run_to_address) {
+        if (source) {
+            toggle_source_breakpoint(line);
+        } else {
+            toggle_instruction_breakpoint(address);
+        }
+        return;
+    }
+    if (source) {
+        std::uint32_t target = 0;
+        if (!source_line_to_address(line, target)) {
+            for (const debug::Line& candidate : session_.info().lines) {
+                if (candidate.line >= line) {
+                    target = candidate.address;
+                    break;
+                }
+            }
+        }
+        run_to(target);
+    } else {
+        run_to(address);
+    }
+}
+
+void DebuggerUI::hover(int x, int y, int width, int height) {
+    if (menu_.open) {
+        const int hover = menu_.toggle_rect.contains(x, y)
+                              ? 0
+                              : (menu_.run_rect.contains(x, y) ? 1 : -1);
+        menu_.hover = hover;
+        return;
+    }
+    const Layout areas = layout(width, height);
+    hover_row_ = -1;
+    hover_source_ = false;
+    if (x >= areas.source.x && x < areas.source.x + kSourceGutter &&
+        y >= areas.source.y + 24 && y < areas.source.y + areas.source.height) {
+        hover_row_ = (y - (areas.source.y + 24)) / 18;
+        hover_source_ = true;
+    } else if (x >= areas.disassembly.x && x < areas.disassembly.x + kAsmGutter &&
+               y >= areas.disassembly.y + 24 &&
+               y < areas.disassembly.y + areas.disassembly.height) {
+        hover_row_ = (y - (areas.disassembly.y + 24)) / 20;
+        hover_source_ = false;
+    }
+}
+
+bool DebuggerUI::context_menu(int x, int y, int width, int height) {
+    open_context_menu(x, y, width, height);
+    return menu_.open;
+}
+
 void DebuggerUI::render(Canvas& canvas) {
     canvas.clear(kBackground);
     draw_toolbar(canvas);
@@ -732,11 +911,22 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_variables(canvas, areas.variables);
     draw_bottom(canvas, areas.bottom);
     draw_error(canvas);
+    draw_context_menu(canvas);
 }
 
 bool DebuggerUI::click(int x, int y, int width, int height) {
     if (!error_.empty()) {
         error_.clear();
+        return true;
+    }
+    if (menu_.open) {
+        if (menu_.toggle_rect.contains(x, y)) {
+            activate_context_menu(false);
+        } else if (menu_.run_rect.contains(x, y)) {
+            activate_context_menu(true);
+        } else {
+            menu_.open = false;
+        }
         return true;
     }
     const Layout areas = layout(width, height);
@@ -790,22 +980,14 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
             return true;
         }
     }
-    if (x < areas.source.x + areas.source.width && y >= areas.source.y + 24 &&
+    if (x < areas.source.x + kSourceGutter && y >= areas.source.y + 24 &&
         y < areas.source.y + areas.source.height) {
         const int row = (y - (areas.source.y + 24)) / 18;
         const int line = source_scroll_ + row + 1;
-        std::uint32_t address = 0;
-        if (source_line_to_address(line, address)) {
-            if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
-                session_.clear_breakpoint(address);
-            } else {
-                session_.set_breakpoint(address);
-            }
-        }
+        toggle_source_breakpoint(line);
         return true;
     }
-    if (x >= areas.disassembly.x &&
-        x < areas.disassembly.x + areas.disassembly.width &&
+    if (x >= areas.disassembly.x && x < areas.disassembly.x + kAsmGutter &&
         y >= areas.disassembly.y + 24 && y < areas.disassembly.y + areas.disassembly.height) {
         const int row = (y - (areas.disassembly.y + 24)) / 20;
         const std::uint32_t pc = session_.machine().pc();
@@ -813,12 +995,7 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
         std::uint32_t start = pc >= before ? pc - before : 0;
         start = std::max(start, session_.machine().ram_base());
-        const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
-        if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
-            session_.clear_breakpoint(address);
-        } else {
-            session_.set_breakpoint(address);
-        }
+        toggle_instruction_breakpoint(start + static_cast<std::uint32_t>(row * 4));
         return true;
     }
     return false;
@@ -826,7 +1003,11 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
 
 bool DebuggerUI::key(int key_value, bool shift) {
     if (key_value == kr32::platform::key::Escape) {
-        quit_ = true;
+        if (menu_.open) {
+            menu_.open = false;
+        } else {
+            quit_ = true;
+        }
         return true;
     }
     if (key_value == kr32::platform::key::F5) {

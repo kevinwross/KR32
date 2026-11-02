@@ -23,6 +23,7 @@ struct Event {
     enum class Kind { None, Quit, Resize, KeyDown, MouseDown, MouseUp, MouseMove, Wheel };
     Kind kind = Kind::None;
     int key = 0;
+    int button = 0;
     bool shift = false;
     bool control = false;
     int x = 0;

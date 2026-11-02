@@ -107,6 +107,7 @@ bool Window::poll(Event& event) {
             return true;
         case SDL_MOUSEBUTTONDOWN:
             event.kind = Event::Kind::MouseDown;
+            event.button = sdl_event.button.button;
             event.x = sdl_event.button.x;
             event.y = sdl_event.button.y;
             return true;

@@ -24,6 +24,8 @@ public:
 
     void render(Canvas& canvas);
     [[nodiscard]] bool click(int x, int y, int width, int height);
+    [[nodiscard]] bool context_menu(int x, int y, int width, int height);
+    void hover(int x, int y, int width, int height);
     [[nodiscard]] bool key(int key, bool shift);
     [[nodiscard]] bool quit_requested() const { return quit_; }
     [[nodiscard]] const std::string& status() const { return status_; }
@@ -44,6 +46,12 @@ private:
 
     [[nodiscard]] Layout layout(int width, int height) const;
     void set_status_from_result(const core::StepResult& result);
+    void open_context_menu(int x, int y, int width, int height);
+    void draw_context_menu(Canvas& canvas);
+    void activate_context_menu(bool run_to);
+    void run_to(std::uint32_t address);
+    void toggle_source_breakpoint(int line);
+    void toggle_instruction_breakpoint(std::uint32_t address);
     void prepare_initial_stop();
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);
     void draw_toolbar(Canvas& canvas);
@@ -71,6 +79,20 @@ private:
     std::string error_;
     std::vector<std::string> source_lines_;
     int source_scroll_ = 0;
+
+    struct ContextMenu {
+        bool open = false;
+        bool source = false;
+        int line = 0;
+        std::uint32_t address = 0;
+        Rect rect{};
+        Rect toggle_rect{};
+        Rect run_rect{};
+        int hover = -1;
+    };
+    ContextMenu menu_;
+    int hover_row_ = -1;
+    bool hover_source_ = false;
 };
 
 // Renders one frame without opening a window. Returns the canvas hash and
