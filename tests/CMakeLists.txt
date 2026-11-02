@@ -100,6 +100,13 @@ add_test(NAME build_c_hello
 set_tests_properties(build_c_hello PROPERTIES
     PASS_REGULAR_EXPRESSION "Hello, KR32!")
 
+add_test(NAME build_c_types
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/types.c
+        -o ${CMAKE_BINARY_DIR}/types-c.k32 --run)
+set_tests_properties(build_c_types PROPERTIES
+    PASS_REGULAR_EXPRESSION "unsigned int 10 squared = 100")
+
 add_test(NAME debug_dump
     COMMAND $<TARGET_FILE:kr32> debug ${CMAKE_BINARY_DIR}/hello-c.k32)
 set_tests_properties(debug_dump PROPERTIES
