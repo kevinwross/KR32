@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 12:31 -08:00
+> **Last updated:** 2026-11-02 12:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -555,17 +555,17 @@ M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
 (scalar `float`/`double`, FP calls, conversions, and stack varargs), M9.5
 (classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
 and RTTI), M9.7 (matrix/transform-stack codegen), and M9.8 (function templates,
-weak symbols, and static initialization) are complete, and M9.9 (`new`/`delete`
-and exceptions) is next. C++ ABI revision 1 is frozen in
-[docs/abi.md](docs/abi.md) with machine-checkable constants in
-`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
-in place, and `compile()` now produces assembly for the supported integer,
-scalar-FP, class, virtual/RTTI, matrix, and function-template subset. Confirmed
-decisions include custom C++11 subset, one thread per core with cooperative
-oversubscription, `R11` TP, library matrices plus intrinsics, `double` align
-8/16-byte call boundaries, explicit per-thread transform stacks, full
-destructor unwinding, scalar FP library, stack-based FP varargs, Itanium-like
-mangling, and class-member/`this` debug support.
+weak symbols, and static initialization) are complete; M9.9 is in progress with
+`new`/`delete` implemented and exceptions/cleanup still outstanding. C++ ABI
+revision 1 is frozen in [docs/abi.md](docs/abi.md) with machine-checkable
+constants in `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver
+skeleton are in place, and `compile()` now produces assembly for the supported
+integer, scalar-FP, class, virtual/RTTI, matrix, function-template, and
+allocation subset. Confirmed decisions include custom C++11 subset, one thread
+per core with cooperative oversubscription, `R11` TP, library matrices plus
+intrinsics, `double` align 8/16-byte call boundaries, explicit per-thread
+transform stacks, full destructor unwinding, scalar FP library, stack-based FP
+varargs, Itanium-like mangling, and class-member/`this` debug support.
 
 **Tasks**
 
@@ -595,7 +595,10 @@ mangling, and class-member/`this` debug support.
 - [x] Function templates, weak template/inline symbols, and static
       initialization (M9.8). Class templates, COMDAT groups, static
       destruction, and guarded local statics remain deferred.
-- [ ] Exceptions and `new`/`delete` (M9.9).
+- [x] `new`/`delete` for scalars, objects, and scalar arrays, including
+      constructor/destructor calls (M9.9 partial).
+- [ ] Exceptions, table-driven cleanup/full unwinding, class-array helpers, and
+      static destruction (M9.9 remaining).
 - [x] Scalar `float`/`double` codegen, FP calls/spills, conversions, and ABI
       alignment (M9.4); `.float`/`.double` object-assembler support ported from
       main.
@@ -633,6 +636,8 @@ mangling, and class-member/`this` debug support.
       assertions).
 - [x] Function templates, weak template/inline symbols across TUs, and static
       initialization order pass (M9.8 gate: 169 cases / 4745 assertions).
+- [x] Scalar/object/array `new`, `delete`, and destructor invocation pass
+      (M9.9 partial: 171 cases / 4753 assertions).
 - [ ] C++ hello world and a class/template demo run.
 - [ ] Exceptions unwind correctly.
 - [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
@@ -1031,6 +1036,12 @@ Newest entries at the bottom. Use the local time zone.
       169 test cases and 4745 assertions. Class templates, COMDAT groups, static
       destruction, and guarded local statics remain deferred; M9.9
       (`new`/`delete` and exceptions) is next.
+- **2026-11-02 12:36 -08:00** — Started M9.9. Added `new`/`delete` lowering to
+      `malloc`/`free` for scalars, objects, and scalar arrays, including
+      constructor and destructor calls. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 171 test cases and 4753 assertions. Exceptions,
+      table-driven cleanup/full unwinding, class-array helpers, and static
+      destruction remain; M9.9 stays in progress.
 
 ## 10. Updating this file
 

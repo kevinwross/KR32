@@ -9,7 +9,8 @@ conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), and M9.8 (function templates, weak symbols, and
 static initialization) are complete; phase M9.9 (`new`/`delete` and exceptions)
-is next.
+is in progress, with `new`/`delete` implemented and exception support still
+outstanding.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -150,13 +151,18 @@ Completed in M9.8:
 - [x] Tests: explicit/deduced function templates, weak template/inline symbols
       across TUs, and static initialization order.
 
+In progress:
+
+- [x] `new`/`delete` for scalars, objects, and scalar arrays, including
+      constructor/destructor calls. Exceptions, cleanup tables, class-array
+      helpers, and static destruction remain.
+
 Not started:
 
-- [ ] `new`/`delete`, exceptions, threads, debug, and CLI integration
-      (M9.9-M9.12). Class templates, COMDAT section groups, static destruction,
-      guarded local statics, a full tile allocator/spill pass, matrix
-      optimization/fusion, and by-value class parameters/returns remain
-      deferred.
+- [ ] Exceptions, threads, debug, and CLI integration (M9.9-M9.12). Class
+      templates, COMDAT section groups, static destruction, guarded local
+      statics, a full tile allocator/spill pass, matrix optimization/fusion,
+      and by-value class parameters/returns remain deferred.
 
 ## 3. Milestone map
 
@@ -173,7 +179,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.6 | Virtual dispatch and RTTI | virtual demo; vtable/typeinfo tests | done |
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | done |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
-| M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | not started |
+| M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | in progress |
 | M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | not started |
 | M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | not started |
 | M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | not started |
@@ -369,14 +375,22 @@ headless both pass 21/21 CTest tests; `kr32_tests` reports 169 test cases and
 
 ### M9.9 — `new`/`delete`, exceptions, cleanup
 
-- [ ] `operator new/delete`, array forms, allocation failure behavior.
+- [x] `new`/`delete` lowering to `malloc`/`free` for scalars, objects, and
+      scalar arrays, including constructor and destructor calls. Allocation
+      failure behavior and class-array constructor/destructor helpers remain
+      deferred.
 - [ ] Constructor/destructor array helpers.
-- [ ] Exception object layout, throw/catch/rethrow.
+- [ ] Exception object layout, throw/catch/rethrow (deferred; no exception
+      code generation yet).
 - [ ] Table-driven cleanup and full destructor unwinding.
 - [ ] `__cxa_atexit`-style static destruction.
-- [ ] Tests: RAII, nested try/catch, destructor unwinding, rethrow.
+- [x] Tests: scalar/object/array `new`, `delete`, and destructor invocation.
 
 **Gate:** exception/cleanup tests pass with no leaks in the guest allocator.
+**Status:** in progress 2026-11-02. `new`/`delete` works for scalars, objects,
+and scalar arrays; exceptions, cleanup tables, class-array helpers, and static
+destruction remain. Windows MSVC Debug and WSL GCC headless both pass 21/21
+CTest tests; `kr32_tests` reports 171 test cases and 4753 assertions.
 
 ### M9.10 — Threads, TLS, atomics, synchronization
 
@@ -536,6 +550,12 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   21/21 CTest tests; `kr32_tests` reports 169 test cases and 4745 assertions.
   Class templates, COMDAT section groups, static destruction, and guarded local
   statics remain deferred; M9.9 (`new`/`delete` and exceptions) is next.
+- **2026-11-02 12:36 -08:00** — Started M9.9. Added `new`/`delete` lowering to
+  `malloc`/`free` for scalars, objects, and scalar arrays, including constructor
+  and destructor calls. Added new/delete tests. Windows/WSL both pass 21/21
+  CTest tests; `kr32_tests` reports 171 test cases and 4753 assertions.
+  Exceptions, table-driven cleanup/full unwinding, class-array helpers, and
+  static destruction remain; M9.9 stays in progress.
 
 ## 8. Approval
 

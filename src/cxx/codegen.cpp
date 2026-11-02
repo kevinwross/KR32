@@ -1282,9 +1282,11 @@ private:
             diagnose_once(expression, "unknown member: " + member_name);
             return Type::make_builtin(BuiltinKind::Int);
         }
-        case ExprKind::Scope:
         case ExprKind::New:
+            return Type::make_pointer(resolve_type(expression.type));
         case ExprKind::Delete:
+            return Type::make_builtin(BuiltinKind::Void);
+        case ExprKind::Scope:
         case ExprKind::Lambda:
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
@@ -2111,6 +2113,121 @@ private:
         return target;
     }
 
+    void construct_object_at(ClassInfo* info, int address_temp,
+                             const std::vector<ExprPtr>& arguments) {
+        if (info->abstract) {
+            error(*info->decl, "cannot instantiate abstract class: " + info->qualified);
+            return;
+        }
+        Function* constructor = find_constructor(info, arguments.size());
+        if (!constructor) {
+            if (!arguments.empty()) {
+                error(*info->decl, "no matching constructor for " + info->qualified);
+                return;
+            }
+            emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    MOV R1, #0");
+            emit("    MOV R2, #" + std::to_string(info->size));
+            emit("    CALL memset");
+            return;
+        }
+        std::vector<int> integer_temps;
+        std::vector<std::pair<int, TypePtr>> fp_temps;
+        for (std::size_t index = 0; index < arguments.size(); ++index) {
+            const TypePtr parameter = resolve_type(constructor->parameters[index]);
+            if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                              parameter->kind == TypeKind::RValueRef)) {
+                gen_address(*arguments[index]);
+                const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
+            } else if (is_fp(parameter)) {
+                gen_as_fp(*arguments[index], parameter);
+                const int temp = allocate_local(parameter);
+                emit(std::string("    FSTORE.") +
+                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                     std::to_string(temp) + "]");
+                fp_temps.emplace_back(temp, parameter);
+            } else {
+                gen_expr(*arguments[index]);
+                const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
+            }
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
+        for (std::size_t index = 0; index < integer_temps.size(); ++index) {
+            emit("    LOAD R" + std::to_string(index + 1) + ", [R7 + " +
+                 std::to_string(integer_temps[index]) + "]");
+        }
+        for (std::size_t index = 0; index < fp_temps.size(); ++index) {
+            emit(std::string("    FLOAD.") +
+                 (is_float32(fp_temps[index].second) ? "W" : "D") + " F" +
+                 std::to_string(index) + ", [R7 + " +
+                 std::to_string(fp_temps[index].first) + "]");
+        }
+        emit("    CALL " + constructor->symbol);
+    }
+
+    TypePtr gen_new(const Expr& expression) {
+        const TypePtr pointee = resolve_type(expression.type);
+        ClassInfo* info = class_of(pointee);
+        const int pointer_temp =
+            allocate_local(Type::make_pointer(pointee));
+        if (!expression.children.empty()) {
+            gen_expr(*expression.children[0]);
+            const int element_size = std::max(1, type_size(pointee));
+            if (element_size != 1) {
+                emit("    MUL R0, R0, #" + std::to_string(element_size));
+            }
+            emit("    CALL malloc");
+            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            if (info != nullptr && find_constructor(info, 0) != nullptr) {
+                diagnose_once(expression,
+                              "new[] of classes with constructors is not supported yet");
+            }
+        } else {
+            emit("    MOV R0, #" + std::to_string(std::max(1, type_size(pointee))));
+            emit("    CALL malloc");
+            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            if (info != nullptr) {
+                construct_object_at(info, pointer_temp, expression.arguments);
+            } else if (expression.arguments.size() == 1) {
+                gen_expr(*expression.arguments[0]);
+                emit("    LOAD R1, [R7 + " + std::to_string(pointer_temp) + "]");
+                store_value(pointee);
+            }
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+        return Type::make_pointer(pointee);
+    }
+
+    TypePtr gen_delete(const Expr& expression) {
+        const TypePtr pointer_type = type_of(*expression.children[0]);
+        TypePtr pointee = pointer_type;
+        if (pointee && (pointee->kind == TypeKind::Pointer ||
+                        pointee->kind == TypeKind::LValueRef ||
+                        pointee->kind == TypeKind::RValueRef)) {
+            pointee = pointee->element;
+        }
+        gen_expr(*expression.children[0]);
+        const int pointer_temp =
+            allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+        emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+        if (expression.text != "[]") {
+            if (ClassInfo* info = class_of(pointee)) {
+                if (Function* destructor = find_destructor(info)) {
+                    emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                    emit("    CALL " + destructor->symbol);
+                }
+            }
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+        emit("    CALL free");
+        emit("    MOV R0, #0");
+        return Type::make_builtin(BuiltinKind::Void);
+    }
+
     TypePtr gen_expr(const Expr& expression) {
         switch (expression.kind) {
         case ExprKind::IntegerLiteral:
@@ -2309,9 +2426,11 @@ private:
             }
             return type;
         }
-        case ExprKind::Scope:
         case ExprKind::New:
+            return gen_new(expression);
         case ExprKind::Delete:
+            return gen_delete(expression);
+        case ExprKind::Scope:
         case ExprKind::Lambda:
         case ExprKind::InitializerList:
         case ExprKind::Unknown:

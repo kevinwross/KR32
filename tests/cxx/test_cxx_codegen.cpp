@@ -541,6 +541,53 @@ TEST_CASE("matrix transpose, multiply-add, and transform stack run") {
     CHECK(alias.result == 42);
 }
 
+TEST_CASE("new and delete allocate and construct objects") {
+    const ProgramResult scalar = compile_and_run(
+        "int main() { int* value = new int(42); int result = *value; delete value; "
+        "return result; }\n");
+    INFO(scalar.diagnostics);
+    REQUIRE(scalar.ok);
+    CHECK(scalar.result == 42);
+
+    const ProgramResult object = compile_and_run(
+        "class Value {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Value(int input) { value = input; }\n"
+        "};\n"
+        "int main() { Value* value = new Value(42); int result = value->value; "
+        "delete value; return result; }\n");
+    INFO(object.diagnostics);
+    REQUIRE(object.ok);
+    CHECK(object.result == 42);
+
+    const ProgramResult array = compile_and_run(
+        "int main() {\n"
+        "    int* values = new int[3];\n"
+        "    values[0] = 10; values[1] = 20; values[2] = 12;\n"
+        "    int result = values[0] + values[1] + values[2];\n"
+        "    delete[] values;\n"
+        "    return result;\n"
+        "}\n");
+    INFO(array.diagnostics);
+    REQUIRE(array.ok);
+    CHECK(array.result == 42);
+}
+
+TEST_CASE("delete runs the destructor") {
+    const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    Guard() { }\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int main() { Guard* guard = new Guard(); delete guard; return result; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("function templates instantiate explicitly and by deduction") {
     const ProgramResult explicit_call = compile_and_run(
         "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
