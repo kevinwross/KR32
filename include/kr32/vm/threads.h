@@ -126,6 +126,7 @@ private:
     std::uint32_t scheduler_index_ = 0;
     bool servicing_join_ = false;
     std::vector<Thread> threads_;
+    std::vector<std::uint8_t> tls_template_;
     std::map<std::uint32_t, std::vector<std::uint32_t>> futex_waiters_;
 };
 

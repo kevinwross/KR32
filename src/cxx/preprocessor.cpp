@@ -507,6 +507,7 @@ private:
                     "inline int thread_create(int entry, int arg, int stack_size = 0) { return __builtin_kr32_syscall(44, entry, arg, stack_size); }\n"
                     "inline int thread_join(int handle) { return __builtin_kr32_syscall(45, handle, 0, 0); }\n"
                     "inline void thread_yield() { (void)__builtin_kr32_syscall(46, 0, 0, 0); }\n"
+                    "inline void thread_exit(int code) { (void)__builtin_kr32_syscall(47, code, 0, 0); }\n"
                     "inline int futex_wait(int* address, int expected) { return __builtin_kr32_syscall(48, (int)address, expected, 0); }\n"
                     "inline int futex_wake(int* address, int count) { return __builtin_kr32_syscall(49, (int)address, count, 0); }\n"
                     "struct atomic_int {\n"

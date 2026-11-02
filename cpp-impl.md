@@ -8,10 +8,9 @@ mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
 conversions, and stack varargs), M9.5 (classes, constructors/destructors,
 single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
-initialization), and M9.9 (`new`/`delete`, exceptions, cleanup) are complete;
-phase M9.10 (threads, TLS, atomics, synchronization) is in progress with
-stage-1 host thread/futex services, stage-2 TCB/TLS/context, and stage-3
-compiler `thread_local`/atomics plus the synchronization header surface done.
+initialization), M9.9 (`new`/`delete`, exceptions, cleanup), and M9.10 (threads,
+TLS, atomics, synchronization) are complete; phase M9.11 (C++ debug information
+and GUI/DAP) is next.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
@@ -173,19 +172,17 @@ In progress:
       and tests.
 - [x] Guest TCB at `R11`, per-thread stacks/TLS, guest join, and FPR/TSP
       context save-restore (M9.10 stage 2).
-- [x] Compiler `thread_local`, LL/SC atomics, and thread/mutex/condvar header
-      surface (M9.10 stage 3).
 - [x] Compiler `thread_local` (R11-relative TLS), LL/SC atomics, and
       thread/mutex/condvar header surface (M9.10 stage 3).
+- [x] Thread-safe function-local statics with `__cxa_guard_*` and initialized
+      `.tls` images (M9.10 final).
 
 Not started:
 
-- [ ] Guest TCB/TLS, FPR/TSP context save/restore, compiler `thread_local`/
-      atomics, mutex/condvar/thread headers (M9.10 remaining), then debug and
-      CLI integration (M9.11-M9.12). Class templates, COMDAT section groups,
-      static destruction, guarded local statics, a full tile allocator/spill
-      pass, matrix optimization/fusion, and by-value class parameters/returns
-      remain deferred.
+- [ ] Debug thread inspection and CLI integration (M9.11-M9.12). Class
+      templates, COMDAT section groups, static destruction, a full tile
+      allocator/spill pass, matrix optimization/fusion, and by-value class
+      parameters/returns remain deferred.
 
 ## 3. Milestone map
 
@@ -203,7 +200,7 @@ Status values: `not started`, `in progress`, `blocked`, `done`.
 | M9.7 | Matrix library/intrinsics, tile allocation, transform stack | matrix/transform tests vs scalar reference | done |
 | M9.8 | Templates, COMDAT, static initialization | multi-TU template/static-init tests | done |
 | M9.9 | `new`/`delete`, exceptions, full cleanup | RAII/unwind tests | done |
-| M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | in progress |
+| M9.10 | Threads, TLS/TP, atomics, mutex/condvar, `std::thread` subset | two-core and TLS/atomic tests | done |
 | M9.11 | C++ debug info, GUI/DAP integration | C++ step/locals/members/this | not started |
 | M9.12 | CLI integration, cross-platform gate, docs, tag `m9` | all gates on Windows/WSL/ARM64 | not started |
 
@@ -446,18 +443,17 @@ M9.10 (threads, TLS, atomics, synchronization) is next.
 - [x] `kr32::thread`/`mutex`/`condition_variable`/`atomic_int` header surface
       over the thread/futex syscalls; the mutex lock/unlock path is tested
       single-threaded.
-- [ ] Thread-safe static initialization (`__cxa_guard_*`).
-- [x] Tests: two-core LL/SC counter, `thread_local` R11 access, atomic
-      builtins, header-surface mutex/atomic, TCB/context, and thread join.
+- [x] Thread-safe function-local statics with `__cxa_guard_acquire`/release
+      over LL/SC.
+- [x] Tests: two-core LL/SC counter, two C++ threads with a mutex-protected
+      counter, `thread_local` R11 access with initialized `.tls` images, atomic
+      builtins, header surface, TCB/context, and thread join.
 
 **Gate:** multi-core/thread tests pass on the cluster; debug view shows threads.
-**Status:** in progress 2026-11-02. Stages 1-3 are implemented: host
-thread/futex services, guest TCB/TLS/context, compiler `thread_local`/LL/SC
-atomics, and the thread/mutex/condvar header surface. Remaining: thread-safe
-function-local static guards, initialized TLS images, multi-thread
-mutex/condvar tests, and the full `std::thread` subset. Windows MSVC Debug and
-WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 191 test
-cases and 4917 assertions.
+**Status:** done 2026-11-02 for the runtime/compiler gate. Windows MSVC Debug
+and WSL GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 193 test
+cases and 4951 assertions. Debug thread inspection and the broader `std::thread`
+API polish move to M9.11.
 
 ### M9.11 — C++ debug information and GUI/DAP
 
@@ -669,6 +665,13 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   21/21 CTest tests; `kr32_tests` reports 191 test cases and 4917 assertions.
   M9.10 remains in progress for thread-safe static guards, initialized TLS
   images, and multi-thread mutex/condvar tests.
+- **2026-11-02 14:27 -08:00** — Completed M9.10. Added guarded function-local
+  statics (`__cxa_guard_acquire`/release), initialized `.tls` images loaded
+  into each thread TCB, and a two-thread C++ mutex-protected counter test.
+  Fixed call-site scalar initializers, `!` codegen, and cluster LL/SC
+  reservation invalidation. Windows/WSL both pass 21/21 CTest tests;
+  `kr32_tests` reports 193 test cases and 4951 assertions. M9.11 (C++ debug
+  information and GUI/DAP) is next.
 
 ## 8. Approval
 

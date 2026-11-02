@@ -3,6 +3,7 @@
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
+#include "kr32/cxx/cxx.h"
 #include "kr32/link/linker.h"
 #include "kr32/vm/threads.h"
 
@@ -48,6 +49,49 @@ Program build_worker(std::string_view source, std::string_view entry_name) {
         }
     }
     REQUIRE(program.entry != 0);
+    return program;
+}
+
+struct CxxProgram {
+    container::Image image;
+    std::uint32_t worker = 0;
+    std::uint32_t counter = 0;
+};
+
+CxxProgram build_cxx_worker(std::string_view body, std::string_view counter_name) {
+    cxx::Options options;
+    options.source_name = "thread-cxx.cpp";
+    const cxx::Result compiled = cxx::compile(body, options);
+    const std::string diagnostic =
+        compiled.diagnostics.empty() ? "cxx compile failed"
+                                     : compiled.diagnostics.front().message;
+    INFO(diagnostic);
+    REQUIRE(compiled.ok);
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user,
+                                               assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime,
+                                               assembly_error),
+                    assembly_error.message.c_str());
+    CxxProgram program;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, linker::Options{}, program.image,
+                                 map, link_error),
+                    link_error.message.c_str());
+    for (const container::Symbol& symbol : program.image.symbols) {
+        if (symbol.name.find("worker") != std::string::npos) {
+            program.worker = symbol.value;
+        }
+        if (symbol.name.find(counter_name) != std::string::npos) {
+            program.counter = symbol.value;
+        }
+    }
+    REQUIRE(program.worker != 0);
+    REQUIRE(program.counter != 0);
     return program;
 }
 
@@ -197,6 +241,39 @@ TEST_CASE("two cores increment a shared counter with LL/SC") {
     std::uint32_t second_view = 0;
     REQUIRE(host.cluster().core(second - 1).read32(counter, second_view));
     CHECK(second_view == 1000);
+}
+
+TEST_CASE("two C++ threads increment a mutex-protected counter") {
+    const CxxProgram program = build_cxx_worker(
+        "#include <kr32/thread.hpp>\n"
+        "int counter = 0;\n"
+        "kr32::mutex guard;\n"
+        "void worker(int* target) {\n"
+        "    int index = 0;\n"
+        "    while (index < 500) {\n"
+        "        guard.lock();\n"
+        "        *target = *target + 1;\n"
+        "        guard.unlock();\n"
+        "        index = index + 1;\n"
+        "    }\n"
+        "    kr32::thread_exit(0);\n"
+        "}\n"
+        "int main() { return 0; }\n",
+        "counter");
+    vm::ClusterHost host({3, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    const std::uint32_t first = host.create(program.worker, program.counter);
+    const std::uint32_t second = host.create(program.worker, program.counter);
+    REQUIRE(first != vm::kThreadError);
+    REQUIRE(second != vm::kThreadError);
+    std::uint32_t code = 0;
+    REQUIRE(host.join(first, code));
+    REQUIRE(host.join(second, code));
+    std::uint32_t value = 0;
+    REQUIRE(host.cluster().core(0).read32(program.counter, value));
+    CHECK(value == 1000);
 }
 
 TEST_CASE("guest TCB exposes the approved R11-relative layout") {

@@ -65,6 +65,15 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
     machine.reset(image.entry);
     machine.set_tsp(machine.ram_base() + 512U * 1024U);
     machine.set_reg(11, machine.ram_base() + machine.ram_size() - 1024U);
+    for (const container::Section& section : image.sections) {
+        if (section.name == ".tls") {
+            for (std::size_t index = 0; index < section.data.size(); ++index) {
+                (void)machine.write8(
+                    machine.reg(11) + static_cast<std::uint32_t>(index),
+                    section.data[index]);
+            }
+        }
+    }
     machine.set_syscall_handler([&](core::Machine& current, std::uint32_t vector) {
         if (vector == 33) {
             program.output.push_back(static_cast<char>(current.reg(0) & 0xFFU));
@@ -788,6 +797,23 @@ TEST_CASE("delete runs the destructor") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("function-local statics initialize once behind a guard") {
+    const ProgramResult program = compile_and_run(
+        "int next() {\n"
+        "    static int count = 0;\n"
+        "    count = count + 1;\n"
+        "    return count;\n"
+        "}\n"
+        "int main() {\n"
+        "    int first = next();\n"
+        "    int second = next();\n"
+        "    return first == 1 && second == 2 ? 42 : 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("thread/atomic/mutex header surface compiles and runs") {
     const ProgramResult program = compile_and_run(
         "#include <kr32/thread.hpp>\n"
@@ -838,6 +864,13 @@ TEST_CASE("thread_local globals use R11 TP offsets") {
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);
+
+    const ProgramResult initialized = compile_and_run(
+        "thread_local int value = 42;\n"
+        "int main() { return value; }\n");
+    INFO(initialized.diagnostics);
+    REQUIRE(initialized.ok);
+    CHECK(initialized.result == 42);
 }
 
 TEST_CASE("function templates instantiate explicitly and by deduction") {

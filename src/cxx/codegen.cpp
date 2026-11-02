@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
+#include <cstring>
 #include <iomanip>
 #include <map>
 #include <memory>
@@ -376,11 +377,18 @@ public:
         if (!bss_.empty()) {
             result += ".bss\n" + bss_;
         }
+        if (!tls_image_.empty()) {
+            result += ".tls\n";
+            for (const std::uint8_t byte : tls_image_) {
+                result += "    .byte " + std::to_string(byte) + "\n";
+            }
+        }
         return result;
     }
 
 private:
     struct ClassInfo;
+    struct Global;
 
     struct Function {
         const Decl* decl = nullptr;
@@ -449,6 +457,7 @@ private:
         int offset = 0;
         bool is_reference = false;
         bool is_parameter = false;
+        Global* static_global = nullptr;
     };
 
     void error(const Location& location, std::string message) {
@@ -2015,7 +2024,9 @@ private:
     void gen_address(const Expr& expression) {
         if (expression.kind == ExprKind::Name) {
             if (Local* local = lookup_local(expression.name)) {
-                if (local->is_reference) {
+                if (local->static_global != nullptr) {
+                    emit("    LEA R0, [" + local->static_global->symbol + "]");
+                } else if (local->is_reference) {
                     emit("    LOAD R0, [R7 + " + std::to_string(local->offset) + "]");
                 } else {
                     emit("    LEA R0, [R7 + " + std::to_string(local->offset) + "]");
@@ -3912,6 +3923,46 @@ private:
             push_scope();
         }
         const TypePtr type = resolve_type(declaration.type);
+        if (declaration.is_static) {
+            auto global = std::make_unique<Global>();
+            global->decl = &declaration;
+            global->qualified = "__cxx_local_static_" +
+                                std::to_string(static_counter_);
+            global->symbol = global->qualified;
+            global->type = type;
+            global->defined = true;
+            global->is_static = true;
+            global->initializer = declaration.initializer.get();
+            Global* raw = global.get();
+            global_storage_.push_back(std::move(global));
+            bss_ += ".global " + raw->symbol + "\n" + raw->symbol +
+                    ":\n    .space " + std::to_string(std::max(1, type_size(type))) +
+                    "\n";
+            Local local;
+            local.type = type;
+            local.static_global = raw;
+            if (!declaration.name.parts.empty()) {
+                local_scopes_.back()[declaration.name.parts.back()] = local;
+            }
+            if (declaration.initializer) {
+                const std::string guard =
+                    "__cxx_guard_" + std::to_string(static_counter_++);
+                bss_ += ".global " + guard + "\n" + guard +
+                        ":\n    .space 4\n";
+                emit("    LEA R0, [" + guard + "]");
+                emit("    CALL __cxa_guard_acquire");
+                const std::string done = new_label("guard_done");
+                emit("    CMP R0, #0");
+                emit("    JZ " + done);
+                gen_expr(*declaration.initializer);
+                emit("    LEA R1, [" + raw->symbol + "]");
+                store_value(type);
+                emit("    LEA R0, [" + guard + "]");
+                emit("    CALL __cxa_guard_release");
+                emit(done + ":");
+            }
+            return;
+        }
         Local local;
         local.type = type;
         local.is_reference = type && (type->kind == TypeKind::LValueRef ||
@@ -4000,14 +4051,23 @@ private:
         if (declaration.initializer) {
             const Expr* initializer = declaration.initializer.get();
             if (initializer->kind == ExprKind::Call) {
-                if (initializer->arguments.size() == 1) {
-                    initializer = initializer->arguments[0].get();
-                } else if (initializer->arguments.empty()) {
-                    zero_object(local.offset, std::max(1, type_size(type)));
-                    return;
-                } else {
-                    error(declaration, "invalid scalar initializer");
-                    return;
+                bool function_call = false;
+                if (!initializer->children.empty() &&
+                    initializer->children[0]->kind == ExprKind::Name) {
+                    function_call =
+                        !lookup_functions(initializer->children[0]->name,
+                                          current_prefix_).empty();
+                }
+                if (!function_call) {
+                    if (initializer->arguments.size() == 1) {
+                        initializer = initializer->arguments[0].get();
+                    } else if (initializer->arguments.empty()) {
+                        zero_object(local.offset, std::max(1, type_size(type)));
+                        return;
+                    } else {
+                        error(declaration, "invalid scalar initializer");
+                        return;
+                    }
                 }
             }
             if (is_fp(type)) {
@@ -4475,6 +4535,23 @@ private:
         text_ += "    MOV R0, #1\n";
         text_ += "    STORE R0, [__kr32_exception_pending]\n";
         text_ += "    RET\n";
+        text_ += ".weak __cxa_guard_acquire\n__cxa_guard_acquire:\n";
+        text_ += ".Lguard_retry:\n";
+        text_ += "    LL R1, [R0]\n";
+        text_ += "    CMP R1, #0\n";
+        text_ += "    JNZ .Lguard_ready\n";
+        text_ += "    MOV R2, #1\n";
+        text_ += "    SC R2, [R0]\n";
+        text_ += "    JNZ .Lguard_retry\n";
+        text_ += "    MOV R0, #1\n";
+        text_ += "    RET\n";
+        text_ += ".Lguard_ready:\n";
+        text_ += "    MOV R0, #0\n";
+        text_ += "    RET\n";
+        text_ += ".weak __cxa_guard_release\n__cxa_guard_release:\n";
+        text_ += "    MOV R1, #2\n";
+        text_ += "    STORE R1, [R0]\n";
+        text_ += "    RET\n";
         text_ += ".weak __cxa_atexit\n__cxa_atexit:\n";
         text_ += "    LEA R3, [__kr32_atexit_count]\n";
         text_ += "    LOAD R4, [R3]\n";
@@ -4535,7 +4612,45 @@ private:
 
     void emit_globals() {
         for (const auto& global : global_storage_) {
-            if (!global->defined || global->is_thread_local) {
+            if (!global->defined) {
+                continue;
+            }
+            if (global->is_thread_local) {
+                const int size = std::max(1, type_size(global->type));
+                const std::size_t end =
+                    static_cast<std::size_t>(global->tls_offset + size);
+                if (tls_image_.size() < end) {
+                    tls_image_.resize(end, 0);
+                }
+                if (global->initializer) {
+                    if (is_fp(global->type)) {
+                        double value = 0.0;
+                        if (eval_const_fp(*global->initializer, value)) {
+                            if (is_float32(global->type)) {
+                                const float narrow = static_cast<float>(value);
+                                std::memcpy(tls_image_.data() + global->tls_offset,
+                                            &narrow, sizeof(narrow));
+                            } else {
+                                std::memcpy(tls_image_.data() + global->tls_offset,
+                                            &value, sizeof(value));
+                            }
+                        }
+                    } else {
+                        std::int64_t value = 0;
+                        if (eval_const(*global->initializer, value)) {
+                            if (size == 1) {
+                                tls_image_[static_cast<std::size_t>(
+                                    global->tls_offset)] =
+                                    static_cast<std::uint8_t>(value);
+                            } else {
+                                const std::uint32_t word =
+                                    static_cast<std::uint32_t>(value);
+                                std::memcpy(tls_image_.data() + global->tls_offset,
+                                            &word, sizeof(word));
+                            }
+                        }
+                    }
+                }
                 continue;
             }
             const int size = std::max(1, type_size(global->type));
@@ -4644,6 +4759,7 @@ private:
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
     int tls_cursor_ = 32;
+    std::vector<std::uint8_t> tls_image_;
     std::vector<Global*> static_destructors_;
     std::map<std::string, TypePtr> type_aliases_;
     std::map<std::string, std::set<std::string>> imports_;

@@ -26,6 +26,10 @@ void ClusterHost::install() {
 
 bool ClusterHost::load_image(const container::Image& image, std::string& error) {
     for (const container::Section& section : image.sections) {
+        if (section.name == ".tls") {
+            tls_template_ = section.data;
+            continue;
+        }
         if ((section.flags & container::Alloc) == 0 ||
             section.type == container::SectionType::Bss) {
             continue;
@@ -95,6 +99,10 @@ std::uint32_t ClusterHost::setup_thread(std::uint32_t core,
     (void)machine.write32(tcb + tcb::FprSave, tcb + tcb::HeaderSize);
     (void)machine.write32(tcb + tcb::CurrentException, 0);
     (void)machine.write32(tcb + tcb::Reserved, 0);
+    for (std::size_t index = tcb::Tls; index < tls_template_.size(); ++index) {
+        (void)machine.write8(tcb + static_cast<std::uint32_t>(index),
+                             tls_template_[index]);
+    }
 
     thread.state = State::Running;
     thread.exit_code = 0;
