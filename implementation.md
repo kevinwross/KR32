@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 00:33 -08:00
+> **Last updated:** 2026-11-02 00:35 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -183,10 +183,10 @@ with the module boundaries, CI, and test harness in place.
 
 **Tasks**
 
-- [ ] Initialise the local Git repository with the global identity, branch
+- [x] Initialise the local Git repository with the global identity, branch
       `main`, and an initial commit.
-- [ ] Add `.gitignore` and `.gitattributes` (LF source).
-- [ ] Add `implementation.md` and link it from `KR32-plan.md`.
+- [x] Add `.gitignore` and `.gitattributes` (LF source).
+- [x] Add `implementation.md` and link it from `KR32-plan.md`.
 - [ ] Add `README.md` with the one-command build quick start.
 - [ ] Add `CMakeLists.txt` and `CMakePresets.json`:
   - `windows-msvc`, `windows-ninja`
@@ -615,8 +615,11 @@ Newest entries at the bottom. Use the local time zone.
   not installed yet.
 - **2026-11-02 00:33 -08:00** — Git identity verified:
   `kevinwross <kevinro@live.com>`.
-- **2026-11-02 00:33 -08:00** — Local Git repository initialised on `main`;
-  initial commit pending.
+- **2026-11-02 00:35 -08:00** — Local Git repository initialised on `main`;
+  initial commit `6062fdb` contains the planning docs, ISA draft,
+  `implementation.md`, `.gitignore`, and `.gitattributes`.
+- **2026-11-02 00:35 -08:00** — M0 started. The repository, checklists, and
+  dependency notes are in place; CMake scaffold is next.
 
 ## 10. Updating this file
 
