@@ -41,7 +41,10 @@ ProgramResult compile_and_run(std::string_view source) {
     container::Image image;
     linker::Map map;
     linker::Error link_error;
-    REQUIRE_MESSAGE(linker::link({user, runtime}, linker::Options{}, image, map, link_error),
+    linker::Options link_options;
+    link_options.stack_top = 0x0011'0000;
+    link_options.stack_limit = 0x0001'0000;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, link_options, image, map, link_error),
                     link_error.message);
 
     core::Machine machine(core::Machine::Options{1U * 1024U * 1024U, 0, true});
@@ -65,7 +68,7 @@ ProgramResult compile_and_run(std::string_view source) {
         return false;
     });
 
-    for (int step = 0; step < 10000; ++step) {
+    for (int step = 0; step < 200000; ++step) {
         const core::StepResult step_result = machine.step();
         if (step_result.kind == core::StepResult::Kind::Halted) {
             program.result = machine.reg(0);
@@ -233,6 +236,104 @@ TEST_CASE("variadic calls keep fixed FP args and support more than four extras")
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 16);
+}
+
+TEST_CASE("sizeof, alignof, offsetof, and static assertions work") {
+    const ProgramResult program = compile_and_run(
+        "#include <stddef.h>\n"
+        "struct Point { char tag; int x; double y; };\n"
+        "_Static_assert(sizeof(struct Point) == 16, \"point size\");\n"
+        "_Static_assert(offsetof(struct Point, y) == 8, \"point y offset\");\n"
+        "int main(void) {\n"
+        "    int value = 7;\n"
+        "    return sizeof(value) + sizeof(value + 1) +\n"
+        "           _Alignof(double) + offsetof(struct Point, x);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 4 + 4 + 8 + 4);
+}
+
+TEST_CASE("libc malloc reuses and coalesces free blocks") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    char *a = (char *)malloc(100);\n"
+        "    char *b = (char *)malloc(200);\n"
+        "    char *c = (char *)malloc(300);\n"
+        "    if (a == 0 || b == 0 || c == 0) return 1;\n"
+        "    free(b);\n"
+        "    char *d = (char *)malloc(64);\n"
+        "    if (d != b) return 2;\n"
+        "    free(a);\n"
+        "    free(c);\n"
+        "    free(d);\n"
+        "    char *e = (char *)malloc(300);\n"
+        "    if (e != a) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("libc printf formats integers and floating-point values") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    printf(\"int=%d hex=%x str=%s char=%c\\n\", 42, 42, \"ok\", 'A');\n"
+        "    printf(\"f=%.2f e=%.2e g=%g\\n\", 3.14159, 12345.0, 0.000123);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.output ==
+          "int=42 hex=2a str=ok char=A\n"
+          "f=3.14 e=1.23e+04 g=0.000123\n");
+}
+
+TEST_CASE("FP math builtins map to the KR32 FP instructions") {
+    const ProgramResult program = compile_and_run(
+        "#include <math.h>\n"
+        "int main(void) {\n"
+        "    double root = sqrt(81.0);\n"
+        "    double magnitude = fabs(-2.5);\n"
+        "    double low = fmin(3.0, 1.5);\n"
+        "    double high = fmax(3.0, 1.5);\n"
+        "    return (int)(root + magnitude + low + high);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 16);
+}
+
+TEST_CASE("LL/SC and bit builtins expose the atomic and bit escapes") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int value = 1;\n"
+        "    int old = __builtin_ll(&value);\n"
+        "    int ok = __builtin_sc(&value, 3);\n"
+        "    __builtin_fence();\n"
+        "    int swapped = __builtin_bswap32(0x11223344);\n"
+        "    int leading = __builtin_clz(1);\n"
+        "    int trailing = __builtin_ctz(8);\n"
+        "    int bits = __builtin_popcount(0xF0F0);\n"
+        "    if (old != 1 || ok != 1 || value != 3) return 1;\n"
+        "    if (swapped != 0x44332211 || leading != 31 || trailing != 3) return 2;\n"
+        "    if (bits != 8) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("overflow builtins report wraparound") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int output = 0;\n"
+        "    int add_overflow = __builtin_add_overflow(2147483647, 1, &output);\n"
+        "    int mul_overflow = __builtin_mul_overflow(65536, 65536, &output);\n"
+        "    if (add_overflow != 1 || mul_overflow != 1 || output != 0) return 1;\n"
+        "    return __builtin_add_overflow(2, 3, &output);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
 }
 
 TEST_CASE("a compiled C program supports arrays and indexing") {

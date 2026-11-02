@@ -1642,6 +1642,58 @@ StepResult Machine::execute(const isa::Instruction& instruction,
         return (opcode == 0x60) ? execute_fp(instruction, instruction_pc, next_pc)
                                 : execute_matrix(instruction, instruction_pc, next_pc);
 
+    case 0x62: { // byte/bit escape
+        const std::uint32_t encoded = static_cast<std::uint32_t>(instruction.immediate);
+        const std::uint32_t function = (encoded >> 5) & 0x7U;
+        const std::uint32_t bit_shift = encoded & 0x1FU;
+        const std::uint32_t source = regs_[rs1];
+        std::uint32_t result = 0;
+        if (function == 0x000) {
+            result = (source >> 24) | ((source >> 8) & 0x0000FF00U) |
+                     ((source << 8) & 0x00FF0000U) | (source << 24);
+        } else if (function == 0x001) {
+            const std::uint32_t width = static_cast<std::uint32_t>(instruction.field) + 1U;
+            const std::uint32_t shift = bit_shift & 31U;
+            const std::uint32_t mask = width >= 32U ? 0xFFFF'FFFFU : ((1U << width) - 1U);
+            result = (source >> shift) & mask;
+        } else if (function == 0x002) {
+            const std::uint32_t width = static_cast<std::uint32_t>(instruction.field) + 1U;
+            const std::uint32_t shift = bit_shift & 31U;
+            const std::uint32_t mask = width >= 32U ? 0xFFFF'FFFFU : ((1U << width) - 1U);
+            result = (regs_[rd] & ~(mask << shift)) | ((source & mask) << shift);
+        } else if (function == 0x003) {
+            if (source == 0) {
+                result = 32;
+            } else {
+                while ((source & (0x8000'0000U >> result)) == 0) {
+                    ++result;
+                }
+            }
+        } else if (function == 0x004) {
+            if (source == 0) {
+                result = 32;
+            } else {
+                while ((source & (1U << result)) == 0) {
+                    ++result;
+                }
+            }
+        } else if (function == 0x005) {
+            std::uint32_t value = source;
+            while (value != 0) {
+                result += value & 1U;
+                value >>= 1;
+            }
+        } else {
+            return fail_ud();
+        }
+        regs_[rd] = result;
+        set_flag(kFlagZ, result == 0);
+        set_flag(kFlagN, (result & 0x8000'0000U) != 0);
+        set_flag(kFlagC, false);
+        set_flag(kFlagV, false);
+        return finish_next();
+    }
+
     default:
         return fail_ud();
     }

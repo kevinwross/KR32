@@ -137,6 +137,7 @@ TEST_CASE("the linker can strip local symbols") {
     CHECK(find_symbol(image, "_start") != nullptr);
     CHECK(find_symbol(image, "helper") == nullptr);
     CHECK(find_symbol(image, "__heap_start") != nullptr);
+    CHECK(find_symbol(image, "__heap_end") != nullptr);
 }
 
 TEST_CASE("a linked executable round-trips through the container") {

@@ -1,5 +1,7 @@
 #include "kr32/cc/cc.h"
 
+#include "libc_runtime.h"
+
 #include <algorithm>
 #include <bit>
 #include <cctype>
@@ -318,8 +320,11 @@ std::string preprocess(std::string_view source) {
                         "int sys_random(void);\n"
                         "int sys_argc(void);\n"
                         "int sys_arg(int index, char *buffer, int size);\n"
+                        "int printf(const char *format, ...);\n"
                         "void *malloc(int size);\n"
                         "void free(void *pointer);\n"
+                        "void *calloc(int count, int size);\n"
+                        "void *realloc(void *pointer, int size);\n"
                         "void *memcpy(void *destination, const void *source, int count);\n"
                         "void *memset(void *destination, int value, int count);\n"
                         "int strlen(const char *text);\n";
@@ -333,6 +338,27 @@ std::string preprocess(std::string_view source) {
                     function_macros["va_end"] = FunctionMacro{{"ap"}, "((void)0)"};
                     function_macros["va_copy"] =
                         FunctionMacro{{"dest", "src"}, "__builtin_va_copy(dest, src)"};
+                }
+                if (directive.find("stddef.h") != std::string::npos) {
+                    result +=
+                        "typedef unsigned int size_t;\n"
+                        "typedef int ptrdiff_t;\n";
+                    macros["NULL"] = "0";
+                    function_macros["offsetof"] =
+                        FunctionMacro{{"type", "member"},
+                                      "__builtin_offsetof(type, member)"};
+                }
+                if (directive.find("math.h") != std::string::npos) {
+                    result +=
+                        "double sqrt(double value);\n"
+                        "float sqrtf(float value);\n"
+                        "double fabs(double value);\n"
+                        "float fabsf(float value);\n"
+                        "double fmin(double left, double right);\n"
+                        "float fminf(float left, float right);\n"
+                        "double fmax(double left, double right);\n"
+                        "float fmaxf(float left, float right);\n";
+                    macros["M_PI"] = "3.14159265358979323846";
                 }
             }
             result.push_back('\n');
@@ -838,6 +864,9 @@ private:
             auto type = std::make_shared<Type>();
             type->kind = is_union ? Type::Kind::Union : Type::Kind::Struct;
             type->tag = tag;
+            if (!tag.empty()) {
+                tags_[tag] = type;
+            }
             while (!match("}")) {
                 TypePtr member_type = parse_type();
                 const std::string member_name = parse_name();
@@ -885,6 +914,200 @@ private:
             error("unknown struct/union: " + tag);
         }
         return found->second;
+    }
+
+    std::int64_t constant_primary() {
+        if (match("(")) {
+            const std::int64_t value = constant_expression();
+            expect(")");
+            return value;
+        }
+        if (peek().kind == TokenKind::Number || peek().kind == TokenKind::Character) {
+            return take().value;
+        }
+        if (match("sizeof")) {
+            if (!match("(")) {
+                error("sizeof in a constant expression requires parentheses");
+            }
+            TypePtr type = parse_type();
+            expect(")");
+            return type->size();
+        }
+        if (match("_Alignof") || match("alignof")) {
+            expect("(");
+            TypePtr type = parse_type();
+            expect(")");
+            return type->alignment();
+        }
+        if (match("__builtin_offsetof")) {
+            expect("(");
+            TypePtr type = parse_type();
+            expect(",");
+            const std::string member_name = parse_name();
+            expect(")");
+            const Member* member = find_member(type, member_name);
+            if (member == nullptr) {
+                error("unknown member in offsetof: " + member_name);
+            }
+            return member->offset;
+        }
+        if (peek().kind == TokenKind::Identifier) {
+            const std::string name = take().text;
+            const auto found = enum_constants_.find(name);
+            if (found != enum_constants_.end()) {
+                return found->second;
+            }
+        }
+        error("expected a constant expression");
+    }
+
+    std::int64_t constant_unary() {
+        if (match("-")) {
+            return -constant_unary();
+        }
+        if (match("+")) {
+            return constant_unary();
+        }
+        if (match("!")) {
+            return constant_unary() == 0 ? 1 : 0;
+        }
+        if (match("~")) {
+            return ~constant_unary();
+        }
+        return constant_primary();
+    }
+
+    std::int64_t constant_multiplicative() {
+        std::int64_t value = constant_unary();
+        while (true) {
+            if (match("*")) {
+                value *= constant_unary();
+            } else if (match("/")) {
+                const std::int64_t right = constant_unary();
+                if (right == 0) {
+                    error("division by zero in a constant expression");
+                }
+                value /= right;
+            } else if (match("%")) {
+                const std::int64_t right = constant_unary();
+                if (right == 0) {
+                    error("division by zero in a constant expression");
+                }
+                value %= right;
+            } else {
+                return value;
+            }
+        }
+    }
+
+    std::int64_t constant_additive() {
+        std::int64_t value = constant_multiplicative();
+        while (true) {
+            if (match("+")) {
+                value += constant_multiplicative();
+            } else if (match("-")) {
+                value -= constant_multiplicative();
+            } else {
+                return value;
+            }
+        }
+    }
+
+    std::int64_t constant_shift() {
+        std::int64_t value = constant_additive();
+        while (true) {
+            if (match("<<")) {
+                value <<= constant_additive();
+            } else if (match(">>")) {
+                value >>= constant_additive();
+            } else {
+                return value;
+            }
+        }
+    }
+
+    std::int64_t constant_relational() {
+        std::int64_t value = constant_shift();
+        while (true) {
+            if (match("<")) {
+                value = value < constant_shift() ? 1 : 0;
+            } else if (match("<=")) {
+                value = value <= constant_shift() ? 1 : 0;
+            } else if (match(">")) {
+                value = value > constant_shift() ? 1 : 0;
+            } else if (match(">=")) {
+                value = value >= constant_shift() ? 1 : 0;
+            } else {
+                return value;
+            }
+        }
+    }
+
+    std::int64_t constant_equality() {
+        std::int64_t value = constant_relational();
+        while (true) {
+            if (match("==")) {
+                value = value == constant_relational() ? 1 : 0;
+            } else if (match("!=")) {
+                value = value != constant_relational() ? 1 : 0;
+            } else {
+                return value;
+            }
+        }
+    }
+
+    std::int64_t constant_bit_and() {
+        std::int64_t value = constant_equality();
+        while (match("&")) {
+            value &= constant_equality();
+        }
+        return value;
+    }
+
+    std::int64_t constant_bit_xor() {
+        std::int64_t value = constant_bit_and();
+        while (match("^")) {
+            value ^= constant_bit_and();
+        }
+        return value;
+    }
+
+    std::int64_t constant_bit_or() {
+        std::int64_t value = constant_bit_xor();
+        while (match("|")) {
+            value |= constant_bit_xor();
+        }
+        return value;
+    }
+
+    std::int64_t constant_expression() {
+        std::int64_t value = constant_bit_or();
+        while (true) {
+            if (match("&&")) {
+                const std::int64_t right = constant_bit_or();
+                value = (value != 0 && right != 0) ? 1 : 0;
+            } else if (match("||")) {
+                const std::int64_t right = constant_bit_or();
+                value = (value != 0 || right != 0) ? 1 : 0;
+            } else {
+                return value;
+            }
+        }
+    }
+
+    void parse_static_assert() {
+        expect("(");
+        const std::int64_t value = constant_expression();
+        expect(",");
+        if (peek().kind != TokenKind::String) {
+            error("expected a static assertion message");
+        }
+        const std::string message = take().text;
+        expect(")");
+        expect(";");
+        if (value == 0) {
+            error("static assertion failed: " + message);
+        }
     }
 
     std::int64_t parse_constant_value() {
@@ -973,6 +1196,10 @@ private:
 
     void parse_top_level() {
         if (match(";")) {
+            return;
+        }
+        if (match("_Static_assert")) {
+            parse_static_assert();
             return;
         }
         if (match("typedef")) {
@@ -1195,6 +1422,10 @@ private:
             emit(line_label + ":");
             debug_record("L " + line_label + " 0 " + std::to_string(peek().line) + " " +
                          std::to_string(peek().column));
+        }
+        if (match("_Static_assert")) {
+            parse_static_assert();
+            return;
         }
         if (peek().kind == TokenKind::Identifier && peek(1).text == ":") {
             const std::string label = take().text;
@@ -1636,6 +1867,14 @@ private:
             emit("    FDIV" + suffix + " F0, F1, F0");
             return;
         }
+        if (op == "fmin") {
+            emit("    FMIN" + suffix + " F0, F1, F0");
+            return;
+        }
+        if (op == "fmax") {
+            emit("    FMAX" + suffix + " F0, F1, F0");
+            return;
+        }
         if (op == "==") {
             emit("    FEQ" + suffix + " R0, F1, F0");
             return;
@@ -1902,7 +2141,93 @@ private:
         return type;
     }
 
+    TypePtr parse_unevaluated_unary() {
+        const std::size_t text_size = text_.size();
+        const std::size_t rodata_size = rodata_.size();
+        const std::size_t data_size = data_.size();
+        const std::size_t bss_size = bss_.size();
+        const std::size_t debug_size = debug_.size();
+        const int saved_frame = frame_size_;
+        const int saved_labels = label_counter_;
+        const int saved_strings = string_counter_;
+        TypePtr type = parse_unary();
+        text_.resize(text_size);
+        rodata_.resize(rodata_size);
+        data_.resize(data_size);
+        bss_.resize(bss_size);
+        debug_.resize(debug_size);
+        frame_size_ = saved_frame;
+        label_counter_ = saved_labels;
+        string_counter_ = saved_strings;
+        return type;
+    }
+
+    TypePtr parse_unevaluated_expression() {
+        const std::size_t text_size = text_.size();
+        const std::size_t rodata_size = rodata_.size();
+        const std::size_t data_size = data_.size();
+        const std::size_t bss_size = bss_.size();
+        const std::size_t debug_size = debug_.size();
+        const int saved_frame = frame_size_;
+        const int saved_labels = label_counter_;
+        const int saved_strings = string_counter_;
+        TypePtr type = gen_expression();
+        text_.resize(text_size);
+        rodata_.resize(rodata_size);
+        data_.resize(data_size);
+        bss_.resize(bss_size);
+        debug_.resize(debug_size);
+        frame_size_ = saved_frame;
+        label_counter_ = saved_labels;
+        string_counter_ = saved_strings;
+        return type;
+    }
+
+    TypePtr parse_sizeof(bool alignment) {
+        TypePtr type;
+        if (match("(")) {
+            if (is_type_start()) {
+                type = parse_type();
+                expect(")");
+            } else {
+                type = parse_unevaluated_expression();
+                expect(")");
+            }
+        } else {
+            type = parse_unevaluated_unary();
+        }
+        const int value = alignment ? type->alignment() : type->size();
+        emit("    MOV R0, #" + std::to_string(value));
+        return type_int();
+    }
+
+    TypePtr parse_offsetof() {
+        expect("(");
+        TypePtr type = parse_type();
+        expect(",");
+        const std::string member_name = parse_name();
+        expect(")");
+        const Member* member = find_member(type, member_name);
+        if (member == nullptr) {
+            error("unknown member in offsetof: " + member_name);
+        }
+        emit("    MOV R0, #" + std::to_string(member->offset));
+        return type_int();
+    }
+
     TypePtr parse_unary() {
+        if (peek().text == "sizeof") {
+            take();
+            return parse_sizeof(false);
+        }
+        if (peek().text == "_Alignof" || peek().text == "alignof") {
+            take();
+            return parse_sizeof(true);
+        }
+        if (peek().text == "__builtin_offsetof") {
+            take();
+            return parse_offsetof();
+        }
         if (match("-")) {
             TypePtr type = parse_unary();
             if (is_fp_type(type)) {
@@ -2058,6 +2383,149 @@ private:
             emit("    ADD R1, R1, #8");
             emit("    STORE R1, [R2]");
             return type;
+        }
+        if (peek().text == "__builtin_sqrt" || peek().text == "__builtin_fabs") {
+            const bool square_root = peek().text == "__builtin_sqrt";
+            take();
+            expect("(");
+            TypePtr type = gen_expression();
+            expect(")");
+            if (!is_fp_type(type)) {
+                error("floating-point builtin requires a float or double");
+            }
+            const std::string suffix =
+                type->kind == Type::Kind::Double ? ".D" : ".S";
+            emit(std::string("    ") + (square_root ? "FSQRT" : "FABS") + suffix +
+                 " F0, F0");
+            return type;
+        }
+        if (peek().text == "__builtin_fmin" || peek().text == "__builtin_fmax") {
+            const std::string operation =
+                peek().text == "__builtin_fmin" ? "fmin" : "fmax";
+            take();
+            expect("(");
+            TypePtr left = gen_expression();
+            if (!is_fp_type(left)) {
+                error("fmin/fmax require float or double arguments");
+            }
+            expect(",");
+            push_value(left);
+            TypePtr right = gen_expression();
+            if (!is_fp_type(right)) {
+                error("fmin/fmax require float or double arguments");
+            }
+            expect(")");
+            gen_binary(operation, left, right);
+            return common_fp_type(left, right);
+        }
+        if (peek().text == "__builtin_bswap32" || peek().text == "__builtin_bswap" ||
+            peek().text == "__builtin_clz" || peek().text == "__builtin_ctz" ||
+            peek().text == "__builtin_popcount") {
+            const std::string name = peek().text;
+            take();
+            expect("(");
+            gen_expression();
+            expect(")");
+            if (name == "__builtin_bswap32" || name == "__builtin_bswap") {
+                emit("    BSWAP R0, R0");
+            } else if (name == "__builtin_clz") {
+                emit("    CLZ R0, R0");
+            } else if (name == "__builtin_ctz") {
+                emit("    CTZ R0, R0");
+            } else {
+                emit("    POPCNT R0, R0");
+            }
+            return type_int();
+        }
+        if (peek().text == "__builtin_add_overflow" ||
+            peek().text == "__builtin_sub_overflow" ||
+            peek().text == "__builtin_mul_overflow") {
+            const std::string operation = peek().text;
+            take();
+            expect("(");
+            gen_expression();
+            const int left_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(left_slot) + "]");
+            expect(",");
+            gen_expression();
+            const int right_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(right_slot) + "]");
+            expect(",");
+            gen_expression();
+            expect(")");
+            const int output_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(output_slot) + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(left_slot) + "]");
+            emit("    LOAD R0, [R7 + " + std::to_string(right_slot) + "]");
+            if (operation == "__builtin_add_overflow") {
+                emit("    ADD R0, R1, R0");
+            } else if (operation == "__builtin_sub_overflow") {
+                emit("    SUB R0, R1, R0");
+            } else {
+                emit("    MUL R0, R1, R0");
+            }
+            const std::string overflow = new_label("overflow");
+            const std::string done = new_label("overflowdone");
+            emit("    JVS " + overflow);
+            emit("    LOAD R1, [R7 + " + std::to_string(output_slot) + "]");
+            emit("    STORE R0, [R1]");
+            emit("    MOV R0, #0");
+            emit("    JMP " + done);
+            emit(overflow + ":");
+            emit("    LOAD R1, [R7 + " + std::to_string(output_slot) + "]");
+            emit("    STORE R0, [R1]");
+            emit("    MOV R0, #1");
+            emit(done + ":");
+            return type_int();
+        }
+        if (peek().text == "__builtin_ll") {
+            take();
+            expect("(");
+            gen_expression();
+            expect(")");
+            emit("    LL R0, [R0]");
+            return type_int();
+        }
+        if (peek().text == "__builtin_sc") {
+            take();
+            expect("(");
+            gen_expression();
+            emit("    PUSH R0");
+            expect(",");
+            gen_expression();
+            expect(")");
+            emit("    POP R1");
+            emit("    SC R0, [R1]");
+            const std::string failed = new_label("scfailed");
+            const std::string done = new_label("scdone");
+            emit("    JNZ " + failed);
+            emit("    MOV R0, #1");
+            emit("    JMP " + done);
+            emit(failed + ":");
+            emit("    MOV R0, #0");
+            emit(done + ":");
+            return type_int();
+        }
+        if (peek().text == "__builtin_fence") {
+            take();
+            expect("(");
+            expect(")");
+            emit("    FENCE");
+            return type_int();
+        }
+        if (peek().text == "__builtin_heap_start") {
+            take();
+            expect("(");
+            expect(")");
+            emit("    LEA R0, [__heap_start]");
+            return type_pointer(type_char());
+        }
+        if (peek().text == "__builtin_heap_end") {
+            take();
+            expect("(");
+            expect(")");
+            emit("    LEA R0, [__heap_end]");
+            return type_pointer(type_char());
         }
         if (peek().kind == TokenKind::Identifier) {
             const std::string name = take().text;
@@ -2280,6 +2748,28 @@ Result compile(std::string_view source, std::string_view source_name) {
     return compiler.run();
 }
 
+std::string libc_assembly() {
+    static const std::string assembly = [] {
+        const Result result = compile(libc_source::kLibcSource, "<libc>");
+        if (!result.ok) {
+            const std::string diagnostic =
+                result.diagnostics.empty()
+                    ? "libc compilation failed"
+                    : "line " + std::to_string(result.diagnostics.front().line) +
+                          ", column " + std::to_string(result.diagnostics.front().column) +
+                          ": " + result.diagnostics.front().message;
+            throw std::runtime_error(diagnostic);
+        }
+        std::string text = result.assembly;
+        const std::size_t debug = text.find(".debug_info");
+        if (debug != std::string::npos) {
+            text.resize(debug);
+        }
+        return text;
+    }();
+    return assembly;
+}
+
 std::string runtime_assembly() {
     return
         ".text\n"
@@ -2377,23 +2867,7 @@ std::string runtime_assembly() {
         ".Lstrlen_done:\n"
         "    MOV R0, R1\n"
         "    RET\n"
-        ".global malloc\n"
-        "malloc:\n"
-        "    LEA R1, [__heap_ptr]\n"
-        "    LOAD R2, [R1]\n"
-        "    ADD R3, R0, #3\n"
-        "    AND R3, R3, #-4\n"
-        "    ADD R3, R2, R3\n"
-        "    STORE R3, [R1]\n"
-        "    MOV R0, R2\n"
-        "    RET\n"
-        ".global free\n"
-        "free:\n"
-        "    RET\n"
-        ".data\n"
-        ".global __heap_ptr\n"
-        "__heap_ptr:\n"
-        "    .word __heap_start\n";
+        + libc_assembly();
 }
 
 } // namespace kr32::cc

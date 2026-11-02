@@ -121,6 +121,14 @@ add_test(NAME build_c_varargs
 set_tests_properties(build_c_varargs PROPERTIES
     PASS_REGULAR_EXPRESSION "mixed varargs 4 \\+ 2.5 \\+ 1.25 = 7")
 
+add_test(NAME build_c_libc
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/libc.c
+        -o ${CMAKE_BINARY_DIR}/libc-c.k32 --run)
+set_tests_properties(build_c_libc PROPERTIES
+    PASS_REGULAR_EXPRESSION "heap reuse: ok")
+
+
 
 
 add_test(NAME debug_dump

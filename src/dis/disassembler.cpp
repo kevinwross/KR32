@@ -352,6 +352,33 @@ std::string format_instruction(const isa::Instruction& instruction,
         break;
     }
 
+    case 0x62: {
+        const std::uint32_t encoded =
+            static_cast<std::uint32_t>(instruction.immediate);
+        const std::uint32_t function = (encoded >> 5) & 0x7U;
+        const std::uint32_t shift = encoded & 0x1FU;
+        if (function == 0x000) {
+            out << "BSWAP " << reg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (function == 0x001) {
+            out << "BFX " << reg(instruction.rd) << ", " << reg(instruction.rs1)
+                << ", #" << shift << ", #"
+                << (static_cast<std::uint32_t>(instruction.field) + 1U);
+        } else if (function == 0x002) {
+            out << "BFI " << reg(instruction.rd) << ", " << reg(instruction.rs1)
+                << ", #" << shift << ", #"
+                << (static_cast<std::uint32_t>(instruction.field) + 1U);
+        } else if (function == 0x003) {
+            out << "CLZ " << reg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (function == 0x004) {
+            out << "CTZ " << reg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else if (function == 0x005) {
+            out << "POPCNT " << reg(instruction.rd) << ", " << reg(instruction.rs1);
+        } else {
+            out << "BITOP?";
+        }
+        break;
+    }
+
     case 0x60: {
         const std::uint32_t function =
             static_cast<std::uint32_t>(instruction.immediate) & 0x7FFU;

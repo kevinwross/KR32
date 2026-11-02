@@ -189,7 +189,17 @@ bool link(const std::vector<container::Image>& objects,
 
     std::uint32_t heap_start = cursor;
     heap_start = align_up(heap_start, 16);
+    std::uint32_t heap_end = options.stack_top > 0x0001'0000U
+                                 ? options.stack_top - 0x0001'0000U
+                                 : options.stack_top;
+    heap_end &= ~0xFU;
+    if (heap_end < heap_start) {
+        heap_end = heap_start;
+    }
     if (!add_global("__heap_start", heap_start, container::SymbolBind::Global)) {
+        return false;
+    }
+    if (!add_global("__heap_end", heap_end, container::SymbolBind::Global)) {
         return false;
     }
     if (!add_global("__stack_top", options.stack_top, container::SymbolBind::Global) ||
@@ -197,6 +207,8 @@ bool link(const std::vector<container::Image>& objects,
         return false;
     }
     output_symbols.push_back({"__heap_start", heap_start, 0, 0,
+                              container::SymbolBind::Global});
+    output_symbols.push_back({"__heap_end", heap_end, 0, 0,
                               container::SymbolBind::Global});
     output_symbols.push_back({"__stack_top", options.stack_top, 0, 0,
                               container::SymbolBind::Global});

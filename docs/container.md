@@ -90,7 +90,9 @@ the tables, strings, and payloads.
 - Debug sections are not allocated into the run image by default but remain in
   the executable for the debugger and `size`.
 - Global symbols are resolved by name; locals remain object-scoped.
-- The linker defines `__heap_start`, `__stack_top`, and `__stack_limit`.
+- The linker defines `__heap_start`, `__heap_end`, `__stack_top`, and
+  `__stack_limit`. `__heap_end` reserves 64 KiB below the stack top for the
+  runtime stack.
 - `strip` removes local symbols and relocation records from the output.
 
 ## Versioning

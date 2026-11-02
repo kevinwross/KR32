@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 11:16 -08:00
+> **Last updated:** 2026-11-02 11:46 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -941,6 +941,13 @@ Newest entries at the bottom. Use the local time zone.
       8-byte stack slots (float promotes to double; char/bool promote to int),
       and `stdarg.h` supplies `va_list`, `va_start`, `va_arg`, `va_copy`, and
       `va_end`. Added `examples/varargs.c`, CTest coverage, and ABI docs.
+- **2026-11-02 11:46 -08:00** — Built the freestanding C libc layer in KR32 C:
+      `sizeof`, `_Alignof`, `offsetof`, `_Static_assert`, and `stddef.h`; a new
+      linker `__heap_end`; a boundary-tag best-fit allocator with address-ordered
+      free lists and bidirectional coalescing (`malloc`, `free`, `calloc`,
+      `realloc`); `printf` with integer/string/pointer and FP (`f/e/g`) formats;
+      FP math builtins; LL/SC/FENCE; BSWAP/CLZ/CTZ/POPCNT and overflow builtins;
+      ISA/object-assembler/disassembler support for `0x62`; and tests/docs.
 
 ## 10. Updating this file
 

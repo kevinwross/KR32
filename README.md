@@ -12,13 +12,17 @@ checklists, dependency notes, test gates, and running log are in
 route table, tick-driven device timing, DMA, a cooperative shared-RAM multicore
 cluster, IPIs, and LL/SC spinlock runs are implemented. The C compiler supports
 integer, `float`, and `double` scalars with FP calls, expressions, and debug
-types. The debugger opens at 1440x900 and uses embedded Inter and JetBrains Mono
-fonts, separate source-line and instruction stepping controls, responsive
-resizing, KR16-style gutters with breakpoint toggles and a Run to line/address
-context menu, a HEX word column, disassembly hover help for instructions and
-addressing modes, an expandable CORES panel, a four-line memory dump docked under
-the source pane with an editable start address, and always-visible variables,
-call-stack, and console panels. See
+types. A freestanding C libc now supplies `printf` (including FP formats),
+coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h` (`sizeof`,
+`offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC atomics, and bit
+operations; see [docs/libc.md](docs/libc.md). The debugger opens at 1440x900 and
+uses embedded Inter and JetBrains Mono fonts, separate source-line and
+instruction stepping controls, responsive resizing, KR16-style gutters with
+breakpoint toggles and a Run to line/address context menu, a HEX word column,
+disassembly hover help for instructions and addressing modes, an expandable
+CORES panel, a four-line memory dump docked under the source pane with an
+editable start address, and always-visible variables, call-stack, and console
+panels. See
 [docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++
 toolchain is the remaining planned milestone.
 
@@ -77,7 +81,8 @@ kr32 build examples/hello.c -o hello-c.k32 --run
 kr32 build examples/types.c -o types-c.k32 --run
 kr32 build examples/floats.c -o floats-c.k32 --run
 kr32 build examples/varargs.c -o varargs-c.k32 --run
-kr32 gui examples/varargs.c
+kr32 build examples/libc.c -o libc-c.k32 --run
+kr32 gui examples/libc.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm

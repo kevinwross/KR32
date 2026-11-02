@@ -56,6 +56,36 @@ TEST_CASE("labels and absolute jump targets use an extension word") {
     CHECK(word_at(result.bytes, 8) == 0x0001'0000);
 }
 
+TEST_CASE("the assembler emits FP, atomic, and bit escape encodings") {
+    const auto add = assemble_ok("FADD.S F1, F2, F3\n");
+    REQUIRE(add.bytes.size() == 4);
+    CHECK(word_at(add.bytes) == 0xC024'6000);
+
+    const auto bits = assemble_ok(
+        "BSWAP R1, R2\n"
+        "CLZ R3, R4\n"
+        "CTZ R5, R6\n"
+        "POPCNT R7, R8\n"
+        "BFX R9, R10, #4, #8\n"
+        "BFI R11, R12, #2, #6\n");
+    REQUIRE(bits.bytes.size() == 24);
+    CHECK(word_at(bits.bytes, 0) == 0xC424'0000);
+    CHECK(word_at(bits.bytes, 4) == 0xC468'0060);
+    CHECK(word_at(bits.bytes, 8) == 0xC4AC'0080);
+    CHECK(word_at(bits.bytes, 12) == 0xC4F0'00A0);
+    CHECK(word_at(bits.bytes, 16) == 0xC534'E024);
+    CHECK(word_at(bits.bytes, 20) == 0xC578'A042);
+
+    const auto atomic = assemble_ok(
+        "LL R1, [R2]\n"
+        "SC R3, [R4]\n"
+        "FENCE\n");
+    REQUIRE(atomic.bytes.size() == 12);
+    CHECK(word_at(atomic.bytes, 0) == 0x8C24'4800);
+    CHECK(word_at(atomic.bytes, 4) == 0x8E68'4800);
+    CHECK(word_at(atomic.bytes, 8) == 0x9000'0000);
+}
+
 TEST_CASE("directives emit bytes, words, strings, and alignment") {
     const auto words = assemble_ok(".word 0x12345678\n");
     REQUIRE(words.bytes.size() == 4);

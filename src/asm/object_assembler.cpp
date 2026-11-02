@@ -958,6 +958,80 @@ private:
                                instruction, relocation, addend, statement.line);
         }
 
+        if (mnemonic == "ll" || mnemonic == "sc") {
+            if (operands.size() != 2) {
+                return fail_operands("Rd, [addr]");
+            }
+            int source = 0;
+            if (!parse_register(operands[0], source)) {
+                return fail(statement.line, "expected a register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            instruction.opcode = (mnemonic == "ll") ? 0x46 : 0x47;
+            instruction.rd = static_cast<std::uint8_t>(source);
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            instruction.literal = true;
+            Expr displacement = memory.displacement;
+            return set_payload(displacement,
+                               displacement.symbolic || displacement.value < -1024 ||
+                                   displacement.value > 1023,
+                               instruction, relocation, addend, statement.line);
+        }
+
+        if (mnemonic == "fence") {
+            if (!operands.empty()) {
+                return fail_operands("no operands");
+            }
+            instruction.opcode = 0x48;
+            return true;
+        }
+
+        if (mnemonic == "bswap" || mnemonic == "clz" || mnemonic == "ctz" ||
+            mnemonic == "popcnt" || mnemonic == "bfx" || mnemonic == "bfi") {
+            const bool field_op = mnemonic == "bfx" || mnemonic == "bfi";
+            if (operands.size() != (field_op ? 4U : 2U)) {
+                return fail_operands(field_op ? "Rd, Rs1, #lsb, #width" : "Rd, Rs1");
+            }
+            int destination = 0;
+            int source = 0;
+            if (!parse_register(operands[0], destination) ||
+                !parse_register(operands[1], source)) {
+                return fail(statement.line, "expected registers");
+            }
+            instruction.opcode = 0x62;
+            instruction.rd = static_cast<std::uint8_t>(destination);
+            instruction.rs1 = static_cast<std::uint8_t>(source);
+            if (!field_op) {
+                const std::uint32_t function = mnemonic == "bswap" ? 0x000
+                                             : mnemonic == "clz" ? 0x003
+                                             : mnemonic == "ctz" ? 0x004
+                                                                 : 0x005;
+                instruction.immediate = static_cast<std::int16_t>(function << 5);
+                return true;
+            }
+            Expr shift;
+            Expr width;
+            if (!parse_immediate(operands[2], shift) ||
+                !parse_immediate(operands[3], width)) {
+                return false;
+            }
+            if (width.symbolic || shift.symbolic || width.value < 1 || width.value > 32 ||
+                shift.value < 0 || shift.value > 31) {
+                return fail(statement.line, "bit-field width must be 1..32 and shift 0..31");
+            }
+            const std::uint32_t function = mnemonic == "bfx" ? 0x001 : 0x002;
+            instruction.immediate = static_cast<std::int16_t>(
+                (function << 5) | static_cast<std::uint32_t>(shift.value));
+            instruction.field = static_cast<std::uint8_t>(width.value - 1);
+            return true;
+        }
+
         if (mnemonic == "nop" || mnemonic == "ret" || mnemonic == "halt" ||
             mnemonic == "brk") {
             if (!operands.empty()) {

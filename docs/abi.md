@@ -82,8 +82,10 @@ alignment at public call boundaries.
 
 `_start` calls `main`, then `exit` with `main`'s return value in `R0`.
 `SYSCALL #33` writes `R0` as a character; `SYSCALL #32` exits with `R0`.
-`memcpy`, `memset`, `strlen`, `malloc`, and `free` are supplied by the runtime;
-`malloc` is a simple bump allocator starting at `__heap_start`.
+`memcpy`, `memset`, `strlen`, `malloc`, `free`, `calloc`, `realloc`, and
+`printf` are supplied by the runtime. The allocator is a boundary-tag,
+address-ordered free-list allocator over `__heap_start..__heap_end`, with
+best-fit allocation and bidirectional coalescing; see [libc.md](libc.md).
 
 ## C++ readiness
 
