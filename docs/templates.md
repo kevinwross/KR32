@@ -112,6 +112,7 @@ public:
 - Distinct instantiations for distinct values
 - Bound values used inside member function bodies
 - Bound values used as array sizes
+- Integer constant expressions such as `2 + 3` and `1 << 3`
 
 ### Function-template explicit specializations
 
@@ -128,7 +129,7 @@ template <> int twice<int>(int value) { return 42; }
 
 ## Deferred
 
-- Constant-expression arguments such as `N + 1`
+- Symbolic template expressions such as `N + 1`
 - Nested and multi-level partial-specialization patterns
 - Reference and template-template parameter patterns
 - COMDAT section groups and duplicate-instantiation merging

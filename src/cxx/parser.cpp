@@ -297,13 +297,74 @@ private:
         return false;
     }
 
+    static int template_integer_precedence(std::string_view text) {
+        if (text == "|") return 1;
+        if (text == "^") return 2;
+        if (text == "&") return 3;
+        if (text == "<<" || text == ">>") return 4;
+        if (text == "+" || text == "-") return 5;
+        if (text == "*" || text == "/" || text == "%") return 6;
+        return -1;
+    }
+
+    std::int64_t parse_template_integer_constant(int minimum_precedence = 0) {
+        std::int64_t value = 0;
+        if (consume("-")) {
+            value = -parse_template_integer_constant(7);
+        } else if (consume("+")) {
+            value = parse_template_integer_constant(7);
+        } else if (consume("~")) {
+            value = ~parse_template_integer_constant(7);
+        } else if (consume("(")) {
+            value = parse_template_integer_constant(0);
+            expect(")", "in template integer expression");
+        } else if (peek().kind == TokenKind::IntegerLiteral) {
+            value = peek().integer;
+            advance();
+        } else {
+            error(peek(), "expected integer constant expression");
+            return 0;
+        }
+        while (!at_end()) {
+            const int precedence = template_integer_precedence(peek().text);
+            if (precedence < 0 || precedence < minimum_precedence) {
+                break;
+            }
+            const std::string operation = peek().text;
+            advance();
+            const std::int64_t right =
+                parse_template_integer_constant(precedence + 1);
+            if (operation == "|") value |= right;
+            else if (operation == "^") value ^= right;
+            else if (operation == "&") value &= right;
+            else if (operation == "<<") value <<= right;
+            else if (operation == ">>") value >>= right;
+            else if (operation == "+") value += right;
+            else if (operation == "-") value -= right;
+            else if (operation == "*") value *= right;
+            else if (operation == "/") value = right == 0 ? 0 : value / right;
+            else if (operation == "%") value = right == 0 ? 0 : value % right;
+        }
+        return value;
+    }
+
     std::vector<TypePtr> parse_template_type_arguments() {
         std::vector<TypePtr> arguments;
         if (!expect("<", "in template argument list")) {
             return arguments;
         }
         while (!at_end() && !at(">") && !at(">>")) {
-            if (peek().kind == TokenKind::IntegerLiteral ||
+            const bool constant_expression =
+                at("(") || at("-") ||
+                (peek().kind == TokenKind::IntegerLiteral &&
+                 template_integer_precedence(peek(1).text) >= 0);
+            if (constant_expression) {
+                TypePtr argument = Type::make_builtin(BuiltinKind::Int);
+                argument->has_template_integer_value = true;
+                argument->template_integer_value =
+                    parse_template_integer_constant();
+                arguments.push_back(std::move(argument));
+            } else if (peek().kind == TokenKind::IntegerLiteral ||
                 peek().kind == TokenKind::FloatLiteral ||
                 peek().kind == TokenKind::CharacterLiteral ||
                 peek().kind == TokenKind::StringLiteral || at("true") ||
