@@ -31,7 +31,8 @@ by-value class parameters/returns with `sret` (plus one-to-eight-byte trivial, i
 range-based `for` over arrays, braced initializer lists, and
 `initializer_list` variables, `goto`/labels, and
 C++ debug records (including template and lambda functions). Template support and limitations are summarized in
-[docs/templates.md](docs/templates.md). A
+[docs/templates.md](docs/templates.md), and overall compiler roadmap status is
+in [docs/roadmap.md](docs/roadmap.md). A
 freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
 (`sizeof`, `offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC
