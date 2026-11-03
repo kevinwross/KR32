@@ -1676,6 +1676,16 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("larger aggregates pass and return through hidden pointers") {
+    const ProgramResult program = compile_and_run(
+        "struct Big { int whole; double fraction; };\n"
+        "Big make() { Big value; value.whole = 40; value.fraction = 2.5; return value; }\n"
+        "int read(Big value) { return value.whole + (int)value.fraction; }\n"
+        "int main() { Big value = make(); return read(value); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("mixed integer and floating aggregates use register ABI") {
     const ProgramResult program = compile_and_run(
         "struct Mixed { int whole; float fraction; };\n"

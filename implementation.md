@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 15:58 -08:00
+> **Last updated:** 2026-11-03 16:06 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1625,6 +1625,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 15:58 -08:00** — Constructor argument scoring unwraps reference
       parameters, so reference copy constructors are selected correctly. 327
       cases / 5857 assertions.
+- **2026-11-03 16:06 -08:00** — Added regression coverage for aggregates
+      larger than eight bytes using hidden-pointer parameters and `sret`
+      returns. 328 cases / 5859 assertions.
 
 ## 10. Updating this file
 
