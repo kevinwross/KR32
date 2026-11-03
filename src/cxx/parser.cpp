@@ -49,6 +49,8 @@ struct Declarator {
     Name name;
     TypePtr type;
     std::vector<Param> parameters;
+    std::vector<TypePtr> template_arguments;
+    std::vector<TypePtr> owner_template_arguments;
     bool variadic = false;
     bool is_function = false;
     bool is_const = false;
@@ -647,20 +649,27 @@ private:
             if (at("::")) {
                 declarator.name = parse_qualified_name(false);
             } else {
-                declarator.name.parts.push_back(peek().text);
-                advance();
-                if (consume("::")) {
-                    while (true) {
+                while (true) {
+                    declarator.name.parts.push_back(peek().text);
+                    advance();
+                    std::vector<TypePtr> component_arguments;
+                    if (at("<")) {
+                        component_arguments = parse_template_type_arguments();
+                    }
+                    if (consume("::")) {
+                        if (!component_arguments.empty()) {
+                            declarator.owner_template_arguments = component_arguments;
+                        }
                         if (!at_identifier() && peek().kind != TokenKind::Keyword) {
                             error(peek(), "expected name after '::'");
                             break;
                         }
-                        declarator.name.parts.push_back(peek().text);
-                        advance();
-                        if (!consume("::")) {
-                            break;
-                        }
+                        continue;
                     }
+                    if (!component_arguments.empty()) {
+                        declarator.template_arguments = component_arguments;
+                    }
+                    break;
                 }
             }
         } else if (!allow_abstract) {
@@ -972,6 +981,9 @@ private:
             declaration->name = declarator.name;
             declaration->type = declarator.type;
             declaration->parameters = std::move(declarator.parameters);
+            declaration->specialization_arguments = declarator.template_arguments;
+            declaration->owner_template_arguments =
+                declarator.owner_template_arguments;
             declaration->variadic = declarator.variadic;
             declaration->is_const = declarator.is_const || specifiers.is_const;
             declaration->is_volatile = declarator.is_volatile || specifiers.is_volatile;

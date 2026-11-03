@@ -67,9 +67,21 @@ public:
 - Template-parameter binding from the matched actual type
 - Fallback to the generic template when no pattern matches
 
+### Out-of-class member definitions
+
+```cpp
+template <typename T>
+T Box<T>::get() {
+    return value;
+}
+```
+
+- Attached to each instantiation during class-template cloning
+- Parameter and return types substituted through the class bindings
+- Also supported for explicit class specializations
+
 ## Deferred
 
-- Out-of-class template member definitions
 - Static data members of class templates
 - Non-type template parameters
 - Nested and multi-level partial-specialization patterns

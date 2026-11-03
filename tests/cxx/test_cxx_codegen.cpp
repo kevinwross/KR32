@@ -1421,6 +1421,47 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("out-of-class template member definitions attach to instantiations") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> class Box {\n"
+        "public:\n"
+        "    T value;\n"
+        "    T add(T amount);\n"
+        "};\n"
+        "template <typename T> T Box<T>::add(T amount) {\n"
+        "    return value + amount;\n"
+        "}\n"
+        "int main() {\n"
+        "    Box<int> box;\n"
+        "    box.value = 40;\n"
+        "    return box.add(2);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("specialized out-of-class template members define specialization methods") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> class Box {\n"
+        "public:\n"
+        "    T value;\n"
+        "    T get();\n"
+        "};\n"
+        "template <> class Box<int> {\n"
+        "public:\n"
+        "    int value;\n"
+        "    int get();\n"
+        "};\n"
+        "template <> int Box<int>::get() { return 42; }\n"
+        "int main() {\n"
+        "    Box<int> box;\n"
+        "    box.value = 1;\n"
+        "    return box.get();\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("partial class template specializations match pointer patterns") {
     const ProgramResult program = compile_and_run(
         "template <typename T> class Box {\n"

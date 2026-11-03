@@ -829,6 +829,37 @@ private:
                 info->qualified = key;
                 ClassInfo* raw = info.get();
                 class_index_[key] = std::move(info);
+                Decl* specialization_decl =
+                    const_cast<Decl*>(existing_specialization->second);
+                for (DeclPtr& child : specialization_decl->children) {
+                    if (!child || child->kind != DeclKind::Function ||
+                        child->body || child->name.parts.empty()) {
+                        continue;
+                    }
+                    const std::string method = child->name.parts.back();
+                    for (const TemplateMemberDefinition& definition :
+                         template_member_definitions_) {
+                        if (definition.owner != template_name ||
+                            definition.method != method ||
+                            definition.pattern.size() !=
+                                named->template_arguments.size()) {
+                            continue;
+                        }
+                        bool matches = true;
+                        for (std::size_t index = 0;
+                             index < definition.pattern.size(); ++index) {
+                            if (mangle_type(definition.pattern[index]) !=
+                                mangle_type(named->template_arguments[index])) {
+                                matches = false;
+                                break;
+                            }
+                        }
+                        if (matches) {
+                            child->body = definition.decl->body;
+                            break;
+                        }
+                    }
+                }
                 collect_class_members(*existing_specialization->second, key);
                 layout_class(*raw);
             }
@@ -905,6 +936,34 @@ private:
             child_copy->name = child->name;
             child_copy->type = substitute_type(child->type, bindings);
             child_copy->body = child->body;
+            if (!child_copy->body && child->kind == DeclKind::Function &&
+                !child->name.parts.empty()) {
+                const std::string method = child->name.parts.back();
+                for (const TemplateMemberDefinition& definition :
+                     template_member_definitions_) {
+                    if (definition.owner != template_name ||
+                        definition.method != method ||
+                        definition.pattern.size() !=
+                            named->template_arguments.size()) {
+                        continue;
+                    }
+                    bool matches = true;
+                    for (std::size_t index = 0;
+                         index < definition.pattern.size(); ++index) {
+                        const TypePtr pattern =
+                            substitute_type(definition.pattern[index], bindings);
+                        if (mangle_type(pattern) !=
+                            mangle_type(named->template_arguments[index])) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (matches) {
+                        child_copy->body = definition.decl->body;
+                        break;
+                    }
+                }
+            }
             child_copy->initializer = nullptr;
             child_copy->is_static = child->is_static;
             child_copy->is_virtual = child->is_virtual;
@@ -1084,6 +1143,19 @@ private:
     }
 
     Function* collect_function(const Decl& declaration, const std::string& prefix) {
+        if (!declaration.owner_template_arguments.empty() &&
+            declaration.name.parts.size() > 1) {
+            Name owner_name;
+            owner_name.parts.assign(declaration.name.parts.begin(),
+                                    declaration.name.parts.end() - 1);
+            TemplateMemberDefinition definition;
+            definition.owner = qualify(prefix, owner_name);
+            definition.pattern = declaration.owner_template_arguments;
+            definition.method = declaration.name.parts.back();
+            definition.decl = &declaration;
+            template_member_definitions_.push_back(std::move(definition));
+            return nullptr;
+        }
         if (declaration.is_template) {
             template_functions_[qualify(prefix, declaration.name)].push_back(
                 &declaration);
@@ -6772,6 +6844,13 @@ private:
     std::vector<std::unique_ptr<Function>> function_storage_;
     std::map<std::string, std::vector<Function*>> function_index_;
     std::map<std::string, std::vector<const Decl*>> template_functions_;
+    struct TemplateMemberDefinition {
+        std::string owner;
+        std::vector<TypePtr> pattern;
+        std::string method;
+        const Decl* decl = nullptr;
+    };
+    std::vector<TemplateMemberDefinition> template_member_definitions_;
     std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;

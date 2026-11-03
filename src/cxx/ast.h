@@ -237,6 +237,7 @@ struct Decl {
     std::vector<DeclPtr> children;        // namespace/class/function/enum members
     std::vector<DeclPtr> template_parameters;
     std::vector<TypePtr> specialization_arguments;
+    std::vector<TypePtr> owner_template_arguments;
     std::vector<Initializer> initializers; // constructor base/member init list
     std::vector<Name> base_names;          // class bases
     std::vector<EnumMember> enum_members;
