@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 07:39 -08:00
+> **Last updated:** 2026-11-03 07:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1383,6 +1383,11 @@ Newest entries at the bottom. Use the local time zone.
       a `void*` entry overload; reference/default captures and capturing
       lambdas converted to function pointers are diagnosed. 264 cases /
       5639 assertions.
+- **2026-11-03 07:44 -08:00** — Completed lambda capture forms:
+      explicit by-value, explicit by-reference, `[=]`, and `[&]` closure
+      captures, with reference holds stored as addresses and resolved through
+      the closure. Added `std::thread::detach()` to both thread wrappers.
+      265 cases / 5643 assertions.
 
 ## 10. Updating this file
 

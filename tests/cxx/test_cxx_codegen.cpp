@@ -1197,6 +1197,30 @@ TEST_CASE("lambdas capture values into closure objects") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("lambdas capture by reference and by default") {
+    const ProgramResult reference = compile_and_run(
+        "int main() {\n"
+        "    int x = 1;\n"
+        "    auto f = [&x](int y) { x = x + y; return x; };\n"
+        "    int result = f(41);\n"
+        "    return x + result - 42;\n"
+        "}\n");
+    CHECK(reference.ok);
+    CHECK(reference.result == 42);
+
+    const ProgramResult by_default = compile_and_run(
+        "int main() {\n"
+        "    int a = 10;\n"
+        "    int b = 20;\n"
+        "    auto f = [=](int x) { return a + b + x; };\n"
+        "    a = 0;\n"
+        "    b = 0;\n"
+        "    return f(12);\n"
+        "}\n");
+    CHECK(by_default.ok);
+    CHECK(by_default.result == 42);
+}
+
 TEST_CASE("std thread accepts function pointers and captureless lambdas") {
     const cxx::Result compiled = cxx::compile(
         "#include <thread>\n"
@@ -1204,6 +1228,8 @@ TEST_CASE("std thread accepts function pointers and captureless lambdas") {
         "int main() {\n"
         "    std::thread a(worker, 1);\n"
         "    std::thread b([](int value) { return value; }, 2);\n"
+        "    std::thread c([](int value) { return value; }, 3);\n"
+        "    c.detach();\n"
         "    return a.joinable() + b.joinable();\n"
         "}\n");
     CHECK(compiled.ok);

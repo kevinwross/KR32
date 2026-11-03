@@ -466,6 +466,7 @@ private:
         int lambda_closure_size = 0;
         std::map<std::string, int> lambda_capture_offsets;
         std::map<std::string, TypePtr> lambda_capture_types;
+        std::set<std::string> lambda_capture_references;
         Access access = Access::Public;
     };
 
@@ -1395,6 +1396,33 @@ private:
         std::map<std::string, int> capture_offsets;
         std::map<std::string, TypePtr> capture_types;
         int capture_size = 0;
+        std::set<std::string> capture_references;
+        auto add_capture = [&](const std::string& name, bool reference) {
+            Name capture_name;
+            capture_name.parts.push_back(name);
+            Local* source = lookup_local(capture_name);
+            if (source == nullptr) {
+                error(expression.location,
+                      "lambda capture is not a local variable: " + name);
+                return;
+            }
+            if (!reference && source->type &&
+                source->type->kind == TypeKind::Array) {
+                error(expression.location,
+                      "array lambda captures must be by reference");
+                return;
+            }
+            if (capture_offsets.find(name) != capture_offsets.end()) {
+                error(expression.location, "duplicate lambda capture: " + name);
+                return;
+            }
+            capture_offsets[name] = capture_size;
+            capture_types[name] = source->type;
+            if (reference) {
+                capture_references.insert(name);
+            }
+            capture_size += 4;
+        };
         if (!expression.text.empty()) {
             std::string captures = expression.text;
             std::size_t start = 0;
@@ -1411,27 +1439,28 @@ private:
                        std::isspace(static_cast<unsigned char>(name.back())) != 0) {
                     name.pop_back();
                 }
-                if (name == "=" || name == "&" || name == "this") {
-                    error(expression.location,
-                          "default/reference/this lambda captures are not supported yet");
-                } else if (!name.empty()) {
-                    Name capture_name;
-                    capture_name.parts.push_back(name);
-                    Local* source = lookup_local(capture_name);
-                    if (source == nullptr) {
-                        error(expression.location,
-                              "lambda capture is not a local variable: " + name);
-                    } else {
-                        std::size_t offset = 0;
-                        if (capture_offsets.find(name) != capture_offsets.end()) {
-                            error(expression.location,
-                                  "duplicate lambda capture: " + name);
-                        } else {
-                            offset = capture_size;
-                            capture_offsets[name] = static_cast<int>(offset);
-                            capture_types[name] = source->type;
-                            capture_size += 4;
+                if (name == "=" || name == "&") {
+                    const bool reference = name == "&";
+                    std::set<std::string> seen;
+                    for (auto scope = local_scopes_.rbegin();
+                         scope != local_scopes_.rend(); ++scope) {
+                        for (const auto& entry : *scope) {
+                            if (seen.insert(entry.first).second) {
+                                add_capture(entry.first, reference);
+                            }
                         }
+                    }
+                } else if (name == "this") {
+                    error(expression.location,
+                          "this lambda captures are not supported yet");
+                } else if (!name.empty()) {
+                    bool reference = false;
+                    if (name.front() == '&') {
+                        reference = true;
+                        name.erase(name.begin());
+                    }
+                    if (!name.empty()) {
+                        add_capture(name, reference);
                     }
                 }
                 if (comma == std::string::npos) {
@@ -1473,6 +1502,7 @@ private:
         function->lambda_closure_size = capture_size;
         function->lambda_capture_offsets = capture_offsets;
         function->lambda_capture_types = capture_types;
+        function->lambda_capture_references = capture_references;
         Function* raw = function.get();
         function_storage_.push_back(std::move(function));
         lambda_functions_[&expression] = raw;
@@ -2449,6 +2479,12 @@ private:
                 if (capture_offset != 0) {
                     emit("    ADD R0, R0, #" + std::to_string(capture_offset));
                 }
+                if (current_lambda_function_ != nullptr &&
+                    current_lambda_function_->lambda_capture_references.find(
+                        expression.name.parts[0]) !=
+                        current_lambda_function_->lambda_capture_references.end()) {
+                    emit("    LOAD R0, [R0]");
+                }
                 return;
             }
             if (Local* local = lookup_local(expression.name)) {
@@ -3255,6 +3291,12 @@ private:
                      std::to_string(current_lambda_closure_offset_) + "]");
                 if (capture_offset != 0) {
                     emit("    ADD R0, R0, #" + std::to_string(capture_offset));
+                }
+                if (current_lambda_function_ != nullptr &&
+                    current_lambda_function_->lambda_capture_references.find(
+                        expression.name.parts[0]) !=
+                        current_lambda_function_->lambda_capture_references.end()) {
+                    emit("    LOAD R0, [R0]");
                 }
                 if (is_fp(capture_type)) {
                     load_fp(capture_type);
@@ -4852,7 +4894,19 @@ private:
                 Name capture_name;
                 capture_name.parts.push_back(capture.first);
                 if (Local* source = lookup_local(capture_name)) {
-                    emit("    LOAD R0, [R7 + " + std::to_string(source->offset) + "]");
+                    if (lambda_target->lambda_capture_references.find(capture.first) !=
+                        lambda_target->lambda_capture_references.end()) {
+                        if (source->is_reference) {
+                            emit("    LOAD R0, [R7 + " +
+                                 std::to_string(source->offset) + "]");
+                        } else {
+                            emit("    LEA R0, [R7 + " +
+                                 std::to_string(source->offset) + "]");
+                        }
+                    } else {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(source->offset) + "]");
+                    }
                     emit("    STORE R0, [R7 + " +
                          std::to_string(local.offset + capture.second) + "]");
                 }

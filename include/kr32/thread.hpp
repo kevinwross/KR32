@@ -88,6 +88,7 @@ struct thread {
             handle = 0;
         }
     }
+    void detach() { handle = 0; }
     void yield() { thread_yield(); }
 };
 
@@ -114,6 +115,7 @@ struct thread {
             handle = 0;
         }
     }
+    void detach() { handle = 0; }
     void yield() { kr32::thread_yield(); }
 };
 namespace this_thread {
