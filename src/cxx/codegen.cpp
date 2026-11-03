@@ -841,6 +841,22 @@ private:
             return match_partial_pattern(pattern->element, actual->element,
                                          parameters, bindings);
         }
+        if (pattern->kind == TypeKind::LValueRef ||
+            pattern->kind == TypeKind::RValueRef) {
+            if (actual->kind != pattern->kind || !actual->element) {
+                return false;
+            }
+            return match_partial_pattern(pattern->element, actual->element,
+                                         parameters, bindings);
+        }
+        if (pattern->kind == TypeKind::Array) {
+            if (actual->kind != TypeKind::Array || !actual->element ||
+                pattern->array_size != actual->array_size) {
+                return false;
+            }
+            return match_partial_pattern(pattern->element, actual->element,
+                                         parameters, bindings);
+        }
         return mangle_type(pattern) == mangle_type(actual);
     }
 

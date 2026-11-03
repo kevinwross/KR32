@@ -64,6 +64,8 @@ public:
 ```
 
 - One-level pointer patterns such as `T*`
+- Multi-level pointer patterns such as `T**`
+- Reference patterns such as `T&`
 - Template-parameter binding from the matched actual type
 - Fallback to the generic template when no pattern matches
 
@@ -130,8 +132,7 @@ template <> int twice<int>(int value) { return 42; }
 ## Deferred
 
 - Symbolic template expressions such as `N + 1`
-- Nested and multi-level partial-specialization patterns
-- Reference and template-template parameter patterns
+- Nested template-id partial-specialization patterns
 - COMDAT section groups and duplicate-instantiation merging
 - Template-aware debug information beyond class/function records
 
