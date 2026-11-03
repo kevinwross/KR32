@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 11:13 -08:00
+> **Last updated:** 2026-11-03 11:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1514,6 +1514,10 @@ Newest entries at the bottom. Use the local time zone.
       specializations (`template <> int twice<int>(int)`), matching them
       against call arguments and reusing the generic instantiation symbol.
       293 cases / 5767 assertions.
+- **2026-11-03 11:20 -08:00** — Fixed local scalar declarations initialized by
+      function-template specializations, which previously unwrapped the
+      argument as a cast; repeated specialized calls now use the specialized
+      body. 293 cases / 5767 assertions.
 
 ## 10. Updating this file
 

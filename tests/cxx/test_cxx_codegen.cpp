@@ -1425,9 +1425,13 @@ TEST_CASE("function template explicit specializations override generic calls") {
     const ProgramResult specialized = compile_and_run(
         "template <typename T> T twice(T value) { return value + value; }\n"
         "template <> int twice<int>(int value) { return 42; }\n"
-        "int main() { return twice(1); }\n");
+        "int main() {\n"
+        "    int first = twice(1);\n"
+        "    int second = twice(1);\n"
+        "    return first + second;\n"
+        "}\n");
     CHECK(specialized.ok);
-    CHECK(specialized.result == 42);
+    CHECK(specialized.result == 84);
 
     const ProgramResult generic = compile_and_run(
         "template <typename T> T twice(T value) { return value + value; }\n"

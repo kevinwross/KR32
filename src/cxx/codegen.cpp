@@ -5939,6 +5939,19 @@ private:
                         function_call = function_call ||
                                         lambda_local->lambda_target != nullptr;
                     }
+                    if (!function_call) {
+                        for (const std::string& key : candidate_keys(
+                                 initializer->children[0]->name,
+                                 current_prefix_)) {
+                            if (template_functions_.find(key) !=
+                                    template_functions_.end() ||
+                                function_specializations_.find(key) !=
+                                    function_specializations_.end()) {
+                                function_call = true;
+                                break;
+                            }
+                        }
+                    }
                 }
                 if (!function_call) {
                     if (initializer->arguments.size() == 1) {
