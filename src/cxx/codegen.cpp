@@ -519,6 +519,7 @@ private:
         bool is_reference = false;
         bool is_parameter = false;
         Global* static_global = nullptr;
+        Function* lambda_target = nullptr;
     };
 
     void error(const Location& location, std::string message) {
@@ -1355,6 +1356,59 @@ private:
         return {};
     }
 
+    TypePtr lambda_function_type(Function* function) {
+        auto type = std::make_shared<Type>();
+        type->kind = TypeKind::Function;
+        type->element = function->result;
+        type->parameters = function->parameters;
+        type->variadic = function->variadic;
+        return Type::make_pointer(type);
+    }
+
+    Function* materialize_lambda(const Expr& expression) {
+        const auto existing = lambda_functions_.find(&expression);
+        if (existing != lambda_functions_.end()) {
+            return existing->second;
+        }
+        if (!expression.text.empty()) {
+            error(expression.location,
+                  "lambda captures are not supported yet");
+        }
+        auto declaration = std::make_shared<Decl>();
+        declaration->kind = DeclKind::Function;
+        declaration->location = expression.location;
+        declaration->name.parts.push_back(
+            "__lambda_" + std::to_string(lambda_counter_++));
+        declaration->body = expression.body;
+        declaration->type = expression.type
+                                ? resolve_type(expression.type)
+                                : Type::make_builtin(BuiltinKind::Int);
+        for (const DeclPtr& parameter : expression.parameters) {
+            if (!parameter) {
+                continue;
+            }
+            Param copy;
+            copy.type = parameter->type;
+            copy.name = parameter->name;
+            copy.location = parameter->location;
+            declaration->parameters.push_back(std::move(copy));
+        }
+        lambda_decl_storage_.push_back(declaration);
+        auto function = std::make_unique<Function>();
+        function->decl = declaration.get();
+        function->qualified = declaration->name.to_string();
+        function->symbol = function->qualified;
+        function->result = declaration->type;
+        for (const Param& parameter : declaration->parameters) {
+            function->parameters.push_back(resolve_type(parameter.type));
+        }
+        function->defined = expression.body != nullptr;
+        Function* raw = function.get();
+        function_storage_.push_back(std::move(function));
+        lambda_functions_[&expression] = raw;
+        return raw;
+    }
+
     TypePtr type_of(const Expr& expression, bool decay_arrays = true) {
         switch (expression.kind) {
         case ExprKind::IntegerLiteral:
@@ -1487,6 +1541,18 @@ private:
                     return Type::make_builtin(BuiltinKind::Int);
                 }
             }
+            if (!expression.children.empty() &&
+                expression.children[0]->kind == ExprKind::Lambda) {
+                return materialize_lambda(*expression.children[0])->result;
+            }
+            if (!expression.children.empty() &&
+                expression.children[0]->kind == ExprKind::Name) {
+                if (Local* local = lookup_local(expression.children[0]->name)) {
+                    if (local->lambda_target != nullptr) {
+                        return resolve_type(local->lambda_target->result);
+                    }
+                }
+            }
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
             }
@@ -1549,7 +1615,12 @@ private:
         case ExprKind::Delete:
             return Type::make_builtin(BuiltinKind::Void);
         case ExprKind::Scope:
-        case ExprKind::Lambda:
+            diagnose_once(expression, "expression is not supported until a later M9 phase");
+            return Type::make_builtin(BuiltinKind::Int);
+        case ExprKind::Lambda: {
+            Function* function = materialize_lambda(expression);
+            return lambda_function_type(function);
+        }
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
             diagnose_once(expression, "expression is not supported until a later M9 phase");
@@ -3268,7 +3339,14 @@ private:
         case ExprKind::Delete:
             return gen_delete(expression);
         case ExprKind::Scope:
-        case ExprKind::Lambda:
+            diagnose_once(expression, "expression is not supported until a later M9 phase");
+            emit("    MOV R0, #0");
+            return Type::make_builtin(BuiltinKind::Int);
+        case ExprKind::Lambda: {
+            Function* function = materialize_lambda(expression);
+            emit("    LEA R0, [" + function->symbol + "]");
+            return lambda_function_type(function);
+        }
         case ExprKind::InitializerList:
         case ExprKind::Unknown:
             diagnose_once(expression, "expression is not supported until a later M9 phase");
@@ -3735,7 +3813,19 @@ private:
                 return type;
             }
         }
-        Function* function = resolve_call(expression);
+        Function* function = nullptr;
+        if (!expression.children.empty() &&
+            expression.children[0]->kind == ExprKind::Lambda) {
+            function = materialize_lambda(*expression.children[0]);
+        } else if (!expression.children.empty() &&
+                   expression.children[0]->kind == ExprKind::Name) {
+            if (Local* local = lookup_local(expression.children[0]->name)) {
+                function = local->lambda_target;
+            }
+        }
+        if (function == nullptr) {
+            function = resolve_call(expression);
+        }
         if (!function) {
             emit("    MOV R0, #0");
             return Type::make_builtin(BuiltinKind::Int);
@@ -4549,7 +4639,13 @@ private:
         if (local_scopes_.empty()) {
             push_scope();
         }
-        const TypePtr type = resolve_type(declaration.type);
+        TypePtr type = resolve_type(declaration.type);
+        Function* lambda_target = nullptr;
+        if (declaration.initializer &&
+            declaration.initializer->kind == ExprKind::Lambda) {
+            lambda_target = materialize_lambda(*declaration.initializer);
+            type = lambda_function_type(lambda_target);
+        }
         if (declaration.is_static) {
             auto global = std::make_unique<Global>();
             global->decl = &declaration;
@@ -4615,6 +4711,7 @@ private:
         }
         Local local;
         local.type = type;
+        local.lambda_target = lambda_target;
         local.is_reference = type && (type->kind == TypeKind::LValueRef ||
                                       type->kind == TypeKind::RValueRef);
         local.offset = allocate_local(type);
@@ -4730,10 +4827,19 @@ private:
             if (initializer->kind == ExprKind::Call) {
                 bool function_call = false;
                 if (!initializer->children.empty() &&
+                    initializer->children[0]->kind == ExprKind::Lambda) {
+                    function_call = true;
+                }
+                if (!initializer->children.empty() &&
                     initializer->children[0]->kind == ExprKind::Name) {
                     function_call =
                         !lookup_functions(initializer->children[0]->name,
                                           current_prefix_).empty();
+                    if (Local* lambda_local =
+                            lookup_local(initializer->children[0]->name)) {
+                        function_call = function_call ||
+                                        lambda_local->lambda_target != nullptr;
+                    }
                 }
                 if (!function_call) {
                     if (initializer->arguments.size() == 1) {
@@ -5886,6 +5992,9 @@ private:
     std::vector<std::string> break_labels_;
     std::vector<std::string> continue_labels_;
     std::map<const Expr*, Function*> call_targets_;
+    std::map<const Expr*, Function*> lambda_functions_;
+    std::vector<DeclPtr> lambda_decl_storage_;
+    int lambda_counter_ = 0;
     std::set<const Expr*> diagnosed_expressions_;
     std::set<Function*> emitted_functions_;
     struct ExceptionHandler {

@@ -1167,6 +1167,22 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("captureless lambdas call directly and through auto variables") {
+    const ProgramResult immediate = compile_and_run(
+        "int main() { return [](int x) { return x + 1; }(41); }\n");
+    CHECK(immediate.ok);
+    CHECK(immediate.result == 42);
+
+    const ProgramResult stored = compile_and_run(
+        "int main() {\n"
+        "    int result = [](int x) { return x + 1; }(41);\n"
+        "    auto twice = [](int x) { return x * 2; };\n"
+        "    return result + twice(0);\n"
+        "}\n");
+    CHECK(stored.ok);
+    CHECK(stored.result == 42);
+}
+
 TEST_CASE("std thread, mutex, and condition_variable surface compiles") {
     const ProgramResult program = compile_and_run(
         "#include <thread>\n"

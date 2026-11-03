@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 07:25 -08:00
+> **Last updated:** 2026-11-03 07:31 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1372,6 +1372,10 @@ Newest entries at the bottom. Use the local time zone.
       discovers the weak trampoline symbol and passes the original entry/arg.
       Added main-thread and created-thread TLS lifecycle regressions.
       261 cases / 5632 assertions.
+- **2026-11-03 07:31 -08:00** — Added captureless lambdas. Lambda bodies
+      are materialized as unique functions, direct invocation works, and
+      `auto f = []...` stores a callable function target for `f(...)` calls.
+      Lambda captures are diagnosed as deferred. 262 cases / 5636 assertions.
 
 ## 10. Updating this file
 
