@@ -1344,6 +1344,28 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C++ long long arrays and references keep both halves") {
+    const ProgramResult array_program = compile_and_run(
+        "int main() {\n"
+        "    long long values[2];\n"
+        "    values[0] = 10000000000;\n"
+        "    values[1] = 2;\n"
+        "    return (int)(values[0] / 1000000000) + (int)values[1];\n"
+        "}\n");
+    CHECK(array_program.ok);
+    CHECK(array_program.result == 12);
+
+    const ProgramResult reference_program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 10000000000;\n"
+        "    long long& ref = value;\n"
+        "    ref = ref + 1;\n"
+        "    return (int)(value / 1000000000);\n"
+        "}\n");
+    CHECK(reference_program.ok);
+    CHECK(reference_program.result == 10);
+}
+
 TEST_CASE("C++ long long globals and fields keep both halves") {
     const ProgramResult program = compile_and_run(
         "long long global = 10000000000;\n"

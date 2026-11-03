@@ -6554,6 +6554,10 @@ private:
                                 tls_image_[static_cast<std::size_t>(
                                     global->tls_offset)] =
                                     static_cast<std::uint8_t>(value);
+                            } else if (is_long_long(global->type)) {
+                                const std::int64_t wide = value;
+                                std::memcpy(tls_image_.data() + global->tls_offset,
+                                            &wide, sizeof(wide));
                             } else {
                                 const std::uint32_t word =
                                     static_cast<std::uint32_t>(value);

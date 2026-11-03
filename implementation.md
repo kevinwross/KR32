@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:39 -08:00
+> **Last updated:** 2026-11-03 09:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1457,6 +1457,10 @@ Newest entries at the bottom. Use the local time zone.
       static data members now emit/load both halves; constant globals emit
       two words. Added field/global/static regressions. 282 cases / 5737
       assertions.
+- **2026-11-03 09:44 -08:00** — Verified and covered 64-bit elements in
+      C++ arrays and references; TLS image initialization now copies the full
+      eight bytes (TLS long-long execution still fails and remains deferred).
+      283 cases / 5741 assertions.
 
 ## 10. Updating this file
 
