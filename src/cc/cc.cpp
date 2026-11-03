@@ -1543,6 +1543,29 @@ private:
             emit(end_label + ":");
             return;
         }
+        if (match("do")) {
+            const std::string start = new_label("do");
+            const std::string condition = new_label("docond");
+            const std::string end = new_label("doend");
+            emit(start + ":");
+            break_labels_.push_back(end);
+            continue_labels_.push_back(condition);
+            parse_statement();
+            break_labels_.pop_back();
+            continue_labels_.pop_back();
+            emit(condition + ":");
+            if (!match("while")) {
+                error("expected while after do body");
+            }
+            expect("(");
+            gen_condition();
+            expect(")");
+            emit("    CMP R0, #0");
+            emit("    JNZ " + start);
+            emit(end + ":");
+            expect(";");
+            return;
+        }
         if (match("while")) {
             const std::string start = new_label("while");
             const std::string end = new_label("endwhile");

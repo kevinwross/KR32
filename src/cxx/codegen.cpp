@@ -3875,9 +3875,78 @@ private:
         case StmtKind::Case:
         case StmtKind::Default:
             return;
-        case StmtKind::RangeFor:
-            error(statement.location, "range-for is not supported until M9.7");
+        case StmtKind::RangeFor: {
+            if (!statement.expression || !statement.declaration) {
+                error(statement.location,
+                      "range-for requires a declared loop variable and an array");
+                return;
+            }
+            const TypePtr range_type = type_of(*statement.expression, false);
+            if (!range_type || range_type->kind != TypeKind::Array ||
+                !range_type->element) {
+                error(statement.location,
+                      "range-for currently supports arrays only");
+                return;
+            }
+            push_scope();
+            gen_expr(*statement.expression);
+            const int base_temp =
+                allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
+            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            const int index_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    MOV R0, #0");
+            emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+            declare_local(*statement.declaration);
+            Local* variable = lookup_local(statement.declaration->name);
+            if (variable == nullptr) {
+                error(statement.location, "range-for loop variable was not declared");
+                pop_scope();
+                return;
+            }
+            const int variable_offset = variable->offset;
+            const int element_size = type_size(range_type->element);
+            const bool fp_element = is_fp(range_type->element);
+            const std::string start = new_label("rangefor");
+            const std::string increment = new_label("rangeinc");
+            const std::string end = new_label("rangeend");
+            break_labels_.push_back(end);
+            continue_labels_.push_back(increment);
+            emit(start + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+            emit("    MOV R1, #" + std::to_string(range_type->array_size));
+            emit("    CMP R0, R1");
+            emit("    JGE " + end);
+            emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(index_temp) + "]");
+            if (element_size != 1) {
+                emit("    MUL R1, R1, #" + std::to_string(element_size));
+            }
+            emit("    ADD R2, R0, R1");
+            emit("    LEA R1, [R7 + " + std::to_string(variable_offset) + "]");
+            if (fp_element) {
+                emit(std::string("    FLOAD.") +
+                     (is_float32(range_type->element) ? "W" : "D") + " F0, [R2]");
+                emit(std::string("    FSTORE.") +
+                     (is_float32(range_type->element) ? "W" : "D") + " F0, [R1]");
+            } else {
+                emit("    LOAD R0, [R2]");
+                emit("    STORE R0, [R1]");
+            }
+            if (statement.body) {
+                gen_statement(*statement.body);
+            }
+            emit(increment + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+            emit("    ADD R0, R0, #1");
+            emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+            emit("    JMP " + start);
+            emit(end + ":");
+            continue_labels_.pop_back();
+            break_labels_.pop_back();
+            pop_scope();
             return;
+        }
         case StmtKind::Throw:
             gen_throw(statement);
             return;
@@ -3885,9 +3954,20 @@ private:
             gen_try(statement);
             return;
         case StmtKind::Goto:
-            error(statement.location, "goto is not supported in M9.3");
+            if (current_function_ != nullptr) {
+                emit("    JMP .Luser_" + current_function_->symbol + "_" +
+                     statement.label);
+            } else {
+                error(statement.location, "goto outside a function");
+            }
             return;
         case StmtKind::Label:
+            if (current_function_ != nullptr) {
+                emit(".Luser_" + current_function_->symbol + "_" + statement.label + ":");
+            } else {
+                error(statement.location, "label outside a function");
+            }
+            return;
         case StmtKind::Unknown:
             return;
         }

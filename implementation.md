@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 22:46 -08:00
+> **Last updated:** 2026-11-02 23:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1288,6 +1288,10 @@ Newest entries at the bottom. Use the local time zone.
       multidimensional-array dimension order, scales pointer increments and
       compound assignments, and implements switch with fallthrough. Added
       C/C++ regression coverage; 240 cases / 5482 assertions.
+- **2026-11-02 23:02 -08:00** — Added C `do`/`while`, C++ `goto`/labels,
+      and C++ range-based `for` over arrays. Added regression coverage for
+      all three and retained the earlier compound/array/ternary/switch work.
+      242 cases / 5500 assertions.
 
 ## 10. Updating this file
 

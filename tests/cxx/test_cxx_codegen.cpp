@@ -1152,6 +1152,32 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("goto labels and range-for arrays run") {
+    const ProgramResult jump = compile_and_run(
+        "int main() {\n"
+        "    int i = 0;\n"
+        "    goto check;\n"
+        "body:\n"
+        "    i += 1;\n"
+        "check:\n"
+        "    if (i < 4) goto body;\n"
+        "    return i;\n"
+        "}\n");
+    CHECK(jump.ok);
+    CHECK(jump.result == 4);
+
+    const ProgramResult range = compile_and_run(
+        "int main() {\n"
+        "    int values[4];\n"
+        "    values[0] = 1; values[1] = 2; values[2] = 3; values[3] = 4;\n"
+        "    int total = 0;\n"
+        "    for (int value : values) { total += value; }\n"
+        "    return total;\n"
+        "}\n");
+    CHECK(range.ok);
+    CHECK(range.result == 10);
+}
+
 TEST_CASE("conditional expressions and switch fallthrough run") {
     const ProgramResult ternary = compile_and_run(
         "int main() {\n"

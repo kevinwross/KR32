@@ -362,6 +362,18 @@ TEST_CASE("C supports multidimensional arrays") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C do-while executes its body before testing") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int i = 0;\n"
+        "    int total = 0;\n"
+        "    do { total += i; i++; } while (i < 4);\n"
+        "    return total;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 6);
+}
+
 TEST_CASE("C conditional expressions select a value") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"
