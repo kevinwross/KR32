@@ -888,6 +888,18 @@ TEST_CASE("function-local statics initialize once behind a guard") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("C++ long long compound assignments preserve both halves") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 100000;\n"
+        "    value += 200000;\n"
+        "    value *= 2;\n"
+        "    return (int)(value / 1000);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 600);
+}
+
 TEST_CASE("thread_local long long keeps both halves") {
     const ProgramResult program = compile_and_run(
         "thread_local long long value = 10000000000;\n"

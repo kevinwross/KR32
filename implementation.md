@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 12:22 -08:00
+> **Last updated:** 2026-11-03 12:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1548,6 +1548,9 @@ Newest entries at the bottom. Use the local time zone.
       `.tls` section, installs a TCB/TLS template at `R11`, and initializes
       thread-local data. Standalone `kr32 vm`/`build --run` now handles int
       and `long long` thread-locals. 301 cases / 5784 assertions.
+- **2026-11-03 12:30 -08:00** — Added 64-bit C++ compound assignments
+      (`+=`, `-=`, `*=`, `/=`, `%=`, bitwise, shifts) with carry/borrow and
+      helper calls. 302 cases / 5786 assertions.
 
 ## 10. Updating this file
 

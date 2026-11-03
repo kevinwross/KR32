@@ -4665,6 +4665,116 @@ private:
         if (is_fp(lhs_type)) {
             return gen_fp_assignment(expression, lhs_type);
         }
+        if (is_long_long(lhs_type) && expression.text != "=") {
+            const std::string op =
+                expression.text.substr(0, expression.text.size() - 1);
+            gen_address(*expression.children[0]);
+            const int address_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
+            load_value(lhs_type);
+            const int left_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+            emit("    STORE R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+            gen_expr(*expression.children[1]);
+            const TypePtr right_type = type_of(*expression.children[1]);
+            if (!is_long_long(right_type)) {
+                emit("    MOV R5, R0");
+                emit(std::string("    ") +
+                     (is_unsigned_integer(right_type) ? "SHR" : "SAR") +
+                     " R5, R5, #31");
+                emit("    MOV R4, R0");
+            } else {
+                emit("    MOV R4, R0");
+                emit("    MOV R5, R1");
+            }
+            emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+            const bool unsigned_operation =
+                is_unsigned_operation(lhs_type, right_type);
+            if (op == "+") {
+                const std::string no_carry = new_label("llnocarry");
+                emit("    ADD R0, R0, R4");
+                emit("    MOV R6, #0");
+                emit("    JNC " + no_carry);
+                emit("    MOV R6, #1");
+                emit(no_carry + ":");
+                emit("    ADD R1, R1, R5");
+                emit("    ADD R1, R1, R6");
+            } else if (op == "-") {
+                const std::string no_borrow = new_label("llnoborrow");
+                const std::string borrow_done = new_label("llborrowdone");
+                emit("    SUB R0, R0, R4");
+                emit("    MOV R6, #0");
+                emit("    JCS " + no_borrow);
+                emit("    MOV R6, #1");
+                emit("    JMP " + borrow_done);
+                emit(no_borrow + ":");
+                emit(borrow_done + ":");
+                emit("    SUB R1, R1, R5");
+                emit("    SUB R1, R1, R6");
+            } else if (op == "*") {
+                emit("    MUL R6, R0, R4");
+                emit("    MULHU R12, R0, R4");
+                emit("    MUL R13, R0, R5");
+                emit("    MUL R14, R1, R4");
+                emit("    ADD R12, R12, R13");
+                emit("    ADD R12, R12, R14");
+                emit("    MOV R0, R6");
+                emit("    MOV R1, R12");
+            } else if (op == "&") {
+                emit("    AND R0, R0, R4");
+                emit("    AND R1, R1, R5");
+            } else if (op == "|") {
+                emit("    OR R0, R0, R4");
+                emit("    OR R1, R1, R5");
+            } else if (op == "^") {
+                emit("    XOR R0, R0, R4");
+                emit("    XOR R1, R1, R5");
+            } else if (op == "/" || op == "%") {
+                emit("    MOV R2, R4");
+                emit("    MOV R3, R5");
+                emit("    CALL " +
+                     std::string(unsigned_operation
+                                     ? (op == "/" ? "__kr32_ulldiv" : "__kr32_ulmod")
+                                     : (op == "/" ? "__kr32_lldiv" : "__kr32_llmod")));
+            } else if (op == "<<" || op == ">>") {
+                const std::string zero = new_label("llshift0");
+                const std::string done = new_label("llshiftdone");
+                emit("    CMP R4, #0");
+                emit("    JZ " + zero);
+                emit("    MOV R6, R0");
+                if (op == "<<") {
+                    emit("    SHL R0, R0, R4");
+                    emit("    SHL R1, R1, R4");
+                    emit("    MOV R12, #32");
+                    emit("    SUB R12, R12, R4");
+                    emit("    SHR R6, R6, R12");
+                    emit("    OR R1, R1, R6");
+                } else if (unsigned_operation) {
+                    emit("    SHR R0, R0, R4");
+                    emit("    SHL R6, R1, R4");
+                    emit("    OR R0, R0, R6");
+                    emit("    SHR R1, R1, R4");
+                } else {
+                    emit("    SHR R0, R0, R4");
+                    emit("    SHL R6, R1, R4");
+                    emit("    OR R0, R0, R6");
+                    emit("    SAR R1, R1, R4");
+                }
+                emit("    JMP " + done);
+                emit(zero + ":");
+                emit(done + ":");
+            } else {
+                diagnose_once(expression, "unsupported long long assignment operator");
+            }
+            emit("    MOV R2, R1");
+            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+            store_value(lhs_type);
+            return lhs_type;
+        }
         gen_address(*expression.children[0]);
         const int address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
         emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
