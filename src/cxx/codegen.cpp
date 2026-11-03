@@ -6346,7 +6346,27 @@ private:
             }
             if (declaration.initializer &&
                 declaration.initializer->kind == ExprKind::InitializerList &&
-                find_constructor(info, declaration.initializer->children.size()) == nullptr) {
+                find_constructor(info, declaration.initializer->children.size()) ==
+                    nullptr) {
+                Function* list_constructor = find_constructor(info, 1);
+                if (list_constructor != nullptr &&
+                    !list_constructor->parameters.empty()) {
+                    const TypePtr parameter =
+                        resolve_type(list_constructor->parameters[0]);
+                    ClassInfo* list_class = class_of(parameter);
+                    if (is_initializer_list_class(list_class)) {
+                        const int list_object = prepare_initializer_list_argument(
+                            list_class, parameter, *declaration.initializer);
+                        emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                        emit("    LEA R1, [R7 + " + std::to_string(list_object) + "]");
+                        emit("    CALL " + list_constructor->symbol);
+                        if (Function* destructor = find_destructor(info)) {
+                            local_destructors_.back().push_back(
+                                {local.offset, destructor});
+                        }
+                        return;
+                    }
+                }
                 gen_class_aggregate_initializer(info, local.offset,
                                                  *declaration.initializer);
                 if (Function* destructor = find_destructor(info)) {

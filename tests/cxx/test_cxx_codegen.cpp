@@ -2100,6 +2100,21 @@ TEST_CASE("auto initializer_list variables hold braced values") {
     CHECK(program.result == 9);
 }
 
+TEST_CASE("constructors accept initializer_list arguments") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "struct Sum {\n"
+        "    int total;\n"
+        "    Sum(std::initializer_list<int> values) {\n"
+        "        total = 0;\n"
+        "        for (int value : values) total += value;\n"
+        "    }\n"
+        "};\n"
+        "int main() { Sum sum{1, 2, 3}; return sum.total; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 6);
+}
+
 TEST_CASE("initializer_list keeps 64-bit elements") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"

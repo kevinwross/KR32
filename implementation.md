@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 14:54 -08:00
+> **Last updated:** 2026-11-03 15:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1602,6 +1602,9 @@ Newest entries at the bottom. Use the local time zone.
       assertions.
 - **2026-11-03 14:54 -08:00** — Non-type template array bounds now accept
       constant offsets such as `N + 1`. 319 cases / 5837 assertions.
+- **2026-11-03 15:02 -08:00** — Constructors whose single parameter is
+      `std::initializer_list` now accept braced arguments. 320 cases / 5839
+      assertions.
 
 ## 10. Updating this file
 
