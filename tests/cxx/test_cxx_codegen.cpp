@@ -1766,6 +1766,26 @@ TEST_CASE("C++ by-value class parameters copy and sret returns objects") {
     CHECK(program.result == 160);
 }
 
+TEST_CASE("template static data merges across translation units") {
+    const std::string header =
+        "template <typename T> struct Counter { static int value; };\n"
+        "template <typename T> int Counter<T>::value = 0;\n";
+    const cxx::Result first = cxx::compile(
+        header +
+        "int bump() { return ++Counter<int>::value; }\n",
+        cxx::Options{.source_name = "counter_a.cpp"});
+    const cxx::Result second = cxx::compile(
+        header +
+        "int bump();\n"
+        "int main() { return bump() * 10 + ++Counter<int>::value; }\n",
+        cxx::Options{.source_name = "counter_b.cpp"});
+    REQUIRE(first.ok);
+    REQUIRE(second.ok);
+    const ProgramResult program = run_assemblies({first.assembly, second.assembly});
+    CHECK(program.ok);
+    CHECK(program.result == 12);
+}
+
 TEST_CASE("class template instantiations are weak across translation units") {
     const std::string header =
         "template <typename T> class Box {\n"

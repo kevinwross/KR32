@@ -7500,7 +7500,9 @@ private:
             debug_record("G " + global->qualified + " " + global->symbol + " " +
                          debug_type(global->type) + " " + std::to_string(size));
             std::string output;
-            output += ".global " + global->symbol + "\n";
+            output += global->template_static_member
+                          ? ".weak " + global->symbol + "\n"
+                          : ".global " + global->symbol + "\n";
             output += global->symbol + ":\n";
             if (ClassInfo* info = class_of(global->type)) {
                 if (global->initializer &&

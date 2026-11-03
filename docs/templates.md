@@ -82,6 +82,8 @@ struct Array {
 - Integer non-type parameters
 - Array bounds derived from a parameter plus a constant offset
 - Constant expressions in non-type arguments
+- Template static data members emitted weak and merged across translation
+  units
 
 ### Out-of-class member definitions
 
