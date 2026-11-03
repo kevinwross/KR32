@@ -2455,11 +2455,16 @@ private:
             const std::string false_label = new_label("llfalse");
             const std::string done = new_label("lldone");
             emit("    CMP R1, R5");
-            if (op == "==" || op == "!=") {
+            if (op == "==") {
                 emit("    JNZ " + false_label);
                 emit("    CMP R0, R4");
                 emit("    JZ " + true_label);
                 emit("    JMP " + false_label);
+            } else if (op == "!=") {
+                emit("    JNZ " + true_label);
+                emit("    CMP R0, R4");
+                emit("    JZ " + false_label);
+                emit("    JMP " + true_label);
             } else {
                 if (unsigned_operation) {
                     if (op == "<" || op == "<=") emit("    JNC " + true_label);
@@ -3233,6 +3238,14 @@ private:
                 emit("    FLOAD.D F0, [R1]");
             } else if (type->kind == Type::Kind::Float) {
                 emit("    FLOAD.W F0, [R1]");
+            } else if (is_long_long_type(type)) {
+                emit("    LOAD R3, [R1]");
+                emit("    LOAD R4, [R1 + 4]");
+                emit("    ADD R1, R1, #8");
+                emit("    STORE R1, [R2]");
+                emit("    MOV R0, R3");
+                emit("    MOV R1, R4");
+                return type;
             } else if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
                 emit("    LOAD8S R0, [R1]");
             } else {
@@ -3418,6 +3431,10 @@ private:
                         if (extra) {
                             if (is_fp_type(target)) {
                                 emit("    FSTORE.D F0, [R7 + " + std::to_string(slot) + "]");
+                            } else if (is_long_long_type(target)) {
+                                emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                                emit("    STORE R1, [R7 + " +
+                                     std::to_string(slot + 4) + "]");
                             } else {
                                 emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
                                 emit("    MOV R1, #0");
@@ -3457,8 +3474,14 @@ private:
                     } else {
                         emit("    LOAD R0, [R7 + " + std::to_string(slots[index]) + "]");
                         emit("    STORE R0, [SP]");
-                        emit("    MOV R1, #0");
-                        emit("    STORE R1, [SP + 4]");
+                        if (is_long_long_type(target_types[index])) {
+                            emit("    LOAD R1, [R7 + " +
+                                 std::to_string(slots[index] + 4) + "]");
+                            emit("    STORE R1, [SP + 4]");
+                        } else {
+                            emit("    MOV R1, #0");
+                            emit("    STORE R1, [SP + 4]");
+                        }
                     }
                 }
                 const std::size_t register_count =

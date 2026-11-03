@@ -520,6 +520,69 @@ static int format_integer(char *buffer, unsigned int value, int base, int flags)
     return position;
 }
 
+static int format_integer64(char *buffer, unsigned long long value,
+                            int base_flags) {
+    int base = (base_flags >> 8) & 255;
+    int flags = base_flags & 255;
+    int negative = flags & 1;
+    int plus = (flags >> 1) & 1;
+    int space = (flags >> 2) & 1;
+    int alternate = (flags >> 3) & 1;
+    int upper = (flags >> 4) & 1;
+    char digits[80];
+    int digit_count = 0;
+    int position = 0;
+    if (negative) {
+        buffer[position] = '-';
+        position = position + 1;
+    } else if (plus) {
+        buffer[position] = '+';
+        position = position + 1;
+    } else if (space) {
+        buffer[position] = ' ';
+        position = position + 1;
+    }
+    if (alternate) {
+        if (base == 16) {
+            buffer[position] = '0';
+            position = position + 1;
+            if (upper) {
+                buffer[position] = 'X';
+            } else {
+                buffer[position] = 'x';
+            }
+            position = position + 1;
+        } else if (base == 8 && value != 0) {
+            buffer[position] = '0';
+            position = position + 1;
+        }
+    }
+    if (value == 0) {
+        digits[digit_count] = '0';
+        digit_count = digit_count + 1;
+    }
+    while (value != 0) {
+        int digit = (int)(value % (unsigned long long)base);
+        if (digit < 10) {
+            digits[digit_count] = (char)('0' + digit);
+        } else {
+            if (upper) {
+                digits[digit_count] = (char)('A' + (digit - 10));
+            } else {
+                digits[digit_count] = (char)('a' + (digit - 10));
+            }
+        }
+        digit_count = digit_count + 1;
+        value = value / (unsigned long long)base;
+    }
+    while (digit_count > 0) {
+        digit_count = digit_count - 1;
+        buffer[position] = digits[digit_count];
+        position = position + 1;
+    }
+    return position;
+}
+
 static int format_double_fixed(char *buffer, double value, int precision, int flags) {
     int plus = flags & 1;
     int space = (flags >> 1) & 1;
@@ -1095,8 +1158,12 @@ int printf(const char *format, ...) {
                 }
             }
         }
+        int long_count = 0;
         while (*cursor == 'h' || *cursor == 'l' || *cursor == 'j' ||
                *cursor == 'z' || *cursor == 't' || *cursor == 'L') {
+            if (*cursor == 'l') {
+                long_count = long_count + 1;
+            }
             cursor = cursor + 1;
         }
         char spec = *cursor;
@@ -1106,24 +1173,42 @@ int printf(const char *format, ...) {
         int length = 0;
         int prefix = 0;
         if (spec == 'd' || spec == 'i') {
-            int value = va_arg(arguments, int);
-            unsigned int magnitude = 0;
-            int negative = value < 0;
-            if (negative) {
-                magnitude = (unsigned int)(0 - value);
-            } else {
-                magnitude = (unsigned int)value;
-            }
             int integer_flags = 0;
-            if (negative) integer_flags = integer_flags | 1;
-            if (plus) integer_flags = integer_flags | 2;
-            if (space) integer_flags = integer_flags | 4;
-            length = format_integer(buffer, magnitude, 10, integer_flags);
-            if (negative || plus || space) {
-                prefix = 1;
+            if (long_count >= 2) {
+                long long value = va_arg(arguments, long long);
+                unsigned long long magnitude = 0;
+                int negative = value < 0;
+                if (negative) {
+                    magnitude = (unsigned long long)0 - (unsigned long long)value;
+                    integer_flags = integer_flags | 1;
+                } else {
+                    magnitude = (unsigned long long)value;
+                }
+                if (plus) integer_flags = integer_flags | 2;
+                if (space) integer_flags = integer_flags | 4;
+                length = format_integer64(buffer, magnitude,
+                                          integer_flags | (10 << 8));
+                if (negative || plus || space) {
+                    prefix = 1;
+                }
+            } else {
+                int value = va_arg(arguments, int);
+                unsigned int magnitude = 0;
+                int negative = value < 0;
+                if (negative) {
+                    magnitude = (unsigned int)(0 - value);
+                    integer_flags = integer_flags | 1;
+                } else {
+                    magnitude = (unsigned int)value;
+                }
+                if (plus) integer_flags = integer_flags | 2;
+                if (space) integer_flags = integer_flags | 4;
+                length = format_integer(buffer, magnitude, 10, integer_flags);
+                if (negative || plus || space) {
+                    prefix = 1;
+                }
             }
         } else if (spec == 'u' || spec == 'x' || spec == 'X' || spec == 'o') {
-            unsigned int value = va_arg(arguments, unsigned int);
             int base = 10;
             int integer_flags = 0;
             if (spec == 'x' || spec == 'X') {
@@ -1134,11 +1219,24 @@ int printf(const char *format, ...) {
                 base = 8;
                 if (alternate) integer_flags = integer_flags | 8;
             }
-            length = format_integer(buffer, value, base, integer_flags);
-            if ((spec == 'x' || spec == 'X') && alternate && value != 0) {
-                prefix = 2;
-            } else if (spec == 'o' && alternate && value != 0) {
-                prefix = 1;
+            if (long_count >= 2) {
+                unsigned long long value =
+                    va_arg(arguments, unsigned long long);
+                length = format_integer64(buffer, value,
+                                          integer_flags | (base << 8));
+                if ((spec == 'x' || spec == 'X') && alternate && value != 0) {
+                    prefix = 2;
+                } else if (spec == 'o' && alternate && value != 0) {
+                    prefix = 1;
+                }
+            } else {
+                unsigned int value = va_arg(arguments, unsigned int);
+                length = format_integer(buffer, value, base, integer_flags);
+                if ((spec == 'x' || spec == 'X') && alternate && value != 0) {
+                    prefix = 2;
+                } else if (spec == 'o' && alternate && value != 0) {
+                    prefix = 1;
+                }
             }
         } else if (spec == 'p') {
             unsigned int value = (unsigned int)va_arg(arguments, void *);

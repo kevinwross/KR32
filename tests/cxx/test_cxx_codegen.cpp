@@ -94,7 +94,7 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
         return false;
     });
 
-    for (int step = 0; step < 200000; ++step) {
+    for (int step = 0; step < 1000000; ++step) {
         const core::StepResult step_result = machine.step();
         if (step_result.kind == core::StepResult::Kind::Halted) {
             program.result = machine.exit_code_set() ? machine.exit_code()

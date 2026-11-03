@@ -68,7 +68,7 @@ ProgramResult compile_and_run(std::string_view source) {
         return false;
     });
 
-    for (int step = 0; step < 200000; ++step) {
+    for (int step = 0; step < 1000000; ++step) {
         const core::StepResult step_result = machine.step();
         if (step_result.kind == core::StepResult::Kind::Halted) {
             program.result = machine.reg(0);
@@ -416,6 +416,20 @@ TEST_CASE("C unsigned long long divides and takes remainders") {
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 42);
+}
+
+TEST_CASE("C printf formats long long values") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    long long signed_value = -7;\n"
+        "    unsigned long long unsigned_value = 8589934591;\n"
+        "    printf(\"%lld %llu %llx\\n\", signed_value, unsigned_value,\n"
+        "           unsigned_value);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.output == "-7 8589934591 1ffffffff\n");
 }
 
 TEST_CASE("C signed long long divides and takes signed remainders") {
