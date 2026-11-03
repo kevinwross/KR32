@@ -1181,7 +1181,30 @@ TEST_CASE("exit runs static destructors once") {
     CHECK(program.result == 7);
 }
 
-TEST_CASE("by-value class parameters copy and sret returns objects") {
+TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
+    const ProgramResult arithmetic = compile_and_run(
+        "int signed_div(int x, int y) { return x / y; }\n"
+        "int main() {\n"
+        "    unsigned int a = 1;\n"
+        "    unsigned int b = 2;\n"
+        "    unsigned int wrapped = a - b;\n"
+        "    int signed_result = -7 / 2;\n"
+        "    int shifted = (int)((unsigned)-1 >> 31);\n"
+        "    return (wrapped > 0) + (signed_result == -3) + shifted +\n"
+        "           signed_div(-7, 2) + (1u < 2u) + sizeof(unsigned int);\n"
+        "}\n");
+    CHECK(arithmetic.ok);
+    CHECK(arithmetic.result == 5);
+
+    const ProgramResult overload = compile_and_run(
+        "int pick(int) { return 1; }\n"
+        "int pick(unsigned int) { return 2; }\n"
+        "int main() { return pick(1u); }\n");
+    CHECK(overload.ok);
+    CHECK(overload.result == 2);
+}
+
+TEST_CASE("C++ by-value class parameters copy and sret returns objects") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; };\n"
         "int sum(P p) { p.x = 100; return p.x + p.y; }\n"
@@ -1236,6 +1259,46 @@ TEST_CASE("class templates instantiate fields, methods, and constructors") {
     CHECK(program.result == 107);
 }
 
+TEST_CASE("C++ friends and private static members enforce access") {
+    const ProgramResult friends = compile_and_run(
+        "class Box {\n"
+        "private:\n"
+        "    int value;\n"
+        "public:\n"
+        "    Box() { value = 42; }\n"
+        "    friend int peek(Box& box);\n"
+        "    friend class Inspector;\n"
+        "};\n"
+        "int peek(Box& box) { return box.value; }\n"
+        "class Inspector { public: int get(Box& box) { return box.value; } };\n"
+        "int main() { Box box; Inspector inspector; return peek(box) + inspector.get(box); }\n");
+    CHECK(friends.ok);
+    CHECK(friends.result == 84);
+
+    const ProgramResult statics = compile_and_run(
+        "class Counter {\n"
+        "private:\n"
+        "    static int secret;\n"
+        "public:\n"
+        "    static int get() { return secret; }\n"
+        "};\n"
+        "int Counter::secret = 42;\n"
+        "int main() { return Counter::get(); }\n");
+    CHECK(statics.ok);
+    CHECK(statics.result == 42);
+
+    const cxx::Result rejected = cxx::compile(
+        "class Counter {\n"
+        "private:\n"
+        "    static int secret;\n"
+        "public:\n"
+        "    static int get() { return secret; }\n"
+        "};\n"
+        "int Counter::secret = 42;\n"
+        "int main() { return Counter::secret; }\n");
+    CHECK_FALSE(rejected.ok);
+}
+
 TEST_CASE("C++ access control rejects private members and allows class internals") {
     const ProgramResult internal = compile_and_run(
         "class P {\n"
@@ -1262,6 +1325,19 @@ TEST_CASE("C++ access control rejects private members and allows class internals
         "int main() { D d; return d.get(); }\n");
     CHECK(protected_access.ok);
     CHECK(protected_access.result == 1);
+}
+
+TEST_CASE("C++ supports designated aggregate and array initializers") {
+    const ProgramResult program = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "P global = {.y = 5};\n"
+        "int main() {\n"
+        "    P p = {.y = 2};\n"
+        "    int a[4] = {[2] = 7, 8};\n"
+        "    return p.x + p.y + a[0] + a[2] + a[3] + global.y;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 22);
 }
 
 TEST_CASE("C++ global aggregate initializers are constant data") {

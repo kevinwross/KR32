@@ -1409,21 +1409,23 @@ private:
             }
             std::size_t index = 0;
             while (!match("}")) {
-                if (match(".")) {
-                    const std::string field = parse_name();
-                    expect("=");
-                    index = type->members.size();
-                    for (std::size_t candidate = 0; candidate < type->members.size();
-                         ++candidate) {
-                        if (type->members[candidate].name == field) {
-                            index = candidate;
-                            break;
-                        }
+                if (peek().text == ".") {
+                    TypePtr target;
+                    int target_offset = 0;
+                    std::size_t root_index = 0;
+                    if (!parse_struct_designator_path(type, offset, target,
+                                                      target_offset, root_index)) {
+                        return;
                     }
-                    if (index >= type->members.size()) {
-                        error("unknown field designator: " + field);
+                    parse_global_initializer(target, bytes, target_offset);
+                    index = root_index + 1;
+                    if (!match(",")) {
+                        expect("}");
+                        break;
                     }
-                } else if (match("[")) {
+                    continue;
+                }
+                if (match("[")) {
                     error("array designator on a struct initializer");
                 }
                 if (index >= type->members.size()) {
@@ -1940,21 +1942,23 @@ private:
             }
             std::size_t index = 0;
             while (!match("}")) {
-                if (match(".")) {
-                    const std::string field = parse_name();
-                    expect("=");
-                    index = type->members.size();
-                    for (std::size_t candidate = 0; candidate < type->members.size();
-                         ++candidate) {
-                        if (type->members[candidate].name == field) {
-                            index = candidate;
-                            break;
-                        }
+                if (peek().text == ".") {
+                    TypePtr target;
+                    int target_offset = 0;
+                    std::size_t root_index = 0;
+                    if (!parse_struct_designator_path(type, offset, target,
+                                                      target_offset, root_index)) {
+                        return;
                     }
-                    if (index >= type->members.size()) {
-                        error("unknown field designator: " + field);
+                    gen_initializer_at(target, base_slot, target_offset);
+                    index = root_index + 1;
+                    if (!match(",")) {
+                        expect("}");
+                        break;
                     }
-                } else if (match("[")) {
+                    continue;
+                }
+                if (match("[")) {
                     error("array designator on a struct initializer");
                 }
                 if (index >= type->members.size()) {
@@ -2606,6 +2610,49 @@ private:
             }
         }
         return nullptr;
+    }
+
+    bool parse_struct_designator_path(const TypePtr& root, int root_offset,
+                                      TypePtr& target, int& target_offset,
+                                      std::size_t& root_index) {
+        if (!match(".")) {
+            return false;
+        }
+        TypePtr current = root;
+        int offset = root_offset;
+        root_index = 0;
+        bool first = true;
+        while (true) {
+            if (current->kind != Type::Kind::Struct &&
+                current->kind != Type::Kind::Union) {
+                error("field designator requires a struct or union");
+                return false;
+            }
+            const std::string field = parse_name();
+            const Member* member = find_member(current, field);
+            if (member == nullptr) {
+                error("unknown field designator: " + field);
+                return false;
+            }
+            if (first) {
+                for (std::size_t index = 0; index < current->members.size(); ++index) {
+                    if (current->members[index].name == field) {
+                        root_index = index;
+                        break;
+                    }
+                }
+                first = false;
+            }
+            offset += member->offset;
+            target = member->type;
+            if (match(".")) {
+                current = target;
+                continue;
+            }
+            expect("=");
+            target_offset = offset;
+            return true;
+        }
     }
 
     TypePtr apply_postfix(TypePtr type, bool& address) {

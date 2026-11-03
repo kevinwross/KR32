@@ -2128,6 +2128,35 @@ private:
         if (at("{")) {
             return parse_initializer_list_expression();
         }
+        if (at(".")) {
+            advance();
+            if (at_identifier()) {
+                const std::string field = peek().text;
+                advance();
+                expect("=", "after field designator");
+                ExprPtr value = parse_assignment_expression();
+                value->has_field_designator = true;
+                value->field_designator = field;
+                return value;
+            }
+            error(peek(), "expected field name after designator");
+            return parse_assignment_expression();
+        }
+        if (at("[") && peek(1).kind == TokenKind::IntegerLiteral) {
+            advance();
+            if (peek().kind == TokenKind::IntegerLiteral) {
+                const int index = static_cast<int>(peek().integer);
+                advance();
+                expect("]", "after array designator");
+                expect("=", "after array designator");
+                ExprPtr value = parse_assignment_expression();
+                value->has_index_designator = true;
+                value->index_designator = index;
+                return value;
+            }
+            error(peek(), "array designator requires an integer literal");
+            return parse_assignment_expression();
+        }
         return parse_assignment_expression();
     }
 

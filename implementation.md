@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 00:20 -08:00
+> **Last updated:** 2026-11-03 07:14 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1359,6 +1359,12 @@ Newest entries at the bottom. Use the local time zone.
       value` for arrays, including continuation after a designator and
       zero-filled gaps. Nested aggregate designators remain future work.
       255 cases / 5593 assertions.
+- **2026-11-03 07:14 -08:00** — Completed the first recommendation
+      sprint: C++ unsigned literals, arithmetic conversions, unsigned
+      comparisons/division/modulo/shifts, and unsigned overload selection;
+      friend functions/classes plus private static-member access enforcement;
+      and nested C designated initializers plus C++ field/array designators.
+      Added regressions for each. 259 cases / 5618 assertions.
 
 ## 10. Updating this file
 

@@ -378,6 +378,19 @@ TEST_CASE("C supports global aggregate and array initializers") {
     CHECK(program.result == 248);
 }
 
+TEST_CASE("C supports nested designated initializers") {
+    const ProgramResult program = compile_and_run(
+        "struct Inner { int x; int y; };\n"
+        "struct Outer { struct Inner in; int z; };\n"
+        "struct Outer g = {.in.y = 5};\n"
+        "int main(void) {\n"
+        "    struct Outer o = {.in.y = 2, .z = 3};\n"
+        "    return o.in.x + o.in.y + o.z + g.in.y;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("C supports designated aggregate and array initializers") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; };\n"

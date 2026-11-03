@@ -149,6 +149,10 @@ struct Expr {
     bool is_arrow = false;     // Member access through `->`
     bool is_prefix = false;    // prefix unary/increment
     bool global_scope = false; // leading `::`
+    bool has_field_designator = false;
+    bool has_index_designator = false;
+    std::string field_designator;
+    int index_designator = 0;
 };
 
 enum class StmtKind {

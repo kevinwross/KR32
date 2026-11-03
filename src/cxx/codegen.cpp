@@ -128,6 +128,23 @@ bool is_integer(const TypePtr& type) {
     return type && type->is_integral();
 }
 
+bool is_unsigned_integer(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           type->builtin == BuiltinKind::UnsignedInt;
+}
+
+bool is_unsigned_operation(const TypePtr& left, const TypePtr& right) {
+    return is_unsigned_integer(left) || is_unsigned_integer(right);
+}
+
+bool has_unsigned_suffix(const std::string& raw) {
+    std::size_t index = raw.size();
+    while (index > 0 && (raw[index - 1] == 'l' || raw[index - 1] == 'L')) {
+        --index;
+    }
+    return index > 0 && (raw[index - 1] == 'u' || raw[index - 1] == 'U');
+}
+
 bool is_pointer(const TypePtr& type) {
     return type && (type->kind == TypeKind::Pointer || type->kind == TypeKind::Array);
 }
@@ -197,6 +214,9 @@ TypePtr arithmetic_type(const TypePtr& left, const TypePtr& right) {
     }
     if (is_float32(left) || is_float32(right)) {
         return Type::make_builtin(BuiltinKind::Float);
+    }
+    if (is_unsigned_operation(left, right)) {
+        return Type::make_builtin(BuiltinKind::UnsignedInt);
     }
     return Type::make_builtin(BuiltinKind::Int);
 }
@@ -440,6 +460,7 @@ private:
         int vtable_index = -1;
         std::string member_name;
         ClassInfo* owner = nullptr;
+        ClassInfo* friend_owner = nullptr;
         Access access = Access::Public;
     };
 
@@ -456,6 +477,8 @@ private:
         std::string tls_slot_symbol;
         const Expr* initializer = nullptr;
         bool needs_init = false;
+        Access access = Access::Public;
+        ClassInfo* owner = nullptr;
     };
 
     struct MemberInfo {
@@ -479,6 +502,8 @@ private:
         std::vector<Function*> constructors;
         Function* destructor = nullptr;
         std::map<std::string, Global*> static_globals;
+        std::map<std::string, Access> static_access;
+        std::set<std::string> friend_classes;
         std::vector<Function*> vtable;
         std::map<std::string, int> virtual_slots;
         bool polymorphic = false;
@@ -562,10 +587,18 @@ private:
         if (owner == nullptr || access == Access::Public) {
             return true;
         }
+        if (current_function_ != nullptr &&
+            current_function_->friend_owner == owner) {
+            return true;
+        }
         if (current_class_ == nullptr) {
             return false;
         }
         if (current_class_ == owner) {
+            return true;
+        }
+        if (owner->friend_classes.find(current_class_->qualified) !=
+            owner->friend_classes.end()) {
             return true;
         }
         if (access == Access::Protected) {
@@ -1107,17 +1140,29 @@ private:
                 continue;
             }
             if (child->kind == DeclKind::Function) {
-                collect_function(*child, prefix);
+                if (child->is_friend) {
+                    if (Function* friend_function = collect_function(*child, "")) {
+                        friend_function->friend_owner = info;
+                    }
+                } else {
+                    collect_function(*child, prefix);
+                }
             } else if (child->kind == DeclKind::Variable && child->is_static) {
                 collect_global(*child, prefix);
                 const auto found = global_index_.find(
                     qualify(prefix, child->name));
+                info->static_access[child->name.to_string()] = child->access;
                 if (found != global_index_.end()) {
                     info->static_globals[child->name.to_string()] = found->second;
+                    found->second->access = child->access;
+                    found->second->owner = info;
                 }
             } else if (child->kind == DeclKind::Class) {
-                collect_class_members(*child,
-                                      qualify(prefix, child->name));
+                if (child->is_friend) {
+                    info->friend_classes.insert(child->name.to_string());
+                } else {
+                    collect_class_members(*child, qualify(prefix, child->name));
+                }
             } else if (child->kind == DeclKind::TypeAlias ||
                        child->kind == DeclKind::Using) {
                 collect_using(*child, prefix);
@@ -1145,6 +1190,19 @@ private:
                 ".Ltls_slot_" + std::to_string(tls_slot_counter_++);
         }
         global->type = resolve_type(declaration.type);
+        if (declaration.name.parts.size() > 1) {
+            Name class_name;
+            class_name.parts.assign(declaration.name.parts.begin(),
+                                    declaration.name.parts.end() - 1);
+            if (ClassInfo* owner = find_class(class_name)) {
+                const std::string member_name = declaration.name.parts.back();
+                const auto access = owner->static_access.find(member_name);
+                if (access != owner->static_access.end()) {
+                    global->owner = owner;
+                    global->access = access->second;
+                }
+            }
+        }
         global->initializer = declaration.initializer.get();
         global->defined = !declaration.is_extern || declaration.initializer != nullptr;
         global->symbol =
@@ -1299,7 +1357,9 @@ private:
     TypePtr type_of(const Expr& expression, bool decay_arrays = true) {
         switch (expression.kind) {
         case ExprKind::IntegerLiteral:
-            return Type::make_builtin(BuiltinKind::Int);
+            return Type::make_builtin(has_unsigned_suffix(expression.text)
+                                          ? BuiltinKind::UnsignedInt
+                                          : BuiltinKind::Int);
         case ExprKind::CharacterLiteral:
             return Type::make_builtin(BuiltinKind::Char);
         case ExprKind::BoolLiteral:
@@ -2231,6 +2291,12 @@ private:
                 return;
             }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
+                if (global->owner != nullptr &&
+                    !can_access(global->owner, global->access)) {
+                    diagnose_once(expression, "member is not accessible");
+                    emit("    MOV R0, #0");
+                    return;
+                }
                 if (global->is_thread_local) {
                     emit_tls_address(global);
                 } else {
@@ -2326,6 +2392,13 @@ private:
             for (ClassInfo* current = info; current != nullptr; current = current->base) {
                 const auto global = current->static_globals.find(member_name);
                 if (global != current->static_globals.end()) {
+                    const auto access = current->static_access.find(member_name);
+                    if (access != current->static_access.end() &&
+                        !can_access(current, access->second)) {
+                        diagnose_once(expression, "member is not accessible");
+                        emit("    MOV R0, #0");
+                        return;
+                    }
                     emit("    LEA R0, [" + global->second->symbol + "]");
                     return;
                 }
@@ -2975,12 +3048,16 @@ private:
     TypePtr gen_expr(const Expr& expression) {
         switch (expression.kind) {
         case ExprKind::IntegerLiteral:
+            emit("    MOV R0, #" + std::to_string(expression.integer));
+            return Type::make_builtin(has_unsigned_suffix(expression.text)
+                                          ? BuiltinKind::UnsignedInt
+                                          : BuiltinKind::Int);
         case ExprKind::CharacterLiteral:
         case ExprKind::BoolLiteral:
             emit("    MOV R0, #" + std::to_string(expression.integer));
             return expression.kind == ExprKind::BoolLiteral
                        ? Type::make_builtin(BuiltinKind::Bool)
-                       : Type::make_builtin(BuiltinKind::Int);
+                       : Type::make_builtin(BuiltinKind::Char);
         case ExprKind::FloatLiteral: {
             const TypePtr type =
                 expression.text.find('f') != std::string::npos ||
@@ -3018,6 +3095,12 @@ private:
                 return type;
             }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
+                if (global->owner != nullptr &&
+                    !can_access(global->owner, global->access)) {
+                    diagnose_once(expression, "member is not accessible");
+                    emit("    MOV R0, #0");
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
                 if (global->is_thread_local) {
                     emit_tls_address(global);
                 } else {
@@ -3408,16 +3491,21 @@ private:
             return decay(right_type);
         }
 
+        const bool unsigned_operation =
+            is_unsigned_operation(left_type, right_type);
         if (op == "+") emit("    ADD R0, R0, R1");
         else if (op == "-") emit("    SUB R0, R0, R1");
         else if (op == "*") emit("    MUL R0, R0, R1");
-        else if (op == "/") emit("    DIV R0, R0, R1");
-        else if (op == "%") emit("    MOD R0, R0, R1");
+        else if (op == "/") emit(unsigned_operation ? "    DIV R0, R0, R1"
+                                                     : "    DIVS R0, R0, R1");
+        else if (op == "%") emit(unsigned_operation ? "    MOD R0, R0, R1"
+                                                     : "    MODS R0, R0, R1");
         else if (op == "&") emit("    AND R0, R0, R1");
         else if (op == "|") emit("    OR R0, R0, R1");
         else if (op == "^") emit("    XOR R0, R0, R1");
         else if (op == "<<") emit("    SHL R0, R0, R1");
-        else if (op == ">>") emit("    SAR R0, R0, R1");
+        else if (op == ">>") emit(unsigned_operation ? "    SHR R0, R0, R1"
+                                                     : "    SAR R0, R0, R1");
         else if (op == "==" || op == "!=" || op == "<" || op == "<=" ||
                  op == ">" || op == ">=") {
             const std::string true_label = new_label("true");
@@ -3425,10 +3513,17 @@ private:
             emit("    CMP R0, R1");
             if (op == "==") emit("    JZ " + true_label);
             if (op == "!=") emit("    JNZ " + true_label);
-            if (op == "<") emit("    JLT " + true_label);
-            if (op == "<=") emit("    JLE " + true_label);
-            if (op == ">") emit("    JGT " + true_label);
-            if (op == ">=") emit("    JGE " + true_label);
+            if (unsigned_operation) {
+                if (op == "<") emit("    JNC " + true_label);
+                if (op == "<=") emit("    JLS " + true_label);
+                if (op == ">") emit("    JHI " + true_label);
+                if (op == ">=") emit("    JCS " + true_label);
+            } else {
+                if (op == "<") emit("    JLT " + true_label);
+                if (op == "<=") emit("    JLE " + true_label);
+                if (op == ">") emit("    JGT " + true_label);
+                if (op == ">=") emit("    JGE " + true_label);
+            }
             emit("    MOV R0, #0");
             emit("    JMP " + end_label);
             emit(true_label + ":");
@@ -3536,16 +3631,21 @@ private:
                 }
             }
             emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+            const bool unsigned_operation =
+                is_unsigned_operation(lhs_type, type_of(*expression.children[1]));
             if (op == "+") emit("    ADD R0, R0, R1");
             else if (op == "-") emit("    SUB R0, R0, R1");
             else if (op == "*") emit("    MUL R0, R0, R1");
-            else if (op == "/") emit("    DIV R0, R0, R1");
-            else if (op == "%") emit("    MOD R0, R0, R1");
+            else if (op == "/") emit(unsigned_operation ? "    DIV R0, R0, R1"
+                                                         : "    DIVS R0, R0, R1");
+            else if (op == "%") emit(unsigned_operation ? "    MOD R0, R0, R1"
+                                                         : "    MODS R0, R0, R1");
             else if (op == "&") emit("    AND R0, R0, R1");
             else if (op == "|") emit("    OR R0, R0, R1");
             else if (op == "^") emit("    XOR R0, R0, R1");
             else if (op == "<<") emit("    SHL R0, R0, R1");
-            else if (op == ">>") emit("    SAR R0, R0, R1");
+            else if (op == ">>") emit(unsigned_operation ? "    SHR R0, R0, R1"
+                                                         : "    SAR R0, R0, R1");
             else diagnose_once(expression, "unsupported assignment operator");
         }
         emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
@@ -4363,8 +4463,19 @@ private:
         const int element_size = type_size(type->element);
         std::size_t index = 0;
         for (const ExprPtr& element : initializer.children) {
-            if (index >= type->array_size || !element) {
-                break;
+            if (!element) {
+                continue;
+            }
+            if (element->has_index_designator) {
+                if (element->index_designator < 0) {
+                    error(element->location, "array designator is out of range");
+                    continue;
+                }
+                index = static_cast<std::size_t>(element->index_designator);
+            }
+            if (index >= type->array_size) {
+                error(element->location, "array designator is out of range");
+                continue;
             }
             const int element_offset = offset + static_cast<int>(index) * element_size;
             if (type->element->kind == TypeKind::Array) {
@@ -4390,15 +4501,30 @@ private:
             return;
         }
         std::size_t index = 0;
-        for (const MemberInfo& member : info->members) {
-            if (index >= initializer.children.size()) {
-                break;
-            }
-            const ExprPtr& value = initializer.children[index];
+        for (const ExprPtr& value : initializer.children) {
             if (!value) {
-                ++index;
                 continue;
             }
+            if (value->has_field_designator) {
+                index = info->members.size();
+                for (std::size_t candidate = 0; candidate < info->members.size();
+                     ++candidate) {
+                    if (info->members[candidate].name == value->field_designator) {
+                        index = candidate;
+                        break;
+                    }
+                }
+                if (index >= info->members.size()) {
+                    error(value->location,
+                          "unknown field designator: " + value->field_designator);
+                    continue;
+                }
+            }
+            if (index >= info->members.size()) {
+                error(value->location, "too many aggregate initializer elements");
+                continue;
+            }
+            const MemberInfo& member = info->members[index];
             const int member_offset = offset + member.offset;
             if (member.type && member.type->kind == TypeKind::Array) {
                 gen_array_initializer(member.type, member_offset, *value);
@@ -5366,8 +5492,19 @@ private:
             const int element_size = type_size(type->element);
             std::size_t index = 0;
             for (const ExprPtr& element : initializer.children) {
-                if (index >= type->array_size || !element) {
-                    break;
+                if (!element) {
+                    continue;
+                }
+                if (element->has_index_designator) {
+                    if (element->index_designator < 0) {
+                        error(element->location, "array designator is out of range");
+                        continue;
+                    }
+                    index = static_cast<std::size_t>(element->index_designator);
+                }
+                if (index >= type->array_size) {
+                    error(element->location, "array designator is out of range");
+                    continue;
                 }
                 emit_constant_object(type->element, *element, bytes,
                                      offset + static_cast<int>(index) * element_size);
@@ -5377,14 +5514,32 @@ private:
         }
         if (ClassInfo* info = class_of(type)) {
             std::size_t index = 0;
-            for (const MemberInfo& member : info->members) {
-                if (index >= initializer.children.size()) {
-                    break;
+            for (const ExprPtr& value : initializer.children) {
+                if (!value) {
+                    continue;
                 }
-                if (initializer.children[index]) {
-                    emit_constant_object(member.type, *initializer.children[index], bytes,
-                                         offset + member.offset);
+                if (value->has_field_designator) {
+                    index = info->members.size();
+                    for (std::size_t candidate = 0; candidate < info->members.size();
+                         ++candidate) {
+                        if (info->members[candidate].name == value->field_designator) {
+                            index = candidate;
+                            break;
+                        }
+                    }
+                    if (index >= info->members.size()) {
+                        error(value->location,
+                              "unknown field designator: " + value->field_designator);
+                        continue;
+                    }
                 }
+                if (index >= info->members.size()) {
+                    error(value->location, "too many aggregate initializer elements");
+                    continue;
+                }
+                const MemberInfo& member = info->members[index];
+                emit_constant_object(member.type, *value, bytes,
+                                     offset + member.offset);
                 ++index;
             }
             return;
