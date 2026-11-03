@@ -387,6 +387,7 @@ struct Token {
     std::int64_t value = 0;
     double real = 0.0;
     bool is_float = false;
+    bool is_unsigned = false;
     int line = 1;
     int column = 1;
 };
@@ -458,10 +459,16 @@ private:
         if (std::isdigit(static_cast<unsigned char>(c)) != 0 ||
             (c == '.' && std::isdigit(static_cast<unsigned char>(peek(1))) != 0)) {
             if (c == '0' && (peek(1) == 'x' || peek(1) == 'X')) {
-                std::string number;
-                while (std::isalnum(static_cast<unsigned char>(peek())) != 0 ||
+                std::string number = "0x";
+                advance();
+                advance();
+                while (std::isxdigit(static_cast<unsigned char>(peek())) != 0 ||
                        peek() == '\'') {
                     number.push_back(peek());
+                    advance();
+                }
+                if (peek() == 'u' || peek() == 'U') {
+                    token.is_unsigned = true;
                     advance();
                 }
                 token.kind = TokenKind::Number;
@@ -497,15 +504,24 @@ private:
                 }
             }
             bool float_suffix = false;
+            bool unsigned_suffix = false;
             if (peek() == 'f' || peek() == 'F') {
                 float_suffix = true;
                 floating = true;
                 advance();
             } else if (peek() == 'l' || peek() == 'L') {
                 advance();
+            } else if (peek() == 'u' || peek() == 'U') {
+                unsigned_suffix = true;
+                advance();
             }
             token.text = number;
+            token.is_unsigned = unsigned_suffix;
             if (floating) {
+                if (unsigned_suffix) {
+                    throw CompileError(token.line, token.column,
+                                       "unsigned suffix is not valid on a float");
+                }
                 token.kind = TokenKind::Float;
                 char* end = nullptr;
                 token.real = std::strtod(number.c_str(), &end);
@@ -611,6 +627,7 @@ struct Type {
     TypePtr base;
     std::weak_ptr<Type> pointer_base;
     int count = 0;
+    bool is_unsigned = false;
     std::vector<Member> members;
     std::string tag;
     int total_size = 0;
@@ -668,6 +685,11 @@ struct Type {
 };
 
 TypePtr type_int() { return std::make_shared<Type>(Type{Type::Kind::Int, nullptr, 0}); }
+TypePtr type_uint() {
+    auto type = type_int();
+    type->is_unsigned = true;
+    return type;
+}
 TypePtr type_char() { return std::make_shared<Type>(Type{Type::Kind::Char, nullptr, 0}); }
 TypePtr type_bool() { return std::make_shared<Type>(Type{Type::Kind::Bool, nullptr, 0}); }
 TypePtr type_float() { return std::make_shared<Type>(Type{Type::Kind::Float, nullptr, 0}); }
@@ -690,6 +712,11 @@ TypePtr type_array(TypePtr base, int count) {
 bool is_fp_type(const TypePtr& type) {
     return type != nullptr &&
            (type->kind == Type::Kind::Float || type->kind == Type::Kind::Double);
+}
+
+bool is_unsigned_scalar(const TypePtr& type) {
+    return type != nullptr && type->is_unsigned &&
+           (type->kind == Type::Kind::Char || type->kind == Type::Kind::Int);
 }
 
 TypePtr common_fp_type(const TypePtr& left, const TypePtr& right) {
@@ -837,8 +864,8 @@ private:
         }
         switch (type->kind) {
         case Type::Kind::Void: return "void";
-        case Type::Kind::Char: return "char";
-        case Type::Kind::Int: return "int";
+        case Type::Kind::Char: return type->is_unsigned ? "unsigned char" : "char";
+        case Type::Kind::Int: return type->is_unsigned ? "unsigned int" : "int";
         case Type::Kind::Bool: return "_Bool";
         case Type::Kind::Float: return "float";
         case Type::Kind::Double: return "double";
@@ -865,7 +892,7 @@ private:
                text == "struct" || text == "union" || text == "enum" ||
                text == "const" || text == "unsigned" || text == "signed" ||
                text == "static" || text == "extern" || text == "volatile" ||
-               text == "register" || typedefs_.find(text) != typedefs_.end();
+               text == "register" || text == "long" || typedefs_.find(text) != typedefs_.end();
     }
 
     static int align_up(int value, int alignment) {
@@ -1172,11 +1199,28 @@ private:
     }
 
     TypePtr parse_type() {
+        bool unsigned_flag = false;
+        bool signed_flag = false;
+        bool long_flag = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
-               peek().text == "register" || peek().text == "typedef") {
-            take();
+               peek().text == "register" || peek().text == "typedef" ||
+               peek().text == "long") {
+            const std::string qualifier = take().text;
+            if (qualifier == "unsigned") {
+                unsigned_flag = true;
+            } else if (qualifier == "signed") {
+                signed_flag = true;
+            } else if (qualifier == "long") {
+                if (long_flag) {
+                    error("long long is not supported");
+                }
+                long_flag = true;
+            }
+        }
+        if (peek().text == "short") {
+            error("short is not supported yet");
         }
         TypePtr base;
         if (match("struct")) {
@@ -1200,8 +1244,19 @@ private:
             base = type_double();
         } else if (match("void")) {
             base = type_void();
+        } else if (unsigned_flag || signed_flag || long_flag) {
+            base = type_int();
         } else {
             error("expected a type");
+        }
+        if (long_flag && base->kind == Type::Kind::Double) {
+            error("long double is not supported");
+        }
+        if (unsigned_flag) {
+            if (base->kind != Type::Kind::Int && base->kind != Type::Kind::Char) {
+                error("unsigned is only supported for int and char");
+            }
+            base->is_unsigned = true;
         }
         while (match("*")) {
             base = type_pointer(base);
@@ -1758,7 +1813,9 @@ private:
     }
 
     void gen_load(const TypePtr& type) {
-        if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
+        if (type->kind == Type::Kind::Char) {
+            emit(type->is_unsigned ? "    LOAD8U R0, [R0]" : "    LOAD8S R0, [R0]");
+        } else if (type->kind == Type::Kind::Bool) {
             emit("    LOAD8S R0, [R0]");
         } else if (type->kind == Type::Kind::Float) {
             emit("    FLOAD.W F0, [R0]");
@@ -1810,8 +1867,10 @@ private:
         }
         if (to->kind == Type::Kind::Char) {
             emit("    AND R0, R0, #255");
-            emit("    SHL R0, R0, #24");
-            emit("    SAR R0, R0, #24");
+            if (!to->is_unsigned) {
+                emit("    SHL R0, R0, #24");
+                emit("    SAR R0, R0, #24");
+            }
         } else if (to->kind == Type::Kind::Bool) {
             const std::string nonzero = new_label("bool");
             const std::string done = new_label("boolend");
@@ -1973,11 +2032,15 @@ private:
             return;
         }
         if (op == "/") {
-            emit("    DIV R0, R1, R0");
+            emit(is_unsigned_scalar(left) || is_unsigned_scalar(right)
+                     ? "    DIV R0, R1, R0"
+                     : "    DIVS R0, R1, R0");
             return;
         }
         if (op == "%") {
-            emit("    MOD R0, R1, R0");
+            emit(is_unsigned_scalar(left) || is_unsigned_scalar(right)
+                     ? "    MOD R0, R1, R0"
+                     : "    MODS R0, R1, R0");
             return;
         }
         if (op == "&") {
@@ -1993,20 +2056,33 @@ private:
             return;
         }
         if (op == "<<" || op == ">>") {
-            emit(std::string("    ") + (op == "<<" ? "SHL" : "SAR") + " R0, R1, R0");
+            const bool logical_shift = op == ">>" &&
+                                       (is_unsigned_scalar(left) ||
+                                        is_unsigned_scalar(right));
+            emit(std::string("    ") + (op == "<<" ? "SHL" : (logical_shift ? "SHR" : "SAR")) +
+                 " R0, R1, R0");
             return;
         }
         if (op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" ||
             op == ">=") {
             const std::string true_label = new_label("true");
             const std::string end_label = new_label("cmpend");
+            const bool unsigned_compare = is_unsigned_scalar(left) ||
+                                          is_unsigned_scalar(right);
             emit("    CMP R1, R0");
             if (op == "==") emit("    JZ " + true_label);
             if (op == "!=") emit("    JNZ " + true_label);
-            if (op == "<") emit("    JLT " + true_label);
-            if (op == "<=") emit("    JLE " + true_label);
-            if (op == ">") emit("    JGT " + true_label);
-            if (op == ">=") emit("    JGE " + true_label);
+            if (unsigned_compare) {
+                if (op == "<") emit("    JNC " + true_label);
+                if (op == "<=") emit("    JLS " + true_label);
+                if (op == ">") emit("    JHI " + true_label);
+                if (op == ">=") emit("    JCS " + true_label);
+            } else {
+                if (op == "<") emit("    JLT " + true_label);
+                if (op == "<=") emit("    JLE " + true_label);
+                if (op == ">") emit("    JGT " + true_label);
+                if (op == ">=") emit("    JGE " + true_label);
+            }
             emit("    MOV R0, #0");
             emit("    JMP " + end_label);
             emit(true_label + ":");
@@ -2185,7 +2261,10 @@ private:
                                ? type_int()
                                : (is_fp_type(left) || is_fp_type(right)
                                       ? common_fp_type(left, right)
-                                      : left);
+                                      : (is_unsigned_scalar(left) ||
+                                                 is_unsigned_scalar(right)
+                                             ? type_uint()
+                                             : left));
                     matched = true;
                     break;
                 }
@@ -2485,9 +2564,9 @@ private:
             return emit_fp_constant(token.real, token.is_float);
         }
         if (peek().kind == TokenKind::Number) {
-            const std::int64_t value = take().value;
-            emit("    MOV R0, #" + std::to_string(value));
-            return type_int();
+            const Token token = take();
+            emit("    MOV R0, #" + std::to_string(token.value));
+            return token.is_unsigned ? type_uint() : type_int();
         }
         if (peek().kind == TokenKind::Character) {
             const std::int64_t value = take().value;
@@ -2876,7 +2955,10 @@ private:
                                ? type_int()
                                : (is_fp_type(left) || is_fp_type(right)
                                       ? common_fp_type(left, right)
-                                      : left);
+                                      : (is_unsigned_scalar(left) ||
+                                                 is_unsigned_scalar(right)
+                                             ? type_uint()
+                                             : left));
                     matched = true;
                     break;
                 }

@@ -771,8 +771,8 @@ private:
             static const std::map<std::string, std::uint32_t> alu = {
                 {"add", 0x20}, {"sub", 0x21}, {"and", 0x2A}, {"or", 0x2B},
                 {"xor", 0x2C}, {"slt", 0x18}, {"sltu", 0x19}, {"mul", 0x22},
-                {"div", 0x25}, {"mod", 0x27}, {"shl", 0x30}, {"shr", 0x31},
-                {"sar", 0x32},
+                {"div", 0x25}, {"divs", 0x26}, {"mod", 0x27}, {"mods", 0x28},
+                {"shl", 0x30}, {"shr", 0x31}, {"sar", 0x32},
             };
             const auto operation = alu.find(mnemonic);
             if (operation != alu.end()) {

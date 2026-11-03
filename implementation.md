@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 23:02 -08:00
+> **Last updated:** 2026-11-02 23:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1292,6 +1292,13 @@ Newest entries at the bottom. Use the local time zone.
       and C++ range-based `for` over arrays. Added regression coverage for
       all three and retained the earlier compound/array/ternary/switch work.
       242 cases / 5500 assertions.
+- **2026-11-02 23:09 -08:00** — Added the C unsigned integer model:
+      `unsigned int`/`unsigned char`, `u`/`U` literals, zero-extending
+      loads, unsigned comparisons/division/remainder/logical right shifts,
+      and unsigned `size_t`. Fixed signed division/remainder to use
+      `DIVS`/`MODS`, added those object-assembler aliases, and treated
+      `long` as the 32-bit ILP32 type. `short`/`long long` remain diagnosed.
+      243 cases / 5514 assertions.
 
 ## 10. Updating this file
 

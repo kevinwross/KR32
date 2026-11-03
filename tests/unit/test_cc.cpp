@@ -362,6 +362,28 @@ TEST_CASE("C supports multidimensional arrays") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C unsigned and long integer operations use unsigned semantics") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    unsigned int u = 1u;\n"
+        "    u = u - 2u;\n"
+        "    if (u != 0xFFFFFFFFu) return 1;\n"
+        "    if (!(u > 1u)) return 2;\n"
+        "    if (7u / 2u != 3u) return 3;\n"
+        "    if (7u % 2u != 1u) return 4;\n"
+        "    if ((0x80000000u >> 31) != 1u) return 5;\n"
+        "    unsigned char c = 255;\n"
+        "    c++;\n"
+        "    if (c != 0u) return 6;\n"
+        "    long value = 9;\n"
+        "    if (-7 / 2 != -3) return 8;\n"
+        "    if (-7 % 2 != -1) return 9;\n"
+        "    return value == 9 ? 0 : 7;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C do-while executes its body before testing") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"
