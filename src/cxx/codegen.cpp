@@ -5135,6 +5135,16 @@ private:
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
+                if (is_register_class(parameter_class)) {
+                    gen_expr(*expression.arguments[index]);
+                    emit("    LOAD R0, [R0]");
+                    slot.offset =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                    ++integer_argument;
+                    slots.push_back(std::move(slot));
+                    continue;
+                }
                 if (is_initializer_list_class(parameter_class) &&
                     expression.arguments[index]->kind ==
                         ExprKind::InitializerList) {
@@ -5906,6 +5916,13 @@ private:
                info->qualified.find("initializer_list__") != std::string::npos;
     }
 
+    bool is_register_class(ClassInfo* info) const {
+        return info != nullptr && info->size > 0 && info->size <= 4 &&
+               !info->polymorphic && !info->abstract &&
+               info->base == nullptr && info->constructors.empty() &&
+               info->destructor == nullptr && info->members.size() <= 1;
+    }
+
     int prepare_initializer_list_argument(ClassInfo* info, const TypePtr& type,
                                           const Expr& initializer) {
         MemberInfo* data_member = find_member(info, "data_");
@@ -6504,6 +6521,24 @@ private:
                 } else {
                     error(parameter.location,
                           "long long parameter needs two integer registers");
+                }
+            } else if (ClassInfo* register_class = class_of(local.type);
+                       register_class != nullptr &&
+                       is_register_class(register_class)) {
+                if (integer_argument < 4) {
+                    if (!saved_integer_arguments.empty()) {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(saved_integer_arguments[
+                                 static_cast<std::size_t>(integer_argument)]) +
+                             "]");
+                    } else {
+                        emit("    MOV R0, R" + std::to_string(integer_argument));
+                    }
+                    emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                    ++integer_argument;
+                } else {
+                    error(parameter.location,
+                          "more than four integer parameters are not supported yet");
                 }
             } else if (!local.is_reference && class_of(local.type) != nullptr) {
                 if (integer_argument < 4) {

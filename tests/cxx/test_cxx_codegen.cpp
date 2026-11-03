@@ -1467,6 +1467,19 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("trivial four-byte classes pass by value in a register") {
+    const ProgramResult program = compile_and_run(
+        "struct Small { int value; };\n"
+        "int read(Small object) { return object.value; }\n"
+        "int main() {\n"
+        "    Small object;\n"
+        "    object.value = 42;\n"
+        "    return read(object);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C++ by-value class parameters copy and sret returns objects") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; };\n"
