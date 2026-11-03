@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 14:38 -08:00
+> **Last updated:** 2026-11-03 14:46 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1597,6 +1597,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 14:38 -08:00** — Added cluster runtime coverage for capturing
       threads writing shared globals; `join()` makes the write visible to the
       primary thread. 317 cases / 5831 assertions.
+- **2026-11-03 14:46 -08:00** — Added cluster runtime coverage for detached
+      `std::thread` workers running to completion. 318 cases / 5835
+      assertions.
 
 ## 10. Updating this file
 
