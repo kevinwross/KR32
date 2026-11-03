@@ -1151,8 +1151,9 @@ private:
                 add_known_type(parameter->name);
             }
         }
+        std::vector<TypePtr> specialization_arguments;
         if (at("class") || at("struct") || at("union")) {
-            DeclPtr definition = parse_class_definition();
+            DeclPtr definition = parse_class_definition(&specialization_arguments);
             add_known_type(definition->name);
             declarations.push_back(std::move(definition));
             consume(";");
@@ -1168,6 +1169,7 @@ private:
             declaration->is_template = true;
             declaration->is_specialization = specialization;
             declaration->template_parameters = parameters;
+            declaration->specialization_arguments = specialization_arguments;
             output.push_back(std::move(declaration));
         }
     }
@@ -1282,7 +1284,8 @@ private:
         }
     }
 
-    DeclPtr parse_class_definition() {
+    DeclPtr parse_class_definition(
+        std::vector<TypePtr>* specialization_arguments = nullptr) {
         const bool is_union = at("union");
         const bool is_class = at("class");
         advance(); // class/struct/union
@@ -1298,6 +1301,9 @@ private:
                     advance();
                 }
             }
+        }
+        if (specialization_arguments != nullptr && at("<")) {
+            *specialization_arguments = parse_template_type_arguments();
         }
         (void)is_class;
         (void)is_union;

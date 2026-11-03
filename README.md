@@ -16,7 +16,8 @@ supports integer, `short`/`unsigned short`, `unsigned int`/`unsigned char`,
 local aggregate/array initializers, designated initializers, compound
 assignment, `++`/`--`, conditional
 expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
-inheritance, virtual dispatch/RTTI, function and class templates, matrices,
+inheritance, virtual dispatch/RTTI, function and class templates with explicit
+specializations, matrices,
 exceptions/unwinding, `new`/`delete`, callable `std::thread`/TLS/atomics,
 per-thread
 `thread_local` construction/destruction, conditional

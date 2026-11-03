@@ -1344,6 +1344,27 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("explicit class template specializations override generic instantiations") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> class Box {\n"
+        "public:\n"
+        "    T value;\n"
+        "    int generic() { return 1; }\n"
+        "};\n"
+        "template <> class Box<int> {\n"
+        "public:\n"
+        "    int value;\n"
+        "    int specialized() { return 41; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Box<int> box;\n"
+        "    box.value = 1;\n"
+        "    return box.specialized() + box.value;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("class templates instantiate fields, methods, and constructors") {
     const ProgramResult program = compile_and_run(
         "template <typename T> class Box {\n"

@@ -648,7 +648,23 @@ private:
                 continue;
             }
             if (declaration->is_template) {
-                class_templates_[qualify(prefix, declaration->name)] = declaration.get();
+                const std::string qualified = qualify(prefix, declaration->name);
+                if (declaration->is_specialization &&
+                    !declaration->specialization_arguments.empty()) {
+                    std::string key = qualified + "__";
+                    for (std::size_t index = 0;
+                         index < declaration->specialization_arguments.size();
+                         ++index) {
+                        if (index != 0) {
+                            key += "_";
+                        }
+                        key += mangle_type(
+                            declaration->specialization_arguments[index]);
+                    }
+                    class_specializations_[key] = declaration.get();
+                } else {
+                    class_templates_[qualified] = declaration.get();
+                }
                 continue;
             }
             auto info = std::make_unique<ClassInfo>();
@@ -742,10 +758,6 @@ private:
 
     TypePtr instantiate_class_template(const TypePtr& named) {
         const std::string template_name = named->name.to_string();
-        const auto found_template = class_templates_.find(template_name);
-        if (found_template == class_templates_.end()) {
-            return named;
-        }
         std::string key = template_name + "__";
         for (std::size_t index = 0; index < named->template_arguments.size(); ++index) {
             if (index != 0) {
@@ -754,6 +766,26 @@ private:
             key += named->template_arguments[index]
                        ? mangle_type(named->template_arguments[index])
                        : "x";
+        }
+        const auto existing_specialization = class_specializations_.find(key);
+        if (existing_specialization != class_specializations_.end()) {
+            const auto existing = class_index_.find(key);
+            if (existing == class_index_.end()) {
+                auto info = std::make_unique<ClassInfo>();
+                info->decl = existing_specialization->second;
+                info->qualified = key;
+                ClassInfo* raw = info.get();
+                class_index_[key] = std::move(info);
+                collect_class_members(*existing_specialization->second, key);
+                layout_class(*raw);
+            }
+            Name name;
+            name.parts.push_back(key);
+            return Type::make_named(name);
+        }
+        const auto found_template = class_templates_.find(template_name);
+        if (found_template == class_templates_.end()) {
+            return named;
         }
         const auto existing = class_index_.find(key);
         if (existing != class_index_.end()) {
@@ -6196,6 +6228,7 @@ private:
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;
     std::map<std::string, std::unique_ptr<ClassInfo>> class_index_;
     std::map<std::string, const Decl*> class_templates_;
+    std::map<std::string, const Decl*> class_specializations_;
     std::vector<DeclPtr> template_class_storage_;
 
     std::vector<std::map<std::string, Local>> local_scopes_;

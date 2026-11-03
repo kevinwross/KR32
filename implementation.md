@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 08:43 -08:00
+> **Last updated:** 2026-11-03 08:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1421,6 +1421,11 @@ Newest entries at the bottom. Use the local time zone.
       two-word staging. Fixed 64-bit `!=` comparison and raised the test
       harness step budget for slower 64-bit formatting. 271 cases / 5715
       assertions.
+- **2026-11-03 08:50 -08:00** — Added explicit class-template
+      specializations (`template <> class Box<int>`): parser records
+      specialization arguments, codegen registers specialization keys, and
+      instantiation prefers them over the generic template. 272 cases /
+      5717 assertions.
 
 ## 10. Updating this file
 
