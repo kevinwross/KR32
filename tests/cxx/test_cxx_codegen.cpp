@@ -1221,6 +1221,24 @@ TEST_CASE("lambdas capture by reference and by default") {
     CHECK(by_default.result == 42);
 }
 
+TEST_CASE("condition variable timed waits accept past deadlines") {
+    const ProgramResult program = compile_and_run(
+        "#include <thread>\n"
+        "#include <mutex>\n"
+        "#include <condition_variable>\n"
+        "int main() {\n"
+        "    std::mutex guard;\n"
+        "    std::condition_variable condition;\n"
+        "    guard.lock();\n"
+        "    condition.wait_for(guard, 0);\n"
+        "    condition.wait_until(guard, 0);\n"
+        "    guard.unlock();\n"
+        "    return 42;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("std this_thread sleep_until accepts a past deadline") {
     const ProgramResult program = compile_and_run(
         "#include <thread>\n"

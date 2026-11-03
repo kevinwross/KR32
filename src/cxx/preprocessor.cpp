@@ -562,7 +562,7 @@ private:
                     "struct condition_variable {\n"
                     "    int sequence;\n"
                     "    condition_variable() { sequence = 0; }\n"
-                    "    void wait(mutex& guard) { int observed = sequence; guard.unlock(); futex_wait(&sequence, observed); guard.lock(); }\n"
+                    "    void wait(kr32::mutex& guard) { int observed = sequence; guard.unlock(); futex_wait(&sequence, observed); guard.lock(); }\n"                     "    void wait_for(kr32::mutex& guard, int milliseconds) { int observed = sequence; guard.unlock(); if (milliseconds > 0) { const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0); const int seconds = (milliseconds + 999) / 1000; while (sequence == observed && (int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) { thread_yield(); } } guard.lock(); }\n"                     "    void wait_until(kr32::mutex& guard, int seconds) { int observed = sequence; guard.unlock(); if (seconds > 0) { while (sequence == observed && (int)__builtin_kr32_syscall(40, 0, 0, 0) < seconds) { thread_yield(); } } guard.lock(); }\n"
                     "    void notify_one() { __atomic_fetch_add(&sequence, 1, 0); futex_wake(&sequence, 1); }\n"
                     "    void notify_all() { __atomic_fetch_add(&sequence, 1, 0); futex_wake(&sequence, 2147483647); }\n"
                     "};\n"

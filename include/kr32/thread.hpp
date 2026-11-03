@@ -164,10 +164,34 @@ struct recursive_mutex {
 struct condition_variable {
     int sequence;
     condition_variable() { sequence = 0; }
-    void wait(mutex& guard) {
+    void wait(kr32::mutex& guard) {
         const int observed = sequence;
         guard.unlock();
         futex_wait(&sequence, observed);
+        guard.lock();
+    }
+    void wait_for(kr32::mutex& guard, int milliseconds) {
+        const int observed = sequence;
+        guard.unlock();
+        if (milliseconds > 0) {
+            const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0);
+            const int seconds = (milliseconds + 999) / 1000;
+            while (sequence == observed &&
+                   (int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) {
+                thread_yield();
+            }
+        }
+        guard.lock();
+    }
+    void wait_until(kr32::mutex& guard, int seconds) {
+        const int observed = sequence;
+        guard.unlock();
+        if (seconds > 0) {
+            while (sequence == observed &&
+                   (int)__builtin_kr32_syscall(40, 0, 0, 0) < seconds) {
+                thread_yield();
+            }
+        }
         guard.lock();
     }
     void notify_one() {
