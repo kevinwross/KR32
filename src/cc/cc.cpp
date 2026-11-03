@@ -2396,6 +2396,17 @@ private:
             emit("    ADD R12, R12, R14");
             emit("    MOV R0, R6");
             emit("    MOV R1, R12");
+        } else if (op == "/" || op == "%") {
+            if (!unsigned_operation) {
+                error("signed long long division is not supported yet");
+            }
+            emit("    MOV R2, R4");
+            emit("    MOV R3, R5");
+            const std::string helper =
+                unsigned_operation
+                    ? (op == "/" ? "__kr32_ulldiv" : "__kr32_ulmod")
+                    : (op == "/" ? "__kr32_lldiv" : "__kr32_llmod");
+            emit("    CALL " + helper);
         } else if (op == "<<" || op == ">>") {
             const std::string zero = new_label("llshift0");
             const std::string wide = new_label("llshiftwide");

@@ -25,6 +25,75 @@ static int heap_ready = 0;
 unsigned int heap_allocated_blocks = 0;
 unsigned int heap_free_blocks = 0;
 
+unsigned long long __kr32_ulldiv(unsigned long long left,
+                                  unsigned long long right) {
+    unsigned long long quotient = 0;
+    unsigned long long remainder = 0;
+    int bit = 63;
+    while (bit >= 0) {
+        remainder = (remainder << 1) |
+                    ((left >> bit) & (unsigned long long)1);
+        if (remainder >= right) {
+            remainder = remainder - right;
+            quotient = quotient | ((unsigned long long)1 << bit);
+        }
+        bit = bit - 1;
+    }
+    return quotient;
+}
+
+unsigned long long __kr32_ulmod(unsigned long long left,
+                                 unsigned long long right) {
+    unsigned long long remainder = 0;
+    int bit = 63;
+    while (bit >= 0) {
+        remainder = (remainder << 1) |
+                    ((left >> bit) & (unsigned long long)1);
+        if (remainder >= right) {
+            remainder = remainder - right;
+        }
+        bit = bit - 1;
+    }
+    return remainder;
+}
+
+long long __kr32_lldiv(long long left, long long right) {
+    int negative = 0;
+    unsigned long long uleft = left;
+    unsigned long long uright = right;
+    if (left < 0) {
+        uleft = (unsigned long long)0 - uleft;
+        negative = 1;
+    }
+    if (right < 0) {
+        uright = (unsigned long long)0 - uright;
+        negative = 1 - negative;
+    }
+    unsigned long long result = __kr32_ulldiv(uleft, uright);
+    if (negative) {
+        result = (unsigned long long)0 - result;
+    }
+    return result;
+}
+
+long long __kr32_llmod(long long left, long long right) {
+    int negative = 0;
+    unsigned long long uleft = left;
+    unsigned long long uright = right;
+    if (left < 0) {
+        uleft = (unsigned long long)0 - uleft;
+        negative = 1;
+    }
+    if (right < 0) {
+        uright = (unsigned long long)0 - uright;
+    }
+    unsigned long long result = __kr32_ulmod(uleft, uright);
+    if (negative) {
+        result = (unsigned long long)0 - result;
+    }
+    return result;
+}
+
 static unsigned int heap_align(unsigned int value, unsigned int alignment) {
     return (value + alignment - 1) & ~(alignment - 1);
 }
