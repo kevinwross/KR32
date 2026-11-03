@@ -1344,6 +1344,18 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C++ long long locals support 64-bit arithmetic") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long a = 100000;\n"
+        "    long long b = 100000;\n"
+        "    long long c = a * b;\n"
+        "    return (int)(c / 1000000000);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("range-for iterates initializer_list variables") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"

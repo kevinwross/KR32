@@ -60,6 +60,8 @@ std::string mangle_builtin(BuiltinKind kind) {
     case BuiltinKind::Char: return "c";
     case BuiltinKind::Int: return "i";
     case BuiltinKind::UnsignedInt: return "j";
+    case BuiltinKind::LongLong: return "l";
+    case BuiltinKind::UnsignedLongLong: return "m";
     case BuiltinKind::Float: return "f";
     case BuiltinKind::Double: return "d";
     case BuiltinKind::LongDouble: return "d";
@@ -130,7 +132,14 @@ bool is_integer(const TypePtr& type) {
 
 bool is_unsigned_integer(const TypePtr& type) {
     return type && type->kind == TypeKind::Builtin &&
-           type->builtin == BuiltinKind::UnsignedInt;
+           (type->builtin == BuiltinKind::UnsignedInt ||
+            type->builtin == BuiltinKind::UnsignedLongLong);
+}
+
+bool is_long_long(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           (type->builtin == BuiltinKind::LongLong ||
+            type->builtin == BuiltinKind::UnsignedLongLong);
 }
 
 bool is_unsigned_operation(const TypePtr& left, const TypePtr& right) {
@@ -214,6 +223,11 @@ TypePtr arithmetic_type(const TypePtr& left, const TypePtr& right) {
     }
     if (is_float32(left) || is_float32(right)) {
         return Type::make_builtin(BuiltinKind::Float);
+    }
+    if (is_long_long(left) || is_long_long(right)) {
+        return Type::make_builtin(is_unsigned_operation(left, right)
+                                      ? BuiltinKind::UnsignedLongLong
+                                      : BuiltinKind::LongLong);
     }
     if (is_unsigned_operation(left, right)) {
         return Type::make_builtin(BuiltinKind::UnsignedInt);
@@ -911,6 +925,8 @@ private:
             case BuiltinKind::Int:
             case BuiltinKind::UnsignedInt:
             case BuiltinKind::Float: return 4;
+            case BuiltinKind::LongLong:
+            case BuiltinKind::UnsignedLongLong: return 8;
             case BuiltinKind::Double:
             case BuiltinKind::LongDouble: return 8;
             case BuiltinKind::Auto: return 4;
@@ -2513,7 +2529,11 @@ private:
 
     void load_value(const TypePtr& type) {
         const TypePtr resolved = resolve_type(type);
-        if (resolved && resolved->kind == TypeKind::Builtin &&
+        if (is_long_long(resolved)) {
+            emit("    MOV R2, R0");
+            emit("    LOAD R0, [R2]");
+            emit("    LOAD R1, [R2 + 4]");
+        } else if (resolved && resolved->kind == TypeKind::Builtin &&
             (resolved->builtin == BuiltinKind::Char ||
              resolved->builtin == BuiltinKind::Bool)) {
             emit("    LOAD8S R0, [R0]");
@@ -2524,7 +2544,10 @@ private:
 
     void store_value(const TypePtr& type) {
         const TypePtr resolved = resolve_type(type);
-        if (resolved && resolved->kind == TypeKind::Builtin &&
+        if (is_long_long(resolved)) {
+            emit("    STORE R0, [R1]");
+            emit("    STORE R2, [R1 + 4]");
+        } else if (resolved && resolved->kind == TypeKind::Builtin &&
             (resolved->builtin == BuiltinKind::Char ||
              resolved->builtin == BuiltinKind::Bool)) {
             emit("    STORE8 R0, [R1]");
@@ -3749,6 +3772,161 @@ private:
         return result_type;
     }
 
+    TypePtr gen_long_long_binary(const Expr& expression, const TypePtr& left,
+                                 const TypePtr& right) {
+        const std::string& op = expression.text;
+        const bool unsigned_operation = is_unsigned_operation(left, right);
+        const bool comparison =
+            op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" ||
+            op == ">=";
+        gen_expr(*expression.children[0]);
+        if (!is_long_long(left)) {
+            emit("    MOV R1, R0");
+            emit(std::string("    ") +
+                 (is_unsigned_integer(left) ? "SHR" : "SAR") + " R1, R1, #31");
+        }
+        const int left_temp =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+        emit("    STORE R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+        gen_expr(*expression.children[1]);
+        if (!is_long_long(right)) {
+            emit("    MOV R5, R0");
+            emit(std::string("    ") +
+                 (is_unsigned_integer(right) ? "SHR" : "SAR") + " R5, R5, #31");
+            emit("    MOV R4, R0");
+        } else {
+            emit("    MOV R4, R0");
+            emit("    MOV R5, R1");
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+        emit("    LOAD R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+        if (comparison) {
+            const std::string is_true = new_label("lltrue");
+            const std::string is_false = new_label("llfalse");
+            const std::string done = new_label("lldone");
+            emit("    CMP R1, R5");
+            if (op == "==") {
+                emit("    JNZ " + is_false);
+                emit("    CMP R0, R4");
+                emit("    JZ " + is_true);
+                emit("    JMP " + is_false);
+            } else if (op == "!=") {
+                emit("    JNZ " + is_true);
+                emit("    CMP R0, R4");
+                emit("    JZ " + is_false);
+                emit("    JMP " + is_true);
+            } else {
+                if (op == "<" || op == "<=") {
+                    emit(std::string("    ") + (unsigned_operation ? "JCS " : "JLT ") +
+                         is_true);
+                    emit(std::string("    ") + (unsigned_operation ? "JHI " : "JGT ") +
+                         is_false);
+                } else {
+                    emit(std::string("    ") + (unsigned_operation ? "JHI " : "JGT ") +
+                         is_true);
+                    emit(std::string("    ") + (unsigned_operation ? "JCS " : "JLT ") +
+                         is_false);
+                }
+                emit("    CMP R0, R4");
+                if (op == "<") {
+                    emit(std::string("    ") + (unsigned_operation ? "JCS " : "JLT ") +
+                         is_true);
+                } else if (op == "<=") {
+                    emit(std::string("    ") + (unsigned_operation ? "JLS " : "JLE ") +
+                         is_true);
+                } else if (op == ">") {
+                    emit(std::string("    ") + (unsigned_operation ? "JHI " : "JGT ") +
+                         is_true);
+                } else {
+                    emit(std::string("    ") + (unsigned_operation ? "JHI " : "JGT ") +
+                         is_true);
+                    emit("    JZ " + is_true);
+                }
+                emit("    JMP " + is_false);
+            }
+            emit(is_true + ":");
+            emit("    MOV R0, #1");
+            emit("    JMP " + done);
+            emit(is_false + ":");
+            emit("    MOV R0, #0");
+            emit(done + ":");
+            return Type::make_builtin(BuiltinKind::Bool);
+        }
+        if (op == "+") {
+            emit("    ADD R0, R0, R4");
+            emit("    ADD R1, R1, R5");
+        } else if (op == "-") {
+            const std::string no_borrow = new_label("llnoborrow");
+            const std::string borrow_done = new_label("llborrowdone");
+            emit("    SUB R0, R0, R4");
+            emit("    MOV R6, #0");
+            emit("    JCS " + no_borrow);
+            emit("    MOV R6, #1");
+            emit("    JMP " + borrow_done);
+            emit(no_borrow + ":");
+            emit(borrow_done + ":");
+            emit("    SUB R1, R1, R5");
+            emit("    SUB R1, R1, R6");
+        } else if (op == "&") {
+            emit("    AND R0, R0, R4");
+            emit("    AND R1, R1, R5");
+        } else if (op == "|") {
+            emit("    OR R0, R0, R4");
+            emit("    OR R1, R1, R5");
+        } else if (op == "^") {
+            emit("    XOR R0, R0, R4");
+            emit("    XOR R1, R1, R5");
+        } else if (op == "*") {
+            emit("    MUL R6, R0, R4");
+            emit("    MULHU R12, R0, R4");
+            emit("    MUL R13, R0, R5");
+            emit("    MUL R14, R1, R4");
+            emit("    ADD R12, R12, R13");
+            emit("    ADD R12, R12, R14");
+            emit("    MOV R0, R6");
+            emit("    MOV R1, R12");
+        } else if (op == "/" || op == "%") {
+            emit("    MOV R2, R4");
+            emit("    MOV R3, R5");
+            const std::string helper =
+                unsigned_operation
+                    ? (op == "/" ? "__kr32_ulldiv" : "__kr32_ulmod")
+                    : (op == "/" ? "__kr32_lldiv" : "__kr32_llmod");
+            emit("    CALL " + helper);
+        } else if (op == "<<" || op == ">>") {
+            const std::string zero = new_label("llshift0");
+            const std::string done = new_label("llshiftdone");
+            emit("    CMP R4, #0");
+            emit("    JZ " + zero);
+            emit("    MOV R6, R0");
+            if (op == "<<") {
+                emit("    SHL R0, R0, R4");
+                emit("    SHL R1, R1, R4");
+                emit("    MOV R12, #32");
+                emit("    SUB R12, R12, R4");
+                emit("    SHR R6, R6, R12");
+                emit("    OR R1, R1, R6");
+            } else if (unsigned_operation) {
+                emit("    SHR R0, R0, R4");
+                emit("    SHL R6, R1, R4");
+                emit("    OR R0, R0, R6");
+                emit("    SHR R1, R1, R4");
+            } else {
+                emit("    SHR R0, R0, R4");
+                emit("    SHL R6, R1, R4");
+                emit("    OR R0, R0, R6");
+                emit("    SAR R1, R1, R4");
+            }
+            emit("    JMP " + done);
+            emit(zero + ":");
+            emit(done + ":");
+        }
+        return Type::make_builtin(unsigned_operation
+                                      ? BuiltinKind::UnsignedLongLong
+                                      : BuiltinKind::LongLong);
+    }
+
     TypePtr gen_binary(const Expr& expression) {
         const std::string& op = expression.text;
         if (op == "&&" || op == "||") {
@@ -3777,6 +3955,9 @@ private:
         const TypePtr right_type = type_of(*expression.children[1]);
         if (is_fp(left_type) || is_fp(right_type)) {
             return gen_fp_binary(expression, left_type, right_type);
+        }
+        if (is_long_long(left_type) || is_long_long(right_type)) {
+            return gen_long_long_binary(expression, left_type, right_type);
         }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -3961,6 +4142,18 @@ private:
             else if (op == ">>") emit(unsigned_operation ? "    SHR R0, R0, R1"
                                                          : "    SAR R0, R0, R1");
             else diagnose_once(expression, "unsupported assignment operator");
+        }
+        if (is_long_long(lhs_type)) {
+            if (expression.text == "=") {
+                const TypePtr value_type = type_of(*expression.children[1]);
+                if (!is_long_long(value_type)) {
+                    emit("    MOV R1, R0");
+                    emit(std::string("    ") +
+                         (is_unsigned_integer(value_type) ? "SHR" : "SAR") +
+                         " R1, R1, #31");
+                }
+            }
+            emit("    MOV R2, R1");
         }
         emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
         store_value(lhs_type);
@@ -5277,6 +5470,16 @@ private:
                 return;
             }
             gen_expr(*initializer);
+            if (is_long_long(type)) {
+                const TypePtr initializer_type = type_of(*initializer);
+                if (!is_long_long(initializer_type)) {
+                    emit("    MOV R1, R0");
+                    emit(std::string("    ") +
+                         (is_unsigned_integer(initializer_type) ? "SHR" : "SAR") +
+                         " R1, R1, #31");
+                }
+                emit("    MOV R2, R1");
+            }
             emit("    LEA R1, [R7 + " + std::to_string(local.offset) + "]");
             store_value(type);
         }

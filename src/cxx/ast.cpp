@@ -38,6 +38,8 @@ bool Type::is_integral() const {
     case BuiltinKind::Char:
     case BuiltinKind::Int:
     case BuiltinKind::UnsignedInt:
+    case BuiltinKind::LongLong:
+    case BuiltinKind::UnsignedLongLong:
         return true;
     default:
         return false;
@@ -257,6 +259,8 @@ std::string_view builtin_kind_name(BuiltinKind kind) {
     case BuiltinKind::Char: return "char";
     case BuiltinKind::Int: return "int";
     case BuiltinKind::UnsignedInt: return "unsigned int";
+    case BuiltinKind::LongLong: return "long long";
+    case BuiltinKind::UnsignedLongLong: return "unsigned long long";
     case BuiltinKind::Float: return "float";
     case BuiltinKind::Double: return "double";
     case BuiltinKind::LongDouble: return "long double";

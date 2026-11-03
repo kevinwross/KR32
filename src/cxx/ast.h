@@ -32,6 +32,8 @@ enum class BuiltinKind {
     Char,
     Int,
     UnsignedInt,
+    LongLong,
+    UnsignedLongLong,
     Float,
     Double,
     LongDouble,

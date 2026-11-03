@@ -360,6 +360,7 @@ private:
         Specifiers specifiers;
         bool have_unsigned = false;
         bool have_long = false;
+        bool have_long_long = false;
         bool have_short = false;
         while (!at_end()) {
             skip_attributes();
@@ -461,6 +462,9 @@ private:
                 continue;
             }
             if (at("long")) {
+                if (have_long) {
+                    have_long_long = true;
+                }
                 have_long = true;
                 advance();
                 continue;
@@ -519,7 +523,9 @@ private:
                 }
                 continue;
             }
-            if (at("::") || (at_identifier() && !specifiers.type)) {
+            if (at("::") ||
+                (at_identifier() && !specifiers.type && !have_long &&
+                 !have_short && !have_unsigned)) {
                 TypePtr named = Type::make_named(Name{});
                 named->name = parse_qualified_name(true, &named);
                 specifiers.type = named;
@@ -540,6 +546,13 @@ private:
         } else if (specifiers.type->kind == TypeKind::Builtin &&
                    specifiers.type->builtin == BuiltinKind::Int && have_unsigned) {
             specifiers.type->builtin = BuiltinKind::UnsignedInt;
+        }
+        if (have_long_long && specifiers.type->kind == TypeKind::Builtin) {
+            if (specifiers.type->builtin == BuiltinKind::Int) {
+                specifiers.type->builtin = BuiltinKind::LongLong;
+            } else if (specifiers.type->builtin == BuiltinKind::UnsignedInt) {
+                specifiers.type->builtin = BuiltinKind::UnsignedLongLong;
+            }
         }
         if (specifiers.is_const) {
             specifiers.type->is_const = true;
