@@ -8,6 +8,7 @@
 #include "kr32/container/container.h"
 #include "kr32/core/cluster.h"
 #include "kr32/core/machine.h"
+#include "kr32/debug/debug.h"
 #include "kr32/vm/host.h"
 
 namespace kr32::vm {
@@ -91,6 +92,9 @@ public:
     // Save/restore the full guest context (GPRs, SP/PC/FLAGS, FPRs, TSP).
     [[nodiscard]] bool save_context(std::uint32_t handle);
     [[nodiscard]] bool restore_context(std::uint32_t handle);
+
+    // Live snapshots for the debugger/DAP/GUI.
+    [[nodiscard]] std::vector<debug::ThreadInfo> debug_threads() const;
 
     // Guest syscall dispatch for the thread/futex vector range.
     [[nodiscard]] bool handle(core::Machine& machine, std::uint32_t vector);

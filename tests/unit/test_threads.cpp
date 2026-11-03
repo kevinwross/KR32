@@ -243,6 +243,29 @@ TEST_CASE("two cores increment a shared counter with LL/SC") {
     CHECK(second_view == 1000);
 }
 
+TEST_CASE("debug sessions pull live ClusterHost thread snapshots") {
+    const Program program = build_worker(
+        "void worker(int value) { exit(value); }\n"
+        "int main() { return 0; }\n",
+        "worker");
+    vm::ClusterHost host({3, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    const std::uint32_t first = host.create(program.entry, 1);
+    const std::uint32_t second = host.create(program.entry, 2);
+    REQUIRE(first != vm::kThreadError);
+    REQUIRE(second != vm::kThreadError);
+    debug::Session session;
+    session.set_thread_provider(
+        [&host]() { return host.debug_threads(); });
+    session.refresh_threads();
+    CHECK(session.threads().size() == 2);
+    CHECK(session.threads()[0].id == first);
+    CHECK(session.threads()[1].id == second);
+    CHECK(session.selected_thread() == first);
+}
+
 TEST_CASE("two C++ threads increment a mutex-protected counter") {
     const CxxProgram program = build_cxx_worker(
         "#include <kr32/thread.hpp>\n"
@@ -274,6 +297,55 @@ TEST_CASE("two C++ threads increment a mutex-protected counter") {
     std::uint32_t value = 0;
     REQUIRE(host.cluster().core(0).read32(program.counter, value));
     CHECK(value == 1000);
+}
+
+TEST_CASE("two threads race a guarded function-local static") {
+    const CxxProgram program = build_cxx_worker(
+        "#include <kr32/thread.hpp>\n"
+        "int init_count = 0;\n"
+        "int output = 0;\n"
+        "int initialize() {\n"
+        "    int spin = 0;\n"
+        "    while (spin < 2000) { spin = spin + 1; }\n"
+        "    __atomic_fetch_add(&init_count, 1, 0);\n"
+        "    return 7;\n"
+        "}\n"
+        "int get() {\n"
+        "    static int value = initialize();\n"
+        "    return value;\n"
+        "}\n"
+        "void worker(int* unused) {\n"
+        "    int index = 0;\n"
+        "    while (index < 50) {\n"
+        "        if (get() != 7) { __atomic_store_n(&output, 99, 0); }\n"
+        "        index = index + 1;\n"
+        "    }\n"
+        "    kr32::thread_exit(0);\n"
+        "}\n"
+        "int main() { return 0; }\n",
+        "init_count");
+    vm::ClusterHost host({3, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    const std::uint32_t first = host.create(program.worker, program.counter);
+    const std::uint32_t second = host.create(program.worker, program.counter);
+    REQUIRE(first != vm::kThreadError);
+    REQUIRE(second != vm::kThreadError);
+    std::uint32_t code = 0;
+    REQUIRE(host.join(first, code));
+    REQUIRE(host.join(second, code));
+    std::uint32_t count = 0;
+    REQUIRE(host.cluster().core(0).read32(program.counter, count));
+    CHECK(count == 1);
+    std::uint32_t out = 0;
+    for (const container::Symbol& symbol : program.image.symbols) {
+        if (symbol.name.find("output") != std::string::npos) {
+            REQUIRE(host.cluster().core(0).read32(symbol.value, out));
+            break;
+        }
+    }
+    CHECK(out == 0);
 }
 
 TEST_CASE("guest TCB exposes the approved R11-relative layout") {

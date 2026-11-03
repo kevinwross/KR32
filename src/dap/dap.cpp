@@ -679,6 +679,7 @@ private:
             send(response(request, true));
             stopped(session_.at_breakpoint() ? "breakpoint" : "entry");
         } else if (command == "threads") {
+            session_.refresh_threads();
             Json threads = Json::array_value();
             const std::vector<debug::ThreadInfo>& snapshot = session_.threads();
             if (snapshot.empty()) {
@@ -698,6 +699,7 @@ private:
             body.set("threads", std::move(threads));
             send(response(request, true, std::move(body)));
         } else if (command == "stackTrace") {
+            session_.refresh_threads();
             if (arguments != nullptr && arguments->get("threadId") != nullptr) {
                 session_.select_thread(static_cast<std::uint32_t>(
                     arguments->get("threadId")->as_number()));

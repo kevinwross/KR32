@@ -189,6 +189,17 @@ void Session::set_threads(std::vector<ThreadInfo> threads) {
     }
 }
 
+void Session::set_thread_provider(
+    std::function<std::vector<ThreadInfo>()> provider) {
+    thread_provider_ = std::move(provider);
+}
+
+void Session::refresh_threads() {
+    if (thread_provider_) {
+        set_threads(thread_provider_());
+    }
+}
+
 void Session::select_thread(std::uint32_t id) {
     for (const ThreadInfo& thread : threads_) {
         if (thread.id == id) {

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <set>
 #include <string>
 #include <vector>
@@ -111,6 +112,8 @@ public:
     [[nodiscard]] const Info& info() const { return info_; }
 
     void set_threads(std::vector<ThreadInfo> threads);
+    void set_thread_provider(std::function<std::vector<ThreadInfo>()> provider);
+    void refresh_threads();
     [[nodiscard]] const std::vector<ThreadInfo>& threads() const { return threads_; }
     void select_thread(std::uint32_t id);
     [[nodiscard]] std::uint32_t selected_thread() const { return selected_thread_; }
@@ -158,6 +161,7 @@ private:
     Info info_;
     std::set<std::uint32_t> breakpoints_;
     std::vector<ThreadInfo> threads_;
+    std::function<std::vector<ThreadInfo>()> thread_provider_;
     std::uint32_t selected_thread_ = 0;
     std::string console_;
 };
