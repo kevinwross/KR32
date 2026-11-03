@@ -374,6 +374,7 @@ public:
             }
         }
         emit_cxx_init();
+        emit_tls_runtime();
         emit_rtti();
         emit_lsdas();
         emit_eh_frame();
@@ -5098,14 +5099,19 @@ private:
         emit(done + ":");
     }
 
-    void emit_static_initializers() {
+    void emit_static_initializers(bool tls_only = false) {
         for (const auto& global : global_storage_) {
-            if (!global->needs_init || global->is_thread_local) {
+            if (!global->needs_init ||
+                global->is_thread_local != tls_only) {
                 continue;
             }
             if (ClassInfo* info = class_of(global->type)) {
                 const int address = allocate_local(Type::make_builtin(BuiltinKind::Int));
-                emit("    LEA R0, [" + global->symbol + "]");
+                if (global->is_thread_local) {
+                    emit_tls_address(global.get());
+                } else {
+                    emit("    LEA R0, [" + global->symbol + "]");
+                }
                 emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
                 std::vector<ExprPtr> empty;
                 const std::vector<ExprPtr>* arguments = &empty;
@@ -5121,12 +5127,22 @@ private:
             }
             if (is_fp(global->type)) {
                 gen_as_fp(*global->initializer, global->type);
-                emit("    LEA R1, [" + global->symbol + "]");
+                if (global->is_thread_local) {
+                    emit_tls_address(global.get());
+                    emit("    MOV R1, R0");
+                } else {
+                    emit("    LEA R1, [" + global->symbol + "]");
+                }
                 emit(std::string("    FSTORE.") +
                      (is_float32(global->type) ? "W" : "D") + " F0, [R1]");
             } else {
                 gen_expr(*global->initializer);
-                emit("    LEA R1, [" + global->symbol + "]");
+                if (global->is_thread_local) {
+                    emit_tls_address(global.get());
+                    emit("    MOV R1, R0");
+                } else {
+                    emit("    LEA R1, [" + global->symbol + "]");
+                }
                 store_value(global->type);
             }
         }
@@ -5135,7 +5151,7 @@ private:
     void emit_cxx_init() {
         bool needed = false;
         for (const auto& global : global_storage_) {
-            if (global->needs_init && !global->is_thread_local) {
+            if (global->needs_init) {
                 needed = true;
                 break;
             }
@@ -5152,12 +5168,69 @@ private:
         text_ += ".text\n.Lcxx_init:\n";
         text_ += "    PUSH R7\n    ADJSP #-1024\n    LEA R7, [SP]\n";
         emit_static_initializers();
+        if (tls_cursor_ > 0) {
+            emit("    CALL __kr32_tls_init");
+        }
         text_ += "    ADJSP #1024\n    POP R7\n    RET\n";
         local_destructors_.pop_back();
         pop_scope();
         frame_size_ = saved_frame;
         current_function_ = saved_function;
         startup_ += ".init_array\n    .word .Lcxx_init\n";
+    }
+
+    void emit_tls_runtime() {
+        bool needs_tls_init = false;
+        for (const auto& global : global_storage_) {
+            if (global->is_thread_local && global->needs_init) {
+                needs_tls_init = true;
+                break;
+            }
+        }
+        if (!needs_tls_init && tls_destructors_.empty()) {
+            return;
+        }
+        const int saved_frame = frame_size_;
+        Function* saved_function = current_function_;
+        current_function_ = nullptr;
+        frame_size_ = 0;
+        push_scope();
+        local_destructors_.push_back({});
+        text_ += ".text\n.weak __kr32_tls_init\n__kr32_tls_init:\n";
+        text_ += "    PUSH R7\n    ADJSP #-1024\n    LEA R7, [SP]\n";
+        if (needs_tls_init) {
+            emit_static_initializers(true);
+        }
+        text_ += "    ADJSP #1024\n    POP R7\n    RET\n";
+        text_ += ".weak __kr32_tls_fini\n__kr32_tls_fini:\n";
+        text_ += "    PUSH R7\n    ADJSP #-1024\n    LEA R7, [SP]\n";
+        for (auto iterator = tls_destructors_.rbegin();
+             iterator != tls_destructors_.rend(); ++iterator) {
+            Global* global = *iterator;
+            ClassInfo* info = class_of(global->type);
+            if (info == nullptr) {
+                continue;
+            }
+            if (Function* destructor = find_destructor(info)) {
+                emit_tls_address(global);
+                text_ += "    CALL " + destructor->symbol + "\n";
+            }
+        }
+        text_ += "    ADJSP #1024\n    POP R7\n    RET\n";
+        text_ += ".weak __kr32_thread_entry\n__kr32_thread_entry:\n";
+        text_ += "    PUSH R4\n    PUSH R5\n";
+        text_ += "    MOV R4, R0\n    MOV R5, R1\n";
+        text_ += "    CALL __kr32_tls_init\n";
+        text_ += "    MOV R0, R5\n";
+        text_ += "    CALL R4\n";
+        text_ += "    CALL __kr32_tls_fini\n";
+        text_ += "    MOV R0, #0\n";
+        text_ += "    SYSCALL #47\n";
+        text_ += "    HALT\n";
+        local_destructors_.pop_back();
+        pop_scope();
+        frame_size_ = saved_frame;
+        current_function_ = saved_function;
     }
 
     void emit_lsdas() {
@@ -5449,6 +5522,18 @@ private:
                 text_ += "    CALL " + destructor->symbol + "\n";
             }
         }
+        for (auto iterator = tls_destructors_.rbegin();
+             iterator != tls_destructors_.rend(); ++iterator) {
+            Global* global = *iterator;
+            ClassInfo* info = class_of(global->type);
+            if (info == nullptr) {
+                continue;
+            }
+            if (Function* destructor = find_destructor(info)) {
+                emit_tls_address(global);
+                text_ += "    CALL " + destructor->symbol + "\n";
+            }
+        }
         text_ += "    ADJSP #24\n    POP R7\n    RET\n";
         startup_ += ".fini_array\n    .word .Lcxx_fini\n";
         bss_ += ".weak __kr32_atexit_count\n";
@@ -5585,6 +5670,26 @@ private:
                     static_cast<std::size_t>(global->tls_offset + size);
                 if (tls_image_.size() < end) {
                     tls_image_.resize(end, 0);
+                }
+                if (ClassInfo* info = class_of(global->type)) {
+                    if (global->initializer &&
+                        global->initializer->kind == ExprKind::InitializerList &&
+                        find_constructor(info, global->initializer->children.size()) ==
+                            nullptr) {
+                        std::vector<std::uint8_t> bytes(
+                            static_cast<std::size_t>(size), 0);
+                        emit_constant_object(global->type, *global->initializer, bytes,
+                                             0);
+                        std::memcpy(tls_image_.data() + global->tls_offset,
+                                    bytes.data(), bytes.size());
+                    } else if (global->initializer ||
+                               find_constructor(info, 0) != nullptr) {
+                        global->needs_init = true;
+                    }
+                    if (find_destructor(info) != nullptr) {
+                        tls_destructors_.push_back(global.get());
+                    }
+                    continue;
                 }
                 if (global->initializer) {
                     if (is_fp(global->type)) {
@@ -5768,6 +5873,7 @@ private:
     std::string startup_;
     std::string debug_;
     std::vector<Global*> static_destructors_;
+    std::vector<Global*> tls_destructors_;
     std::map<std::string, TypePtr> type_aliases_;
     std::map<std::string, std::set<std::string>> imports_;
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 07:14 -08:00
+> **Last updated:** 2026-11-03 07:25 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1365,6 +1365,13 @@ Newest entries at the bottom. Use the local time zone.
       friend functions/classes plus private static-member access enforcement;
       and nested C designated initializers plus C++ field/array designators.
       Added regressions for each. 259 cases / 5618 assertions.
+- **2026-11-03 07:25 -08:00** — Added per-thread TLS object lifecycle:
+      thread-local class constructors run in `.Lcxx_init` for the main thread
+      and through a `__kr32_thread_entry` trampoline for created threads;
+      `__kr32_tls_fini` destroys them on normal thread return. ClusterHost
+      discovers the weak trampoline symbol and passes the original entry/arg.
+      Added main-thread and created-thread TLS lifecycle regressions.
+      261 cases / 5632 assertions.
 
 ## 10. Updating this file
 

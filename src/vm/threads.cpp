@@ -39,6 +39,16 @@ bool ClusterHost::load_image(const container::Image& image, std::string& error) 
             return false;
         }
     }
+    guest_thread_entry_ = 0;
+    for (const container::Symbol& symbol : image.symbols) {
+        if (symbol.name != "__kr32_thread_entry" ||
+            symbol.section == container::kUndefinedSection) {
+            continue;
+        }
+        if (symbol.section < image.sections.size()) {
+            guest_thread_entry_ = symbol.value;
+        }
+    }
     return true;
 }
 
@@ -52,7 +62,7 @@ void ClusterHost::start(std::uint32_t entry, std::uint32_t stack_top) {
         threads_[0].tcb = 0;
         return;
     }
-    (void)setup_thread(0, entry, 0, options_.stack_size);
+    (void)setup_thread(0, entry, 0, options_.stack_size, false);
 }
 
 std::uint32_t ClusterHost::create(std::uint32_t entry, std::uint32_t arg,
@@ -72,7 +82,8 @@ std::uint32_t ClusterHost::create(std::uint32_t entry, std::uint32_t arg,
 std::uint32_t ClusterHost::setup_thread(std::uint32_t core,
                                         std::uint32_t entry,
                                         std::uint32_t arg,
-                                        std::uint32_t requested) {
+                                        std::uint32_t requested,
+                                        bool use_guest_trampoline) {
     Thread& thread = threads_[core];
     const std::uint32_t minimum = 4096;
     const std::uint32_t size = std::max(minimum, (requested + 15U) & ~15U);
@@ -86,8 +97,14 @@ std::uint32_t ClusterHost::setup_thread(std::uint32_t core,
     const std::uint32_t tsp = (region_base + 1024U) & ~63U;
 
     core::Machine& machine = cluster_.core(core);
-    machine.reset(entry, stack_top);
-    machine.set_reg(0, arg);
+    if (use_guest_trampoline && guest_thread_entry_ != 0) {
+        machine.reset(guest_thread_entry_, stack_top);
+        machine.set_reg(0, entry);
+        machine.set_reg(1, arg);
+    } else {
+        machine.reset(entry, stack_top);
+        machine.set_reg(0, arg);
+    }
     machine.set_reg(11, tcb);
     machine.set_tsp(tsp);
 

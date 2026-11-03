@@ -266,6 +266,31 @@ TEST_CASE("debug sessions pull live ClusterHost thread snapshots") {
     CHECK(session.selected_thread() == first);
 }
 
+TEST_CASE("created threads construct and destroy thread_local objects") {
+    const CxxProgram program = build_cxx_worker(
+        "int counter = 0;\n"
+        "struct Guard {\n"
+        "    int value;\n"
+        "    Guard() { value = 42; }\n"
+        "    ~Guard() { counter = counter + 100; }\n"
+        "};\n"
+        "thread_local Guard guard;\n"
+        "void worker(int* target) { *target = guard.value; }\n"
+        "int main() { return 0; }\n",
+        "counter");
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    std::string error;
+    REQUIRE(host.load_image(program.image, error));
+    const std::uint32_t handle = host.create(program.worker, program.counter);
+    REQUIRE(handle != vm::kThreadError);
+    std::uint32_t code = 0;
+    REQUIRE(host.join(handle, code));
+    std::uint32_t value = 0;
+    REQUIRE(host.cluster().core(0).read32(program.counter, value));
+    CHECK(value == 142);
+}
+
 TEST_CASE("two C++ threads increment a mutex-protected counter") {
     const CxxProgram program = build_cxx_worker(
         "#include <kr32/thread.hpp>\n"

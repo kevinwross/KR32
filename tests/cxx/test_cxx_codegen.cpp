@@ -888,6 +888,21 @@ TEST_CASE("function-local statics initialize once behind a guard") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("thread_local class objects construct and destruct") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "struct Guard {\n"
+        "    int value;\n"
+        "    Guard() { value = 42; }\n"
+        "    ~Guard() { putchar('T'); }\n"
+        "};\n"
+        "thread_local Guard guard;\n"
+        "int main() { putchar('B'); return guard.value == 42 ? 0 : 1; }\n");
+    CHECK(program.ok);
+    CHECK(program.output == "BT");
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("thread/atomic/mutex header surface compiles and runs") {
     const ProgramResult program = compile_and_run(
         "#include <kr32/thread.hpp>\n"

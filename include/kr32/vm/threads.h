@@ -118,7 +118,8 @@ private:
     [[nodiscard]] std::uint32_t setup_thread(std::uint32_t core,
                                               std::uint32_t entry,
                                               std::uint32_t arg,
-                                              std::uint32_t requested);
+                                              std::uint32_t requested,
+                                              bool use_guest_trampoline = true);
     [[nodiscard]] bool has_running_thread() const;
     [[nodiscard]] bool has_running_thread_except(std::uint32_t skip_core) const;
     [[nodiscard]] core::StepResult step_except(std::uint32_t skip_core);
@@ -131,6 +132,7 @@ private:
     bool servicing_join_ = false;
     std::vector<Thread> threads_;
     std::vector<std::uint8_t> tls_template_;
+    std::uint32_t guest_thread_entry_ = 0;
     std::map<std::uint32_t, std::vector<std::uint32_t>> futex_waiters_;
 };
 
