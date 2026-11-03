@@ -174,7 +174,12 @@ bool load_executable(core::Machine& machine,
         error = "input is a relocatable object, not an executable";
         return false;
     }
+    std::vector<std::uint8_t> tls_template;
     for (const container::Section& section : image.sections) {
+        if (section.name == ".tls") {
+            tls_template = section.data;
+            continue;
+        }
         if ((section.flags & container::Alloc) == 0 ||
             section.type == container::SectionType::Bss) {
             continue;
@@ -185,6 +190,16 @@ bool load_executable(core::Machine& machine,
         }
     }
     machine.reset(image.entry);
+    if (!tls_template.empty()) {
+        const std::uint32_t tcb =
+            machine.ram_base() + machine.ram_size() - 1024U;
+        for (std::size_t index = 0; index < tls_template.size(); ++index) {
+            (void)machine.write8(
+                tcb + 32U + static_cast<std::uint32_t>(index),
+                tls_template[index]);
+        }
+        machine.set_reg(11, tcb);
+    }
     return true;
 }
 
