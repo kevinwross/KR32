@@ -5768,6 +5768,11 @@ private:
                      (is_float32(range_type->element) ? "W" : "D") + " F0, [R2]");
                 emit(std::string("    FSTORE.") +
                      (is_float32(range_type->element) ? "W" : "D") + " F0, [R1]");
+            } else if (is_long_long(range_type->element)) {
+                emit("    LOAD R0, [R2]");
+                emit("    LOAD R3, [R2 + 4]");
+                emit("    STORE R0, [R1]");
+                emit("    STORE R3, [R1 + 4]");
             } else {
                 emit("    LOAD R0, [R2]");
                 emit("    STORE R0, [R1]");

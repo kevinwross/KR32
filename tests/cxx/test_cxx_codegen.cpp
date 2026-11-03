@@ -2213,6 +2213,24 @@ TEST_CASE("functions return braced initializer_lists") {
     CHECK(program.result == 10);
 }
 
+TEST_CASE("initializer_list constructors keep 64-bit elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "struct Sum {\n"
+        "    long long total;\n"
+        "    Sum(std::initializer_list<long long> values) {\n"
+        "        total = 0;\n"
+        "        for (long long value : values) total += value;\n"
+        "    }\n"
+        "};\n"
+        "int main() {\n"
+        "    Sum sum{10000000000, 2};\n"
+        "    return (int)(sum.total / 1000000000);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("constructors accept initializer_list arguments") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"
