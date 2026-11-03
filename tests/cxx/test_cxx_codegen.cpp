@@ -1789,6 +1789,21 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("non-type template array bounds accept constant offsets") {
+    const ProgramResult program = compile_and_run(
+        "template <int N> struct Array {\n"
+        "    int values[N + 1];\n"
+        "    int size() { return N + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Array<2> array;\n"
+        "    array.values[2] = 42;\n"
+        "    return array.size() + array.values[2] - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("non-type template arguments accept constant expressions") {
     const ProgramResult program = compile_and_run(
         "template <int N> class Box {\n"

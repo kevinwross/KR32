@@ -70,6 +70,19 @@ public:
 - Template-parameter binding from the matched actual type
 - Fallback to the generic template when no pattern matches
 
+### Non-type parameters
+
+```cpp
+template <int N>
+struct Array {
+    int values[N + 1];
+};
+```
+
+- Integer non-type parameters
+- Array bounds derived from a parameter plus a constant offset
+- Constant expressions in non-type arguments
+
 ### Out-of-class member definitions
 
 ```cpp

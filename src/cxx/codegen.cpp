@@ -2353,7 +2353,8 @@ private:
                 if (bound != bindings.end() && bound->second &&
                     bound->second->has_template_integer_value) {
                     copy->array_size = static_cast<std::uint32_t>(
-                        bound->second->template_integer_value);
+                        bound->second->template_integer_value +
+                        type->array_bound_offset);
                 }
             }
             copy->parameters.clear();

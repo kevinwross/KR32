@@ -767,10 +767,12 @@ private:
         }
         std::vector<std::uint32_t> dimensions;
         std::vector<std::string> bound_names;
+        std::vector<int> bound_offsets;
         while (at("[")) {
             advance();
             std::uint32_t size = 0;
             std::string bound_name;
+            int bound_offset = 0;
             if (!at("]")) {
                 const Token& token = peek();
                 if (token.kind == TokenKind::IntegerLiteral) {
@@ -779,6 +781,17 @@ private:
                 } else if (token.kind == TokenKind::Identifier) {
                     bound_name = token.text;
                     advance();
+                    if (at("+") || at("-")) {
+                        const bool negative = at("-");
+                        advance();
+                        if (peek().kind == TokenKind::IntegerLiteral) {
+                            bound_offset = static_cast<int>(peek().integer);
+                            if (negative) {
+                                bound_offset = -bound_offset;
+                            }
+                            advance();
+                        }
+                    }
                 } else {
                     // Parse and discard other non-literal bounds for now.
                     parse_assignment_expression();
@@ -787,12 +800,14 @@ private:
             expect("]", "in array declarator");
             dimensions.push_back(size);
             bound_names.push_back(bound_name);
+            bound_offsets.push_back(bound_offset);
         }
         // The first declarator dimension is the outermost array:
         // int a[10][5][2] is array<10, array<5, array<2, int>>>.
         for (std::size_t index = dimensions.size(); index > 0; --index) {
             TypePtr array = Type::make_array(type, dimensions[index - 1]);
             array->array_bound_name = bound_names[index - 1];
+            array->array_bound_offset = bound_offsets[index - 1];
             type = array;
         }
         declarator.type = type;
