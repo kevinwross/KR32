@@ -1766,6 +1766,26 @@ TEST_CASE("C++ by-value class parameters copy and sret returns objects") {
     CHECK(program.result == 160);
 }
 
+TEST_CASE("template function local statics merge across translation units") {
+    const std::string header =
+        "template <typename T> int next() { static int value = 0; value = value + 1; return value; }\n";
+    const cxx::Result first = cxx::compile(
+        header +
+        "int bump() { return next<int>(); }\n",
+        cxx::Options{.source_name = "local_a.cpp"});
+    const cxx::Result second = cxx::compile(
+        header +
+        "int bump();\n"
+        "int main() { return bump() * 10 + next<int>(); }\n",
+        cxx::Options{.source_name = "local_b.cpp"});
+    REQUIRE(first.ok);
+    REQUIRE(second.ok);
+    const ProgramResult program = run_assemblies({first.assembly, second.assembly});
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 12);
+}
+
 TEST_CASE("template static data merges across translation units") {
     const std::string header =
         "template <typename T> struct Counter { static int value; };\n"

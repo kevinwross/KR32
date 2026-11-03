@@ -6149,16 +6149,21 @@ private:
         if (declaration.is_static) {
             auto global = std::make_unique<Global>();
             global->decl = &declaration;
-            global->qualified = "__cxx_local_static_" +
+            const std::string owner_symbol =
+                current_function_ != nullptr ? current_function_->symbol : "global";
+            global->qualified = "__cxx_local_static_" + owner_symbol + "_" +
                                 std::to_string(static_counter_);
             global->symbol = global->qualified;
             global->type = type;
             global->defined = true;
             global->is_static = true;
             global->initializer = declaration.initializer.get();
+            const bool template_owner =
+                current_function_ != nullptr && current_function_->from_template;
+            const std::string linkage = template_owner ? ".weak " : ".global ";
             Global* raw = global.get();
             global_storage_.push_back(std::move(global));
-            bss_ += ".global " + raw->symbol + "\n" + raw->symbol +
+            bss_ += linkage + raw->symbol + "\n" + raw->symbol +
                     ":\n    .space " + std::to_string(std::max(1, type_size(type))) +
                     "\n";
             Local local;
@@ -6170,9 +6175,8 @@ private:
             ClassInfo* info = class_of(type);
             const bool guarded = declaration.initializer != nullptr || info != nullptr;
             if (guarded) {
-                const std::string guard =
-                    "__cxx_guard_" + std::to_string(static_counter_++);
-                bss_ += ".global " + guard + "\n" + guard +
+                const std::string guard = raw->symbol + "_guard";
+                bss_ += linkage + guard + "\n" + guard +
                         ":\n    .space 4\n";
                 emit("    LEA R0, [" + guard + "]");
                 emit("    CALL __cxa_guard_acquire");

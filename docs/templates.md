@@ -84,6 +84,8 @@ struct Array {
 - Constant expressions in non-type arguments
 - Template static data members emitted weak and merged across translation
   units
+- Function-local statics inside template instantiations merged across
+  translation units
 
 ### Out-of-class member definitions
 
