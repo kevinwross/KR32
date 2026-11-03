@@ -1467,6 +1467,23 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("floating aggregates use register ABI") {
+    const ProgramResult program = compile_and_run(
+        "struct F { float value; };\n"
+        "struct D { double value; };\n"
+        "F make_f() { F object; object.value = 2.5f; return object; }\n"
+        "D make_d() { D object; object.value = 4.5; return object; }\n"
+        "float read_f(F object) { return object.value; }\n"
+        "double read_d(D object) { return object.value; }\n"
+        "int main() {\n"
+        "    F f = make_f();\n"
+        "    D d = make_d();\n"
+        "    return (int)(read_f(f) + read_d(d));\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 7);
+}
+
 TEST_CASE("eight-byte classes return in two registers") {
     const ProgramResult program = compile_and_run(
         "struct Pair { int first; int second; };\n"

@@ -26,7 +26,7 @@ designated initializers, access control (including friends), unsigned integer
 semantics, `std::initializer_list` parameters, `auto` variables, 64-bit elements, and begin/end iteration,
 captureless and
 value/reference/default-capturing lambdas,
-by-value class parameters/returns with `sret` (plus one-to-eight-byte trivial class register arguments and returns), exit-time static destruction,
+by-value class parameters/returns with `sret` (plus one-to-eight-byte trivial, including floating, class register arguments and returns), exit-time static destruction,
 range-based `for` over arrays, braced initializer lists, and
 `initializer_list` variables, `goto`/labels, and
 C++ debug records. Template support and limitations are summarized in

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 13:42 -08:00
+> **Last updated:** 2026-11-03 13:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1579,6 +1579,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 13:42 -08:00** — Two-word trivial aggregates now also pass
       in register pairs; initializer-list classes remain on the hidden-pointer
       path. 310 cases / 5804 assertions.
+- **2026-11-03 13:50 -08:00** — Documented and regression-tested register
+      ABI for one- and two-word floating aggregates (`float`/`double` members).
+      311 cases / 5806 assertions.
 
 ## 10. Updating this file
 
