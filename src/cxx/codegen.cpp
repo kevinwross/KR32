@@ -1272,9 +1272,13 @@ private:
             template_member_definitions_.push_back(std::move(definition));
             return nullptr;
         }
-        if (declaration.is_template) {
-            template_functions_[qualify(prefix, declaration.name)].push_back(
-                &declaration);
+        if (declaration.is_template) {            const std::string key = qualify(prefix, declaration.name);
+            if (declaration.is_specialization &&
+                !declaration.specialization_arguments.empty()) {
+                function_specializations_[key].push_back(&declaration);
+            } else {
+                template_functions_[key].push_back(&declaration);
+            }
             return nullptr;
         }
         ClassInfo* owner = nullptr;
@@ -1485,8 +1489,7 @@ private:
     }
 
     void collect_global(const Decl& declaration, const std::string& prefix) {
-        if (declaration.is_template) {
-            if (!declaration.owner_template_arguments.empty() &&
+        if (declaration.is_template) {            if (!declaration.owner_template_arguments.empty() &&
                 declaration.name.parts.size() > 1) {
                 Name owner_name;
                 owner_name.parts.assign(declaration.name.parts.begin(),
@@ -2443,6 +2446,71 @@ private:
             if (found != template_functions_.end()) {
                 templates.insert(templates.end(), found->second.begin(),
                                  found->second.end());
+            }
+        }
+        for (const std::string& key : keys) {
+            const auto found_specializations = function_specializations_.find(key);
+            if (found_specializations == function_specializations_.end()) {
+                continue;
+            }
+            for (const Decl* specialization : found_specializations->second) {
+                const std::vector<TypePtr>& candidate_arguments =
+                    call.children[0]->template_type_arguments.empty()
+                        ? argument_types
+                        : call.children[0]->template_type_arguments;
+                if (specialization->specialization_arguments.size() !=
+                    candidate_arguments.size()) {
+                    continue;
+                }
+                bool matches = true;
+                for (std::size_t index = 0;
+                     index < specialization->specialization_arguments.size();
+                     ++index) {
+                    if (mangle_type(specialization->specialization_arguments[index]) !=
+                        mangle_type(candidate_arguments[index])) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (!matches) {
+                    continue;
+                }
+                for (const Decl* generic : templates) {
+                    if (generic->template_parameters.size() !=
+                        candidate_arguments.size()) {
+                        continue;
+                    }
+                    Decl copy;
+                    copy.kind = DeclKind::Function;
+                    copy.location = specialization->location;
+                    copy.name = specialization->name;
+                    copy.type = specialization->type;
+                    for (const Param& parameter : specialization->parameters) {
+                        Param copied;
+                        copied.type = parameter.type;
+                        copied.name = parameter.name;
+                        copied.location = parameter.location;
+                        copied.variadic = parameter.variadic;
+                        if (parameter.default_value) {
+                            copied.default_value =
+                                clone_expr(*parameter.default_value);
+                        }
+                        copy.parameters.push_back(std::move(copied));
+                    }
+                    copy.body = specialization->body;
+                    copy.template_parameters = generic->template_parameters;
+                    copy.variadic = specialization->variadic;
+                    copy.is_inline = specialization->is_inline;
+                    copy.is_extern_c = specialization->is_extern_c;
+                    copy.is_static = specialization->is_static;
+                    const std::string qualified =
+                        qualify(current_prefix_, specialization->name);
+                    if (Function* function = instantiate_template(
+                            copy, qualified, candidate_arguments,
+                            argument_types)) {
+                        return function;
+                    }
+                }
             }
         }
         for (const Decl* declaration : templates) {
@@ -7055,6 +7123,7 @@ private:
     std::vector<std::unique_ptr<Function>> function_storage_;
     std::map<std::string, std::vector<Function*>> function_index_;
     std::map<std::string, std::vector<const Decl*>> template_functions_;
+    std::map<std::string, std::vector<const Decl*>> function_specializations_;
     struct TemplateMemberDefinition {
         std::string owner;
         std::vector<TypePtr> pattern;

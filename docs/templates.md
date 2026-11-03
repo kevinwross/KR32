@@ -112,12 +112,21 @@ public:
 - Distinct instantiations for distinct values
 - Bound values used inside member function bodies
 
+### Function-template explicit specializations
+
+```cpp
+template <typename T> T twice(T value) { return value + value; }
+template <> int twice<int>(int value) { return 42; }
+```
+
+- Explicit specialization arguments are matched against call arguments
+- Specialized bodies replace the generic instantiation for matching calls
+
 ## Deferred
 
 - Non-type parameters usable as array bounds
 - Nested and multi-level partial-specialization patterns
 - Reference and template-template parameter patterns
-- Function-template explicit specializations
 - COMDAT section groups and duplicate-instantiation merging
 - Template-aware debug information beyond class/function records
 

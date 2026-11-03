@@ -1421,6 +1421,21 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("function template explicit specializations override generic calls") {
+    const ProgramResult specialized = compile_and_run(
+        "template <typename T> T twice(T value) { return value + value; }\n"
+        "template <> int twice<int>(int value) { return 42; }\n"
+        "int main() { return twice(1); }\n");
+    CHECK(specialized.ok);
+    CHECK(specialized.result == 42);
+
+    const ProgramResult generic = compile_and_run(
+        "template <typename T> T twice(T value) { return value + value; }\n"
+        "int main() { return (int)twice(1.5); }\n");
+    CHECK(generic.ok);
+    CHECK(generic.result == 3);
+}
+
 TEST_CASE("non-type template parameters bind integer arguments") {
     const ProgramResult program = compile_and_run(
         "template <int N> class Box {\n"

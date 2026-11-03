@@ -1209,7 +1209,9 @@ private:
             declaration->is_template = true;
             declaration->is_specialization = specialization;
             declaration->template_parameters = parameters;
-            declaration->specialization_arguments = specialization_arguments;
+            if (!specialization_arguments.empty()) {
+                declaration->specialization_arguments = specialization_arguments;
+            }
             output.push_back(std::move(declaration));
         }
     }
