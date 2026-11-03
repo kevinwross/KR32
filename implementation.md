@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:49 -08:00
+> **Last updated:** 2026-11-03 09:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1465,6 +1465,10 @@ Newest entries at the bottom. Use the local time zone.
       specializations with one-level pointer patterns (`Box<T*>`), including
       template-parameter binding and generic fallback. Added regression. 284
       cases / 5743 assertions.
+- **2026-11-03 09:55 -08:00** — Added `std::thread::id` as a nested
+      alias plus `std::thread::get_id()`, in both the header and injected
+      preprocessor declarations; added regression. 285 cases / 5745
+      assertions.
 
 ## 10. Updating this file
 

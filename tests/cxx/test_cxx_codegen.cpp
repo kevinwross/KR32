@@ -1221,6 +1221,18 @@ TEST_CASE("lambdas capture by reference and by default") {
     CHECK(by_default.result == 42);
 }
 
+TEST_CASE("std thread exposes a thread id type") {
+    const ProgramResult program = compile_and_run(
+        "#include <thread>\n"
+        "int main() {\n"
+        "    std::thread thread;\n"
+        "    std::thread::id id = thread.get_id();\n"
+        "    return id == 0 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("std thread accepts function pointers and captureless lambdas") {
     const cxx::Result compiled = cxx::compile(
         "#include <thread>\n"
