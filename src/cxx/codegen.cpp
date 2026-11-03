@@ -5911,6 +5911,16 @@ private:
                      std::to_string(element_offset) + "]");
             } else {
                 gen_expr(*element);
+                if (is_long_long(type->element)) {
+                    const TypePtr value_type = type_of(*element);
+                    if (!is_long_long(value_type)) {
+                        emit("    MOV R1, R0");
+                        emit(std::string("    ") +
+                             (is_unsigned_integer(value_type) ? "SHR" : "SAR") +
+                             " R1, R1, #31");
+                    }
+                    emit("    MOV R2, R1");
+                }
                 emit("    LEA R1, [R7 + " + std::to_string(element_offset) + "]");
                 store_value(type->element);
             }

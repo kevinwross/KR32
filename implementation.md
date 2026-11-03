@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 12:38 -08:00
+> **Last updated:** 2026-11-03 12:45 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1554,6 +1554,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 12:38 -08:00** — Added C++ long-long cast extension and
       wide shift handling for counts of 32 or more. 303 cases / 5790
       assertions.
+- **2026-11-03 12:45 -08:00** — Initializer lists now store 64-bit
+      elements as full pairs, enabling `initializer_list<long long>` and
+      arrays of `long long`. 304 cases / 5792 assertions.
 
 ## 10. Updating this file
 

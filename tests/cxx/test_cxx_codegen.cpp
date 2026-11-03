@@ -1773,6 +1773,17 @@ TEST_CASE("auto initializer_list variables hold braced values") {
     CHECK(program.result == 9);
 }
 
+TEST_CASE("initializer_list keeps 64-bit elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "int main() {\n"
+        "    auto values = {10000000000, 2};\n"
+        "    return (int)(values.data_[0] / 1000000000) + values.data_[1];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 12);
+}
+
 TEST_CASE("initializer_list begin and end iterate values") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"
