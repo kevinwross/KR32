@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 10:34 -08:00
+> **Last updated:** 2026-11-03 10:40 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1490,6 +1490,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 10:34 -08:00** — Added condition-variable
       `wait_for`/`wait_until` with coarse busy polling, and qualified the
       mutex reference parameter so `condition_variable::wait` resolves.
+      288 cases / 5755 assertions.
+- **2026-11-03 10:40 -08:00** — Added `docs/templates.md` summarizing
+      supported template forms (function, class, explicit and pointer-pattern
+      partial specializations) and documenting deferred template work.
       288 cases / 5755 assertions.
 
 ## 10. Updating this file
