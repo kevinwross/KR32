@@ -599,7 +599,7 @@ private:
                     "    void detach() { handle = 0; }\n"
                     "    void yield() { kr32::thread_yield(); }\n"
                     "};\n"
-                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline int get_id() { return kr32::thread_self(); } }\n"
+                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); } }\n"
                     "}\n");
                 return;
             }

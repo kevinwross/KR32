@@ -181,6 +181,6 @@ struct thread {
 };
 namespace this_thread {
 inline void yield() { kr32::thread_yield(); }
-inline int get_id() { return kr32::thread_self(); }
+inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); }
 } // namespace this_thread
 } // namespace std
