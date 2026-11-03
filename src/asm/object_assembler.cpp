@@ -1417,6 +1417,12 @@ private:
                     {name, 0, 0, container::kUndefinedSection, container::SymbolBind::Global});
             }
         }
+        for (const std::string& name : weak_symbols_) {
+            if (labels_.find(name) == labels_.end()) {
+                image.symbols.push_back(
+                    {name, 0, 0, container::kUndefinedSection, container::SymbolBind::Weak});
+            }
+        }
         return true;
     }
 

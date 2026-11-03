@@ -1152,6 +1152,18 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("exit runs static destructors once") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "struct Guard { ~Guard() { printf(\"F\"); } };\n"
+        "Guard guard;\n"
+        "int main() { printf(\"B\"); exit(7); return 0; }\n");
+    CHECK(program.ok);
+    CHECK(program.output == "BF");
+    CHECK(program.result == 7);
+}
+
 TEST_CASE("by-value class parameters copy and sret returns objects") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; };\n"

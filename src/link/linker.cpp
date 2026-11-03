@@ -291,8 +291,20 @@ bool link(const std::vector<container::Image>& objects,
                     }
                 }
                 if (!found) {
-                    error = {"undefined symbol: " + relocation.symbol};
-                    return false;
+                    bool weak_undefined = false;
+                    for (const container::Symbol& symbol : object.symbols) {
+                        if (symbol.name == relocation.symbol &&
+                            symbol.section == container::kUndefinedSection &&
+                            symbol.bind == container::SymbolBind::Weak) {
+                            weak_undefined = true;
+                            break;
+                        }
+                    }
+                    if (!weak_undefined) {
+                        error = {"undefined symbol: " + relocation.symbol};
+                        return false;
+                    }
+                    symbol_address = 0;
                 }
             }
 

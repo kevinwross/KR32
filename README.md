@@ -17,9 +17,9 @@ expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
 inheritance, virtual dispatch/RTTI, function and class templates, matrices,
 exceptions/unwinding, `new`/`delete`, threads/TLS/atomics, conditional
 expressions, switch statements, global and local aggregate initializers, access
-control, by-value class parameters/returns with `sret`, range-based `for`,
-`goto`/labels, and C++ debug records. A freestanding C libc supplies `printf`
-(including FP formats),
+control, by-value class parameters/returns with `sret`, exit-time static
+destruction, range-based `for`, `goto`/labels, and C++ debug records. A
+freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
 (`sizeof`, `offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC
 atomics, and string/memory routines; see [docs/libc.md](docs/libc.md). The

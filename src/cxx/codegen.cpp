@@ -4807,7 +4807,7 @@ private:
             const int result_temp =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(result_temp) + "]");
-            emit_fini_array_loop();
+            emit("    CALL __kr32_cxx_fini");
             emit("    LOAD R0, [R7 + " + std::to_string(result_temp) + "]");
         }
         frame_size_ = (frame_size_ + 15) / 16 * 16 + 8;
@@ -5181,6 +5181,19 @@ private:
     }
 
     void emit_static_fini() {
+        text_ += ".weak __kr32_cxx_fini\n";
+        text_ += "__kr32_cxx_fini:\n";
+        text_ += "    LEA R0, [__kr32_cxx_fini_done]\n";
+        text_ += "    LOAD R1, [R0]\n";
+        text_ += "    CMP R1, #0\n";
+        text_ += "    JNZ .Lcxx_fini_done\n";
+        text_ += "    MOV R1, #1\n";
+        text_ += "    STORE R1, [R0]\n";
+        emit_fini_array_loop();
+        text_ += ".Lcxx_fini_done:\n";
+        text_ += "    RET\n";
+        bss_ += ".weak __kr32_cxx_fini_done\n";
+        bss_ += "__kr32_cxx_fini_done:\n    .space 4\n";
         text_ += ".weak __cxa_allocate_exception\n__cxa_allocate_exception:\n";
         text_ += "    ADD R0, R0, #12\n";
         text_ += "    CALL malloc\n";

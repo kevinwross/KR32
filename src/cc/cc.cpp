@@ -3248,6 +3248,7 @@ std::string libc_assembly() {
 
 std::string runtime_assembly() {
     return
+        ".weak __kr32_cxx_fini\n"
         ".text\n"
         ".global _start\n"
         "_start:\n"
@@ -3260,6 +3261,13 @@ std::string runtime_assembly() {
         "    RET\n"
         ".global exit\n"
         "exit:\n"
+        "    PUSH R0\n"
+        "    LEA R1, [__kr32_cxx_fini]\n"
+        "    CMP R1, #0\n"
+        "    JZ .Lexit_no_cxx_fini\n"
+        "    CALL R1\n"
+        ".Lexit_no_cxx_fini:\n"
+        "    POP R0\n"
         "    SYSCALL #32\n"
         "    HALT\n"
         ".global getchar\n"
