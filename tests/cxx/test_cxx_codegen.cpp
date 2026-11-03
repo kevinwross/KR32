@@ -1344,6 +1344,17 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("range-for iterates braced initializer lists") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int total = 0;\n"
+        "    for (int value : {1, 2, 3, 4}) { total += value; }\n"
+        "    return total;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("explicit class template specializations override generic instantiations") {
     const ProgramResult program = compile_and_run(
         "template <typename T> class Box {\n"

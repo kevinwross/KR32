@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 08:50 -08:00
+> **Last updated:** 2026-11-03 08:56 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1426,6 +1426,9 @@ Newest entries at the bottom. Use the local time zone.
       specialization arguments, codegen registers specialization keys, and
       instantiation prefers them over the generic template. 272 cases /
       5717 assertions.
+- **2026-11-03 08:56 -08:00** — Range-for now accepts braced initializer
+      lists by materializing a temporary array and iterating it; added
+      regression. 273 cases / 5719 assertions.
 
 ## 10. Updating this file
 

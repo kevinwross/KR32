@@ -4458,7 +4458,27 @@ private:
                       "range-for requires a declared loop variable and an array");
                 return;
             }
-            const TypePtr range_type = type_of(*statement.expression, false);
+            TypePtr range_type;
+            int list_array_offset = -1;
+            if (statement.expression->kind == ExprKind::InitializerList) {
+                if (statement.expression->children.empty()) {
+                    error(statement.location,
+                          "range-for initializer list cannot be empty");
+                    return;
+                }
+                TypePtr element_type =
+                    resolve_type(type_of(*statement.expression->children[0]));
+                range_type = Type::make_array(
+                    element_type,
+                    static_cast<std::uint32_t>(
+                        statement.expression->children.size()));
+                list_array_offset = allocate_local(range_type);
+                zero_object(list_array_offset, type_size(range_type));
+                gen_array_initializer(range_type, list_array_offset,
+                                      *statement.expression);
+            } else {
+                range_type = type_of(*statement.expression, false);
+            }
             if (!range_type || range_type->kind != TypeKind::Array ||
                 !range_type->element) {
                 error(statement.location,
@@ -4466,7 +4486,11 @@ private:
                 return;
             }
             push_scope();
-            gen_expr(*statement.expression);
+            if (list_array_offset >= 0) {
+                emit("    LEA R0, [R7 + " + std::to_string(list_array_offset) + "]");
+            } else {
+                gen_expr(*statement.expression);
+            }
             const int base_temp =
                 allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
             emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");

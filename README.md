@@ -25,7 +25,8 @@ expressions, switch statements, global and local aggregate initializers,
 designated initializers, access control (including friends), unsigned integer
 semantics, captureless and value/reference/default-capturing lambdas,
 by-value class parameters/returns with `sret`, exit-time static destruction,
-range-based `for`, `goto`/labels, and C++ debug records. A
+range-based `for` over arrays and braced initializer lists, `goto`/labels, and
+C++ debug records. A
 freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
 (`sizeof`, `offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC
