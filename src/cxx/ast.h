@@ -59,6 +59,7 @@ struct Type {
     Name name;                       // Named
     TypePtr element;                 // Pointer / reference / array
     std::uint32_t array_size = 0;    // Array (0 = unknown)
+    std::string array_bound_name;    // Array bound symbol (template parameter)
     std::vector<TypePtr> parameters; // Function
     std::vector<TypePtr> template_arguments; // Named template-id
     bool variadic = false;           // Function

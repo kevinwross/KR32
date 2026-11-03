@@ -694,26 +694,34 @@ private:
             parse_function_suffix(declarator);
         }
         std::vector<std::uint32_t> dimensions;
+        std::vector<std::string> bound_names;
         while (at("[")) {
             advance();
             std::uint32_t size = 0;
+            std::string bound_name;
             if (!at("]")) {
                 const Token& token = peek();
                 if (token.kind == TokenKind::IntegerLiteral) {
                     size = static_cast<std::uint32_t>(token.integer);
                     advance();
+                } else if (token.kind == TokenKind::Identifier) {
+                    bound_name = token.text;
+                    advance();
                 } else {
-                    // Parse and discard a non-literal bound for now.
+                    // Parse and discard other non-literal bounds for now.
                     parse_assignment_expression();
                 }
             }
             expect("]", "in array declarator");
             dimensions.push_back(size);
+            bound_names.push_back(bound_name);
         }
         // The first declarator dimension is the outermost array:
         // int a[10][5][2] is array<10, array<5, array<2, int>>>.
-        for (auto it = dimensions.rbegin(); it != dimensions.rend(); ++it) {
-            type = Type::make_array(type, *it);
+        for (std::size_t index = dimensions.size(); index > 0; --index) {
+            TypePtr array = Type::make_array(type, dimensions[index - 1]);
+            array->array_bound_name = bound_names[index - 1];
+            type = array;
         }
         declarator.type = type;
         return true;

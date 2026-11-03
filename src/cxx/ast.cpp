@@ -114,6 +114,7 @@ TypePtr Type::clone() const {
     result->builtin = builtin;
     result->name = name;
     result->array_size = array_size;
+    result->array_bound_name = array_bound_name;
     result->variadic = variadic;
     result->is_const = is_const;
     result->is_volatile = is_volatile;

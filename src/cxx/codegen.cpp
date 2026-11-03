@@ -2321,6 +2321,14 @@ private:
             type->kind == TypeKind::Function) {
             auto copy = std::make_shared<Type>(*type);
             copy->element = substitute_type(type->element, bindings);
+            if (type->kind == TypeKind::Array && !type->array_bound_name.empty()) {
+                const auto bound = bindings.find(type->array_bound_name);
+                if (bound != bindings.end() && bound->second &&
+                    bound->second->has_template_integer_value) {
+                    copy->array_size = static_cast<std::uint32_t>(
+                        bound->second->template_integer_value);
+                }
+            }
             copy->parameters.clear();
             for (const TypePtr& parameter : type->parameters) {
                 copy->parameters.push_back(substitute_type(parameter, bindings));

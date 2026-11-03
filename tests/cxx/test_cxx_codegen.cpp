@@ -1421,6 +1421,22 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("non-type template parameters size arrays") {
+    const ProgramResult program = compile_and_run(
+        "template <int N> class Box {\n"
+        "public:\n"
+        "    int data[N];\n"
+        "    int size() { return N; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Box<4> box;\n"
+        "    box.data[3] = 42;\n"
+        "    return box.data[3] + box.size() - 4;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("function template explicit specializations override generic calls") {
     const ProgramResult specialized = compile_and_run(
         "template <typename T> T twice(T value) { return value + value; }\n"

@@ -111,6 +111,7 @@ public:
 - Integer literal template arguments
 - Distinct instantiations for distinct values
 - Bound values used inside member function bodies
+- Bound values used as array sizes
 
 ### Function-template explicit specializations
 
@@ -127,7 +128,7 @@ template <> int twice<int>(int value) { return 42; }
 
 ## Deferred
 
-- Non-type parameters usable as array bounds
+- Constant-expression arguments such as `N + 1`
 - Nested and multi-level partial-specialization patterns
 - Reference and template-template parameter patterns
 - COMDAT section groups and duplicate-instantiation merging
