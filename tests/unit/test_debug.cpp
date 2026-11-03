@@ -317,6 +317,35 @@ TEST_CASE("DebugSession steps over and out by source line") {
     CHECK(out.kind == core::StepResult::Kind::Retired);
 }
 
+TEST_CASE("DebugSession steps over a false if-body") {
+    const container::Image image = compile_debug_image(
+        "int main(void) {\n"
+        "    int x = 1;\n"
+        "    if (x == 2) {\n"
+        "        return 9;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Line* condition = find_line(info, 3);
+    REQUIRE(condition != nullptr);
+    session.set_breakpoint(condition->address);
+    (void)session.run();
+    REQUIRE(session.at_breakpoint());
+
+    const core::StepResult over = session.step_line_over();
+    CHECK(over.kind == core::StepResult::Kind::Retired);
+    const debug::Line* after = session.line_at(session.machine().pc());
+    REQUIRE(after != nullptr);
+    CHECK(after->line > condition->line);
+    CHECK(after->line != 4);
+}
+
 TEST_CASE("DebugSession captures console output") {
     const container::Image image = compile_debug_image(
         "int putchar(int c);\n"

@@ -83,13 +83,13 @@ kr32 build examples/hello.c -o hello-c.k32 --run
 kr32 build examples/types.c -o types-c.k32 --run
 kr32 build examples/floats.c -o floats-c.k32 --run
 kr32 build examples/varargs.c -o varargs-c.k32 --run
-kr32 build examples/libc.c -o libc-c.k32 --run
+kr32 build examples/libc-test.c -o libc-c.k32 --run
 kr32 build examples/strings.c -o strings-c.k32 --run
 kr32 build examples/binarytree.c -o binarytree-c.k32 --run
 kr32 cxx examples/hello.cpp -S -o hello-cxx.s
 kr32 build examples/hello.cpp -o hello-cxx.k32 --run
 kr32 build examples/cxx_libc.cpp -o cxx-libc.k32 --run
-kr32 gui examples/libc.c
+kr32 gui examples/libc-test.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm

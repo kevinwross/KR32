@@ -33,14 +33,22 @@ int main(void) {
     }
     first[0] = 'A';
     second[0] = 'B';
+    printf("first %h second %h\n",first,second);
+
     free(first);
+
     char *reused = (char *)malloc(64);
+    
     if (reused != first) {
         printf("heap reuse failed\n");
         return 2;
     }
+    
     free(second);
+    
     free(reused);
+    
     printf("heap reuse: ok\n");
+    
     return 0;
 }

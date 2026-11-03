@@ -161,7 +161,7 @@ set_tests_properties(build_c_varargs PROPERTIES
 
 add_test(NAME build_c_libc
     COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/libc.c
+        ${CMAKE_SOURCE_DIR}/examples/libc-test.c
         -o ${CMAKE_BINARY_DIR}/libc-c.k32 --run)
 set_tests_properties(build_c_libc PROPERTIES
     PASS_REGULAR_EXPRESSION "heap reuse: ok")

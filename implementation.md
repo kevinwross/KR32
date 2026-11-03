@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 19:35 -08:00
+> **Last updated:** 2026-11-02 21:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1264,6 +1264,12 @@ Newest entries at the bottom. Use the local time zone.
       dimmed modal backdrop, white wrapped message text, and centered layout.
       Startup load failures now show the same popup. Added a UI pixel test;
       226 cases / 5333 assertions, 33/33 Windows, 30/30 WSL.
+- **2026-11-02 21:50 -08:00** — Fixed source-line OVER when the next source line
+      is inside a skipped branch. Step-over now repeatedly advances by one
+      instruction (skipping calls) until control reaches a different source
+      line, instead of requiring a single precomputed target line. Added a
+      false-if regression and renamed the libc demo to `libc-test.c`.
+      227 cases / 5345 assertions; 33/33 Windows; 30/30 WSL.
 
 ## 10. Updating this file
 

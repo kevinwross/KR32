@@ -254,27 +254,30 @@ core::StepResult Session::step_line_over() {
     if (start == nullptr) {
         return machine_.step();
     }
-    std::uint32_t target = 0;
-    bool found = false;
-    const Function* function = function_at(machine_.pc());
-    for (const Line& line : info_.lines) {
-        if (line.address <= machine_.pc()) continue;
-        if (function != nullptr && function_at(line.address) != function) continue;
-        if (line.line == start->line && line.source == start->source) continue;
-        target = line.address;
-        found = true;
-        break;
-    }
-    if (!found) {
-        return machine_.step();
-    }
-    const bool existing = breakpoints_.find(target) != breakpoints_.end();
-    if (!existing) {
-        set_breakpoint(target);
-    }
-    core::StepResult result = run(200000);
-    if (!existing) {
-        clear_breakpoint(target);
+    const Function* start_function = function_at(machine_.pc());
+    bool skipped_initial_breakpoint = false;
+    core::StepResult result;
+    for (int guard = 0; guard < 1'000'000; ++guard) {
+        // step_over() executes one instruction, or skips a CALL to its return
+        // address. Repeating it lets control flow choose the next source line:
+        // a skipped if-body must not be required to be reachable.
+        result = step_over();
+        if (result.kind != core::StepResult::Kind::Retired) {
+            return result;
+        }
+        if (skipped_initial_breakpoint && at_breakpoint()) {
+            return result;
+        }
+        skipped_initial_breakpoint = true;
+        const Line* current = line_at(machine_.pc());
+        if (current != nullptr &&
+            (current->line != start->line || current->source != start->source)) {
+            return result;
+        }
+        if (current == nullptr && start_function != nullptr &&
+            function_at(machine_.pc()) != start_function) {
+            return result;
+        }
     }
     return result;
 }
