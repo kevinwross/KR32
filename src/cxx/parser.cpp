@@ -2060,6 +2060,10 @@ private:
             if (at("<") && looks_like_template_arguments()) {
                 expression->template_type_arguments =
                     parse_template_type_arguments();
+                if (consume("::") && at_identifier()) {
+                    expression->name.parts.push_back(peek().text);
+                    advance();
+                }
             }
             return expression;
         }

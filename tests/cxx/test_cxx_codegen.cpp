@@ -1430,7 +1430,7 @@ TEST_CASE("class template static data members use their definition initializer")
         "template <typename T> T Box<T>::value = 42;\n"
         "int main() {\n"
         "    Box<int> box;\n"
-        "    return box.value;\n"
+        "    return Box<int>::value == box.value ? 42 : 0;\n"
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 42);

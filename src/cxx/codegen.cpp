@@ -1608,6 +1608,26 @@ private:
         return nullptr;
     }
 
+    Global* lookup_template_static(const Expr& expression) {
+        if (expression.template_type_arguments.empty() ||
+            expression.name.parts.size() < 2) {
+            return nullptr;
+        }
+        Name class_name;
+        class_name.parts.assign(expression.name.parts.begin(),
+                                expression.name.parts.end() - 1);
+        TypePtr named = Type::make_named(class_name);
+        named->template_arguments = expression.template_type_arguments;
+        TypePtr resolved = resolve_type(named);
+        ClassInfo* info = class_of(resolved);
+        if (info == nullptr) {
+            return nullptr;
+        }
+        const auto found =
+            info->static_globals.find(expression.name.parts.back());
+        return found == info->static_globals.end() ? nullptr : found->second;
+    }
+
     std::vector<std::string> candidate_keys(const Name& name,
                                              const std::string& prefix) const {
         std::vector<std::string> keys;
@@ -1852,6 +1872,14 @@ private:
                 if (type && type->kind == TypeKind::LValueRef) {
                     type = type->element;
                 }
+                if (decay_arrays) {
+                    type = decay(type);
+                }
+                return type;
+            }
+            if (Global* global =
+                    lookup_template_static(expression)) {
+                TypePtr type = resolve_type(global->type);
                 if (decay_arrays) {
                     type = decay(type);
                 }
@@ -2847,6 +2875,20 @@ private:
                 }
                 return;
             }
+            if (Global* global = lookup_template_static(expression)) {
+                if (global->owner != nullptr &&
+                    !can_access(global->owner, global->access)) {
+                    diagnose_once(expression, "member is not accessible");
+                    emit("    MOV R0, #0");
+                    return;
+                }
+                if (global->is_thread_local) {
+                    emit_tls_address(global);
+                } else {
+                    emit("    LEA R0, [" + global->symbol + "]");
+                }
+                return;
+            }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
                 if (global->owner != nullptr &&
                     !can_access(global->owner, global->access)) {
@@ -3677,6 +3719,30 @@ private:
                 if (type && type->kind == TypeKind::LValueRef) {
                     type = type->element;
                 }
+                if (type && (type->kind == TypeKind::Array ||
+                             class_of(type) != nullptr)) {
+                    return type;
+                }
+                if (is_fp(type)) {
+                    load_fp(type);
+                    return type;
+                }
+                load_value(type);
+                return type;
+            }
+            if (Global* global = lookup_template_static(expression)) {
+                if (global->owner != nullptr &&
+                    !can_access(global->owner, global->access)) {
+                    diagnose_once(expression, "member is not accessible");
+                    emit("    MOV R0, #0");
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
+                if (global->is_thread_local) {
+                    emit_tls_address(global);
+                } else {
+                    emit("    LEA R0, [" + global->symbol + "]");
+                }
+                TypePtr type = resolve_type(global->type);
                 if (type && (type->kind == TypeKind::Array ||
                              class_of(type) != nullptr)) {
                     return type;
