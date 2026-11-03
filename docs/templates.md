@@ -66,6 +66,7 @@ public:
 - One-level pointer patterns such as `T*`
 - Multi-level pointer patterns such as `T**`
 - Reference patterns such as `T&`
+- Fixed-size array patterns such as `T[3]`
 - Template-parameter binding from the matched actual type
 - Fallback to the generic template when no pattern matches
 

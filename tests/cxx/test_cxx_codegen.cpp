@@ -1554,6 +1554,18 @@ TEST_CASE("specialized out-of-class template members define specialization metho
     CHECK(program.result == 42);
 }
 
+TEST_CASE("partial specializations match array patterns") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> class Box { public: int kind() { return 1; } };\n"
+        "template <typename T> class Box<T[3]> { public: int kind() { return 5; } };\n"
+        "int main() {\n"
+        "    Box<int[3]> array_box;\n"
+        "    return array_box.kind();\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 5);
+}
+
 TEST_CASE("partial specializations match reference and multi-level pointer patterns") {
     const ProgramResult program = compile_and_run(
         "template <typename T> class Box { public: int kind() { return 1; } };\n"

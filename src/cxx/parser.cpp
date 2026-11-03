@@ -386,7 +386,18 @@ private:
                 arguments.push_back(std::move(argument));
                 advance();
             } else {
-                arguments.push_back(parse_type_id());
+                TypePtr argument = parse_type_id();
+                while (at("[")) {
+                    advance();
+                    std::uint32_t size = 0;
+                    if (peek().kind == TokenKind::IntegerLiteral) {
+                        size = static_cast<std::uint32_t>(peek().integer);
+                        advance();
+                    }
+                    expect("]", "in template array argument");
+                    argument = Type::make_array(argument, size);
+                }
+                arguments.push_back(std::move(argument));
             }
             if (!consume(",")) {
                 break;
