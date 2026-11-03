@@ -6201,6 +6201,16 @@ private:
             TypePtr list_type = Type::make_named(list_name);
             list_type->template_arguments.push_back(element_type);
             type = resolve_type(list_type);
+        } else if (declaration.type &&
+                   declaration.type->kind == TypeKind::Builtin &&
+                   declaration.type->builtin == BuiltinKind::Auto &&
+                   declaration.initializer &&
+                   declaration.initializer->kind == ExprKind::Call) {
+            const TypePtr inferred =
+                resolve_type(type_of(*declaration.initializer));
+            if (inferred != nullptr && class_of(inferred) != nullptr) {
+                type = inferred;
+            }
         }
         Function* lambda_target = nullptr;
         if (declaration.initializer &&

@@ -2140,6 +2140,18 @@ TEST_CASE("auto initializer_list variables hold braced values") {
     CHECK(program.result == 9);
 }
 
+TEST_CASE("auto deduces class return types from calls") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "std::initializer_list<int> make() { return {4, 5, 6}; }\n"
+        "int main() {\n"
+        "    auto values = make();\n"
+        "    return values.data_[0] + values.data_[2];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("functions return braced initializer_lists") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"

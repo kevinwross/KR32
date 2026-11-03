@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 15:26 -08:00
+> **Last updated:** 2026-11-03 15:34 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1613,6 +1613,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 15:26 -08:00** — Functions returning `std::initializer_list`
       accept braced lists, backed by compiler-emitted static storage. 323
       cases / 5849 assertions.
+- **2026-11-03 15:34 -08:00** — `auto` locals deduce class return types from
+      call initializers, including `std::initializer_list`. 324 cases / 5851
+      assertions.
 
 ## 10. Updating this file
 
