@@ -80,9 +80,25 @@ T Box<T>::get() {
 - Parameter and return types substituted through the class bindings
 - Also supported for explicit class specializations
 
+### Static data members
+
+```cpp
+template <typename T>
+class Box {
+public:
+    static T value;
+};
+
+template <typename T>
+T Box<T>::value = 42;
+```
+
+- Definition initializers attach to each instantiation
+- Late static-template globals are emitted after function code generation
+- Accessed through an instance or scope-qualified member
+
 ## Deferred
 
-- Static data members of class templates
 - Non-type template parameters
 - Nested and multi-level partial-specialization patterns
 - Reference and template-template parameter patterns

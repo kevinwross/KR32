@@ -126,6 +126,38 @@ std::string mangle_type(const TypePtr& type) {
     return "i";
 }
 
+ExprPtr clone_expr(const Expr& source) {
+    auto copy = std::make_unique<Expr>();
+    copy->kind = source.kind;
+    copy->location = source.location;
+    copy->text = source.text;
+    copy->integer = source.integer;
+    copy->floating = source.floating;
+    copy->name = source.name;
+    copy->type = source.type ? source.type->clone() : nullptr;
+    copy->body = source.body;
+    copy->template_arguments = source.template_arguments;
+    for (const TypePtr& argument : source.template_type_arguments) {
+        copy->template_type_arguments.push_back(argument ? argument->clone()
+                                                         : nullptr);
+    }
+    copy->is_arrow = source.is_arrow;
+    copy->is_prefix = source.is_prefix;
+    copy->global_scope = source.global_scope;
+    copy->has_field_designator = source.has_field_designator;
+    copy->has_index_designator = source.has_index_designator;
+    copy->field_designator = source.field_designator;
+    copy->index_designator = source.index_designator;
+    copy->parameters = source.parameters;
+    for (const ExprPtr& child : source.children) {
+        copy->children.push_back(child ? clone_expr(*child) : nullptr);
+    }
+    for (const ExprPtr& argument : source.arguments) {
+        copy->arguments.push_back(argument ? clone_expr(*argument) : nullptr);
+    }
+    return copy;
+}
+
 bool is_integer(const TypePtr& type) {
     return type && type->is_integral();
 }
@@ -387,6 +419,7 @@ public:
                 emit_function(*function);
             }
         }
+        emit_globals(true);
         emit_cxx_init();
         emit_tls_runtime();
         emit_rtti();
@@ -497,6 +530,7 @@ private:
         std::string tls_slot_symbol;
         const Expr* initializer = nullptr;
         bool needs_init = false;
+        bool template_static_member = false;
         Access access = Access::Public;
         ClassInfo* owner = nullptr;
     };
@@ -860,7 +894,40 @@ private:
                         }
                     }
                 }
+                for (DeclPtr& child : specialization_decl->children) {
+                    if (!child || child->kind != DeclKind::Variable ||
+                        !child->is_static || child->initializer ||
+                        child->name.parts.empty()) {
+                        continue;
+                    }
+                    const std::string member = child->name.parts.back();
+                    for (const TemplateStaticDefinition& definition :
+                         template_static_definitions_) {
+                        if (definition.owner != template_name ||
+                            definition.member != member ||
+                            definition.pattern.size() !=
+                                named->template_arguments.size()) {
+                            continue;
+                        }
+                        bool matches = true;
+                        for (std::size_t index = 0;
+                             index < definition.pattern.size(); ++index) {
+                            if (mangle_type(definition.pattern[index]) !=
+                                mangle_type(named->template_arguments[index])) {
+                                matches = false;
+                                break;
+                            }
+                        }
+                        if (matches) {
+                            child->initializer =
+                                clone_expr(*definition.decl->initializer);
+                            break;
+                        }
+                    }
+                }
+                in_template_instantiation_ = true;
                 collect_class_members(*existing_specialization->second, key);
+                in_template_instantiation_ = false;
                 layout_class(*raw);
             }
             Name name;
@@ -965,6 +1032,35 @@ private:
                 }
             }
             child_copy->initializer = nullptr;
+            if (child->kind == DeclKind::Variable && child->is_static &&
+                !child->name.parts.empty()) {
+                const std::string member = child->name.parts.back();
+                for (const TemplateStaticDefinition& definition :
+                     template_static_definitions_) {
+                    if (definition.owner != template_name ||
+                        definition.member != member ||
+                        definition.pattern.size() !=
+                            named->template_arguments.size()) {
+                        continue;
+                    }
+                    bool matches = true;
+                    for (std::size_t index = 0;
+                         index < definition.pattern.size(); ++index) {
+                        const TypePtr pattern =
+                            substitute_type(definition.pattern[index], bindings);
+                        if (mangle_type(pattern) !=
+                            mangle_type(named->template_arguments[index])) {
+                            matches = false;
+                            break;
+                        }
+                    }
+                    if (matches) {
+                        child_copy->initializer =
+                            clone_expr(*definition.decl->initializer);
+                        break;
+                    }
+                }
+            }
             child_copy->is_static = child->is_static;
             child_copy->is_virtual = child->is_virtual;
             child_copy->is_override = child->is_override;
@@ -996,7 +1092,9 @@ private:
         info->qualified = key;
         ClassInfo* raw = info.get();
         class_index_[key] = std::move(info);
+        in_template_instantiation_ = true;
         collect_class_members(*clone, key);
+        in_template_instantiation_ = false;
         layout_class(*raw);
         Name name;
         name.parts.push_back(key);
@@ -1370,10 +1468,24 @@ private:
 
     void collect_global(const Decl& declaration, const std::string& prefix) {
         if (declaration.is_template) {
+            if (!declaration.owner_template_arguments.empty() &&
+                declaration.name.parts.size() > 1) {
+                Name owner_name;
+                owner_name.parts.assign(declaration.name.parts.begin(),
+                                        declaration.name.parts.end() - 1);
+                TemplateStaticDefinition definition;
+                definition.owner = qualify(prefix, owner_name);
+                definition.pattern = declaration.owner_template_arguments;
+                definition.member = declaration.name.parts.back();
+                definition.decl = &declaration;
+                template_static_definitions_.push_back(std::move(definition));
+                return;
+            }
             error(declaration, "variable templates are not supported");
             return;
         }
         auto global = std::make_unique<Global>();
+        global->template_static_member = in_template_instantiation_;
         global->decl = &declaration;
         global->qualified = qualify(prefix, declaration.name);
         global->extern_c = declaration.is_extern_c;
@@ -6625,8 +6737,11 @@ private:
         write_constant_scalar(bytes, offset, type, value);
     }
 
-    void emit_globals() {
+    void emit_globals(bool late_template_statics = false) {
         for (const auto& global : global_storage_) {
+            if (global->template_static_member != late_template_statics) {
+                continue;
+            }
             if (!global->defined) {
                 continue;
             }
@@ -6851,6 +6966,14 @@ private:
         const Decl* decl = nullptr;
     };
     std::vector<TemplateMemberDefinition> template_member_definitions_;
+    struct TemplateStaticDefinition {
+        std::string owner;
+        std::vector<TypePtr> pattern;
+        std::string member;
+        const Decl* decl = nullptr;
+    };
+    std::vector<TemplateStaticDefinition> template_static_definitions_;
+    bool in_template_instantiation_ = false;
     std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
