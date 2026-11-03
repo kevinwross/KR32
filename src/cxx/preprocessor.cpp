@@ -572,6 +572,7 @@ private:
                     "void free(void* pointer);\n"
                     "void* calloc(int count, int size);\n"
                     "void* realloc(void* pointer, int size);\n"
+                    "int _heapwalk(void);\n"
                     "int sys_random();\n"
                     "}\n");
                 return;

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 22:06 -08:00
+> **Last updated:** 2026-11-02 22:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1275,6 +1275,12 @@ Newest entries at the bottom. Use the local time zone.
       with cell highlighting, and richer variable tooltips for decimal/signed
       values, characters, strings, pointers, arrays, and aggregates. The
       existing instruction/addressing and FPR hovers remain.
+- **2026-11-02 22:15 -08:00** — Added exported heap accounting globals
+      `heap_allocated_blocks` and `heap_free_blocks` (updated by malloc, split,
+      free, and coalesce) and `_heapwalk()` to validate the physical chain,
+      headers/footers, free-list links, and counts, then resynchronize the
+      counters. Verified the globals in the GUI variables panel and added
+      heapwalk regression coverage; 228 cases / 5359 assertions.
 
 ## 10. Updating this file
 

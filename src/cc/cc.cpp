@@ -318,6 +318,7 @@ std::string preprocess(std::string_view source) {
                         "int printf(const char *format, ...); void *malloc(int size); "
                         "void free(void *pointer); void *calloc(int count, int size); "
                         "void *realloc(void *pointer, int size); "
+                        "int _heapwalk(void); "
                         "void *memcpy(void *destination, const void *source, int count); "
                         "void *memset(void *destination, int value, int count); "
                         "int strlen(const char *text); "

@@ -63,6 +63,29 @@ The allocator is a boundary-tag allocator with address-ordered free lists:
   already-free block; there is no validation of arbitrary pointers.
 - The allocator is not thread-safe; the initial libc layer targets one thread.
 
+The allocator exports two globals for debugger inspection:
+
+- `heap_allocated_blocks` — number of live (allocated) blocks.
+- `heap_free_blocks` — number of blocks currently on the free list.
+
+They are updated on allocation, split, free, and coalesce operations. Both are
+visible in the GUI **VARIABLES** panel and in `kr32 debug` output.
+
+`int _heapwalk(void)` validates the physical block chain and address-ordered
+free list, checks every header/footer and free-list link, then recomputes the
+two counters from the validated blocks. It is declared by `<stdlib.h>` and
+returns:
+
+- `0` — heap is consistent; counters were resynchronized.
+- `1` — heap is unavailable or too small to initialize.
+- `2` — physical block chain/header failure.
+- `3` — block footer mismatch.
+- `4` — free-list link or membership failure.
+- `5` — free-list count does not match the physical free blocks.
+
+It is a detector, not a repair tool: corrupt links are reported, not rewritten.
+Like the allocator, it is not thread-safe.
+
 ## String and memory functions
 
 The runtime provides:

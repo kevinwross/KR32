@@ -49,6 +49,11 @@ int main(void) {
     free(reused);
     
     printf("heap reuse: ok\n");
-    
+    int heap_status = _heapwalk();
+    printf("heap walk=%d\n", heap_status);
+    if (heap_status != 0) {
+        return 3;
+    }
+
     return 0;
 }

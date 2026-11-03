@@ -275,6 +275,24 @@ TEST_CASE("libc malloc reuses and coalesces free blocks") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("libc heapwalk validates block links and free counts") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    char *a = (char *)malloc(64);\n"
+        "    char *b = (char *)malloc(128);\n"
+        "    if (a == 0 || b == 0) return 1;\n"
+        "    free(a);\n"
+        "    char *c = (char *)malloc(32);\n"
+        "    if (c == 0) return 2;\n"
+        "    free(b);\n"
+        "    free(c);\n"
+        "    return _heapwalk();\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("libc printf formats integers and floating-point values") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

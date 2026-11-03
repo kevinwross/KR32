@@ -21,6 +21,10 @@ static unsigned int heap_begin = 0;
 static unsigned int heap_end_address = 0;
 static int heap_ready = 0;
 
+/* Live heap accounting, exported so the debugger can display it. */
+unsigned int heap_allocated_blocks = 0;
+unsigned int heap_free_blocks = 0;
+
 static unsigned int heap_align(unsigned int value, unsigned int alignment) {
     return (value + alignment - 1) & ~(alignment - 1);
 }
@@ -70,12 +74,17 @@ static void heap_init(void) {
     block->prev = 0;
     heap_set_footer(block);
     heap_free_list = block;
+    heap_allocated_blocks = 0;
+    heap_free_blocks = 1;
     heap_ready = 1;
 }
 
 static void heap_remove(struct heap_block *block) {
     struct heap_block *previous = (struct heap_block *)block->prev;
     struct heap_block *next = (struct heap_block *)block->next;
+    if (heap_free_blocks > 0) {
+        heap_free_blocks = heap_free_blocks - 1;
+    }
     if (previous != 0) {
         previous->next = (unsigned int)next;
     } else {
@@ -91,6 +100,7 @@ static void heap_remove(struct heap_block *block) {
 static void heap_insert(struct heap_block *block) {
     struct heap_block *previous = 0;
     struct heap_block *current = heap_free_list;
+    heap_free_blocks = heap_free_blocks + 1;
     while (current != 0 && (unsigned int)current < (unsigned int)block) {
         previous = current;
         current = (struct heap_block *)current->next;
@@ -148,6 +158,7 @@ void *malloc(int size) {
         heap_insert(remainder);
     }
     best->is_free = 0;
+    heap_allocated_blocks = heap_allocated_blocks + 1;
     heap_set_footer(best);
     return (void *)((unsigned int)best + sizeof(struct heap_block));
 }
@@ -162,6 +173,9 @@ void free(void *pointer) {
         return;
     }
     block->is_free = 1;
+    if (heap_allocated_blocks > 0) {
+        heap_allocated_blocks = heap_allocated_blocks - 1;
+    }
 
     struct heap_block *next = heap_next(block);
     if (next != 0 && next->is_free) {
@@ -220,6 +234,102 @@ void *realloc(void *pointer, int size) {
     memcpy(replacement, pointer, (int)old_size);
     free(pointer);
     return replacement;
+}
+
+static int heap_free_list_contains(struct heap_block *target) {
+    struct heap_block *current = heap_free_list;
+    int guard = 0;
+    while (current != 0 && guard < 1000000) {
+        if (current == target) {
+            return 1;
+        }
+        current = (struct heap_block *)current->next;
+        guard = guard + 1;
+    }
+    return 0;
+}
+
+/*
+ * Validate the physical block chain and the address-ordered free list, then
+ * recompute the exported counters. Returns 0 on success, or a small nonzero
+ * diagnostic code. This is a diagnostic, not a repair of corrupt links.
+ */
+int _heapwalk(void) {
+    if (!heap_ready) {
+        heap_init();
+        if (!heap_ready) {
+            return 1;
+        }
+    }
+    unsigned int allocated = 0;
+    unsigned int free_count = 0;
+    unsigned int address = heap_begin;
+    int guard = 0;
+    while (address < heap_end_address) {
+        if (heap_end_address - address < sizeof(struct heap_block)) {
+            return 2;
+        }
+        struct heap_block *block = (struct heap_block *)address;
+        if (block->size < sizeof(struct heap_block) + 12 ||
+            (block->size & 7) != 0 || block->size > heap_end_address - address) {
+            return 2;
+        }
+        if (heap_footer(block) != block->size) {
+            return 3;
+        }
+        if (block->is_free) {
+            free_count = free_count + 1;
+            if (!heap_free_list_contains(block)) {
+                return 4;
+            }
+        } else {
+            allocated = allocated + 1;
+        }
+        address = address + block->size;
+        guard = guard + 1;
+        if (guard > 1000000) {
+            return 2;
+        }
+    }
+    if (address != heap_end_address) {
+        return 2;
+    }
+
+    struct heap_block *current = heap_free_list;
+    unsigned int previous = 0;
+    unsigned int listed = 0;
+    guard = 0;
+    while (current != 0) {
+        const unsigned int block_address = (unsigned int)current;
+        if (block_address < heap_begin ||
+            block_address + sizeof(struct heap_block) > heap_end_address) {
+            return 4;
+        }
+        if (!current->is_free) {
+            return 4;
+        }
+        if (previous != 0 && block_address <= previous) {
+            return 4;
+        }
+        if (current->prev != previous) {
+            return 4;
+        }
+        previous = block_address;
+        listed = listed + 1;
+        current = (struct heap_block *)current->next;
+        guard = guard + 1;
+        if (guard > 1000000) {
+            return 4;
+        }
+    }
+    if (listed != free_count) {
+        return 5;
+    }
+
+    /* The walk is authoritative; resynchronize stale debug counters. */
+    heap_allocated_blocks = allocated;
+    heap_free_blocks = free_count;
+    return 0;
 }
 
 static int out_char(char c) {
