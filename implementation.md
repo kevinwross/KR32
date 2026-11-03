@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 17:54 -08:00
+> **Last updated:** 2026-11-02 17:59 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1255,6 +1255,11 @@ Newest entries at the bottom. Use the local time zone.
       cases / 5317 assertions. Tag `m9` remains at `9707b55`; end-to-end
       ClusterHost-backed GUI/DAP sessions remain open.
 
+- **2026-11-02 17:59 -08:00** — Merged `m9-p0` into `main`. Resolved the
+      handoff/tracker conflicts and combined the live-thread hooks with the
+      UI-enabled main branch. Final gate: 225 unit cases / 5331 assertions;
+      33/33 Windows Debug/Release; 30/30 WSL GCC/Clang/ASan. Remaining work is
+      the GUI/DAP-owned ClusterHost session and P1 feature work.
 
 ## 10. Updating this file
 
