@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:02 -08:00
+> **Last updated:** 2026-11-03 09:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1434,6 +1434,10 @@ Newest entries at the bottom. Use the local time zone.
       the backing array and list object, and overload resolution recognizes
       initializer-list parameters. Sanitized namespaced class-template keys
       for assembler-safe symbols. 274 cases / 5721 assertions.
+- **2026-11-03 09:08 -08:00** — Added `auto values = {1, 2, 3};`
+      initializer-list variables: infer element type, instantiate
+      `std::initializer_list`, materialize the backing array, and copy the
+      list object into the local. 275 cases / 5723 assertions.
 
 ## 10. Updating this file
 

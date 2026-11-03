@@ -4961,6 +4961,20 @@ private:
             push_scope();
         }
         TypePtr type = resolve_type(declaration.type);
+        if (declaration.type && declaration.type->kind == TypeKind::Builtin &&
+            declaration.type->builtin == BuiltinKind::Auto &&
+            declaration.initializer &&
+            declaration.initializer->kind == ExprKind::InitializerList &&
+            !declaration.initializer->children.empty()) {
+            const TypePtr element_type =
+                resolve_type(type_of(*declaration.initializer->children[0]));
+            Name list_name;
+            list_name.parts.push_back("std");
+            list_name.parts.push_back("initializer_list");
+            TypePtr list_type = Type::make_named(list_name);
+            list_type->template_arguments.push_back(element_type);
+            type = resolve_type(list_type);
+        }
         Function* lambda_target = nullptr;
         if (declaration.initializer &&
             declaration.initializer->kind == ExprKind::Lambda) {
@@ -5074,6 +5088,19 @@ private:
             return;
         }
         if (ClassInfo* info = class_of(type)) {
+            if (declaration.initializer &&
+                declaration.initializer->kind == ExprKind::InitializerList &&
+                is_initializer_list_class(info)) {
+                const int object = prepare_initializer_list_argument(
+                    info, type, *declaration.initializer);
+                if (object >= 0) {
+                    emit("    LEA R1, [R7 + " + std::to_string(object) + "]");
+                    emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    MOV R2, #" + std::to_string(info->size));
+                    emit("    CALL memcpy");
+                }
+                return;
+            }
             const std::vector<ExprPtr> empty;
             const std::vector<ExprPtr>* arguments = &empty;
             if (declaration.initializer &&

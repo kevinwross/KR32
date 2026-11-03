@@ -1344,6 +1344,17 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("auto initializer_list variables hold braced values") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "int main() {\n"
+        "    auto values = {1, 2, 3, 4};\n"
+        "    return values.data_[0] + values.data_[3] + values.size_;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 9);
+}
+
 TEST_CASE("initializer_list parameters accept braced arguments") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"
