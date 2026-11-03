@@ -31,9 +31,7 @@ struct Diagnostic {
 // populated: `assembly` for Emit::Assembly or `object` (a `.k32` relocatable
 // object image) for Emit::Object. On failure `ok` is false and `diagnostics`
 // explains why; neither output vector is required to be empty in that case,
-// so callers must check `ok` before using output. Until the object emitter
-// exists, an Emit::Object request fails with a diagnostic rather than
-// returning an empty object.
+// so callers must check `ok` before using output.
 struct Result {
     bool ok = false;
     std::string assembly;

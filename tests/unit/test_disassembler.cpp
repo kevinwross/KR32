@@ -121,6 +121,7 @@ TEST_CASE("the base opcode set round-trips through the assembler and disassemble
         {"PUSH R1\n", "PUSH"},
         {"POP R1\n", "POP"},
         {"ADJSP #4\n", "ADJSP"},
+        {"SETSP R1\n", "SETSP"},
         {"INT #1\n", "INT"},
         {"SYSCALL #2\n", "SYSCALL"},
         {"IRET\n", "IRET"},

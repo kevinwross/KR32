@@ -1,5 +1,6 @@
 #include "doctest.h"
 
+#include "kr32/container/container.h"
 #include "kr32/cxx/abi.h"
 #include "kr32/cxx/cxx.h"
 
@@ -64,6 +65,21 @@ TEST_CASE("compile is callable and a failure explains itself") {
     // carry at least one diagnostic. A successful compile is allowed now and
     // after the front end lands.
     CHECK((result.ok || !result.diagnostics.empty()));
+}
+
+TEST_CASE("object emission returns a readable relocatable image") {
+    kr32::cxx::Options options;
+    options.emit = kr32::cxx::Emit::Object;
+    const kr32::cxx::Result result =
+        kr32::cxx::compile("int answer() { return 42; }", options);
+    REQUIRE(result.ok);
+    REQUIRE_FALSE(result.object.empty());
+    CHECK(result.assembly.empty());
+    kr32::container::Image image;
+    kr32::container::Error error;
+    REQUIRE_MESSAGE(kr32::container::read(result.object, image, error),
+                    error.message);
+    CHECK(image.type == kr32::container::ImageType::Object);
 }
 
 TEST_CASE("API smoke test sees the frozen ABI constants") {

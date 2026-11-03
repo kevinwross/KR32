@@ -286,6 +286,9 @@ std::string format_instruction(const isa::Instruction& instruction,
     case 0x3E:
         out << "ADJSP " << value_text(instruction, true);
         break;
+    case 0x3F:
+        out << "SETSP " << reg(instruction.rs1);
+        break;
     case 0x40:
         out << "INT " << value_text(instruction, true);
         break;

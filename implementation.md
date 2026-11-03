@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 17:23 -08:00
+> **Last updated:** 2026-11-02 17:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1223,6 +1223,11 @@ Newest entries at the bottom. Use the local time zone.
       both front ends now share one freestanding C runtime/libc. The merged tree
       passes the UI-enabled Windows matrix and WSL matrix, and
       `kr32 build examples/hello.cpp --run` returns 42.
+- **2026-11-02 17:36 -08:00** — Post-merge cleanup: fixed the C++ test harness
+      to link the 1 MiB test VM at the matching heap boundary, implemented the
+      public `cxx::Emit::Object` path, decoded `SETSP` in the disassembler, and
+      merged the C/C++ logs and documentation. Full merged gate: 217 unit cases
+      / 5202 assertions; 31/31 Windows CTest; 29/29 WSL CTest.
 
 
 ## 10. Updating this file

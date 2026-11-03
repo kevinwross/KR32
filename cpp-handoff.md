@@ -1,5 +1,11 @@
 # KR32 C++ M9 — Handoff
 
+**Post-merge status:** this branch was merged into `main` as `29942c7` (plus the
+handoff merge). Both C and C++ front ends now share the C runtime/libc. Two P0
+items from §5 were fixed on main after the merge: public `Emit::Object` is
+implemented, and `SETSP` is decoded by the disassembler. The remaining P0 items
+below are still open.
+
 **Status:** M9.1–M9.12 are committed on `m9-cxx`; annotated tag **`m9`** points at
 **`9707b55`** (M9.12). The worktree is clean. `main` was not modified.
 
