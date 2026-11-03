@@ -424,6 +424,9 @@ public:
             }
         }
         emit_globals(true);
+        for (const std::string& function : late_text_functions_) {
+            text_ += function;
+        }
         emit_cxx_init();
         emit_tls_runtime();
         emit_rtti();
@@ -3178,8 +3181,63 @@ private:
         return target;
     }
 
+    int emit_lambda_closure(Function* lambda) {
+        const int offset = allocate_local_bytes(lambda->lambda_closure_size);
+        for (const auto& capture : lambda->lambda_capture_offsets) {
+            Name capture_name;
+            capture_name.parts.push_back(capture.first);
+            Local* source = lookup_local(capture_name);
+            if (source == nullptr) {
+                continue;
+            }
+            if (lambda->lambda_capture_references.find(capture.first) !=
+                lambda->lambda_capture_references.end()) {
+                if (source->is_reference) {
+                    emit("    LOAD R0, [R7 + " + std::to_string(source->offset) + "]");
+                } else {
+                    emit("    LEA R0, [R7 + " + std::to_string(source->offset) + "]");
+                }
+            } else {
+                emit("    LOAD R0, [R7 + " + std::to_string(source->offset) + "]");
+                if (source->type && (source->type->kind == TypeKind::LValueRef ||
+                                     source->type->kind == TypeKind::RValueRef)) {
+                    emit("    LOAD R0, [R0]");
+                }
+            }
+            emit("    STORE R0, [R7 + " +
+                 std::to_string(offset + capture.second) + "]");
+        }
+        emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+        return offset;
+    }
+
     void construct_object_at(ClassInfo* info, int address_temp,
                              const std::vector<ExprPtr>& arguments) {
+        if (info->qualified == "std::thread" && !arguments.empty() &&
+            arguments[0] && arguments[0]->kind == ExprKind::Lambda &&
+            !arguments[0]->text.empty()) {
+            Function* lambda = materialize_lambda(*arguments[0]);
+            (void)emit_lambda_closure(lambda);
+            const int closure_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(closure_temp) + "]");
+            const std::string entry =
+                "__lambda_thread_entry_" + std::to_string(lambda_thread_counter_++);
+            std::string thunk;
+            thunk += ".text\n.align 4\n" + entry + ":\n";
+            thunk += "    PUSH R7\n    ADJSP #-8\n    LEA R7, [SP]\n";
+            thunk += "    CALL " + lambda->symbol + "\n";
+            thunk += "    ADJSP #8\n    POP R7\n";
+            thunk += "    MOV R0, #0\n    SYSCALL #47\n    HALT\n";
+            late_text_functions_.push_back(std::move(thunk));
+            emit("    LEA R0, [" + entry + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(closure_temp) + "]");
+            emit("    MOV R2, #0");
+            emit("    SYSCALL #44");
+            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    STORE R0, [R1]");
+            return;
+        }
         if (info->abstract) {
             error(*info->decl, "cannot instantiate abstract class: " + info->qualified);
             return;
@@ -5896,6 +5954,19 @@ private:
             }
             if (declaration.initializer &&
                 declaration.initializer->kind == ExprKind::Call) {
+                if (info->qualified == "std::thread" &&
+                    !declaration.initializer->arguments.empty() &&
+                    declaration.initializer->arguments[0] &&
+                    declaration.initializer->arguments[0]->kind ==
+                        ExprKind::Lambda &&
+                    !declaration.initializer->arguments[0]->text.empty()) {
+                    construct_object_at(info, local.offset,
+                                        declaration.initializer->arguments);
+                    if (Function* destructor = find_destructor(info)) {
+                        local_destructors_.back().push_back({local.offset, destructor});
+                    }
+                    return;
+                }
                 bool callee_is_class = false;
                 if (!declaration.initializer->children.empty() &&
                     declaration.initializer->children[0]->kind ==
@@ -7202,6 +7273,8 @@ private:
         bool exported = false;
     };
     std::vector<TlsSymbol> tls_symbols_;
+    std::vector<std::string> late_text_functions_;
+    int lambda_thread_counter_ = 0;
     int tls_slot_counter_ = 0;
     bool tls_base_emitted_ = false;
     std::string startup_;

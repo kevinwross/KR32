@@ -1298,6 +1298,18 @@ TEST_CASE("std thread exposes a thread id type") {
     CHECK(current.result == 42);
 }
 
+TEST_CASE("std thread accepts capturing lambda closures") {
+    const cxx::Result compiled = cxx::compile(
+        "#include <thread>\n"
+        "int main() {\n"
+        "    int value = 42;\n"
+        "    std::thread worker([value]() { return value; }, 0);\n"
+        "    worker.join();\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(compiled.ok);
+}
+
 TEST_CASE("std thread accepts function pointers and captureless lambdas") {
     const cxx::Result compiled = cxx::compile(
         "#include <thread>\n"
