@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 15:50 -08:00
+> **Last updated:** 2026-11-03 15:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1622,6 +1622,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 15:50 -08:00** — Constructor selection now scores class
       arguments, so copy constructors are preferred over scalar overloads.
       326 cases / 5855 assertions.
+- **2026-11-03 15:58 -08:00** — Constructor argument scoring unwraps reference
+      parameters, so reference copy constructors are selected correctly. 327
+      cases / 5857 assertions.
 
 ## 10. Updating this file
 

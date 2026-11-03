@@ -2053,6 +2053,7 @@ private:
                                              list_data, list_size)) {
                 return Type::make_pointer(list_data->type->element);
             }
+
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
             }
@@ -4935,6 +4936,7 @@ private:
     }
 
     TypePtr gen_call(const Expr& expression) {
+
         std::string list_method;
         ClassInfo* list_info = nullptr;
         MemberInfo* list_data = nullptr;
@@ -5832,11 +5834,21 @@ private:
                 }
                 int score = 0;
                 for (std::size_t index = 0; index < arguments.size(); ++index) {
-                    const TypePtr parameter =
+                    const TypePtr parameter_raw =
                         resolve_type(constructor->parameters[index]);
-                    const TypePtr argument =
+                    const TypePtr argument_raw =
                         arguments[index] ? resolve_type(type_of(*arguments[index]))
                                          : nullptr;
+                    TypePtr parameter = parameter_raw;
+                    TypePtr argument = argument_raw;
+                    if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                                      parameter->kind == TypeKind::RValueRef)) {
+                        parameter = parameter->element;
+                    }
+                    if (argument && (argument->kind == TypeKind::LValueRef ||
+                                     argument->kind == TypeKind::RValueRef)) {
+                        argument = argument->element;
+                    }
                     ClassInfo* parameter_class = class_of(parameter);
                     ClassInfo* argument_class =
                         argument ? class_of(argument) : nullptr;
