@@ -1467,6 +1467,23 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("trivial byte and short classes use register ABI") {
+    const ProgramResult program = compile_and_run(
+        "struct Byte { char value; };\n"
+        "struct Short { short value; };\n"
+        "Byte make_byte() { Byte object; object.value = 7; return object; }\n"
+        "Short make_short() { Short object; object.value = 35; return object; }\n"
+        "int read_byte(Byte object) { return object.value; }\n"
+        "int read_short(Short object) { return object.value; }\n"
+        "int main() {\n"
+        "    Byte byte = make_byte();\n"
+        "    Short small = make_short();\n"
+        "    return read_byte(byte) + read_short(small);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("trivial four-byte classes return in a register") {
     const ProgramResult program = compile_and_run(
         "struct Small { int value; };\n"

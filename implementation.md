@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 13:16 -08:00
+> **Last updated:** 2026-11-03 13:24 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1569,6 +1569,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 13:16 -08:00** — Trivial four-byte class returns now use a
       register instead of `sret`, with callers materializing the returned
       object locally. 308 cases / 5800 assertions.
+- **2026-11-03 13:24 -08:00** — Extended register-class ABI coverage to
+      one- and two-byte trivial classes; 8-byte aggregates still use the
+      hidden-pointer path. 309 cases / 5802 assertions.
 
 ## 10. Updating this file
 
