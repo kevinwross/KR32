@@ -1570,10 +1570,20 @@ private:
 
     TypePtr type_of(const Expr& expression, bool decay_arrays = true) {
         switch (expression.kind) {
-        case ExprKind::IntegerLiteral:
-            return Type::make_builtin(has_unsigned_suffix(expression.text)
-                                          ? BuiltinKind::UnsignedInt
-                                          : BuiltinKind::Int);
+        case ExprKind::IntegerLiteral: {
+            const bool unsigned_suffix = has_unsigned_suffix(expression.text);
+            if (unsigned_suffix) {
+                return Type::make_builtin(
+                    expression.integer > 2147483647LL
+                        ? BuiltinKind::UnsignedLongLong
+                        : BuiltinKind::UnsignedInt);
+            }
+            return Type::make_builtin(
+                expression.integer > 2147483647LL ||
+                        expression.integer < -2147483648LL
+                    ? BuiltinKind::LongLong
+                    : BuiltinKind::Int);
+        }
         case ExprKind::CharacterLiteral:
             return Type::make_builtin(BuiltinKind::Char);
         case ExprKind::BoolLiteral:
@@ -3351,11 +3361,27 @@ private:
 
     TypePtr gen_expr(const Expr& expression) {
         switch (expression.kind) {
-        case ExprKind::IntegerLiteral:
-            emit("    MOV R0, #" + std::to_string(expression.integer));
-            return Type::make_builtin(has_unsigned_suffix(expression.text)
-                                          ? BuiltinKind::UnsignedInt
-                                          : BuiltinKind::Int);
+        case ExprKind::IntegerLiteral: {
+            const bool unsigned_suffix = has_unsigned_suffix(expression.text);
+            const bool long_long =
+                expression.integer > 2147483647LL ||
+                expression.integer < -2147483648LL;
+            if (long_long) {
+                const std::uint64_t bits =
+                    static_cast<std::uint64_t>(expression.integer);
+                emit("    MOV R0, #" +
+                     std::to_string(static_cast<std::uint32_t>(bits)));
+                emit("    MOV R1, #" +
+                     std::to_string(static_cast<std::uint32_t>(bits >> 32)));
+            } else {
+                emit("    MOV R0, #" + std::to_string(expression.integer));
+            }
+            return Type::make_builtin(
+                unsigned_suffix
+                    ? (long_long ? BuiltinKind::UnsignedLongLong
+                                 : BuiltinKind::UnsignedInt)
+                    : (long_long ? BuiltinKind::LongLong : BuiltinKind::Int));
+        }
         case ExprKind::CharacterLiteral:
         case ExprKind::BoolLiteral:
             emit("    MOV R0, #" + std::to_string(expression.integer));
@@ -3694,9 +3720,32 @@ private:
             return operand_type;
         }
         if (op == "-") {
-            emit("    NEG R0, R0");
+            if (is_long_long(operand_type)) {
+                const std::string no_borrow = new_label("llnoborrow");
+                const std::string borrow_done = new_label("llborrowdone");
+                emit("    MOV R4, R0");
+                emit("    MOV R5, R1");
+                emit("    MOV R0, #0");
+                emit("    MOV R1, #0");
+                emit("    SUB R0, R0, R4");
+                emit("    MOV R6, #0");
+                emit("    JCS " + no_borrow);
+                emit("    MOV R6, #1");
+                emit("    JMP " + borrow_done);
+                emit(no_borrow + ":");
+                emit(borrow_done + ":");
+                emit("    SUB R1, R1, R5");
+                emit("    SUB R1, R1, R6");
+            } else {
+                emit("    NEG R0, R0");
+            }
         } else if (op == "~") {
-            emit("    NOT R0, R0");
+            if (is_long_long(operand_type)) {
+                emit("    NOT R0, R0");
+                emit("    NOT R1, R1");
+            } else {
+                emit("    NOT R0, R0");
+            }
         } else if (op == "!") {
             emit("    CMP R0, #0");
             emit("    MOV R0, #0");
@@ -3854,8 +3903,14 @@ private:
             return Type::make_builtin(BuiltinKind::Bool);
         }
         if (op == "+") {
+            const std::string no_carry = new_label("llnocarry");
             emit("    ADD R0, R0, R4");
+            emit("    MOV R6, #0");
+            emit("    JNC " + no_carry);
+            emit("    MOV R6, #1");
+            emit(no_carry + ":");
             emit("    ADD R1, R1, R5");
+            emit("    ADD R1, R1, R6");
         } else if (op == "-") {
             const std::string no_borrow = new_label("llnoborrow");
             const std::string borrow_done = new_label("llborrowdone");

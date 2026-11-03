@@ -1344,6 +1344,17 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C++ long long literals carry across 64-bit addition") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long positive = 10000000000;\n"
+        "    long long negative = -10000000000;\n"
+        "    return positive + negative == 0 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C++ printf formats long long values") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
