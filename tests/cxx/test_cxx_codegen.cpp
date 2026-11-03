@@ -1344,6 +1344,29 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C++ printf formats long long values") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "int main() {\n"
+        "    long long value = 100000;\n"
+        "    long long big = value * value;\n"
+        "    printf(\"%lld %llx\\n\", big, big);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.output == "10000000000 2540be400\n");
+}
+
+TEST_CASE("C++ long long functions pass and return 64-bit values") {
+    const ProgramResult program = compile_and_run(
+        "long long mul(long long a, long long b) { return a * b; }\n"
+        "int main() {\n"
+        "    return (int)(mul(100000, 100000) / 1000000000);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("C++ long long locals support 64-bit arithmetic") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"

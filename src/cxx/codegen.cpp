@@ -4329,6 +4329,11 @@ private:
                     gen_as_fp(*expression.arguments[index],
                               Type::make_builtin(BuiltinKind::Double));
                     emit("    FSTORE.D F0, [R7 + " + std::to_string(temp) + "]");
+                } else if (is_long_long(argument_type)) {
+                    gen_expr(*expression.arguments[index]);
+                    emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                    emit("    STORE R1, [R7 + " +
+                         std::to_string(temp + 4) + "]");
                 } else {
                     gen_expr(*expression.arguments[index]);
                     emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
@@ -4383,6 +4388,22 @@ private:
                      (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
                      std::to_string(slot.offset) + "]");
                 ++fp_argument;
+            } else if (is_long_long(parameter)) {
+                gen_expr(*expression.arguments[index]);
+                const TypePtr argument_type =
+                    type_of(*expression.arguments[index]);
+                if (!is_long_long(argument_type)) {
+                    emit("    MOV R1, R0");
+                    emit(std::string("    ") +
+                         (is_unsigned_integer(argument_type) ? "SHR" : "SAR") +
+                         " R1, R1, #31");
+                }
+                slot.type = parameter;
+                slot.offset = allocate_local(parameter);
+                emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                emit("    STORE R1, [R7 + " +
+                     std::to_string(slot.offset + 4) + "]");
+                integer_argument += 2;
             } else {
                 gen_expr(*expression.arguments[index]);
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -4426,6 +4447,12 @@ private:
                      std::to_string(fp_register) + ", [R7 + " +
                      std::to_string(slot.offset) + "]");
                 ++fp_register;
+            } else if (is_long_long(slot.type)) {
+                emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
+                     std::to_string(slot.offset) + "]");
+                emit("    LOAD R" + std::to_string(integer_register + 1) +
+                     ", [R7 + " + std::to_string(slot.offset + 4) + "]");
+                integer_register += 2;
             } else {
                 emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
                      std::to_string(slot.offset) + "]");
@@ -5606,6 +5633,30 @@ private:
                 } else {
                     error(parameter.location,
                           "more than eight FP parameters are not supported yet");
+                }
+            } else if (is_long_long(local.type)) {
+                if (integer_argument + 1 < 4) {
+                    if (!saved_integer_arguments.empty()) {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(saved_integer_arguments[
+                                 static_cast<std::size_t>(integer_argument)]) +
+                             "]");
+                        emit("    LOAD R1, [R7 + " +
+                             std::to_string(saved_integer_arguments[
+                                 static_cast<std::size_t>(integer_argument + 1)]) +
+                             "]");
+                    } else {
+                        emit("    MOV R0, R" + std::to_string(integer_argument));
+                        emit("    MOV R1, R" +
+                             std::to_string(integer_argument + 1));
+                    }
+                    emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    STORE R1, [R7 + " +
+                         std::to_string(local.offset + 4) + "]");
+                    integer_argument += 2;
+                } else {
+                    error(parameter.location,
+                          "long long parameter needs two integer registers");
                 }
             } else if (!local.is_reference && class_of(local.type) != nullptr) {
                 if (integer_argument < 4) {

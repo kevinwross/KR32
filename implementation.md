@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:20 -08:00
+> **Last updated:** 2026-11-03 09:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1446,6 +1446,10 @@ Newest entries at the bottom. Use the local time zone.
       pair temporaries, and signed/unsigned divide/remainder through the
       shared libc helpers. Function parameters/returns and `printf` remain
       deferred. 277 cases / 5727 assertions.
+- **2026-11-03 09:27 -08:00** — C++ long-long phase 2: two-register
+      parameters, 64-bit call staging/loading, 64-bit returns, and variadic
+      pair staging so `printf("%lld", ...)` works. Large `long long` literals
+      remain deferred. 279 cases / 5731 assertions.
 
 ## 10. Updating this file
 
