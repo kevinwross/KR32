@@ -98,9 +98,23 @@ T Box<T>::value = 42;
 - Static members are accessible through an instance or as
   `Box<int>::value`
 
+### Non-type template parameters
+
+```cpp
+template <int N>
+class Box {
+public:
+    int size() { return N; }
+};
+```
+
+- Integer literal template arguments
+- Distinct instantiations for distinct values
+- Bound values used inside member function bodies
+
 ## Deferred
 
-- Non-type template parameters
+- Non-type parameters usable as array bounds
 - Nested and multi-level partial-specialization patterns
 - Reference and template-template parameter patterns
 - Function-template explicit specializations

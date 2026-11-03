@@ -311,7 +311,18 @@ private:
                 const BuiltinKind kind = peek().kind == TokenKind::FloatLiteral
                                              ? BuiltinKind::Double
                                              : BuiltinKind::Int;
-                arguments.push_back(Type::make_builtin(kind));
+                TypePtr argument = Type::make_builtin(kind);
+                if (peek().kind == TokenKind::IntegerLiteral ||
+                    peek().kind == TokenKind::CharacterLiteral ||
+                    at("true") || at("false")) {
+                    argument->has_template_integer_value = true;
+                    argument->template_integer_value =
+                        peek().kind == TokenKind::IntegerLiteral ||
+                                peek().kind == TokenKind::CharacterLiteral
+                            ? peek().integer
+                            : (at("true") ? 1 : 0);
+                }
+                arguments.push_back(std::move(argument));
                 advance();
             } else {
                 arguments.push_back(parse_type_id());
@@ -1154,6 +1165,10 @@ private:
                     } else {
                         Specifiers specifiers = parse_specifiers();
                         parameter->type = specifiers.type;
+                        if (parameter->type && parameter->type->kind == TypeKind::Builtin &&
+                            parameter->type->is_integral()) {
+                            parameter->is_non_type_template_parameter = true;
+                        }
                         if (at_identifier()) {
                             parameter->name.parts.push_back(peek().text);
                             advance();

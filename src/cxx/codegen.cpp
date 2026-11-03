@@ -108,7 +108,11 @@ std::string mangle_type(const TypePtr& type) {
         if (type->is_volatile) {
             result += "V";
         }
-        result += mangle_builtin(type->builtin);
+        if (type->has_template_integer_value) {
+            result += "L" + std::to_string(type->template_integer_value) + "E";
+        } else {
+            result += mangle_builtin(type->builtin);
+        }
         return result;
     }
     case TypeKind::Named: {
@@ -556,6 +560,7 @@ private:
         std::vector<Function*> constructors;
         Function* destructor = nullptr;
         std::map<std::string, Global*> static_globals;
+        std::map<std::string, std::int64_t> template_integer_values;
         std::map<std::string, Access> static_access;
         std::set<std::string> friend_classes;
         std::vector<Function*> vtable;
@@ -1090,6 +1095,19 @@ private:
         auto info = std::make_unique<ClassInfo>();
         info->decl = clone.get();
         info->qualified = key;
+        for (std::size_t index = 0;
+             index < source->template_parameters.size() &&
+             index < named->template_arguments.size();
+             ++index) {
+            const DeclPtr& parameter = source->template_parameters[index];
+            const TypePtr& argument = named->template_arguments[index];
+            if (parameter && parameter->is_non_type_template_parameter &&
+                argument && argument->has_template_integer_value &&
+                !parameter->name.parts.empty()) {
+                info->template_integer_values[parameter->name.parts[0]] =
+                    argument->template_integer_value;
+            }
+        }
         ClassInfo* raw = info.get();
         class_index_[key] = std::move(info);
         in_template_instantiation_ = true;
@@ -1894,6 +1912,11 @@ private:
                 return type;
             }
             if (current_class_ != nullptr && expression.name.parts.size() == 1) {
+                const auto integer_value = current_class_->template_integer_values.find(
+                    expression.name.parts[0]);
+                if (integer_value != current_class_->template_integer_values.end()) {
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
                 if (MemberInfo* member =
                         find_member(current_class_, expression.name.parts[0])) {
                     return member->type;
@@ -3779,6 +3802,13 @@ private:
                 return type;
             }
             if (current_class_ != nullptr && expression.name.parts.size() == 1) {
+                const auto integer_value = current_class_->template_integer_values.find(
+                    expression.name.parts[0]);
+                if (integer_value != current_class_->template_integer_values.end()) {
+                    emit("    MOV R0, #" +
+                         std::to_string(integer_value->second));
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
                 if (MemberInfo* member =
                         find_member(current_class_, expression.name.parts[0])) {
                     gen_address(expression);

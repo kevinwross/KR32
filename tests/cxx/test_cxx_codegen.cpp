@@ -1421,6 +1421,22 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("non-type template parameters bind integer arguments") {
+    const ProgramResult program = compile_and_run(
+        "template <int N> class Box {\n"
+        "public:\n"
+        "    int value;\n"
+        "    int size() { return N; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Box<7> seven;\n"
+        "    Box<9> nine;\n"
+        "    return seven.size() * 10 + nine.size();\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 79);
+}
+
 TEST_CASE("class template static data members use their definition initializer") {
     const ProgramResult program = compile_and_run(
         "template <typename T> class Box {\n"

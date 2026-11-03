@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 11:00 -08:00
+> **Last updated:** 2026-11-03 11:07 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1506,6 +1506,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 11:00 -08:00** — Added scope-qualified access to
       class-template static data (`Box<int>::value`) by resolving template
       arguments in expression names. 291 cases / 5761 assertions.
+- **2026-11-03 11:07 -08:00** — Added integer non-type template
+      parameters for class templates, including value-aware mangling and
+      bound-constant lookup inside member bodies. 292 cases / 5763
+      assertions.
 
 ## 10. Updating this file
 

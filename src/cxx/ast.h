@@ -65,6 +65,8 @@ struct Type {
     bool is_const = false;
     bool is_volatile = false;
     bool is_noexcept = false;
+    bool has_template_integer_value = false;
+    std::int64_t template_integer_value = 0;
 
     [[nodiscard]] bool is_builtin(BuiltinKind value) const {
         return kind == TypeKind::Builtin && builtin == value;
@@ -238,6 +240,7 @@ struct Decl {
     std::vector<DeclPtr> template_parameters;
     std::vector<TypePtr> specialization_arguments;
     std::vector<TypePtr> owner_template_arguments;
+    bool is_non_type_template_parameter = false;
     std::vector<Initializer> initializers; // constructor base/member init list
     std::vector<Name> base_names;          // class bases
     std::vector<EnumMember> enum_members;

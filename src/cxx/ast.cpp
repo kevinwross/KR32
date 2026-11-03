@@ -118,6 +118,8 @@ TypePtr Type::clone() const {
     result->is_const = is_const;
     result->is_volatile = is_volatile;
     result->is_noexcept = is_noexcept;
+    result->has_template_integer_value = has_template_integer_value;
+    result->template_integer_value = template_integer_value;
     result->element = element ? element->clone() : nullptr;
     result->parameters.reserve(parameters.size());
     for (const TypePtr& parameter : parameters) {
