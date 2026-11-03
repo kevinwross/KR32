@@ -2382,6 +2382,60 @@ private:
         } else if (op == "^") {
             emit("    XOR R0, R0, R4");
             emit("    XOR R1, R1, R5");
+        } else if (op == "*") {
+            emit("    MUL R6, R0, R4");
+            emit("    MULHU R8, R0, R4");
+            emit("    MUL R9, R0, R5");
+            emit("    MUL R10, R1, R4");
+            emit("    ADD R8, R8, R9");
+            emit("    ADD R8, R8, R10");
+            emit("    MOV R0, R6");
+            emit("    MOV R1, R8");
+        } else if (op == "<<" || op == ">>") {
+            const std::string zero = new_label("llshift0");
+            const std::string wide = new_label("llshiftwide");
+            const std::string done = new_label("llshiftdone");
+            emit("    CMP R4, #0");
+            emit("    JZ " + zero);
+            emit("    CMP R4, #32");
+            emit("    JCS " + wide);
+            emit("    MOV R6, R0");
+            if (op == "<<") {
+                emit("    SHL R0, R0, R4");
+                emit("    SHL R1, R1, R4");
+                emit("    MOV R8, #32");
+                emit("    SUB R8, R8, R4");
+                emit("    SHR R6, R6, R8");
+                emit("    OR R1, R1, R6");
+            } else if (unsigned_operation) {
+                emit("    SHR R0, R0, R4");
+                emit("    SHL R6, R1, R4");
+                emit("    OR R0, R0, R6");
+                emit("    SHR R1, R1, R4");
+            } else {
+                emit("    SHR R0, R0, R4");
+                emit("    SHL R6, R1, R4");
+                emit("    OR R0, R0, R6");
+                emit("    SAR R1, R1, R4");
+            }
+            emit("    JMP " + done);
+            emit(wide + ":");
+            emit("    SUB R8, R4, #32");
+            if (op == "<<") {
+                emit("    MOV R1, R0");
+                emit("    SHL R1, R1, R8");
+                emit("    MOV R0, #0");
+            } else if (unsigned_operation) {
+                emit("    SHR R0, R1, R8");
+                emit("    MOV R1, #0");
+            } else {
+                emit("    SAR R0, R1, R8");
+                emit("    MOV R1, R1");
+                emit("    SAR R1, R1, #31");
+            }
+            emit("    JMP " + done);
+            emit(zero + ":");
+            emit(done + ":");
         } else if (op == "==" || op == "!=" || op == "<" || op == "<=" ||
                    op == ">" || op == ">=") {
             const std::string true_label = new_label("lltrue");

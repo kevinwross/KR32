@@ -385,7 +385,11 @@ TEST_CASE("C long long stores 64-bit values and carries") {
         "    long long a = 4294967295;\n"
         "    long long b = a + 1;\n"
         "    long long c = b + 4294967295;\n"
+        "    long long d = (b * 3) >> 32;\n"
+        "    long long e = 1;\n"
+        "    e = e << 33;\n"
         "    return b == 4294967296 && c == 8589934591 &&\n"
+        "                   d == 3 && e == 8589934592 &&\n"
         "                   global == 5 && sizeof(long long) == 8\n"
         "               ? 42 : 0;\n"
         "}\n");
