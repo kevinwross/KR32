@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 16:22 -08:00
+> **Last updated:** 2026-11-03 16:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1634,6 +1634,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 16:22 -08:00** — Covered empty braced initializer lists for
       constructors and functions returning `std::initializer_list`. 331 cases
       / 5865 assertions.
+- **2026-11-03 16:30 -08:00** — Added `std::thread::release`/`adopt` for
+      explicit handle transfer, with cluster runtime coverage of the moved
+      worker. 332 cases / 5871 assertions.
 
 ## 10. Updating this file
 

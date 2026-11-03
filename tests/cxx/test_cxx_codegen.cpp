@@ -1446,6 +1446,38 @@ TEST_CASE("captureless lambda thread runs on a cluster") {
     CHECK(host.cluster().core(1).exit_code() == 42);
 }
 
+TEST_CASE("thread handles transfer with release and adopt") {
+    container::Image image;
+    std::string error;
+    REQUIRE(build_cluster_image(
+        "#include <thread>\n"
+        "int main() {\n"
+        "    std::thread first([](int value) {\n"
+        "        (void)__builtin_kr32_syscall(47, value, 0, 0);\n"
+        "    }, 42);\n"
+        "    std::thread second;\n"
+        "    second.adopt(first.release());\n"
+        "    second.join();\n"
+        "    return first.joinable() ? 1 : 0;\n"
+        "}\n",
+        image, error));
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    REQUIRE(host.load_image(image, error));
+    host.start(image.entry);
+    for (int step = 0; step < 2000000; ++step) {
+        if (host.cluster().core(0).halted() &&
+            host.cluster().core(1).halted()) {
+            break;
+        }
+        (void)host.step();
+    }
+    CHECK(host.cluster().core(0).halted());
+    CHECK(host.cluster().core(0).exit_code() == 0);
+    CHECK(host.cluster().core(1).halted());
+    CHECK(host.cluster().core(1).exit_code() == 42);
+}
+
 TEST_CASE("detached thread runs to completion on a cluster") {
     container::Image image;
     std::string error;
