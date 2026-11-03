@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 08:04 -08:00
+> **Last updated:** 2026-11-03 08:21 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1403,6 +1403,11 @@ Newest entries at the bottom. Use the local time zone.
       left/right shifts with signed arithmetic right shift. Added
       `MULH`/`MULHU` to the object assembler. Divide/modulo and long-long
       calls remain deferred. 267 cases / 5659 assertions.
+- **2026-11-03 08:21 -08:00** — Long-long phase 3: 64-bit function
+      parameters consume two integer registers, calls stage/load both
+      halves, and 64-bit returns preserve `R0`/`R1`. Added C regression for
+      passing and returning `long long`. Divide/modulo and `printf` support
+      remain deferred. 268 cases / 5673 assertions.
 
 ## 10. Updating this file
 

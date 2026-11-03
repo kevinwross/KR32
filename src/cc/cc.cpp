@@ -1599,14 +1599,6 @@ private:
         }
 
         auto found = functions_.find(name);
-        if (is_long_long_type(result_type)) {
-            error("long long function returns are not supported yet");
-        }
-        for (const TypePtr& parameter : parameters) {
-            if (is_long_long_type(parameter)) {
-                error("long long function parameters are not supported yet");
-            }
-        }
         if (found == functions_.end()) {
             functions_.emplace(
                 name, FunctionSignature{name, result_type, parameters, variadic, false});
@@ -1650,9 +1642,19 @@ private:
                      " F" + std::to_string(fp_register) + ", [R7 + " +
                      std::to_string(offset) + "]");
                 ++fp_register;
+            } else if (is_long_long_type(parameters[index])) {
+                if (integer_register + 1 < 4) {
+                    emit("    STORE R" + std::to_string(integer_register) +
+                         ", [R7 + " + std::to_string(offset) + "]");
+                    emit("    STORE R" + std::to_string(integer_register + 1) +
+                         ", [R7 + " + std::to_string(offset + 4) + "]");
+                    integer_register += 2;
+                } else {
+                    error("long long parameter needs two integer registers");
+                }
             } else {
-                emit("    STORE R" + std::to_string(integer_register) + ", [R7 + " +
-                     std::to_string(offset) + "]");
+                emit("    STORE R" + std::to_string(integer_register) +
+                     ", [R7 + " + std::to_string(offset) + "]");
                 ++integer_register;
             }
             debug_type(parameters[index]);
@@ -1668,6 +1670,9 @@ private:
         } else if (result_type->kind == Type::Kind::Double) {
             emit("    MOV R0, #0");
             emit("    FCVT.D.W F0, R0");
+        } else if (is_long_long_type(result_type)) {
+            emit("    MOV R0, #0");
+            emit("    MOV R1, #0");
         } else {
             emit("    MOV R0, #0");
         }
@@ -3414,6 +3419,10 @@ private:
                             emit(std::string("    FSTORE") +
                                  (target->kind == Type::Kind::Double ? ".D" : ".W") +
                                  " F0, [R7 + " + std::to_string(slot) + "]");
+                        } else if (is_long_long_type(target)) {
+                            emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                            emit("    STORE R1, [R7 + " +
+                                 std::to_string(slot + 4) + "]");
                         } else {
                             emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
                         }
@@ -3455,9 +3464,20 @@ private:
                              " F" + std::to_string(fp_register) + ", [R7 + " +
                              std::to_string(slots[index]) + "]");
                         ++fp_register;
+                    } else if (is_long_long_type(target_types[index])) {
+                        if (integer_register + 1 >= 4) {
+                            error("long long argument needs two integer registers");
+                        } else {
+                            emit("    LOAD R" + std::to_string(integer_register) +
+                                 ", [R7 + " + std::to_string(slots[index]) + "]");
+                            emit("    LOAD R" +
+                                 std::to_string(integer_register + 1) + ", [R7 + " +
+                                 std::to_string(slots[index] + 4) + "]");
+                            integer_register += 2;
+                        }
                     } else {
-                        emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
-                             std::to_string(slots[index]) + "]");
+                        emit("    LOAD R" + std::to_string(integer_register) +
+                             ", [R7 + " + std::to_string(slots[index]) + "]");
                         ++integer_register;
                     }
                 }

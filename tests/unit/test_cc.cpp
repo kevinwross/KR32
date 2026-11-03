@@ -397,6 +397,17 @@ TEST_CASE("C long long stores 64-bit values and carries") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("C long long functions pass and return 64-bit values") {
+    const ProgramResult program = compile_and_run(
+        "long long add_one(long long value) { return value + 1; }\n"
+        "int main(void) {\n"
+        "    long long value = 4294967295;\n"
+        "    return add_one(value) == 4294967296 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C supports nested designated initializers") {
     const ProgramResult program = compile_and_run(
         "struct Inner { int x; int y; };\n"
