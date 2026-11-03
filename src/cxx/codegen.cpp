@@ -5099,6 +5099,84 @@ private:
         bss_ += "__kr32_atexit_args:\n    .space 64\n";
     }
 
+    void write_constant_scalar(std::vector<std::uint8_t>& bytes, int offset,
+                               const TypePtr& type, std::int64_t value) {
+        const int size = std::max(1, type_size(type));
+        for (int index = 0; index < size && offset + index < static_cast<int>(bytes.size());
+             ++index) {
+            bytes[static_cast<std::size_t>(offset + index)] =
+                static_cast<std::uint8_t>((static_cast<std::uint64_t>(value) >>
+                                           (index * 8)) &
+                                          0xFFU);
+        }
+    }
+
+    void emit_constant_object(const TypePtr& type, const Expr& initializer,
+                              std::vector<std::uint8_t>& bytes, int offset) {
+        if (type->kind == TypeKind::Array && type->element &&
+            type->element->kind == TypeKind::Builtin &&
+            type->element->builtin == BuiltinKind::Char &&
+            initializer.kind == ExprKind::StringLiteral) {
+            const int limit = std::min(static_cast<int>(type->array_size),
+                                       static_cast<int>(initializer.text.size() + 1));
+            for (int index = 0; index < limit; ++index) {
+                bytes[static_cast<std::size_t>(offset + index)] =
+                    index < static_cast<int>(initializer.text.size())
+                        ? static_cast<std::uint8_t>(
+                              initializer.text[static_cast<std::size_t>(index)])
+                        : 0;
+            }
+            return;
+        }
+        if (type->kind == TypeKind::Array) {
+            const int element_size = type_size(type->element);
+            std::size_t index = 0;
+            for (const ExprPtr& element : initializer.children) {
+                if (index >= type->array_size || !element) {
+                    break;
+                }
+                emit_constant_object(type->element, *element, bytes,
+                                     offset + static_cast<int>(index) * element_size);
+                ++index;
+            }
+            return;
+        }
+        if (ClassInfo* info = class_of(type)) {
+            std::size_t index = 0;
+            for (const MemberInfo& member : info->members) {
+                if (index >= initializer.children.size()) {
+                    break;
+                }
+                if (initializer.children[index]) {
+                    emit_constant_object(member.type, *initializer.children[index], bytes,
+                                         offset + member.offset);
+                }
+                ++index;
+            }
+            return;
+        }
+        if (is_fp(type)) {
+            double value = 0.0;
+            if (!eval_const_fp(initializer, value)) {
+                error(initializer.location, "global initializer must be constant");
+                return;
+            }
+            if (is_float32(type)) {
+                const float narrow = static_cast<float>(value);
+                std::memcpy(bytes.data() + offset, &narrow, sizeof(narrow));
+            } else {
+                std::memcpy(bytes.data() + offset, &value, sizeof(value));
+            }
+            return;
+        }
+        std::int64_t value = 0;
+        if (!eval_const(initializer, value)) {
+            error(initializer.location, "global initializer must be constant");
+            return;
+        }
+        write_constant_scalar(bytes, offset, type, value);
+    }
+
     void emit_globals() {
         for (const auto& global : global_storage_) {
             if (!global->defined) {
@@ -5157,6 +5235,21 @@ private:
             output += ".global " + global->symbol + "\n";
             output += global->symbol + ":\n";
             if (ClassInfo* info = class_of(global->type)) {
+                if (global->initializer &&
+                    global->initializer->kind == ExprKind::InitializerList &&
+                    find_constructor(info, global->initializer->children.size()) == nullptr) {
+                    std::vector<std::uint8_t> bytes(
+                        static_cast<std::size_t>(std::max(1, size)), 0);
+                    emit_constant_object(global->type, *global->initializer, bytes, 0);
+                    std::string image = ".align " +
+                                        std::to_string(std::max(1, type_align(global->type))) +
+                                        "\n" + output;
+                    for (std::uint8_t byte : bytes) {
+                        image += "    .byte " + std::to_string(byte) + "\n";
+                    }
+                    data_ += image;
+                    continue;
+                }
                 if (find_destructor(info) != nullptr) {
                     static_destructors_.push_back(global.get());
                 }
@@ -5166,6 +5259,21 @@ private:
                     bss_ += output;
                     continue;
                 }
+            }
+            if (global->initializer && global->type &&
+                global->type->kind == TypeKind::Array &&
+                global->initializer->kind == ExprKind::InitializerList) {
+                std::vector<std::uint8_t> bytes(
+                    static_cast<std::size_t>(std::max(1, size)), 0);
+                emit_constant_object(global->type, *global->initializer, bytes, 0);
+                std::string image = ".align " +
+                                    std::to_string(std::max(1, type_align(global->type))) +
+                                    "\n" + output;
+                for (std::uint8_t byte : bytes) {
+                    image += "    .byte " + std::to_string(byte) + "\n";
+                }
+                data_ += image;
+                continue;
             }
             if (global->initializer && !is_constant_global(*global)) {
                 global->needs_init = true;

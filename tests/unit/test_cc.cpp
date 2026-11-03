@@ -362,6 +362,22 @@ TEST_CASE("C supports multidimensional arrays") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C supports global aggregate and array initializers") {
+    const ProgramResult program = compile_and_run(
+        "struct P { int x; int y; char c; };\n"
+        "int a[3] = {1, 2, 3};\n"
+        "int m[2][2] = {{4, 5}, {6, 7}};\n"
+        "struct P p = {10, 20, 'Z'};\n"
+        "char text[4] = \"hey\";\n"
+        "int b[4] = {9};\n"
+        "int main(void) {\n"
+        "    return a[0] + a[2] + m[0][1] + m[1][0] + p.x + p.y + p.c +\n"
+        "           b[0] + b[3] + text[0];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 248);
+}
+
 TEST_CASE("C supports aggregate and nested array initializers") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; char c; };\n"

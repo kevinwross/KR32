@@ -1180,6 +1180,19 @@ TEST_CASE("C++ access control rejects private members and allows class internals
     CHECK(protected_access.result == 1);
 }
 
+TEST_CASE("C++ global aggregate initializers are constant data") {
+    const ProgramResult program = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "int a[2][2] = {{1, 2}, {3, 4}};\n"
+        "P p = {11, 22};\n"
+        "int b[3] = {5};\n"
+        "int main() {\n"
+        "    return a[0][0] + a[0][1] + a[1][0] + a[1][1] + b[0] + b[2] + p.x + p.y;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 48);
+}
+
 TEST_CASE("C++ aggregate and nested array initializers run") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; };\n"

@@ -1312,13 +1312,114 @@ private:
         parse_global(type, name);
     }
 
+    void write_global_scalar(std::vector<std::uint8_t>& bytes, int offset,
+                             const TypePtr& type, std::uint64_t value) {
+        const int size = type->size();
+        for (int index = 0; index < size && offset + index < static_cast<int>(bytes.size());
+             ++index) {
+            bytes[static_cast<std::size_t>(offset + index)] =
+                static_cast<std::uint8_t>((value >> (index * 8)) & 0xFFU);
+        }
+    }
+
+    void parse_global_scalar(const TypePtr& type, std::vector<std::uint8_t>& bytes,
+                             int offset) {
+        if (peek().kind == TokenKind::Float) {
+            const Token token = take();
+            if (type->kind != Type::Kind::Float && type->kind != Type::Kind::Double) {
+                error("floating-point initializer requires a float or double");
+            }
+            const std::uint64_t bits =
+                type->kind == Type::Kind::Float
+                    ? static_cast<std::uint64_t>(
+                          std::bit_cast<std::uint32_t>(static_cast<float>(token.real)))
+                    : std::bit_cast<std::uint64_t>(token.real);
+            write_global_scalar(bytes, offset, type, bits);
+            return;
+        }
+        const std::int64_t value = parse_constant_value();
+        write_global_scalar(bytes, offset, type, static_cast<std::uint64_t>(value));
+    }
+
+    void parse_global_initializer(const TypePtr& type, std::vector<std::uint8_t>& bytes,
+                                  int offset) {
+        if (type->kind == Type::Kind::Array && type->base &&
+            type->base->kind == Type::Kind::Char && peek().kind == TokenKind::String) {
+            const std::string text = take().text;
+            const int limit = std::min(type->count, static_cast<int>(text.size() + 1));
+            for (int index = 0; index < limit; ++index) {
+                bytes[static_cast<std::size_t>(offset + index)] =
+                    index < static_cast<int>(text.size())
+                        ? static_cast<std::uint8_t>(text[static_cast<std::size_t>(index)])
+                        : 0;
+            }
+            return;
+        }
+        if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
+            type->kind == Type::Kind::Union) {
+            expect("{");
+            if (type->kind == Type::Kind::Array) {
+                int index = 0;
+                const int element_size = type->base ? type->base->size() : 1;
+                while (!match("}")) {
+                    if (index >= type->count) {
+                        error("too many array initializer elements");
+                    }
+                    parse_global_initializer(type->base, bytes,
+                                             offset + index * element_size);
+                    ++index;
+                    if (!match(",")) {
+                        expect("}");
+                        break;
+                    }
+                }
+                return;
+            }
+            if (type->kind == Type::Kind::Union) {
+                if (!type->members.empty()) {
+                    parse_global_initializer(type->members.front().type, bytes,
+                                             offset + type->members.front().offset);
+                }
+                while (!match("}")) {
+                    parse_constant_value();
+                    if (!match(",")) expect("}");
+                }
+                return;
+            }
+            std::size_t index = 0;
+            while (!match("}")) {
+                if (index >= type->members.size()) {
+                    error("too many struct initializer elements");
+                }
+                parse_global_initializer(type->members[index].type, bytes,
+                                         offset + type->members[index].offset);
+                ++index;
+                if (!match(",")) {
+                    expect("}");
+                    break;
+                }
+            }
+            return;
+        }
+        parse_global_scalar(type, bytes, offset);
+    }
+
     void parse_global(const TypePtr& type, const std::string& name) {
         TypePtr actual = parse_array_suffix(type);
         if (match("=")) {
-            if (actual->kind == Type::Kind::Array) {
-                error("array initializers are not supported yet");
-            }
-            if (peek().kind == TokenKind::Float) {
+            if (actual->kind == Type::Kind::Array ||
+                actual->kind == Type::Kind::Struct ||
+                actual->kind == Type::Kind::Union) {
+                std::vector<std::uint8_t> bytes(
+                    static_cast<std::size_t>(std::max(1, actual->size())), 0);
+                parse_global_initializer(actual, bytes, 0);
+                expect(";");
+                data_ += ".align " + std::to_string(std::max(1, actual->alignment())) + "\n";
+                data_ += ".global " + name + "\n" + name + ":\n";
+                for (std::uint8_t byte : bytes) {
+                    data_ += "    .byte " + std::to_string(byte) + "\n";
+                }
+            } else if (peek().kind == TokenKind::Float) {
                 const Token token = take();
                 if (actual->kind != Type::Kind::Float &&
                     actual->kind != Type::Kind::Double) {

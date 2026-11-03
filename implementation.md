@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 23:25 -08:00
+> **Last updated:** 2026-11-02 23:32 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1309,6 +1309,11 @@ Newest entries at the bottom. Use the local time zone.
       access. Private/protected violations now produce diagnostics instead
       of silently compiling. Friends and static-member access remain
       next-stage work. 246 cases / 5536 assertions.
+- **2026-11-02 23:32 -08:00** — Added global aggregate and array
+      initializers for C and C++: nested arrays, structs, string-initialized
+      char arrays, and zero-filled tails. Designated initializers and
+      non-constant global initializers remain next-stage work.
+      248 cases / 5552 assertions.
 
 ## 10. Updating this file
 

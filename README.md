@@ -11,12 +11,12 @@ checklists, dependency notes, test gates, and running log are in
 **Status:** M9 complete (2026-11-02). The C and C++ front ends coexist in the
 same `kr32` executable and share one freestanding libc/runtime. The C compiler
 supports integer, `unsigned int`/`unsigned char`, `long` (32-bit), `float`, and
-`double` scalars with FP calls, expressions, multidimensional arrays, aggregate
-and array initializers, compound assignment, `++`/`--`, conditional expressions,
+`double` scalars with FP calls, expressions, multidimensional arrays, global and
+local aggregate/array initializers, compound assignment, `++`/`--`, conditional expressions,
 `do`-`while`, and switch statements. The C++ subset covers classes,
 inheritance, virtual dispatch/RTTI, templates, matrices, exceptions/unwinding,
 `new`/`delete`, threads/TLS/atomics, conditional expressions, switch statements,
-aggregate initializers, access control, range-based `for`, `goto`/labels, and
+global and local aggregate initializers, access control, range-based `for`, `goto`/labels, and
 C++ debug records. A freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
 (`sizeof`, `offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC
