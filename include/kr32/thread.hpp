@@ -49,9 +49,63 @@ struct mutex {
             futex_wait(&state, 1);
         }
     }
+    bool try_lock() {
+        int expected = 0;
+        return __atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0);
+    }
     void unlock() {
         __atomic_store_n(&state, 0, 0);
         futex_wake(&state, 1);
+    }
+};
+
+struct recursive_mutex {
+    int state;
+    int owner;
+    int count;
+    recursive_mutex() {
+        state = 0;
+        owner = 0;
+        count = 0;
+    }
+    void lock() {
+        const int self = thread_self();
+        if (owner == self) {
+            count = count + 1;
+            return;
+        }
+        int expected = 0;
+        while (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) {
+            expected = 0;
+            futex_wait(&state, 1);
+        }
+        owner = self;
+        count = 1;
+    }
+    bool try_lock() {
+        const int self = thread_self();
+        if (owner == self) {
+            count = count + 1;
+            return true;
+        }
+        int expected = 0;
+        if (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) {
+            return false;
+        }
+        owner = self;
+        count = 1;
+        return true;
+    }
+    void unlock() {
+        if (owner != thread_self()) {
+            return;
+        }
+        count = count - 1;
+        if (count == 0) {
+            owner = 0;
+            __atomic_store_n(&state, 0, 0);
+            futex_wake(&state, 1);
+        }
     }
 };
 
@@ -82,6 +136,7 @@ struct thread {
         handle = thread_create((int)entry, arg, 0);
     }
     bool joinable() { return handle != 0; }
+    static int hardware_concurrency() { return 1; }
     void join() {
         if (handle != 0) {
             thread_join(handle);
@@ -103,12 +158,14 @@ namespace std {
 typedef kr32::atomic_int atomic_int;
 typedef kr32::condition_variable condition_variable;
 typedef kr32::mutex mutex;
+typedef kr32::recursive_mutex recursive_mutex;
 struct thread {
     int handle;
     thread() { handle = 0; }
     thread(int entry, int arg) { handle = kr32::thread_create(entry, arg, 0); }
     thread(void* entry, int arg) { handle = kr32::thread_create((int)entry, arg, 0); }
     bool joinable() { return handle != 0; }
+    static int hardware_concurrency() { return 1; }
     void join() {
         if (handle != 0) {
             kr32::thread_join(handle);

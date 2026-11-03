@@ -1235,6 +1235,25 @@ TEST_CASE("std thread accepts function pointers and captureless lambdas") {
     CHECK(compiled.ok);
 }
 
+TEST_CASE("mutex try_lock, recursive_mutex, and hardware_concurrency run") {
+    const ProgramResult program = compile_and_run(
+        "#include <mutex>\n"
+        "#include <thread>\n"
+        "int main() {\n"
+        "    std::mutex guard;\n"
+        "    if (!guard.try_lock()) return 1;\n"
+        "    guard.unlock();\n"
+        "    std::recursive_mutex recursive;\n"
+        "    recursive.lock();\n"
+        "    recursive.lock();\n"
+        "    recursive.unlock();\n"
+        "    recursive.unlock();\n"
+        "    return std::thread::hardware_concurrency() > 0 ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std thread, mutex, and condition_variable surface compiles") {
     const ProgramResult program = compile_and_run(
         "#include <thread>\n"
