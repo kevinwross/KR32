@@ -11,7 +11,7 @@ checklists, dependency notes, test gates, and running log are in
 **Status:** M9 complete (2026-11-02). The C and C++ front ends coexist in the
 same `kr32` executable and share one freestanding libc/runtime. The C compiler
 supports integer, `short`/`unsigned short`, `unsigned int`/`unsigned char`,
-`long` (32-bit), `long long` (64-bit storage/arithmetic/functions and unsigned divide/modulo), `float`, and
+`long` (32-bit), `long long` (64-bit storage/arithmetic/functions and divide/modulo), `float`, and
 `double` scalars with FP calls, expressions, multidimensional arrays, global and
 local aggregate/array initializers, designated initializers, compound
 assignment, `++`/`--`, conditional

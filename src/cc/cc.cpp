@@ -2397,9 +2397,6 @@ private:
             emit("    MOV R0, R6");
             emit("    MOV R1, R12");
         } else if (op == "/" || op == "%") {
-            if (!unsigned_operation) {
-                error("signed long long division is not supported yet");
-            }
             emit("    MOV R2, R4");
             emit("    MOV R3, R5");
             const std::string helper =
@@ -2457,7 +2454,7 @@ private:
             const std::string true_label = new_label("lltrue");
             const std::string false_label = new_label("llfalse");
             const std::string done = new_label("lldone");
-            emit("    CMP R1, R3");
+            emit("    CMP R1, R5");
             if (op == "==" || op == "!=") {
                 emit("    JNZ " + false_label);
                 emit("    CMP R0, R4");

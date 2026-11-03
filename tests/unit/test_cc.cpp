@@ -418,6 +418,18 @@ TEST_CASE("C unsigned long long divides and takes remainders") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("C signed long long divides and takes signed remainders") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    long long value = -7;\n"
+        "    long long quotient = value / 2;\n"
+        "    long long remainder = value % 2;\n"
+        "    return quotient == -3 && remainder == -1 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C supports nested designated initializers") {
     const ProgramResult program = compile_and_run(
         "struct Inner { int x; int y; };\n"
