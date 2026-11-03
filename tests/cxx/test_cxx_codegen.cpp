@@ -889,6 +889,20 @@ TEST_CASE("function-local statics initialize once behind a guard") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("C++ long long converts to floating point") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long positive = 10000000000;\n"
+        "    long long negative = -10000000000;\n"
+        "    double p = (double)positive;\n"
+        "    double n = (double)negative;\n"
+        "    return (int)(p / 1000000000.0) == 10 &&\n"
+        "           (int)(n / 1000000000.0) == -10 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C++ long long casts extend and wide shifts work") {
     const ProgramResult cast_program = compile_and_run(
         "int main() {\n"

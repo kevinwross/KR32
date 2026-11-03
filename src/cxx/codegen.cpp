@@ -4035,7 +4035,19 @@ private:
             }
             const TypePtr source = type_of(*expression.children[0]);
             gen_expr(*expression.children[0]);
-            if (is_fp(target) && !is_fp(source)) {
+            if (is_fp(target) && is_long_long(source)) {
+                const std::string two32 = intern_fp_constant(4294967296.0, false);
+                emit("    MOV R2, R0");
+                emit("    MOV R3, R1");
+                emit("    FCVT.D.W F0, R3");
+                emit("    FLOAD.D F1, [" + two32 + "]");
+                emit("    FMUL.D F0, F0, F1");
+                emit("    FCVT.D.WU F2, R2");
+                emit("    FADD.D F0, F0, F2");
+                if (is_float32(target)) {
+                    emit("    FCVT.S.D F0, F0");
+                }
+            } else if (is_fp(target) && !is_fp(source)) {
                 emit(std::string("    FCVT.") + (is_float32(target) ? "S" : "D") +
                      ".W F0, R0");
             } else if (is_fp(target) && is_fp(source)) {
