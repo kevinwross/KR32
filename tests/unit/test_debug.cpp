@@ -3,6 +3,7 @@
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
+#include "kr32/cxx/cxx.h"
 #include "kr32/debug/debug.h"
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
@@ -36,6 +37,25 @@ container::Image compile_debug_image(std::string_view source) {
     return image;
 }
 
+container::Image compile_cxx_debug_image(std::string_view source) {
+    const cxx::Result compiled = cxx::compile(source);
+    REQUIRE(compiled.ok);
+
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+    return image;
+}
+
 const debug::Line* find_line(const debug::Info& info, int line) {
     for (const debug::Line& candidate : info.lines) {
         if (candidate.source == 0 && candidate.line == line) {
@@ -46,6 +66,30 @@ const debug::Line* find_line(const debug::Info& info, int line) {
 }
 
 } // namespace
+
+TEST_CASE("C++ debug info covers templates and lambdas") {
+    const container::Image image = compile_cxx_debug_image(
+        "template <typename T> T twice(T value) { return value + value; }\n"
+        "int main() {\n"
+        "    int value = 20;\n"
+        "    auto increment = [](int input) { return input + 1; };\n"
+        "    return twice(value) + increment(0);\n"
+        "}\n");
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    CHECK_FALSE(info.functions.empty());
+    CHECK_FALSE(info.lines.empty());
+    CHECK_FALSE(info.variables.empty());
+    bool found_main = false;
+    for (const debug::Function& function : info.functions) {
+        if (function.name == "main") {
+            found_main = true;
+        }
+    }
+    CHECK(found_main);
+}
 
 TEST_CASE("debug info maps functions, variables, and source lines") {
     const container::Image image = compile_debug_image(

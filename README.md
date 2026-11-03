@@ -30,7 +30,7 @@ value/reference/default-capturing lambdas,
 by-value class parameters/returns with `sret` (plus one-to-eight-byte trivial, including floating and mixed, class register arguments and returns; larger aggregates use hidden pointers), exit-time static destruction,
 range-based `for` over arrays, braced initializer lists, and
 `initializer_list` variables, `goto`/labels, and
-C++ debug records. Template support and limitations are summarized in
+C++ debug records (including template and lambda functions). Template support and limitations are summarized in
 [docs/templates.md](docs/templates.md). A
 freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
