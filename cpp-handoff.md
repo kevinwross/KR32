@@ -1,13 +1,13 @@
 # KR32 C++ M9 — Handoff
 
 **Post-merge status:** this branch was merged into `main` as `29942c7` (plus the
-handoff merge). Both C and C++ front ends now share the C runtime/libc. Two P0
-items from §5 were fixed on main after the merge: public `Emit::Object` is
-implemented, and `SETSP` is decoded by the disassembler. The remaining P0 items
-below are still open.
+handoff merge). Both C and C++ front ends now share the C runtime/libc. Public
+`Emit::Object` and `SETSP` disassembly were fixed on main. The `m9-p0` branch
+fixes §5 P0 items 1–6 and the debug-side plumbing for item 7; see §1.1.
 
 **Status:** M9.1–M9.12 are committed on `m9-cxx`; annotated tag **`m9`** points at
-**`9707b55`** (M9.12). The worktree is clean. `main` was not modified.
+**`9707b55`** (M9.12). P0 fixes are on `m9-p0`, branched from `main`; the `m9`
+tag was not moved.
 
 **Important framing:** `m9` is a milestone snapshot, not a claim that every
 deferred ABI/feature item is complete. The shipped subset is usable for the
@@ -18,15 +18,29 @@ issues, especially across multiple translation units.
 
 | Item | Value |
 | --- | --- |
-| Branch | `m9-cxx` |
-| HEAD | this docs handoff commit (after the tag) |
+| Branch | `m9-p0` |
+| HEAD | this P0 commit (after the merge) |
 | M9 tag | `9707b55` |
 | Tag type | annotated; peeled commit `9707b55` |
-| Windows gate | MSVC Debug, 23/23 CTest |
-| WSL gate | GCC 15.2 headless, 23/23 CTest |
-| Unit/doctest counts | 195 test cases / 4972 assertions |
+| Windows gate | MSVC Debug, 29/29 CTest |
+| WSL gate | GCC 15.2 headless, 29/29 CTest |
+| Unit/doctest counts | 222 test cases / 5317 assertions |
 | UI build | OFF in this environment (no SDL gate) |
 | Worktree | clean |
+
+### 1.1 P0 status on `m9-p0`
+
+| P0 item | Status | Evidence |
+| --- | --- | --- |
+| 1. Multi-TU harness | fixed | `compile_and_run_many`; 3-TU startup/symbol test |
+| 2. Per-TU static init/fini | fixed | `.init_array`/`.fini_array`, linker bounds, main loops; cross-TU ctor/dtor tests |
+| 3. Merged TLS layout | fixed | per-TU `.tls` data + link-time offset cells; distinct-TU TLS test |
+| 4. Merged EH metadata | fixed | `.eh_frame_array` table array; cross-TU throw/catch test |
+| 5. Blocking guard | fixed | futex wait/wake guard; two-thread local-static race test |
+| 6. Class static locals | fixed | construct at static address, guard, destructor registration; test |
+| 7. Live thread snapshots | backend done, session injection partial | `ClusterHost::debug_threads`, `Session` provider/refresh, DAP/GUI refresh; no ClusterHost-backed GUI/DAP session yet |
+
+Windows and WSL both pass 29/29 CTest with 222 doctest cases / 5317 assertions.
 
 Phase commits (newest first):
 
@@ -117,47 +131,29 @@ Smoke test:
 
 ### 4.1 Correctness gaps that should be fixed before calling M9 production-ready
 
-1. **Multi-TU static initialization is incomplete.**
-   `emit_static_initializers()` is emitted only in the `main` prologue of the
-   translation unit that defines `main`. Global constructors from other TUs are
-   never run. `__kr32_cxx_fini` is weak and only the main TU's fini is called,
-   so other TUs' static destructors are not run. This needs per-TU
-   `.init_array`/`.fini_array` (or equivalent) entries and runtime walking.
-2. **Multi-TU TLS layout is likely broken.**
-   Each C++ TU emits a `.tls` section containing a 32-byte TCB header followed
-   by that TU's TLS data, with TLS offsets restarting at 32. If the linker
-   concatenates `.tls`, different TUs' `thread_local` objects collide. TLS needs
-   one image/layout (or COMDAT/merged TLS) with link-time offsets.
-3. **Multi-TU exceptions are not merged.**
-   `__kr32_eh_frame` is weak and contains only the first TU's function
-   descriptors/call sites. A throw across an object compiled in another TU can
-   fail to find its frame/catch. The EH frame and LSDA need a linker-merged
-   table (or per-function registered metadata).
-4. **`__cxa_guard_acquire` is not actually blocking.**
-   The current assembly returns `0` immediately when the guard is held. A second
-   thread skips initialization and proceeds. It needs wait/retry semantics
-   (futex/condvar) plus a test with two threads racing a local static.
-5. **Class-typed function-local statics are not constructed correctly.**
-   `declare_local`'s static branch runs `gen_expr(initializer)` and
-   `store_value(type)` for any type. For a class this writes one word rather
-   than constructing at the static's address. Destroying/registering class
-   static locals is also missing.
-6. **`Emit::Object` is still unimplemented in `kr32::cxx`.**
-   `cxx::compile()` emits assembly; CLI `kr32 cxx` wraps it in an object, but
-   the public API `Emit::Object` returns a diagnostic. Either implement it or
-   remove the option from the public contract.
-7. **DAP/GUI threads are not fed by the live runtime.**
-   `debug::ThreadInfo` exists and DAP/GUI display it, but `debug::Session` is
-   single-machine and nothing populates snapshots from `ClusterHost` during a
-   real debug run. Per-thread stacks/variables and clickable thread/source
-   switching are not wired end-to-end.
-8. **`std::thread`/synchronization surface is only partial.**
+Resolved on `m9-p0` (regression tests added):
+
+- Multi-TU static initialization and destruction (`init_array`/`fini_array`).
+- Multi-TU TLS layout (link-time TLS offsets, no per-TU header collision).
+- Multi-TU exception metadata (`eh_frame_array` merged tables).
+- Blocking `__cxa_guard_acquire` with futex wait/wake.
+- Class-typed function-local statics (construction, guard, destructor).
+
+Remaining:
+
+1. **DAP/GUI still do not own a live `ClusterHost`.** The snapshot/provider
+   plumbing, `ClusterHost::debug_threads()`, and DAP/GUI refresh hooks exist,
+   and tests exercise a live provider, but no GUI/DAP session currently creates
+   and advances a `ClusterHost`. Per-thread stacks/variables and clickable
+   thread/source switching remain end-to-end work.
+2. **`std::thread`/synchronization surface is only partial.**
    `include/kr32/thread.hpp` uses `namespace kr32`, not `namespace std`; the
    preprocessor injection omits `thread_self`, the `thread` class, and
    `condition_variable`; `thread` takes an integer entry address rather than a
    function pointer; `condition_variable` has no multi-thread test. Atomics are
    integer-only, memory orders are ignored, and there is no `atomic<T>` template
    (class templates are absent).
+
 
 ### 4.2 ABI/feature work deferred from the M9 plan
 
@@ -222,6 +218,10 @@ Smoke test:
 ## 5. Ordered task list for the next agent
 
 ### P0 — correctness/blocking
+
+Status on `m9-p0`: items 1–6 are fixed with regression tests; item 7 is fixed at
+the snapshot/provider layer, but no GUI/DAP session currently owns a live
+`ClusterHost` (see §1.1).
 
 1. **Add a multi-TU test harness** (three objects: main, a global/static-init
    TU, and a throw/TLS TU). Use it to expose the next three items before

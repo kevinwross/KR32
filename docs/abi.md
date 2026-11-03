@@ -495,7 +495,9 @@ The TCB begins at TP and uses non-negative offsets. The layout direction is:
 Exact offsets are fixed with the thread runtime in phase M9.10, but the
 direction is frozen: the static TLS block immediately follows the TCB header,
 every `thread_local` object has a link-time-constant positive offset from TP,
-and code generation uses `R11 + offset` (initial-exec model). There are no
+and code generation uses `TP + 32 + offset` (initial-exec model). Offsets are
+assigned after `.tls` sections are merged; each access loads its link-time
+offset from a data cell rather than assuming a per-TU base. There are no
 negative TP offsets. Dynamic TLS (`__tls_get_addr`) is outside revision 1.
 
 Per-thread context:
@@ -579,19 +581,25 @@ section flag. Revision 1 uses them as follows:
 
 ### Static initialization and destruction
 
-- Per-translation-unit static constructors are emitted as an `.init_array`
-  equivalent (an array of function pointers in an allocated section). The
-  runtime walks it before `main`; the exact section name and linker handling are
-  finalised in M9.8.
+- Per-translation-unit static constructors are emitted as `.init_array` entries
+  (allocated arrays of function pointers). The linker concatenates them and
+  defines `__init_array_start`/`__init_array_end`; `main` walks the range forward
+  before its body. Static destructors use `.fini_array` with
+  `__fini_array_start`/`__fini_array_end` and are walked in reverse at exit.
 - Dynamic initializers within a translation unit run in declaration order.
   Ordering across translation units follows link order; revision 1 does not
   promise more.
 - Static destruction is registered with a `__cxa_atexit`-style runtime call and
   runs in reverse registration order during normal exit.
 - Function-local statics use a guard variable plus
-  `__cxa_guard_acquire`/`__cxa_guard_release`. The guard protocol is
-  thread-safe once the thread runtime exists; the compiler must not elide the
+  `__cxa_guard_acquire`/`__cxa_guard_release`. The guard protocol blocks on a
+  futex when another thread is initializing; the compiler must not elide the
   guard for a type with a non-trivial constructor.
+- Exception frame tables are emitted per translation unit and registered in
+  `.eh_frame_array`; the linker defines `__eh_frame_array_start/end` and the
+  unwinder walks every table. The TLS section is merged by the linker and each
+  `thread_local` access loads its link-time offset from a data cell, then adds
+  `TP + 32 + offset`.
 
 ### Approved review decisions
 

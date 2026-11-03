@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 17:36 -08:00
+> **Last updated:** 2026-11-02 17:52 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -558,7 +558,9 @@ and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
 weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
 cleanup) are complete; M9.10 (threads/TLS/atomics) is complete. M9.11 (C++
 debug/GUI/DAP) and M9.12 (CLI/cross-platform/tag) are complete for the
-Windows/WSL gate; tag `m9` marks the final commit. C++ ABI revision 1 is frozen in
+Windows/WSL gate; tag `m9` marks the final commit. Post-merge P0 fixes are on
+`m9-p0`: multi-TU init/fini, TLS/EH merging, blocking guards, class static
+locals, and debug thread-snapshot plumbing. C++ ABI revision 1 is frozen in
 [docs/abi.md](docs/abi.md) with machine-checkable constants in
 `include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
 in place, and `compile()` now produces assembly for the supported integer,
@@ -621,8 +623,11 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       expansion (M9.11).
 - [x] `kr32 cxx`, `kr32 build file.cpp`, runtime auto-link, CLI help/diagnostics,
       docs, and Windows/WSL gate (M9.12, tag `m9`).
-- [ ] Deferred: full per-thread variable expansion, clickable GUI thread/source
-      switching, and the extra compiler/configuration matrix.
+- [x] P0 post-merge fixes: multi-TU init/fini, TLS/EH merging, blocking guards,
+      class static locals, and debug snapshot/provider plumbing (`m9-p0`).
+- [ ] Deferred: ClusterHost-backed GUI/DAP session, full per-thread variable
+      expansion, clickable GUI thread/source switching, and the extra
+      compiler/configuration matrix.
 - [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
       and standard-library subset.
 
@@ -664,6 +669,8 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
       initialized TLS pass (M9.10 gate: 193 cases / 4951 assertions).
 - [x] C++ debug classes/members/`this`/lines and thread snapshots pass (M9.11:
       195 cases / 4972 assertions; 23/23 CTest after CLI tests).
+- [x] P0 multi-TU init/fini/TLS/EH, guard race, class static local, and live
+      snapshot provider pass (m9-p0: 222 cases / 5317 assertions; 29/29 CTest).
 - [x] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
@@ -1228,6 +1235,14 @@ Newest entries at the bottom. Use the local time zone.
       public `cxx::Emit::Object` path, decoded `SETSP` in the disassembler, and
       merged the C/C++ logs and documentation. Full merged gate: 217 unit cases
       / 5202 assertions; 31/31 Windows CTest; 29/29 WSL CTest.
+- **2026-11-02 17:52 -08:00** — Created `m9-p0` from merged `main` and fixed
+      handoff P0 items 1–6: per-TU init/fini arrays, link-time TLS layout,
+      merged exception tables, blocking `__cxa_guard_acquire`, and class static
+      locals, plus a 3-TU harness. Added `ClusterHost::debug_threads`, a
+      `debug::Session` thread provider/refresh, and DAP/GUI refresh hooks for
+      P0 7. Windows/WSL (UI off) both pass 29/29 CTest; `kr32_tests` reports 222
+      cases / 5317 assertions. Tag `m9` remains at `9707b55`; end-to-end
+      ClusterHost-backed GUI/DAP sessions remain open.
 
 
 ## 10. Updating this file
