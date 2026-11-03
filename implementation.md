@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 17:41 -08:00
+> **Last updated:** 2026-11-02 17:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1233,6 +1233,12 @@ Newest entries at the bottom. Use the local time zone.
       the same shared C libc. Headless GUI C++ load passes. Remaining P0
       multi-TU/thread-debug work is assigned to a follow-up branch; see
       `cpp-handoff.md`.
+- **2026-11-02 17:50 -08:00** — Exposed the shared C libc to C++ through
+      `extern "C"` freestanding headers (`stdio.h`, `stdlib.h`, `string.h`,
+      `math.h`, `stddef.h`), added `examples/cxx_libc.cpp`, and verified C++
+      calls `printf`/`strcpy` from the same libc. Final merged gate: 217 unit
+      cases / 5202 assertions; 33/33 Windows Debug/Release/Ninja; 30/30 WSL
+      GCC/Clang/ASan.
 
 
 ## 10. Updating this file
