@@ -73,7 +73,7 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
         if (section.name == ".tls") {
             for (std::size_t index = 0; index < section.data.size(); ++index) {
                 (void)machine.write8(
-                    machine.reg(11) + static_cast<std::uint32_t>(index),
+                    machine.reg(11) + 32U + static_cast<std::uint32_t>(index),
                     section.data[index]);
             }
         }
@@ -140,6 +140,24 @@ ProgramResult compile_and_run_pair(std::string_view first, std::string_view seco
         return failed;
     }
     return run_assemblies({first_result.assembly, second_result.assembly});
+}
+
+ProgramResult compile_and_run_many(const std::vector<std::string>& sources) {
+    std::vector<std::string> assemblies;
+    ProgramResult failed;
+    for (const std::string& source : sources) {
+        const cxx::Result compiled = cxx::compile(source);
+        if (!compiled.ok) {
+            for (const cxx::Diagnostic& diagnostic : compiled.diagnostics) {
+                failed.diagnostics += std::to_string(diagnostic.line) + ":" +
+                                      std::to_string(diagnostic.column) + ": " +
+                                      diagnostic.message + "\n";
+            }
+            return failed;
+        }
+        assemblies.push_back(compiled.assembly);
+    }
+    return run_assemblies(assemblies);
 }
 
 } // namespace
@@ -975,6 +993,85 @@ TEST_CASE("static initialization runs before main in declaration order") {
         "int first = compute();\n"
         "int second = first + 2;\n"
         "int main() { return second; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("static initializers from another translation unit run before main") {
+    const ProgramResult program = compile_and_run_pair(
+        "int value();\n"
+        "int main() { return value(); }\n",
+        "int state = 0;\n"
+        "class Init { public: Init() { state = 42; } };\n"
+        "Init init;\n"
+        "int value() { return state; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("thread_local objects from separate TUs get distinct layouts") {
+    const ProgramResult program = compile_and_run_pair(
+        "int get_b();\n"
+        "thread_local int a_value = 7;\n"
+        "int main() { return a_value + get_b(); }\n",
+        "thread_local int b_value = 42;\n"
+        "int get_b() { return b_value; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 49);
+}
+
+TEST_CASE("exceptions cross translation-unit frame tables") {
+    const ProgramResult program = compile_and_run_pair(
+        "int thrower();\n"
+        "int main() {\n"
+        "    try { return thrower(); }\n"
+        "    catch (int value) { return value; }\n"
+        "    return 0;\n"
+        "}\n",
+        "int thrower() { throw 42; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("class static locals construct at the static object's address") {
+    const ProgramResult program = compile_and_run(
+        "class Counter {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Counter() { value = 42; }\n"
+        "    ~Counter() { value = 0; }\n"
+        "};\n"
+        "int get() { static Counter counter; return counter.value; }\n"
+        "int main() { return get(); }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("three translation units share startup and symbol tables") {
+    const ProgramResult program = compile_and_run_many(
+        {"int value();\n"
+         "int main() { return value(); }\n",
+         "int state = 0;\n"
+         "class Init { public: Init() { state = 42; } };\n"
+         "Init init;\n",
+         "extern int state;\n"
+         "int value() { return state; }\n"});
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("static destructors from another translation unit run at exit") {
+    const ProgramResult program = compile_and_run_pair(
+        "int main() { return 0; }\n",
+        "#include <kr32/runtime.hpp>\n"
+        "class Final { public: ~Final() { exit(42); } };\n"
+        "Final final_object;\n");
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);

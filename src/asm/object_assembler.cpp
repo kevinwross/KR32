@@ -447,6 +447,12 @@ public:
                     container::Alloc);
         add_section(".tls", container::SectionType::Data,
                     container::Alloc | container::Write);
+        add_section(".init_array", container::SectionType::Data,
+                    container::Alloc | container::Write);
+        add_section(".fini_array", container::SectionType::Data,
+                    container::Alloc | container::Write);
+        add_section(".eh_frame_array", container::SectionType::Data,
+                    container::Alloc | container::Write);
         add_section(".data", container::SectionType::Data,
                     container::Alloc | container::Write);
         add_section(".bss", container::SectionType::Bss,
@@ -573,7 +579,8 @@ private:
     bool pass1_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
         if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
-            name == ".tls" || name == ".data" || name == ".bss" ||
+            name == ".tls" || name == ".init_array" || name == ".fini_array" ||
+            name == ".eh_frame_array" || name == ".data" || name == ".bss" ||
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
@@ -1416,7 +1423,8 @@ private:
     bool pass2_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
         if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
-            name == ".tls" || name == ".data" || name == ".bss" ||
+            name == ".tls" || name == ".init_array" || name == ".fini_array" ||
+            name == ".eh_frame_array" || name == ".data" || name == ".bss" ||
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
