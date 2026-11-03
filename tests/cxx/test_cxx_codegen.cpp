@@ -1438,6 +1438,17 @@ TEST_CASE("function template explicit specializations override generic calls") {
         "int main() { return (int)twice(1.5); }\n");
     CHECK(generic.ok);
     CHECK(generic.result == 3);
+
+    const ProgramResult mixed = compile_and_run(
+        "template <typename T> T twice(T value) { return value + value; }\n"
+        "template <> int twice<int>(int value) { return 42; }\n"
+        "int main() {\n"
+        "    int specialized = twice(1);\n"
+        "    int generic = (int)twice(1.5);\n"
+        "    return specialized * 10 + generic;\n"
+        "}\n");
+    CHECK(mixed.ok);
+    CHECK(mixed.result == 423);
 }
 
 TEST_CASE("non-type template parameters bind integer arguments") {

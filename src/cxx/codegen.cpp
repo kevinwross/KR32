@@ -501,6 +501,7 @@ private:
         TypePtr result;
         bool extern_c = false;
         bool variadic = false;
+        bool from_template = false;
         bool defined = false;
         bool is_static = false;
         bool is_member = false;
@@ -2426,6 +2427,7 @@ private:
         function->result = resolve_type(clone->type);
         function->defined = clone->body != nullptr;
         function->weak = true;
+        function->from_template = true;
         Function* raw = function.get();
         template_instantiation_decls_.push_back(clone);
         function_index_[qualified].push_back(raw);
@@ -2556,6 +2558,18 @@ private:
         } else {
             diagnose_once(call, "unsupported call target");
             return nullptr;
+        }
+        if (!candidates.empty()) {
+            bool has_non_template = false;
+            for (Function* candidate : candidates) {
+                if (!candidate->from_template) {
+                    has_non_template = true;
+                    break;
+                }
+            }
+            if (!has_non_template) {
+                candidates.clear();
+            }
         }
         if (candidates.empty()) {
             // Template candidates are instantiated after argument types are

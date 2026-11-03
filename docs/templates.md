@@ -122,10 +122,8 @@ template <> int twice<int>(int value) { return 42; }
 - Explicit specialization arguments are matched against call arguments
 - Specialized bodies replace the generic instantiation for matching calls
 - Local declarations such as `int first = twice(1);` retain the call
-
-Known limitation: combining one explicit specialization with a different
-generic instantiation of the same function template in one translation unit can
-still select the wrong body for the non-matching call.
+- Specialized and generic instantiations of the same template can coexist in
+  one translation unit
 
 ## Deferred
 
