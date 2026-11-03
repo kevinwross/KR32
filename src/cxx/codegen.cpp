@@ -4168,6 +4168,69 @@ private:
         }
     }
 
+    void gen_array_initializer(const TypePtr& type, int offset, const Expr& initializer) {
+        zero_object(offset, std::max(1, type_size(type)));
+        if (initializer.kind != ExprKind::InitializerList) {
+            return;
+        }
+        const int element_size = type_size(type->element);
+        std::size_t index = 0;
+        for (const ExprPtr& element : initializer.children) {
+            if (index >= type->array_size || !element) {
+                break;
+            }
+            const int element_offset = offset + static_cast<int>(index) * element_size;
+            if (type->element->kind == TypeKind::Array) {
+                gen_array_initializer(type->element, element_offset, *element);
+            } else if (is_fp(type->element)) {
+                gen_as_fp(*element, type->element);
+                emit(std::string("    FSTORE.") +
+                     (is_float32(type->element) ? "W" : "D") + " F0, [R7 + " +
+                     std::to_string(element_offset) + "]");
+            } else {
+                gen_expr(*element);
+                emit("    LEA R1, [R7 + " + std::to_string(element_offset) + "]");
+                store_value(type->element);
+            }
+            ++index;
+        }
+    }
+
+    void gen_class_aggregate_initializer(ClassInfo* info, int offset,
+                                         const Expr& initializer) {
+        zero_object(offset, std::max(1, info->size));
+        if (initializer.kind != ExprKind::InitializerList) {
+            return;
+        }
+        std::size_t index = 0;
+        for (const MemberInfo& member : info->members) {
+            if (index >= initializer.children.size()) {
+                break;
+            }
+            const ExprPtr& value = initializer.children[index];
+            if (!value) {
+                ++index;
+                continue;
+            }
+            const int member_offset = offset + member.offset;
+            if (member.type && member.type->kind == TypeKind::Array) {
+                gen_array_initializer(member.type, member_offset, *value);
+            } else if (ClassInfo* member_class = class_of(member.type)) {
+                gen_class_aggregate_initializer(member_class, member_offset, *value);
+            } else if (is_fp(member.type)) {
+                gen_as_fp(*value, member.type);
+                emit(std::string("    FSTORE.") +
+                     (is_float32(member.type) ? "W" : "D") + " F0, [R7 + " +
+                     std::to_string(member_offset) + "]");
+            } else {
+                gen_expr(*value);
+                emit("    LEA R1, [R7 + " + std::to_string(member_offset) + "]");
+                store_value(member.type);
+            }
+            ++index;
+        }
+    }
+
     void declare_local(const Decl& declaration) {
         if (local_scopes_.empty()) {
             push_scope();
@@ -4283,6 +4346,16 @@ private:
                     return;
                 }
             }
+            if (declaration.initializer &&
+                declaration.initializer->kind == ExprKind::InitializerList &&
+                find_constructor(info, declaration.initializer->children.size()) == nullptr) {
+                gen_class_aggregate_initializer(info, local.offset,
+                                                 *declaration.initializer);
+                if (Function* destructor = find_destructor(info)) {
+                    local_destructors_.back().push_back({local.offset, destructor});
+                }
+                return;
+            }
             construct_object(info, local.offset, *arguments);
             if (Function* destructor = find_destructor(info)) {
                 local_destructors_.back().push_back({local.offset, destructor});
@@ -4301,29 +4374,7 @@ private:
         if (type && type->kind == TypeKind::Array) {
             if (declaration.initializer &&
                 declaration.initializer->kind == ExprKind::InitializerList) {
-                const int element_size = type_size(type->element);
-                std::size_t index = 0;
-                for (const ExprPtr& element : declaration.initializer->children) {
-                    if (index >= type->array_size) {
-                        break;
-                    }
-                    if (is_fp(type->element)) {
-                        gen_as_fp(*element, type->element);
-                        emit(std::string("    FSTORE.") +
-                             (is_float32(type->element) ? "W" : "D") + " F0, [R7 + " +
-                             std::to_string(local.offset +
-                                            static_cast<int>(index) * element_size) +
-                             "]");
-                    } else {
-                        gen_expr(*element);
-                        emit("    LEA R1, [R7 + " +
-                             std::to_string(local.offset +
-                                            static_cast<int>(index) * element_size) +
-                             "]");
-                        store_value(type->element);
-                    }
-                    ++index;
-                }
+                gen_array_initializer(type, local.offset, *declaration.initializer);
             }
             return;
         }

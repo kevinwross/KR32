@@ -1152,6 +1152,19 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("C++ aggregate and nested array initializers run") {
+    const ProgramResult program = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "int main() {\n"
+        "    int a[2][2] = {{1, 2}, {3, 4}};\n"
+        "    int b[3] = {5};\n"
+        "    P p = {11, 22};\n"
+        "    return a[0][0] + a[0][1] + a[1][0] + a[1][1] + b[0] + b[2] + p.x + p.y;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 48);
+}
+
 TEST_CASE("goto labels and range-for arrays run") {
     const ProgramResult jump = compile_and_run(
         "int main() {\n"

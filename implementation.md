@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 23:09 -08:00
+> **Last updated:** 2026-11-02 23:22 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1299,6 +1299,11 @@ Newest entries at the bottom. Use the local time zone.
       `DIVS`/`MODS`, added those object-assembler aliases, and treated
       `long` as the 32-bit ILP32 type. `short`/`long long` remain diagnosed.
       243 cases / 5514 assertions.
+- **2026-11-02 23:22 -08:00** — Added local aggregate initializers for C
+      (`int a[3] = {…}`, nested arrays, structs/unions, zero-filled tails)
+      and C++ (nested arrays and C-style aggregate structs). Global aggregate
+      initializers and designated initializers remain next-stage work.
+      245 cases / 5530 assertions.
 
 ## 10. Updating this file
 

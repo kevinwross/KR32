@@ -1732,6 +1732,81 @@ private:
         expect(";");
     }
 
+    void gen_zero_object(int base_slot, int offset, int size) {
+        int cursor = 0;
+        while (cursor + 4 <= size) {
+            emit("    LOAD R0, [R7 + " + std::to_string(base_slot) + "]");
+            emit("    ADD R0, R0, #" + std::to_string(offset + cursor));
+            emit("    MOV R1, R0");
+            emit("    MOV R0, #0");
+            emit("    STORE R0, [R1]");
+            cursor += 4;
+        }
+        while (cursor < size) {
+            emit("    LOAD R0, [R7 + " + std::to_string(base_slot) + "]");
+            emit("    ADD R0, R0, #" + std::to_string(offset + cursor));
+            emit("    MOV R1, R0");
+            emit("    MOV R0, #0");
+            emit("    STORE8 R0, [R1]");
+            ++cursor;
+        }
+    }
+
+    void gen_initializer_at(const TypePtr& type, int base_slot, int offset) {
+        if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
+            type->kind == Type::Kind::Union) {
+            expect("{");
+            if (type->kind == Type::Kind::Array) {
+                const int element_size = type->base ? type->base->size() : 1;
+                int index = 0;
+                while (!match("}")) {
+                    if (index >= type->count) {
+                        error("too many array initializer elements");
+                    }
+                    gen_initializer_at(type->base, base_slot, offset + index * element_size);
+                    ++index;
+                    if (!match(",")) {
+                        expect("}");
+                        break;
+                    }
+                }
+                return;
+            }
+            if (type->kind == Type::Kind::Union) {
+                if (!type->members.empty()) {
+                    gen_initializer_at(type->members.front().type, base_slot,
+                                       offset + type->members.front().offset);
+                }
+                while (!match("}")) {
+                    gen_expression();
+                    if (!match(",")) expect("}");
+                }
+                return;
+            }
+            std::size_t index = 0;
+            while (!match("}")) {
+                if (index >= type->members.size()) {
+                    error("too many struct initializer elements");
+                }
+                gen_initializer_at(type->members[index].type, base_slot,
+                                   offset + type->members[index].offset);
+                ++index;
+                if (!match(",")) {
+                    expect("}");
+                    break;
+                }
+            }
+            return;
+        }
+        TypePtr value_type = gen_expression();
+        convert_value(value_type, type);
+        emit("    LOAD R1, [R7 + " + std::to_string(base_slot) + "]");
+        if (offset != 0) {
+            emit("    ADD R1, R1, #" + std::to_string(offset));
+        }
+        gen_store(type);
+    }
+
     void parse_local_declaration() {
         TypePtr type = parse_type();
         const std::string name = parse_name();
@@ -1742,12 +1817,22 @@ private:
         debug_record("V " + current_function_ + " " + name + " " + std::to_string(offset) +
                      " " + type_name(actual) + " " + std::to_string(actual->size()));
         if (match("=")) {
-            gen_lvalue_address(name);
-            emit("    PUSH R0");
-            TypePtr value_type = gen_expression();
-            convert_value(value_type, actual);
-            emit("    POP R1");
-            gen_store(actual);
+            if (actual->kind == Type::Kind::Array ||
+                actual->kind == Type::Kind::Struct ||
+                actual->kind == Type::Kind::Union) {
+                gen_lvalue_address(name);
+                const int base_slot = allocate_local(type_int());
+                emit("    STORE R0, [R7 + " + std::to_string(base_slot) + "]");
+                gen_zero_object(base_slot, 0, actual->size());
+                gen_initializer_at(actual, base_slot, 0);
+            } else {
+                gen_lvalue_address(name);
+                emit("    PUSH R0");
+                TypePtr value_type = gen_expression();
+                convert_value(value_type, actual);
+                emit("    POP R1");
+                gen_store(actual);
+            }
         }
         expect(";");
     }
