@@ -1221,6 +1221,22 @@ TEST_CASE("lambdas capture by reference and by default") {
     CHECK(by_default.result == 42);
 }
 
+TEST_CASE("std timed thread helpers accept zero waits") {
+    const ProgramResult program = compile_and_run(
+        "#include <thread>\n"
+        "#include <mutex>\n"
+        "int main() {\n"
+        "    std::mutex guard;\n"
+        "    guard.lock();\n"
+        "    bool acquired = guard.try_lock_for(0);\n"
+        "    guard.unlock();\n"
+        "    std::this_thread::sleep_for(0);\n"
+        "    return acquired ? 0 : 42;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("std thread exposes a thread id type") {
     const ProgramResult program = compile_and_run(
         "#include <thread>\n"

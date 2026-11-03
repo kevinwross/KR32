@@ -531,6 +531,7 @@ private:
                     "inline void thread_yield() { (void)__builtin_kr32_syscall(46, 0, 0, 0); }\n"
                     "inline void thread_exit(int code) { (void)__builtin_kr32_syscall(47, code, 0, 0); }\n"
                     "inline int thread_self() { return __builtin_kr32_syscall(50, 0, 0, 0); }\n"
+                    "inline void sleep_for(int milliseconds) { if (milliseconds > 0) { thread_yield(); } }\n"
                     "inline int futex_wait(int* address, int expected) { return __builtin_kr32_syscall(48, (int)address, expected, 0); }\n"
                     "inline int futex_wake(int* address, int count) { return __builtin_kr32_syscall(49, (int)address, count, 0); }\n"
                     "struct atomic_int {\n"
@@ -547,6 +548,7 @@ private:
                     "    mutex() { state = 0; }\n"
                     "    void lock() { int expected = 0; while (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) { expected = 0; futex_wait(&state, 1); } }\n"
                     "    bool try_lock() { int expected = 0; return __atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0); }\n"
+                    "    bool try_lock_for(int milliseconds) { (void)milliseconds; return try_lock(); }\n"
                     "    void unlock() { __atomic_store_n(&state, 0, 0); futex_wake(&state, 1); }\n"
                     "};\n"
                     "struct recursive_mutex {\n"
@@ -554,6 +556,7 @@ private:
                     "    recursive_mutex() { state = 0; owner = 0; count = 0; }\n"
                     "    void lock() { const int self = thread_self(); if (owner == self) { count = count + 1; return; } int expected = 0; while (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) { expected = 0; futex_wait(&state, 1); } owner = self; count = 1; }\n"
                     "    bool try_lock() { const int self = thread_self(); if (owner == self) { count = count + 1; return true; } int expected = 0; if (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) { return false; } owner = self; count = 1; return true; }\n"
+                    "    bool try_lock_for(int milliseconds) { (void)milliseconds; return try_lock(); }\n"
                     "    void unlock() { if (owner != thread_self()) { return; } count = count - 1; if (count == 0) { owner = 0; __atomic_store_n(&state, 0, 0); futex_wake(&state, 1); } }\n"
                     "};\n"
                     "struct condition_variable {\n"
@@ -579,6 +582,7 @@ private:
                     "namespace this_thread {\n"
                     "inline void yield() { thread_yield(); }\n"
                     "inline int get_id() { return thread_self(); }\n"
+                    "inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); }\n"
                     "}\n"
                     "}\n"
                     "namespace std {\n"
@@ -599,7 +603,7 @@ private:
                     "    void detach() { handle = 0; }\n"
                     "    void yield() { kr32::thread_yield(); }\n"
                     "};\n"
-                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); } }\n"
+                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); } inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); } }\n"
                     "}\n");
                 return;
             }

@@ -20,6 +20,11 @@ inline void thread_exit(int code) {
 inline int thread_self() {
     return __builtin_kr32_syscall(50, 0, 0, 0);
 }
+inline void sleep_for(int milliseconds) {
+    if (milliseconds > 0) {
+        thread_yield();
+    }
+}
 inline int futex_wait(int* address, int expected) {
     return __builtin_kr32_syscall(48, (int)address, expected, 0);
 }
@@ -52,6 +57,10 @@ struct mutex {
     bool try_lock() {
         int expected = 0;
         return __atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0);
+    }
+    bool try_lock_for(int milliseconds) {
+        (void)milliseconds;
+        return try_lock();
     }
     void unlock() {
         __atomic_store_n(&state, 0, 0);
@@ -95,6 +104,10 @@ struct recursive_mutex {
         owner = self;
         count = 1;
         return true;
+    }
+    bool try_lock_for(int milliseconds) {
+        (void)milliseconds;
+        return try_lock();
     }
     void unlock() {
         if (owner != thread_self()) {
@@ -182,5 +195,6 @@ struct thread {
 namespace this_thread {
 inline void yield() { kr32::thread_yield(); }
 inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); }
+inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); }
 } // namespace this_thread
 } // namespace std
