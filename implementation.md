@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:55 -08:00
+> **Last updated:** 2026-11-03 10:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1469,6 +1469,9 @@ Newest entries at the bottom. Use the local time zone.
       alias plus `std::thread::get_id()`, in both the header and injected
       preprocessor declarations; added regression. 285 cases / 5745
       assertions.
+- **2026-11-03 10:02 -08:00** — Added `kr32::thread::id` and
+      `get_id()`; both native and `std` wrappers now expose thread ids.
+      285 cases / 5747 assertions.
 
 ## 10. Updating this file
 

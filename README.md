@@ -18,7 +18,7 @@ assignment, `++`/`--`, conditional
 expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
 inheritance, virtual dispatch/RTTI, function and class templates with explicit
 specializations (full and pointer-pattern partial), 64-bit `long long` locals/functions/globals/fields/static/arrays/references/arithmetic/`printf`, matrices,
-exceptions/unwinding, `new`/`delete`, callable `std::thread`/`std::thread::id`/TLS/atomics,
+exceptions/unwinding, `new`/`delete`, callable `std::thread`/`std::thread::id`/`kr32::thread::id`/TLS/atomics,
 per-thread
 `thread_local` construction/destruction, conditional
 expressions, switch statements, global and local aggregate initializers,

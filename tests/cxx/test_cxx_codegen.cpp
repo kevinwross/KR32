@@ -1231,6 +1231,16 @@ TEST_CASE("std thread exposes a thread id type") {
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 42);
+
+    const ProgramResult native = compile_and_run(
+        "#include <kr32/thread.hpp>\n"
+        "int main() {\n"
+        "    kr32::thread thread;\n"
+        "    kr32::thread::id id = thread.get_id();\n"
+        "    return id == 0 ? 42 : 0;\n"
+        "}\n");
+    CHECK(native.ok);
+    CHECK(native.result == 42);
 }
 
 TEST_CASE("std thread accepts function pointers and captureless lambdas") {

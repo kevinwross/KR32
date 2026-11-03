@@ -129,6 +129,7 @@ struct condition_variable {
 };
 
 struct thread {
+    typedef unsigned int id;
     int handle;
     thread() { handle = 0; }
     thread(int entry, int arg) { handle = thread_create(entry, arg, 0); }
@@ -137,6 +138,7 @@ struct thread {
     }
     bool joinable() { return handle != 0; }
     static int hardware_concurrency() { return 1; }
+    unsigned int get_id() { return (unsigned int)handle; }
     void join() {
         if (handle != 0) {
             thread_join(handle);
