@@ -13,7 +13,8 @@ same `kr32` executable and share one freestanding libc/runtime. The C compiler
 supports integer, `short`/`unsigned short`, `unsigned int`/`unsigned char`,
 `long` (32-bit), `float`, and
 `double` scalars with FP calls, expressions, multidimensional arrays, global and
-local aggregate/array initializers, compound assignment, `++`/`--`, conditional
+local aggregate/array initializers, designated initializers, compound
+assignment, `++`/`--`, conditional
 expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
 inheritance, virtual dispatch/RTTI, function and class templates, matrices,
 exceptions/unwinding, `new`/`delete`, `std::thread`/TLS/atomics, conditional

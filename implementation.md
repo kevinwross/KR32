@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 00:14 -08:00
+> **Last updated:** 2026-11-03 00:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1354,6 +1354,11 @@ Newest entries at the bottom. Use the local time zone.
       emission. Function parameters widen to 4-byte slots while preserving
       16-bit lvalues. `long long` remains unsupported. 254 cases / 5579
       assertions.
+- **2026-11-03 00:20 -08:00** — Added C designated initializers for local
+      and global aggregates: `.field = value` for structs and `[index] =
+      value` for arrays, including continuation after a designator and
+      zero-filled gaps. Nested aggregate designators remain future work.
+      255 cases / 5593 assertions.
 
 ## 10. Updating this file
 

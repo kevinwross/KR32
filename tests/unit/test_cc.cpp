@@ -378,6 +378,20 @@ TEST_CASE("C supports global aggregate and array initializers") {
     CHECK(program.result == 248);
 }
 
+TEST_CASE("C supports designated aggregate and array initializers") {
+    const ProgramResult program = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "int g[3] = {[1] = 5};\n"
+        "int main(void) {\n"
+        "    int a[4] = {[2] = 7, 8};\n"
+        "    struct P p = {.y = 2};\n"
+        "    return p.x + p.y + a[0] + a[2] + a[3] +\n"
+        "           g[0] + g[1] + g[2];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 22);
+}
+
 TEST_CASE("C short and unsigned short use 16-bit storage") {
     const ProgramResult program = compile_and_run(
         "struct P { short a; short b; };\n"

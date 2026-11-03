@@ -1375,11 +1375,19 @@ private:
                 int index = 0;
                 const int element_size = type->base ? type->base->size() : 1;
                 while (!match("}")) {
-                    if (index >= type->count) {
-                        error("too many array initializer elements");
+                    if (match(".")) {
+                        error("field designator on an array initializer");
+                    } else if (match("[")) {
+                        index = static_cast<int>(parse_constant_value());
+                        expect("]");
+                        expect("=");
                     }
-                    parse_global_initializer(type->base, bytes,
-                                             offset + index * element_size);
+                    if (index < 0 || index >= type->count) {
+                        error("array designator is out of range");
+                    } else {
+                        parse_global_initializer(type->base, bytes,
+                                                 offset + index * element_size);
+                    }
                     ++index;
                     if (!match(",")) {
                         expect("}");
@@ -1401,11 +1409,29 @@ private:
             }
             std::size_t index = 0;
             while (!match("}")) {
+                if (match(".")) {
+                    const std::string field = parse_name();
+                    expect("=");
+                    index = type->members.size();
+                    for (std::size_t candidate = 0; candidate < type->members.size();
+                         ++candidate) {
+                        if (type->members[candidate].name == field) {
+                            index = candidate;
+                            break;
+                        }
+                    }
+                    if (index >= type->members.size()) {
+                        error("unknown field designator: " + field);
+                    }
+                } else if (match("[")) {
+                    error("array designator on a struct initializer");
+                }
                 if (index >= type->members.size()) {
                     error("too many struct initializer elements");
+                } else {
+                    parse_global_initializer(type->members[index].type, bytes,
+                                             offset + type->members[index].offset);
                 }
-                parse_global_initializer(type->members[index].type, bytes,
-                                         offset + type->members[index].offset);
                 ++index;
                 if (!match(",")) {
                     expect("}");
@@ -1880,10 +1906,19 @@ private:
                 const int element_size = type->base ? type->base->size() : 1;
                 int index = 0;
                 while (!match("}")) {
-                    if (index >= type->count) {
-                        error("too many array initializer elements");
+                    if (match(".")) {
+                        error("field designator on an array initializer");
+                    } else if (match("[")) {
+                        index = static_cast<int>(parse_constant_value());
+                        expect("]");
+                        expect("=");
                     }
-                    gen_initializer_at(type->base, base_slot, offset + index * element_size);
+                    if (index < 0 || index >= type->count) {
+                        error("array designator is out of range");
+                    } else {
+                        gen_initializer_at(type->base, base_slot,
+                                           offset + index * element_size);
+                    }
                     ++index;
                     if (!match(",")) {
                         expect("}");
@@ -1905,11 +1940,29 @@ private:
             }
             std::size_t index = 0;
             while (!match("}")) {
+                if (match(".")) {
+                    const std::string field = parse_name();
+                    expect("=");
+                    index = type->members.size();
+                    for (std::size_t candidate = 0; candidate < type->members.size();
+                         ++candidate) {
+                        if (type->members[candidate].name == field) {
+                            index = candidate;
+                            break;
+                        }
+                    }
+                    if (index >= type->members.size()) {
+                        error("unknown field designator: " + field);
+                    }
+                } else if (match("[")) {
+                    error("array designator on a struct initializer");
+                }
                 if (index >= type->members.size()) {
                     error("too many struct initializer elements");
+                } else {
+                    gen_initializer_at(type->members[index].type, base_slot,
+                                       offset + type->members[index].offset);
                 }
-                gen_initializer_at(type->members[index].type, base_slot,
-                                   offset + type->members[index].offset);
                 ++index;
                 if (!match(",")) {
                     expect("}");
