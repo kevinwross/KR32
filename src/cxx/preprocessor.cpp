@@ -555,6 +555,68 @@ private:
                     "}\n");
                 return;
             }
+            if (header.find("stdio.h") != std::string::npos) {
+                append_line(
+                    "extern \"C\" {\n"
+                    "int putchar(int c);\n"
+                    "int getchar();\n"
+                    "int printf(const char* format, ...);\n"
+                    "}\n");
+                return;
+            }
+            if (header.find("stdlib.h") != std::string::npos) {
+                append_line(
+                    "extern \"C\" {\n"
+                    "void exit(int code);\n"
+                    "void* malloc(int size);\n"
+                    "void free(void* pointer);\n"
+                    "void* calloc(int count, int size);\n"
+                    "void* realloc(void* pointer, int size);\n"
+                    "int sys_random();\n"
+                    "}\n");
+                return;
+            }
+            if (header.find("string.h") != std::string::npos) {
+                append_line(
+                    "extern \"C\" {\n"
+                    "int strlen(const char* text);\n"
+                    "void* memcpy(void* destination, const void* source, int count);\n"
+                    "void* memset(void* destination, int value, int count);\n"
+                    "char* strcpy(char* destination, const char* source);\n"
+                    "char* strncpy(char* destination, const char* source, int count);\n"
+                    "char* strcat(char* destination, const char* source);\n"
+                    "char* strncat(char* destination, const char* source, int count);\n"
+                    "int strcmp(const char* left, const char* right);\n"
+                    "int strncmp(const char* left, const char* right, int count);\n"
+                    "char* strchr(const char* text, int character);\n"
+                    "char* strrchr(const char* text, int character);\n"
+                    "char* strstr(const char* text, const char* needle);\n"
+                    "char* strtok(char* text, const char* delimiters);\n"
+                    "char* strdup(const char* text);\n"
+                    "void* memmove(void* destination, const void* source, int count);\n"
+                    "int memcmp(const void* left, const void* right, int count);\n"
+                    "void* memchr(const void* memory, int character, int count);\n"
+                    "}\n");
+                return;
+            }
+            if (header.find("stddef.h") != std::string::npos) {
+                append_line("typedef unsigned int size_t;\n");
+                return;
+            }
+            if (header.find("math.h") != std::string::npos) {
+                append_line(
+                    "extern \"C\" {\n"
+                    "double sqrt(double value);\n"
+                    "float sqrtf(float value);\n"
+                    "double fabs(double value);\n"
+                    "float fabsf(float value);\n"
+                    "double fmin(double left, double right);\n"
+                    "float fminf(float left, float right);\n"
+                    "double fmax(double left, double right);\n"
+                    "float fmaxf(float left, float right);\n"
+                    "}\n");
+                return;
+            }
             error(line_number, 1,
                   "freestanding C++ header set is not implemented yet: " + header);
             return;

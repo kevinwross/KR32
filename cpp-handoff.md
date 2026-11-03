@@ -142,10 +142,9 @@ Smoke test:
    `store_value(type)` for any type. For a class this writes one word rather
    than constructing at the static's address. Destroying/registering class
    static locals is also missing.
-6. **`Emit::Object` is still unimplemented in `kr32::cxx`.**
-   `cxx::compile()` emits assembly; CLI `kr32 cxx` wraps it in an object, but
-   the public API `Emit::Object` returns a diagnostic. Either implement it or
-   remove the option from the public contract.
+6. **`Emit::Object` is still unimplemented in `kr32::cxx`.** Fixed on `main`
+   after the merge: `cxx::compile()` now assembles and serializes a relocatable
+   `.k32` object; the public API test covers round-tripping it.
 7. **DAP/GUI threads are not fed by the live runtime.**
    `debug::ThreadInfo` exists and DAP/GUI display it, but `debug::Session` is
    single-machine and nothing populates snapshots from `ClusterHost` during a
@@ -247,7 +246,8 @@ Smoke test:
    documentation.
 9. **Decode `SETSP` in the disassembler** or replace the unwinder's SP restore
    with an existing ISA mechanism; record the decision in `docs/isa-v1.md` and
-   `docs/abi.md`.
+   `docs/abi.md`. Decoding is implemented on `main`; the ISA extension remains
+   documented in `docs/isa-v1.md`.
 
 ### P1 — deferred ABI/features
 

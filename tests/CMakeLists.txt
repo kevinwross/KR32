@@ -86,6 +86,12 @@ add_test(NAME run_cxx_demo
             -o ${CMAKE_BINARY_DIR}/hello-cxx.k32)
 set_tests_properties(run_cxx_demo PROPERTIES PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
+add_test(NAME run_cxx_libc
+    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/cxx_libc.cpp --run
+            -o ${CMAKE_BINARY_DIR}/cxx-libc.k32)
+set_tests_properties(run_cxx_libc PROPERTIES
+    PASS_REGULAR_EXPRESSION "C\\+\\+ via C libc: shared libc")
+
 add_test(NAME run_demo
     COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)
 set_tests_properties(run_demo PROPERTIES

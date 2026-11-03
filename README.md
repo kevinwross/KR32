@@ -88,6 +88,7 @@ kr32 build examples/strings.c -o strings-c.k32 --run
 kr32 build examples/binarytree.c -o binarytree-c.k32 --run
 kr32 cxx examples/hello.cpp -S -o hello-cxx.s
 kr32 build examples/hello.cpp -o hello-cxx.k32 --run
+kr32 build examples/cxx_libc.cpp -o cxx-libc.k32 --run
 kr32 gui examples/libc.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
