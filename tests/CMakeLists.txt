@@ -40,6 +40,12 @@ target_compile_features(kr32_tests PRIVATE cxx_std_20)
 if(TARGET kr32_ui)
     target_sources(kr32_tests PRIVATE unit/test_ui.cpp)
     target_link_libraries(kr32_tests PRIVATE kr32_ui)
+    if(WIN32 AND TARGET SDL2::SDL2)
+        add_custom_command(TARGET kr32_tests POST_BUILD
+            COMMAND ${CMAKE_COMMAND} -E copy_if_different
+                "$<TARGET_FILE:SDL2::SDL2>"
+                "$<TARGET_FILE_DIR:kr32_tests>")
+    endif()
 endif()
 
 # doctest 2.4.11 includes <ciso646>, which libstdc++ 15 flags with #warning.

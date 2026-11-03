@@ -70,6 +70,7 @@ int run(int argc, char** argv) {
         std::string error;
         if (!debugger.load(image_path, error)) {
             std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
+            debugger.show_error(error);
         }
     }
 

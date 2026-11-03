@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "kr32/ui/canvas.h"
+#include "kr32/ui/debugger_ui.h"
 #include "kr32/ui/help.h"
 
 using namespace kr32;
@@ -36,6 +37,27 @@ TEST_CASE("the portable canvas clips drawing to its bounds") {
     canvas.pixel(-1, -1, ui::Color{255, 0, 0, 255});
     canvas.pixel(16, 16, ui::Color{255, 0, 0, 255});
     CHECK(canvas.pixel_at(0, 0) == 0xFFFFFFFFU);
+}
+
+TEST_CASE("error popup is opaque and white-on-dark") {
+    ui::DebuggerUI debugger;
+    debugger.show_error(
+        "C:\\Users\\kevin\\source\\repos\\kr16\\tests\\kevin\\C-for-U.c:20:1: "
+        "expected an expression");
+    ui::Canvas canvas(800, 600);
+    debugger.render(canvas);
+    CHECK(canvas.pixel_at(400, 300) == 0xFF1C080CU);
+    int white = 0;
+    for (int y = 270; y < 330; ++y) {
+        for (int x = 50; x < 750; ++x) {
+            const std::uint32_t value = canvas.pixel_at(x, y);
+            if (((value >> 16) & 0xFFU) >= 220 && ((value >> 8) & 0xFFU) >= 220 &&
+                (value & 0xFFU) >= 220) {
+                ++white;
+            }
+        }
+    }
+    CHECK(white > 0);
 }
 
 TEST_CASE("instruction and addressing help describe KR32 operands") {

@@ -285,6 +285,10 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     return true;
 }
 
+void DebuggerUI::show_error(std::string message) {
+    error_ = std::move(message);
+}
+
 void DebuggerUI::prepare_initial_stop() {
     const debug::Function* main_function = nullptr;
     for (const debug::Function& function : session_.info().functions) {
@@ -1473,12 +1477,35 @@ void DebuggerUI::draw_error(Canvas& canvas) {
     if (error_.empty()) {
         return;
     }
-    const Rect dialog{260, 240, 500, 110};
-    canvas.fill(dialog, Color{44, 24, 28, 255});
+    const int panel_width = std::min(820, std::max(420, canvas.width() - 80));
+    const int text_width = panel_width - 24;
+    const int max_chars = std::max(24, text_width / 7);
+    std::vector<std::string> lines;
+    for (std::size_t offset = 0; offset < error_.size();
+         offset += static_cast<std::size_t>(max_chars)) {
+        lines.push_back(error_.substr(offset, static_cast<std::size_t>(max_chars)));
+        if (lines.size() == 6) {
+            if (offset + static_cast<std::size_t>(max_chars) < error_.size()) {
+                lines.back() += "...";
+            }
+            break;
+        }
+    }
+    const int panel_height = 26 + static_cast<int>(lines.size()) * 16 + 34;
+    const int x = (canvas.width() - panel_width) / 2;
+    const int y = (canvas.height() - panel_height) / 2;
+    const Rect dialog{x, y, panel_width, panel_height};
+    canvas.fill(Rect{0, 0, canvas.width(), canvas.height()}, Color{0, 0, 0, 150});
+    canvas.fill(dialog, Color{28, 8, 12, 255});
     canvas.frame(dialog, kBad, 2);
-    canvas.text(dialog.x + 12, dialog.y + 12, "ERROR", kBad);
-    canvas.text(dialog.x + 12, dialog.y + 32, trim_to(error_, 74), kText);
-    canvas.text(dialog.x + 12, dialog.y + 78, "click to dismiss", kDim);
+    canvas.text(dialog.x + 12, dialog.y + 10, "ERROR", Color{255, 130, 130, 255},
+                FontRole::UiBold);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(dialog.x + 12, dialog.y + 34 + static_cast<int>(index) * 16,
+                    lines[index], Color{255, 255, 255, 255}, FontRole::MonoSmall);
+    }
+    canvas.text(dialog.x + 12, dialog.y + panel_height - 22, "click to dismiss",
+                Color{230, 220, 220, 255}, FontRole::MonoSmall);
 }
 
 void DebuggerUI::toggle_source_breakpoint(int line) {

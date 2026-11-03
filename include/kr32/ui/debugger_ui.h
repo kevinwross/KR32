@@ -13,6 +13,7 @@ namespace kr32::ui {
 class DebuggerUI {
 public:
     [[nodiscard]] bool load(const std::string& path, std::string& error);
+    void show_error(std::string message);
     void restart();
     void run();
     void step();
