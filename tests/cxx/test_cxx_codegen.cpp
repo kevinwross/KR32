@@ -2197,6 +2197,21 @@ TEST_CASE("auto initializer_list variables hold braced values") {
     CHECK(program.result == 9);
 }
 
+TEST_CASE("auto deduces scalar and pointer return types") {
+    const ProgramResult program = compile_and_run(
+        "int* pointer() { static int value = 42; return &value; }\n"
+        "long long wide() { return 10000000000; }\n"
+        "double real() { return 2.5; }\n"
+        "int main() {\n"
+        "    auto p = pointer();\n"
+        "    auto w = wide();\n"
+        "    auto d = real();\n"
+        "    return *p + (int)(w / 1000000000) + (int)d;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 54);
+}
+
 TEST_CASE("auto deduces class return types from calls") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"

@@ -6266,7 +6266,9 @@ private:
                    declaration.initializer->kind == ExprKind::Call) {
             const TypePtr inferred =
                 resolve_type(type_of(*declaration.initializer));
-            if (inferred != nullptr && class_of(inferred) != nullptr) {
+            if (inferred != nullptr &&
+                !(inferred->kind == TypeKind::Builtin &&
+                  inferred->builtin == BuiltinKind::Void)) {
                 type = inferred;
             }
         }

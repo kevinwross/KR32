@@ -24,7 +24,7 @@ per-thread
 `thread_local` construction/destruction, conditional
 expressions, switch statements, global and local aggregate initializers,
 designated initializers, access control (including friends), unsigned integer
-semantics, `std::initializer_list` parameters, constructors, braced and empty returns, `auto` variables and class-return deduction, 64-bit elements including range-for, and begin/end iteration,
+semantics, `std::initializer_list` parameters, constructors, braced and empty returns, `auto` variables with full return-type deduction, 64-bit elements including range-for, and begin/end iteration,
 captureless and
 value/reference/default-capturing lambdas,
 by-value class parameters/returns with `sret` (plus one-to-eight-byte trivial, including floating and mixed, class register arguments and returns; larger aggregates use hidden pointers), exit-time static destruction,
