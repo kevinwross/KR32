@@ -15,7 +15,7 @@ supports integer, `unsigned int`/`unsigned char`, `long` (32-bit), `float`, and
 local aggregate/array initializers, compound assignment, `++`/`--`, conditional
 expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
 inheritance, virtual dispatch/RTTI, function and class templates, matrices,
-exceptions/unwinding, `new`/`delete`, threads/TLS/atomics, conditional
+exceptions/unwinding, `new`/`delete`, `std::thread`/TLS/atomics, conditional
 expressions, switch statements, global and local aggregate initializers, access
 control, by-value class parameters/returns with `sret`, exit-time static
 destruction, range-based `for`, `goto`/labels, and C++ debug records. A

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 00:01 -08:00
+> **Last updated:** 2026-11-03 00:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1341,6 +1341,13 @@ Newest entries at the bottom. Use the local time zone.
       for undefined weak symbols and linker resolution of weak undefined
       relocations to zero. Added an `exit()` static-destructor regression.
       252 cases / 5563 assertions.
+- **2026-11-03 00:08 -08:00** — Expanded the thread header surface:
+      `std::thread`, `std::mutex`, `std::condition_variable`,
+      `std::atomic_int`, and `std::this_thread` now resolve through injected
+      `<thread>`, `<mutex>`, `<condition_variable>`, and `<atomic>` headers.
+      Added default-constructible/joinable thread state, `this_thread::yield`
+      and `get_id`, and a single-injection guard for the shared header block.
+      253 cases / 5565 assertions.
 
 ## 10. Updating this file
 

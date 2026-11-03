@@ -76,9 +76,32 @@ struct condition_variable {
 
 struct thread {
     int handle;
+    thread() { handle = 0; }
     thread(int entry, int arg) { handle = thread_create(entry, arg, 0); }
-    int join() { return thread_join(handle); }
+    bool joinable() { return handle != 0; }
+    void join() {
+        if (handle != 0) {
+            thread_join(handle);
+            handle = 0;
+        }
+    }
     void yield() { thread_yield(); }
 };
 
+namespace this_thread {
+inline void yield() { thread_yield(); }
+inline int get_id() { return thread_self(); }
+} // namespace this_thread
+
 } // namespace kr32
+
+namespace std {
+typedef kr32::atomic_int atomic_int;
+typedef kr32::condition_variable condition_variable;
+typedef kr32::mutex mutex;
+typedef kr32::thread thread;
+namespace this_thread {
+inline void yield() { kr32::thread_yield(); }
+inline int get_id() { return kr32::thread_self(); }
+} // namespace this_thread
+} // namespace std

@@ -1152,6 +1152,23 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("std thread, mutex, and condition_variable surface compiles") {
+    const ProgramResult program = compile_and_run(
+        "#include <thread>\n"
+        "#include <mutex>\n"
+        "#include <condition_variable>\n"
+        "int main() {\n"
+        "    std::thread thread;\n"
+        "    std::mutex guard;\n"
+        "    std::condition_variable condition;\n"
+        "    std::this_thread::yield();\n"
+        "    if (thread.joinable()) return 1;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("exit runs static destructors once") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

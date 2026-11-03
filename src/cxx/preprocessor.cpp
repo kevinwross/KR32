@@ -501,18 +501,28 @@ private:
         if (directive == "include") {
             const std::string header(trim(rest));
             if (header.find("kr32/thread.hpp") != std::string::npos ||
-                header.find("thread.hpp") != std::string::npos) {
+                header.find("thread.hpp") != std::string::npos ||
+                header.find("<thread>") != std::string::npos ||
+                header.find("<mutex>") != std::string::npos ||
+                header.find("<condition_variable>") != std::string::npos ||
+                header.find("<atomic>") != std::string::npos) {
+                if (thread_header_injected_) {
+                    return;
+                }
+                thread_header_injected_ = true;
                 append_line(
                     "namespace kr32 {\n"
                     "inline int thread_create(int entry, int arg, int stack_size = 0) { return __builtin_kr32_syscall(44, entry, arg, stack_size); }\n"
                     "inline int thread_join(int handle) { return __builtin_kr32_syscall(45, handle, 0, 0); }\n"
                     "inline void thread_yield() { (void)__builtin_kr32_syscall(46, 0, 0, 0); }\n"
                     "inline void thread_exit(int code) { (void)__builtin_kr32_syscall(47, code, 0, 0); }\n"
+                    "inline int thread_self() { return __builtin_kr32_syscall(50, 0, 0, 0); }\n"
                     "inline int futex_wait(int* address, int expected) { return __builtin_kr32_syscall(48, (int)address, expected, 0); }\n"
                     "inline int futex_wake(int* address, int count) { return __builtin_kr32_syscall(49, (int)address, count, 0); }\n"
                     "struct atomic_int {\n"
                     "    int value;\n"
                     "    atomic_int() { value = 0; }\n"
+                    "    explicit atomic_int(int initial) { value = initial; }\n"
                     "    int load() { return __atomic_load_n(&value, 0); }\n"
                     "    void store(int next) { __atomic_store_n(&value, next, 0); }\n"
                     "    int fetch_add(int delta) { return __atomic_fetch_add(&value, delta, 0); }\n"
@@ -524,6 +534,32 @@ private:
                     "    void lock() { int expected = 0; while (!__atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0)) { expected = 0; futex_wait(&state, 1); } }\n"
                     "    void unlock() { __atomic_store_n(&state, 0, 0); futex_wake(&state, 1); }\n"
                     "};\n"
+                    "struct condition_variable {\n"
+                    "    int sequence;\n"
+                    "    condition_variable() { sequence = 0; }\n"
+                    "    void wait(mutex& guard) { int observed = sequence; guard.unlock(); futex_wait(&sequence, observed); guard.lock(); }\n"
+                    "    void notify_one() { __atomic_fetch_add(&sequence, 1, 0); futex_wake(&sequence, 1); }\n"
+                    "    void notify_all() { __atomic_fetch_add(&sequence, 1, 0); futex_wake(&sequence, 2147483647); }\n"
+                    "};\n"
+                    "struct thread {\n"
+                    "    int handle;\n"
+                    "    thread() { handle = 0; }\n"
+                    "    thread(int entry, int arg) { handle = thread_create(entry, arg, 0); }\n"
+                    "    bool joinable() { return handle != 0; }\n"
+                    "    void join() { if (handle != 0) { thread_join(handle); handle = 0; } }\n"
+                    "    void yield() { thread_yield(); }\n"
+                    "};\n"
+                    "namespace this_thread {\n"
+                    "inline void yield() { thread_yield(); }\n"
+                    "inline int get_id() { return thread_self(); }\n"
+                    "}\n"
+                    "}\n"
+                    "namespace std {\n"
+                    "typedef kr32::atomic_int atomic_int;\n"
+                    "typedef kr32::condition_variable condition_variable;\n"
+                    "typedef kr32::mutex mutex;\n"
+                    "typedef kr32::thread thread;\n"
+                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline int get_id() { return kr32::thread_self(); } }\n"
                     "}\n");
                 return;
             }
@@ -901,6 +937,7 @@ private:
     std::map<std::string, Macro> macros_;
     std::set<std::string> expanding_;
     std::vector<Conditional> conditions_;
+    bool thread_header_injected_ = false;
 };
 
 } // namespace
