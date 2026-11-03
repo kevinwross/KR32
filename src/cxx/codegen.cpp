@@ -5253,8 +5253,10 @@ private:
         }
         const TypePtr call_result = resolve_type(function->result);
         const ClassInfo* call_result_class = class_of(call_result);
+        const bool register_result =
+            call_result_class != nullptr && is_register_class(call_result_class);
         int class_result_temp = -1;
-        if (call_result_class != nullptr) {
+        if (call_result_class != nullptr && !register_result) {
             class_result_temp = allocate_local(call_result);
             emit("    LEA R4, [R7 + " + std::to_string(class_result_temp) + "]");
         }
@@ -5279,6 +5281,12 @@ private:
         emit_unwind_landing(call_landing);
         emit(call_continue + ":");
         record_call_site(call_start, call_end, call_landing);
+        if (register_result) {
+            const int result_object = allocate_local(call_result);
+            emit("    LEA R1, [R7 + " + std::to_string(result_object) + "]");
+            emit("    STORE R0, [R1]");
+            emit("    LEA R0, [R7 + " + std::to_string(result_object) + "]");
+        }
         if (class_result_temp >= 0) {
             emit("    LEA R0, [R7 + " + std::to_string(class_result_temp) + "]");
         }
@@ -5418,6 +5426,17 @@ private:
                     const int source_temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     emit("    STORE R0, [R7 + " + std::to_string(source_temp) + "]");
+                    if (is_register_class(result_class)) {
+                        emit("    LOAD R0, [R7 + " + std::to_string(source_temp) + "]");
+                        emit("    LOAD R0, [R0]");
+                        const int value_temp =
+                            allocate_local(Type::make_builtin(BuiltinKind::Int));
+                        emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+                        emit_all_local_destructors();
+                        emit("    LOAD R0, [R7 + " + std::to_string(value_temp) + "]");
+                        emit("    JMP " + return_label_);
+                        return;
+                    }
                     if (current_sret_slot_ < 0) {
                         error(statement.location,
                               "class return requires a destination object");
@@ -5916,7 +5935,7 @@ private:
                info->qualified.find("initializer_list__") != std::string::npos;
     }
 
-    bool is_register_class(ClassInfo* info) const {
+    bool is_register_class(const ClassInfo* info) const {
         return info != nullptr && info->size > 0 && info->size <= 4 &&
                !info->polymorphic && !info->abstract &&
                info->base == nullptr && info->constructors.empty() &&
@@ -6447,10 +6466,10 @@ private:
             integer_argument = 1;
         }
         current_sret_slot_ = -1;
-        if (ClassInfo* result_class = class_of(resolve_type(function.result))) {
+        if (ClassInfo* result_class = class_of(resolve_type(function.result));
+            result_class != nullptr && !is_register_class(result_class)) {
             current_sret_slot_ = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R4, [R7 + " + std::to_string(current_sret_slot_) + "]");
-            (void)result_class;
         }
         bool has_class_parameter = false;
         for (const Param& parameter : function.decl->parameters) {

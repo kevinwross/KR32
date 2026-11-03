@@ -1467,6 +1467,15 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("trivial four-byte classes return in a register") {
+    const ProgramResult program = compile_and_run(
+        "struct Small { int value; };\n"
+        "Small make() { Small object; object.value = 42; return object; }\n"
+        "int main() { Small object = make(); return object.value; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("trivial four-byte classes pass by value in a register") {
     const ProgramResult program = compile_and_run(
         "struct Small { int value; };\n"
