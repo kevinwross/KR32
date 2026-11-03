@@ -420,7 +420,13 @@ public:
         for (std::size_t index = 0; index < function_storage_.size(); ++index) {
             Function* function = function_storage_[index].get();
             if (function->defined && emitted_functions_.insert(function).second) {
-                emit_function(*function);
+                if (function->from_template && !function->symbol.empty()) {
+                    text_ += ".section .text." + function->symbol + "\n";
+                    emit_function(*function);
+                    text_ += ".text\n";
+                } else {
+                    emit_function(*function);
+                }
             }
         }
         emit_globals(true);

@@ -140,6 +140,36 @@ TEST_CASE("the linker can strip local symbols") {
     CHECK(find_symbol(image, "__heap_end") != nullptr);
 }
 
+TEST_CASE("comdat sections keep one copy across objects") {
+    const container::Image first = assemble(
+        ".text\n"
+        ".global _start\n"
+        "_start:\n"
+        "    HALT\n"
+        ".section .text.shared\n"
+        ".weak shared\n"
+        "shared:\n"
+        "    MOV R0, #1\n"
+        "    RET\n");
+    const container::Image second = assemble(
+        ".section .text.shared\n"
+        ".weak shared\n"
+        "shared:\n"
+        "    MOV R0, #2\n"
+        "    RET\n");
+
+    container::Image image;
+    linker::Map map;
+    linker::Error error;
+    REQUIRE_MESSAGE(linker::link({first, second}, linker::Options{}, image, map, error),
+                    error.message);
+
+    const container::Section* shared = find_section(image, ".text.shared");
+    REQUIRE(shared != nullptr);
+    CHECK(shared->size == 8);
+    CHECK((shared->flags & container::Comdat) != 0);
+}
+
 TEST_CASE("a linked executable round-trips through the container") {
     const container::Image object = assemble(
         ".text\n"

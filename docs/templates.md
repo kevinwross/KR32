@@ -87,6 +87,8 @@ struct Array {
   units
 - Function-local statics inside template instantiations merged across
   translation units
+- Template function instantiations emitted in `.text.<symbol>` COMDAT
+  sections and deduplicated by the linker
 
 ### Out-of-class member definitions
 

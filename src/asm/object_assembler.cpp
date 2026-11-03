@@ -578,6 +578,12 @@ private:
 
     bool pass1_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
+        if (name == ".section") {
+            if (statement.operands.size() != 1) {
+                return fail(statement.line, ".section expects one name");
+            }
+            return switch_section(statement.operands[0], statement.line);
+        }
         if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
             name == ".tls" || name == ".init_array" || name == ".fini_array" ||
             name == ".eh_frame_array" || name == ".data" || name == ".bss" ||
@@ -690,6 +696,12 @@ private:
                 current_ = index;
                 return true;
             }
+        }
+        if (name.rfind(".text.", 0) == 0) {
+            add_section(name, container::SectionType::Text,
+                        container::Alloc | container::Execute | container::Comdat);
+            current_ = sections_.size() - 1;
+            return true;
         }
         return fail(line, "unknown section: " + name);
     }
@@ -1429,6 +1441,12 @@ private:
 
     bool pass2_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
+        if (name == ".section") {
+            if (statement.operands.size() != 1) {
+                return fail(statement.line, ".section expects one name");
+            }
+            return switch_section(statement.operands[0], statement.line);
+        }
         if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
             name == ".tls" || name == ".init_array" || name == ".fini_array" ||
             name == ".eh_frame_array" || name == ".data" || name == ".bss" ||

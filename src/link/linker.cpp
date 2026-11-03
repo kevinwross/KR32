@@ -56,6 +56,7 @@ bool link(const std::vector<container::Image>& objects,
 
     std::vector<container::Section> output_sections;
     std::map<std::string, std::size_t> section_index;
+    std::map<std::size_t, std::uint32_t> comdat_base;
     std::vector<std::vector<std::size_t>> object_section_output(objects.size());
     std::vector<std::vector<std::uint32_t>> object_section_base(objects.size());
 
@@ -72,7 +73,8 @@ bool link(const std::vector<container::Image>& objects,
              ++section_number) {
             const container::Section& input = object.sections[section_number];
             int index = find_section(input.name);
-            if (index < 0) {
+            const bool new_section = index < 0;
+            if (new_section) {
                 index = static_cast<int>(output_sections.size());
                 section_index.emplace(input.name, static_cast<std::size_t>(index));
                 container::Section created;
@@ -88,6 +90,14 @@ bool link(const std::vector<container::Image>& objects,
             object_section_output[object_index][section_number] =
                 static_cast<std::size_t>(index);
 
+            if ((input.flags & container::Comdat) != 0 && !new_section) {
+                const auto existing = comdat_base.find(static_cast<std::size_t>(index));
+                if (existing != comdat_base.end()) {
+                    object_section_base[object_index][section_number] = existing->second;
+                    continue;
+                }
+            }
+
             if (input.type == container::SectionType::Bss) {
                 output.size = align_up(output.size, output.alignment);
                 object_section_base[object_index][section_number] = output.size;
@@ -101,6 +111,10 @@ bool link(const std::vector<container::Image>& objects,
                     static_cast<std::uint32_t>(output.data.size());
                 output.data.insert(output.data.end(), input.data.begin(), input.data.end());
                 output.size = static_cast<std::uint32_t>(output.data.size());
+            }
+            if ((input.flags & container::Comdat) != 0) {
+                comdat_base[static_cast<std::size_t>(index)] =
+                    object_section_base[object_index][section_number];
             }
         }
     }
