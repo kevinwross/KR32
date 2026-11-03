@@ -1264,6 +1264,7 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
 
 void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "THREADS / CALL STACK");
+    session_.refresh_threads();
     const std::vector<debug::ThreadInfo>& threads = session_.threads();
     int y = rect.y + 24;
     const int max_thread_rows = 3;

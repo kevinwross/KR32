@@ -353,6 +353,7 @@ public:
                 emit_function(*function);
             }
         }
+        emit_cxx_init();
         emit_rtti();
         emit_lsdas();
         emit_eh_frame();
@@ -378,10 +379,36 @@ public:
         if (!bss_.empty()) {
             result += ".bss\n" + bss_;
         }
+        if (!startup_.empty()) {
+            result += startup_;
+        }
         if (!tls_image_.empty()) {
             result += ".tls\n";
-            for (const std::uint8_t byte : tls_image_) {
-                result += "    .byte " + std::to_string(byte) + "\n";
+            std::sort(tls_symbols_.begin(), tls_symbols_.end(),
+                      [](const TlsSymbol& left, const TlsSymbol& right) {
+                          return left.offset < right.offset;
+                      });
+            int cursor = 0;
+            for (const TlsSymbol& symbol : tls_symbols_) {
+                if (symbol.offset > cursor) {
+                    result += "    .space " +
+                              std::to_string(symbol.offset - cursor) + "\n";
+                    cursor = symbol.offset;
+                }
+                if (symbol.exported) {
+                    result += ".global " + symbol.symbol + "\n";
+                }
+                result += symbol.symbol + ":\n";
+                for (int index = 0; index < symbol.size; ++index) {
+                    const std::size_t position =
+                        static_cast<std::size_t>(symbol.offset + index);
+                    result += "    .byte " +
+                              std::to_string(position < tls_image_.size()
+                                                 ? tls_image_[position]
+                                                 : 0) +
+                              "\n";
+                }
+                cursor += symbol.size;
             }
         }
         if (!debug_.empty()) {
@@ -425,6 +452,7 @@ private:
         bool is_static = false;
         bool is_thread_local = false;
         int tls_offset = 0;
+        std::string tls_slot_symbol;
         const Expr* initializer = nullptr;
         bool needs_init = false;
     };
@@ -997,6 +1025,8 @@ private:
             tls_cursor_ = (tls_cursor_ + alignment - 1) / alignment * alignment;
             global->tls_offset = tls_cursor_;
             tls_cursor_ += std::max(1, type_size(resolve_type(declaration.type)));
+            global->tls_slot_symbol =
+                ".Ltls_slot_" + std::to_string(tls_slot_counter_++);
         }
         global->type = resolve_type(declaration.type);
         global->initializer = declaration.initializer.get();
@@ -2062,6 +2092,16 @@ private:
         }
     }
 
+    void emit_tls_address(Global* global) {
+        emit("    LEA R0, [" + global->tls_slot_symbol + "]");
+        emit("    LOAD R0, [R0]");
+        emit("    LEA R1, [.Ltls_base]");
+        emit("    LOAD R1, [R1]");
+        emit("    SUB R0, R0, R1");
+        emit("    ADD R0, R11, R0");
+        emit("    ADD R0, R0, #32");
+    }
+
     void gen_address(const Expr& expression) {
         if (expression.kind == ExprKind::Name) {
             if (Local* local = lookup_local(expression.name)) {
@@ -2076,7 +2116,7 @@ private:
             }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
                 if (global->is_thread_local) {
-                    emit("    ADD R0, R11, #" + std::to_string(global->tls_offset));
+                    emit_tls_address(global);
                 } else {
                     emit("    LEA R0, [" + global->symbol + "]");
                 }
@@ -2847,7 +2887,7 @@ private:
             }
             if (Global* global = lookup_global(expression.name, current_prefix_)) {
                 if (global->is_thread_local) {
-                    emit("    ADD R0, R11, #" + std::to_string(global->tls_offset));
+                    emit_tls_address(global);
                 } else {
                     emit("    LEA R0, [" + global->symbol + "]");
                 }
@@ -3992,7 +4032,9 @@ private:
             if (!declaration.name.parts.empty()) {
                 local_scopes_.back()[declaration.name.parts.back()] = local;
             }
-            if (declaration.initializer) {
+            ClassInfo* info = class_of(type);
+            const bool guarded = declaration.initializer != nullptr || info != nullptr;
+            if (guarded) {
                 const std::string guard =
                     "__cxx_guard_" + std::to_string(static_counter_++);
                 bss_ += ".global " + guard + "\n" + guard +
@@ -4002,9 +4044,30 @@ private:
                 const std::string done = new_label("guard_done");
                 emit("    CMP R0, #0");
                 emit("    JZ " + done);
-                gen_expr(*declaration.initializer);
-                emit("    LEA R1, [" + raw->symbol + "]");
-                store_value(type);
+                if (info != nullptr) {
+                    const int address =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    LEA R0, [" + raw->symbol + "]");
+                    emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                    std::vector<ExprPtr> empty;
+                    const std::vector<ExprPtr>* arguments = &empty;
+                    if (declaration.initializer &&
+                        declaration.initializer->kind == ExprKind::Call) {
+                        arguments = &declaration.initializer->arguments;
+                    } else if (declaration.initializer &&
+                               declaration.initializer->kind ==
+                                   ExprKind::InitializerList) {
+                        arguments = &declaration.initializer->children;
+                    }
+                    construct_object_at(info, address, *arguments);
+                    if (find_destructor(info) != nullptr) {
+                        static_destructors_.push_back(raw);
+                    }
+                } else if (declaration.initializer) {
+                    gen_expr(*declaration.initializer);
+                    emit("    LEA R1, [" + raw->symbol + "]");
+                    store_value(type);
+                }
                 emit("    LEA R0, [" + guard + "]");
                 emit("    CALL __cxa_guard_release");
                 emit(done + ":");
@@ -4238,7 +4301,7 @@ private:
                 set_vptr(*function.owner);
             }
             if (function.qualified == "main") {
-                emit_static_initializers();
+                emit_init_array_loop();
             }
             gen_statement(*function.decl->body);
             if (function.is_destructor) {
@@ -4258,7 +4321,7 @@ private:
             const int result_temp =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(result_temp) + "]");
-            emit("    CALL __kr32_cxx_fini");
+            emit_fini_array_loop();
             emit("    LOAD R0, [R7 + " + std::to_string(result_temp) + "]");
         }
         frame_size_ = (frame_size_ + 15) / 16 * 16 + 8;
@@ -4393,6 +4456,36 @@ private:
         return eval_const(*global.initializer, value);
     }
 
+    void emit_init_array_loop() {
+        const std::string loop = new_label("init_array");
+        const std::string done = new_label("init_array_done");
+        emit("    LEA R4, [__init_array_start]");
+        emit("    LEA R5, [__init_array_end]");
+        emit(loop + ":");
+        emit("    CMP R4, R5");
+        emit("    JGE " + done);
+        emit("    LOAD R6, [R4]");
+        emit("    CALL R6");
+        emit("    ADD R4, R4, #4");
+        emit("    JMP " + loop);
+        emit(done + ":");
+    }
+
+    void emit_fini_array_loop() {
+        const std::string loop = new_label("fini_array");
+        const std::string done = new_label("fini_array_done");
+        emit("    LEA R4, [__fini_array_end]");
+        emit("    LEA R5, [__fini_array_start]");
+        emit(loop + ":");
+        emit("    CMP R4, R5");
+        emit("    JLE " + done);
+        emit("    SUB R4, R4, #4");
+        emit("    LOAD R6, [R4]");
+        emit("    CALL R6");
+        emit("    JMP " + loop);
+        emit(done + ":");
+    }
+
     void emit_static_initializers() {
         for (const auto& global : global_storage_) {
             if (!global->needs_init || global->is_thread_local) {
@@ -4425,6 +4518,34 @@ private:
                 store_value(global->type);
             }
         }
+    }
+
+    void emit_cxx_init() {
+        bool needed = false;
+        for (const auto& global : global_storage_) {
+            if (global->needs_init && !global->is_thread_local) {
+                needed = true;
+                break;
+            }
+        }
+        if (!needed) {
+            return;
+        }
+        const int saved_frame = frame_size_;
+        Function* saved_function = current_function_;
+        current_function_ = nullptr;
+        frame_size_ = 0;
+        push_scope();
+        local_destructors_.push_back({});
+        text_ += ".text\n.Lcxx_init:\n";
+        text_ += "    PUSH R7\n    ADJSP #-1024\n    LEA R7, [SP]\n";
+        emit_static_initializers();
+        text_ += "    ADJSP #1024\n    POP R7\n    RET\n";
+        local_destructors_.pop_back();
+        pop_scope();
+        frame_size_ = saved_frame;
+        current_function_ = saved_function;
+        startup_ += ".init_array\n    .word .Lcxx_init\n";
     }
 
     void emit_lsdas() {
@@ -4466,7 +4587,7 @@ private:
         if (function_eh_records_.empty()) {
             return;
         }
-        lsda_ += ".data\n.weak __kr32_eh_frame\n__kr32_eh_frame:\n";
+        lsda_ += ".data\n.Lcxx_eh_frame:\n";
         lsda_ += "    .word " + std::to_string(function_eh_records_.size()) + "\n";
         for (const FunctionEhRecord& record : function_eh_records_) {
             lsda_ += "    .word " + record.label + "\n";
@@ -4474,56 +4595,63 @@ private:
         for (const FunctionEhRecord& record : function_eh_records_) {
             lsda_ += record.text;
         }
+        startup_ += ".eh_frame_array\n    .word .Lcxx_eh_frame\n";
         text_ += ".text\n.weak __kr32_throw\n__kr32_throw:\n";
         text_ += "    PUSH R7\n    ADJSP #-24\n    LEA R7, [SP]\n";
         text_ += "    LOAD R2, [R7 + 24]\n";
         text_ += "    LOAD R3, [R7 + 28]\n";
         text_ += "    JMP __kr32_unwind_continue\n";
         text_ += "__kr32_unwind_continue:\n";
-        text_ += "    LEA R4, [__kr32_eh_frame]\n";
-        text_ += "    LOAD R5, [R4]\n";
+        text_ += "    LEA R4, [__eh_frame_array_start]\n";
+        text_ += "    LEA R5, [__eh_frame_array_end]\n";
+        text_ += ".Lunwind_table_loop:\n";
+        text_ += "    CMP R4, R5\n";
+        text_ += "    JGE .Lunwind_fail\n";
+        text_ += "    LOAD R6, [R4]\n";
         text_ += "    ADD R4, R4, #4\n";
+        text_ += "    LOAD R7, [R6]\n";
+        text_ += "    ADD R6, R6, #4\n";
         text_ += ".Lunwind_desc_loop:\n";
-        text_ += "    CMP R5, #0\n";
-        text_ += "    JLE .Lunwind_fail\n";
-        text_ += "    LOAD R10, [R4]\n";
-        text_ += "    LOAD R6, [R10]\n";
-        text_ += "    CMP R3, R6\n";
+        text_ += "    CMP R7, #0\n";
+        text_ += "    JLE .Lunwind_table_loop\n";
+        text_ += "    LOAD R10, [R6]\n";
+        text_ += "    LOAD R9, [R10]\n";
+        text_ += "    CMP R3, R9\n";
         text_ += "    JLT .Lunwind_next_desc\n";
-        text_ += "    LOAD R6, [R10 + 4]\n";
-        text_ += "    CMP R3, R6\n";
+        text_ += "    LOAD R9, [R10 + 4]\n";
+        text_ += "    CMP R3, R9\n";
         text_ += "    JGT .Lunwind_next_desc\n";
-        text_ += "    LOAD R6, [R10 + 8]\n";
-        text_ += "    LOAD R7, [R10 + 12]\n";
-        text_ += "    LOAD R8, [R7]\n";
-        text_ += "    ADD R7, R7, #4\n";
+        text_ += "    LOAD R1, [R10 + 8]\n";
+        text_ += "    LOAD R10, [R10 + 12]\n";
+        text_ += "    LOAD R8, [R10]\n";
+        text_ += "    ADD R10, R10, #4\n";
         text_ += ".Lunwind_site_loop:\n";
         text_ += "    CMP R8, #0\n";
         text_ += "    JLE .Lunwind_pop\n";
-        text_ += "    LOAD R9, [R7]\n";
+        text_ += "    LOAD R9, [R10]\n";
         text_ += "    CMP R3, R9\n";
         text_ += "    JLT .Lunwind_next_site\n";
-        text_ += "    LOAD R9, [R7 + 4]\n";
+        text_ += "    LOAD R9, [R10 + 4]\n";
         text_ += "    CMP R3, R9\n";
         text_ += "    JGT .Lunwind_next_site\n";
-        text_ += "    LOAD R9, [R7 + 8]\n";
+        text_ += "    LOAD R9, [R10 + 8]\n";
         text_ += "    STORE R2, [__kr32_unwind_frame]\n";
         text_ += "    STORE R3, [__kr32_unwind_pc]\n";
         text_ += "    MOV R7, R2\n";
         text_ += "    SETSP R7\n";
         text_ += "    JMP R9\n";
         text_ += ".Lunwind_next_site:\n";
-        text_ += "    ADD R7, R7, #12\n";
+        text_ += "    ADD R10, R10, #12\n";
         text_ += "    SUB R8, R8, #1\n";
         text_ += "    JMP .Lunwind_site_loop\n";
         text_ += ".Lunwind_pop:\n";
-        text_ += "    ADD R9, R2, R6\n";
+        text_ += "    ADD R9, R2, R1\n";
         text_ += "    LOAD R3, [R9 + 4]\n";
         text_ += "    LOAD R2, [R9]\n";
         text_ += "    JMP __kr32_unwind_continue\n";
         text_ += ".Lunwind_next_desc:\n";
-        text_ += "    ADD R4, R4, #4\n";
-        text_ += "    SUB R5, R5, #1\n";
+        text_ += "    ADD R6, R6, #4\n";
+        text_ += "    SUB R7, R7, #1\n";
         text_ += "    JMP .Lunwind_desc_loop\n";
         text_ += ".Lunwind_fail:\n";
         text_ += "    MOV R0, #1\n";
@@ -4532,27 +4660,33 @@ private:
         text_ += ".weak _Unwind_Resume\n_Unwind_Resume:\n";
         text_ += "    LOAD R2, [__kr32_unwind_frame]\n";
         text_ += "    LOAD R3, [__kr32_unwind_pc]\n";
-        text_ += "    LEA R4, [__kr32_eh_frame]\n";
-        text_ += "    LOAD R5, [R4]\n";
+        text_ += "    LEA R4, [__eh_frame_array_start]\n";
+        text_ += "    LEA R5, [__eh_frame_array_end]\n";
+        text_ += ".Lunwind_resume_table:\n";
+        text_ += "    CMP R4, R5\n";
+        text_ += "    JGE .Lunwind_fail\n";
+        text_ += "    LOAD R6, [R4]\n";
         text_ += "    ADD R4, R4, #4\n";
+        text_ += "    LOAD R7, [R6]\n";
+        text_ += "    ADD R6, R6, #4\n";
         text_ += ".Lunwind_resume_desc:\n";
-        text_ += "    CMP R5, #0\n";
-        text_ += "    JLE .Lunwind_fail\n";
-        text_ += "    LOAD R10, [R4]\n";
-        text_ += "    LOAD R6, [R10]\n";
-        text_ += "    CMP R3, R6\n";
+        text_ += "    CMP R7, #0\n";
+        text_ += "    JLE .Lunwind_resume_table\n";
+        text_ += "    LOAD R10, [R6]\n";
+        text_ += "    LOAD R9, [R10]\n";
+        text_ += "    CMP R3, R9\n";
         text_ += "    JLT .Lunwind_resume_next\n";
-        text_ += "    LOAD R6, [R10 + 4]\n";
-        text_ += "    CMP R3, R6\n";
+        text_ += "    LOAD R9, [R10 + 4]\n";
+        text_ += "    CMP R3, R9\n";
         text_ += "    JGT .Lunwind_resume_next\n";
-        text_ += "    LOAD R6, [R10 + 8]\n";
-        text_ += "    ADD R9, R2, R6\n";
+        text_ += "    LOAD R1, [R10 + 8]\n";
+        text_ += "    ADD R9, R2, R1\n";
         text_ += "    LOAD R3, [R9 + 4]\n";
         text_ += "    LOAD R2, [R9]\n";
         text_ += "    JMP __kr32_unwind_continue\n";
         text_ += ".Lunwind_resume_next:\n";
-        text_ += "    ADD R4, R4, #4\n";
-        text_ += "    SUB R5, R5, #1\n";
+        text_ += "    ADD R6, R6, #4\n";
+        text_ += "    SUB R7, R7, #1\n";
         text_ += "    JMP .Lunwind_resume_desc\n";
         bss_ += ".weak __kr32_unwind_frame\n";
         bss_ += "__kr32_unwind_frame:\n    .space 4\n";
@@ -4615,19 +4749,31 @@ private:
         text_ += ".weak __cxa_guard_acquire\n__cxa_guard_acquire:\n";
         text_ += ".Lguard_retry:\n";
         text_ += "    LL R1, [R0]\n";
+        text_ += "    CMP R1, #2\n";
+        text_ += "    JZ .Lguard_ready\n";
         text_ += "    CMP R1, #0\n";
-        text_ += "    JNZ .Lguard_ready\n";
+        text_ += "    JNZ .Lguard_wait\n";
         text_ += "    MOV R2, #1\n";
         text_ += "    SC R2, [R0]\n";
         text_ += "    JNZ .Lguard_retry\n";
         text_ += "    MOV R0, #1\n";
         text_ += "    RET\n";
+        text_ += ".Lguard_wait:\n";
+        text_ += "    PUSH R0\n";
+        text_ += "    MOV R1, #1\n";
+        text_ += "    SYSCALL #48\n";
+        text_ += "    POP R0\n";
+        text_ += "    JMP .Lguard_retry\n";
         text_ += ".Lguard_ready:\n";
         text_ += "    MOV R0, #0\n";
         text_ += "    RET\n";
         text_ += ".weak __cxa_guard_release\n__cxa_guard_release:\n";
         text_ += "    MOV R1, #2\n";
         text_ += "    STORE R1, [R0]\n";
+        text_ += "    PUSH R0\n";
+        text_ += "    MOV R1, #1\n";
+        text_ += "    SYSCALL #49\n";
+        text_ += "    POP R0\n";
         text_ += "    RET\n";
         text_ += ".weak __cxa_atexit\n__cxa_atexit:\n";
         text_ += "    LEA R3, [__kr32_atexit_count]\n";
@@ -4645,7 +4791,7 @@ private:
         text_ += "    STORE R4, [R3]\n";
         text_ += ".Latexit_full:\n";
         text_ += "    MOV R0, #0\n    RET\n";
-        text_ += ".text\n.weak __kr32_cxx_fini\n__kr32_cxx_fini:\n";
+        text_ += ".text\n.Lcxx_fini:\n";
         text_ += "    PUSH R7\n    ADJSP #-24\n    LEA R7, [SP]\n";
         text_ += "    LEA R1, [__kr32_atexit_count]\n";
         text_ += "    LOAD R2, [R1]\n";
@@ -4679,6 +4825,7 @@ private:
             }
         }
         text_ += "    ADJSP #24\n    POP R7\n    RET\n";
+        startup_ += ".fini_array\n    .word .Lcxx_fini\n";
         bss_ += ".weak __kr32_atexit_count\n";
         bss_ += "__kr32_atexit_count:\n    .space 4\n";
         bss_ += ".weak __kr32_atexit_funcs\n";
@@ -4694,6 +4841,14 @@ private:
             }
             if (global->is_thread_local) {
                 const int size = std::max(1, type_size(global->type));
+                tls_symbols_.push_back({global->symbol, global->tls_offset, size,
+                                        !global->is_static});
+                data_ += global->tls_slot_symbol + ":\n    .word " +
+                         global->symbol + "\n";
+                if (!tls_base_emitted_) {
+                    data_ += ".Ltls_base:\n    .word __kr32_tls_start\n";
+                    tls_base_emitted_ = true;
+                }
                 const std::size_t end =
                     static_cast<std::size_t>(global->tls_offset + size);
                 if (tls_image_.size() < end) {
@@ -4837,8 +4992,18 @@ private:
     std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
-    int tls_cursor_ = 32;
+    int tls_cursor_ = 0;
     std::vector<std::uint8_t> tls_image_;
+    struct TlsSymbol {
+        std::string symbol;
+        int offset = 0;
+        int size = 0;
+        bool exported = false;
+    };
+    std::vector<TlsSymbol> tls_symbols_;
+    int tls_slot_counter_ = 0;
+    bool tls_base_emitted_ = false;
+    std::string startup_;
     std::string debug_;
     std::vector<Global*> static_destructors_;
     std::map<std::string, TypePtr> type_aliases_;

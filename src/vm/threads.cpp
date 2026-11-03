@@ -313,6 +313,26 @@ bool ClusterHost::restore_context(std::uint32_t handle) {
     return true;
 }
 
+std::vector<debug::ThreadInfo> ClusterHost::debug_threads() const {
+    std::vector<debug::ThreadInfo> snapshots;
+    for (std::uint32_t core = 0; core < threads_.size(); ++core) {
+        const Thread& thread = threads_[core];
+        if (thread.state == State::Free) {
+            continue;
+        }
+        const core::Machine& machine = cluster_.core(core);
+        debug::ThreadInfo info;
+        info.id = thread.handle;
+        info.name = core == 0 ? "main" : "thread " + std::to_string(thread.handle);
+        info.pc = machine.pc();
+        info.sp = machine.sp();
+        info.frame_pointer = machine.reg(7);
+        info.current = core == 0;
+        snapshots.push_back(std::move(info));
+    }
+    return snapshots;
+}
+
 bool ClusterHost::handle(core::Machine& machine, std::uint32_t vector) {
     const std::uint32_t handle = handle_for(machine);
     Thread* thread = thread_for(handle);

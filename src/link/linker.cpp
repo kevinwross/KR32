@@ -215,6 +215,39 @@ bool link(const std::vector<container::Image>& objects,
     output_symbols.push_back({"__stack_limit", options.stack_limit, 0, 0,
                               container::SymbolBind::Global});
 
+    auto add_section_bounds = [&](const std::string& section_name,
+                                  const std::string& start_name,
+                                  const std::string& end_name) -> bool {
+        std::uint32_t start = 0;
+        std::uint32_t end = 0;
+        const int index = find_section(section_name);
+        if (index >= 0) {
+            const container::Section& section =
+                output_sections[static_cast<std::size_t>(index)];
+            start = section.address;
+            end = section.address + section.size;
+        }
+        if (!add_global(start_name, start, container::SymbolBind::Global) ||
+            !add_global(end_name, end, container::SymbolBind::Global)) {
+            return false;
+        }
+        output_symbols.push_back(
+            {start_name, start, 0, 0, container::SymbolBind::Global});
+        output_symbols.push_back(
+            {end_name, end, 0, 0, container::SymbolBind::Global});
+        return true;
+    };
+    if (!add_section_bounds(".init_array", "__init_array_start",
+                            "__init_array_end") ||
+        !add_section_bounds(".fini_array", "__fini_array_start",
+                            "__fini_array_end") ||
+        !add_section_bounds(".eh_frame_array", "__eh_frame_array_start",
+                            "__eh_frame_array_end") ||
+        !add_section_bounds(".tls", "__kr32_tls_start", "__kr32_tls_end")) {
+        return false;
+    }
+
+
     const auto start = globals.find("_start");
     image.entry = start != globals.end() ? start->second.address : first_text;
 

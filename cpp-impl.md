@@ -535,7 +535,31 @@ to the final M9.12 commit.
   explicit formatting helpers if needed.
 - Full ISO C++ and full STL remain out of scope.
 
-## 7. Progress log
+## 7. Post-merge P0 fixes (`m9-p0`)
+
+The merged `main` tree shares the C/C++ runtime. `m9-p0` fixes the handoff §5 P0
+correctness items without moving the `m9` tag:
+
+- [x] Linker-defined `__init_array_start/end`, `__fini_array_start/end`,
+      `__eh_frame_array_start/end`, and `__kr32_tls_start/end` bounds.
+- [x] Per-TU `.init_array`/`.fini_array` entries; `main` walks init forward and
+      fini in reverse.
+- [x] Merged TLS layout: per-TU `.tls` data plus data cells holding symbol/TLS
+      base addresses; accesses add `R11 + 32 + offset`.
+- [x] Merged exception tables via `.eh_frame_array`; throw/resume walk every TU
+      table.
+- [x] Blocking `__cxa_guard_acquire` using futex wait (48) and release/wake (49).
+- [x] Class static locals constructed at the static address with guards and
+      destructor registration.
+- [x] `ClusterHost::debug_threads()` and `debug::Session` thread provider /
+      refresh, consumed by DAP and GUI; end-to-end ClusterHost-backed GUI/DAP
+      sessions remain open.
+
+Tests: multi-TU init, fini, TLS, exceptions, 3-TU startup; guard race; class
+static local; live snapshot provider. Windows/WSL both pass 29/29 CTest and
+222 doctest cases / 5317 assertions.
+
+## 8. Progress log
 
 Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
 
@@ -711,8 +735,16 @@ Newest at the bottom. Keep timestamps in `America/Los_Angeles`.
   (23/23 CTest; 195 test cases / 4972 assertions). Tag `m9` marks the final
   M9.12 commit. Deeper per-thread variable expansion and the additional
   compiler/configuration matrix remain deferred.
+- **2026-11-02 17:52 -08:00** — Created `m9-p0` from merged `main` and fixed
+  handoff §5 P0 items 1–6: per-TU init/fini arrays, link-time TLS layout,
+  merged EH tables, blocking guard, class static locals, plus a 3-TU harness.
+  Added P0 7 debug snapshot/provider plumbing and DAP/GUI refresh. Added
+  multi-TU/init/fini/TLS/EH/guard/class-static regression tests. Windows/WSL
+  both pass 29/29 CTest; `kr32_tests` reports 222 test cases / 5317 assertions.
+  Tag `m9` remains at `9707b55`; end-to-end ClusterHost-backed GUI/DAP sessions
+  remain open.
 
-## 8. Approval
+## 9. Approval
 
 - [x] Review this tracker.
 - [x] Approve creation of the `m9-cxx` worktree/branch.
