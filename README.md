@@ -24,8 +24,9 @@ menu, a HEX word column, disassembly hover help for instructions and addressing
 modes, an expandable CORES panel, a four-line memory dump docked under the
 source pane with an editable start address, and always-visible variables,
 call-stack, and console panels. See [docs/devices.md](docs/devices.md) and
-[docs/ui.md](docs/ui.md). Remaining C++ polish is tracked in
-[cpp-impl.md](cpp-impl.md).
+[docs/ui.md](docs/ui.md). Remaining C++ work and known integration gaps are
+tracked in [cpp-impl.md](cpp-impl.md) and
+[cpp-handoff.md](cpp-handoff.md).
 
 ## Build
 
