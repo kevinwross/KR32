@@ -1183,6 +1183,32 @@ TEST_CASE("captureless lambdas call directly and through auto variables") {
     CHECK(stored.result == 42);
 }
 
+TEST_CASE("lambdas capture values into closure objects") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int a = 10;\n"
+        "    int b = 20;\n"
+        "    auto f = [a, b](int x) { return a + b + x; };\n"
+        "    a = 0;\n"
+        "    b = 0;\n"
+        "    return f(12);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("std thread accepts function pointers and captureless lambdas") {
+    const cxx::Result compiled = cxx::compile(
+        "#include <thread>\n"
+        "int worker(int* value) { return *value; }\n"
+        "int main() {\n"
+        "    std::thread a(worker, 1);\n"
+        "    std::thread b([](int value) { return value; }, 2);\n"
+        "    return a.joinable() + b.joinable();\n"
+        "}\n");
+    CHECK(compiled.ok);
+}
+
 TEST_CASE("std thread, mutex, and condition_variable surface compiles") {
     const ProgramResult program = compile_and_run(
         "#include <thread>\n"

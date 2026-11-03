@@ -462,6 +462,10 @@ private:
         std::string member_name;
         ClassInfo* owner = nullptr;
         ClassInfo* friend_owner = nullptr;
+        bool lambda_closure = false;
+        int lambda_closure_size = 0;
+        std::map<std::string, int> lambda_capture_offsets;
+        std::map<std::string, TypePtr> lambda_capture_types;
         Access access = Access::Public;
     };
 
@@ -520,6 +524,7 @@ private:
         bool is_parameter = false;
         Global* static_global = nullptr;
         Function* lambda_target = nullptr;
+        int lambda_closure_offset = -1;
     };
 
     void error(const Location& location, std::string message) {
@@ -1272,8 +1277,25 @@ private:
         return nullptr;
     }
 
-    Global* lookup_global(const Name& name, const std::string& prefix) {
-        const std::vector<std::string> keys = candidate_keys(name, prefix);
+    bool lambda_capture(const Name& name, TypePtr& type, int& offset) const {
+        if (current_lambda_function_ == nullptr || name.parts.size() != 1) {
+            return false;
+        }
+        const auto found =
+            current_lambda_function_->lambda_capture_offsets.find(name.parts[0]);
+        if (found == current_lambda_function_->lambda_capture_offsets.end()) {
+            return false;
+        }
+        offset = found->second;
+        const auto found_type =
+            current_lambda_function_->lambda_capture_types.find(name.parts[0]);
+        type = found_type != current_lambda_function_->lambda_capture_types.end()
+                   ? found_type->second
+                   : Type::make_builtin(BuiltinKind::Int);
+        return true;
+    }
+
+    Global* lookup_global(const Name& name, const std::string& prefix) {        const std::vector<std::string> keys = candidate_keys(name, prefix);
         for (const std::string& key : keys) {
             const auto found = global_index_.find(key);
             if (found != global_index_.end()) {
@@ -1370,9 +1392,53 @@ private:
         if (existing != lambda_functions_.end()) {
             return existing->second;
         }
+        std::map<std::string, int> capture_offsets;
+        std::map<std::string, TypePtr> capture_types;
+        int capture_size = 0;
         if (!expression.text.empty()) {
-            error(expression.location,
-                  "lambda captures are not supported yet");
+            std::string captures = expression.text;
+            std::size_t start = 0;
+            while (start <= captures.size()) {
+                const std::size_t comma = captures.find(',', start);
+                std::string name = captures.substr(
+                    start, comma == std::string::npos ? std::string::npos
+                                                       : comma - start);
+                while (!name.empty() &&
+                       std::isspace(static_cast<unsigned char>(name.front())) != 0) {
+                    name.erase(name.begin());
+                }
+                while (!name.empty() &&
+                       std::isspace(static_cast<unsigned char>(name.back())) != 0) {
+                    name.pop_back();
+                }
+                if (name == "=" || name == "&" || name == "this") {
+                    error(expression.location,
+                          "default/reference/this lambda captures are not supported yet");
+                } else if (!name.empty()) {
+                    Name capture_name;
+                    capture_name.parts.push_back(name);
+                    Local* source = lookup_local(capture_name);
+                    if (source == nullptr) {
+                        error(expression.location,
+                              "lambda capture is not a local variable: " + name);
+                    } else {
+                        std::size_t offset = 0;
+                        if (capture_offsets.find(name) != capture_offsets.end()) {
+                            error(expression.location,
+                                  "duplicate lambda capture: " + name);
+                        } else {
+                            offset = capture_size;
+                            capture_offsets[name] = static_cast<int>(offset);
+                            capture_types[name] = source->type;
+                            capture_size += 4;
+                        }
+                    }
+                }
+                if (comma == std::string::npos) {
+                    break;
+                }
+                start = comma + 1;
+            }
         }
         auto declaration = std::make_shared<Decl>();
         declaration->kind = DeclKind::Function;
@@ -1403,6 +1469,10 @@ private:
             function->parameters.push_back(resolve_type(parameter.type));
         }
         function->defined = expression.body != nullptr;
+        function->lambda_closure = !capture_offsets.empty();
+        function->lambda_closure_size = capture_size;
+        function->lambda_capture_offsets = capture_offsets;
+        function->lambda_capture_types = capture_types;
         Function* raw = function.get();
         function_storage_.push_back(std::move(function));
         lambda_functions_[&expression] = raw;
@@ -1429,6 +1499,12 @@ private:
         case ExprKind::NullptrLiteral:
             return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
         case ExprKind::Name: {
+            TypePtr capture_type;
+            int capture_offset = 0;
+            if (lambda_capture(expression.name, capture_type, capture_offset)) {
+                (void)capture_offset;
+                return capture_type;
+            }
             if (Local* local = lookup_local(expression.name)) {
                 TypePtr type = resolve_type(local->type);
                 if (type && type->kind == TypeKind::LValueRef) {
@@ -1674,6 +1750,11 @@ private:
         if (is_pointer(arg) && is_pointer(param)) {
             if (same_type(decay(arg), param)) {
                 return 0;
+            }
+            const TypePtr parameter_element = param->element;
+            if (parameter_element && parameter_element->kind == TypeKind::Builtin &&
+                parameter_element->builtin == BuiltinKind::Void) {
+                return 1;
             }
             return 100;
         }
@@ -2228,6 +2309,14 @@ private:
         return offset;
     }
 
+    int allocate_local_bytes(int size, int alignment = 4) {
+        alignment = std::max(4, alignment);
+        frame_size_ = (frame_size_ + alignment - 1) / alignment * alignment;
+        const int offset = frame_size_;
+        frame_size_ += (std::max(1, size) + 3) / 4 * 4;
+        return offset;
+    }
+
     void emit(std::string line) {
         text_ += line;
         text_ += '\n';
@@ -2352,6 +2441,16 @@ private:
 
     void gen_address(const Expr& expression) {
         if (expression.kind == ExprKind::Name) {
+            TypePtr capture_type;
+            int capture_offset = 0;
+            if (lambda_capture(expression.name, capture_type, capture_offset)) {
+                emit("    LOAD R0, [R7 + " +
+                     std::to_string(current_lambda_closure_offset_) + "]");
+                if (capture_offset != 0) {
+                    emit("    ADD R0, R0, #" + std::to_string(capture_offset));
+                }
+                return;
+            }
             if (Local* local = lookup_local(expression.name)) {
                 if (local->static_global != nullptr) {
                     emit("    LEA R0, [" + local->static_global->symbol + "]");
@@ -3149,6 +3248,21 @@ private:
             emit("    MOV R0, #0");
             return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
         case ExprKind::Name: {
+            TypePtr capture_type;
+            int capture_offset = 0;
+            if (lambda_capture(expression.name, capture_type, capture_offset)) {
+                emit("    LOAD R0, [R7 + " +
+                     std::to_string(current_lambda_closure_offset_) + "]");
+                if (capture_offset != 0) {
+                    emit("    ADD R0, R0, #" + std::to_string(capture_offset));
+                }
+                if (is_fp(capture_type)) {
+                    load_fp(capture_type);
+                } else {
+                    load_value(capture_type);
+                }
+                return capture_type;
+            }
             if (Local* local = lookup_local(expression.name)) {
                 gen_address(expression);
                 TypePtr type = resolve_type(local->type);
@@ -3344,6 +3458,11 @@ private:
             return Type::make_builtin(BuiltinKind::Int);
         case ExprKind::Lambda: {
             Function* function = materialize_lambda(expression);
+            if (function->lambda_closure) {
+                diagnose_once(
+                    expression,
+                    "capturing lambdas cannot be converted to function pointers");
+            }
             emit("    LEA R0, [" + function->symbol + "]");
             return lambda_function_type(function);
         }
@@ -3814,13 +3933,19 @@ private:
             }
         }
         Function* function = nullptr;
+        int lambda_closure_offset = -1;
         if (!expression.children.empty() &&
             expression.children[0]->kind == ExprKind::Lambda) {
             function = materialize_lambda(*expression.children[0]);
+            if (function->lambda_closure) {
+                diagnose_once(expression,
+                              "immediately invoked capturing lambda is not supported yet");
+            }
         } else if (!expression.children.empty() &&
                    expression.children[0]->kind == ExprKind::Name) {
             if (Local* local = lookup_local(expression.children[0]->name)) {
                 function = local->lambda_target;
+                lambda_closure_offset = local->lambda_closure_offset;
             }
         }
         if (function == nullptr) {
@@ -3878,7 +4003,8 @@ private:
         };
         std::vector<ArgumentSlot> slots;
         std::vector<int> stack_temps;
-        int integer_argument = member_call ? 1 : 0;
+        int integer_argument =
+            (member_call ? 1 : 0) + (lambda_closure_offset >= 0 ? 1 : 0);
         int fp_argument = 0;
         const std::size_t named_parameters = function->parameters.size();
         for (std::size_t index = 0; index < expression.arguments.size(); ++index) {
@@ -3962,6 +4088,10 @@ private:
         int fp_register = 0;
         if (member_call) {
             emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
+        }
+        if (lambda_closure_offset >= 0) {
+            emit("    LEA R0, [R7 + " + std::to_string(lambda_closure_offset) + "]");
+            integer_register = 1;
         }
         for (const ArgumentSlot& slot : slots) {
             if (slot.fp) {
@@ -4715,6 +4845,19 @@ private:
         local.is_reference = type && (type->kind == TypeKind::LValueRef ||
                                       type->kind == TypeKind::RValueRef);
         local.offset = allocate_local(type);
+        if (lambda_target != nullptr && lambda_target->lambda_closure) {
+            local.offset = allocate_local_bytes(lambda_target->lambda_closure_size);
+            local.lambda_closure_offset = local.offset;
+            for (const auto& capture : lambda_target->lambda_capture_offsets) {
+                Name capture_name;
+                capture_name.parts.push_back(capture.first);
+                if (Local* source = lookup_local(capture_name)) {
+                    emit("    LOAD R0, [R7 + " + std::to_string(source->offset) + "]");
+                    emit("    STORE R0, [R7 + " +
+                         std::to_string(local.offset + capture.second) + "]");
+                }
+            }
+        }
         if (current_function_ != nullptr && !declaration.name.parts.empty()) {
             debug_record("V " + current_function_->qualified + " " +
                          declaration.name.parts.back() + " " +
@@ -4723,6 +4866,9 @@ private:
         }
         if (!declaration.name.parts.empty()) {
             local_scopes_.back()[declaration.name.parts.back()] = local;
+        }
+        if (local.lambda_closure_offset >= 0) {
+            return;
         }
         if (ClassInfo* info = class_of(type)) {
             const std::vector<ExprPtr> empty;
@@ -4913,6 +5059,8 @@ private:
 
         current_class_ = function.owner;
         this_offset_ = -1;
+        current_lambda_closure_offset_ = -1;
+        current_lambda_function_ = nullptr;
         int integer_argument = 0;
         int fp_argument = 0;
         if (function.is_member) {
@@ -4922,6 +5070,15 @@ private:
             local.is_parameter = true;
             emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
             this_offset_ = local.offset;
+            integer_argument = 1;
+        }
+        if (function.lambda_closure) {
+            Local closure;
+            closure.type = Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
+            closure.offset = allocate_local(closure.type);
+            emit("    STORE R0, [R7 + " + std::to_string(closure.offset) + "]");
+            current_lambda_closure_offset_ = closure.offset;
+            current_lambda_function_ = &function;
             integer_argument = 1;
         }
         current_sret_slot_ = -1;
@@ -6025,6 +6182,8 @@ private:
     ClassInfo* current_class_ = nullptr;
     int this_offset_ = -1;
     int current_sret_slot_ = -1;
+    int current_lambda_closure_offset_ = -1;
+    const Function* current_lambda_function_ = nullptr;
     Function* current_function_ = nullptr;
     std::string return_label_;
     std::string va_base_placeholder_;

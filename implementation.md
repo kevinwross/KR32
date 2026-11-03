@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 07:31 -08:00
+> **Last updated:** 2026-11-03 07:39 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1376,6 +1376,13 @@ Newest entries at the bottom. Use the local time zone.
       are materialized as unique functions, direct invocation works, and
       `auto f = []...` stores a callable function target for `f(...)` calls.
       Lambda captures are diagnosed as deferred. 262 cases / 5636 assertions.
+- **2026-11-03 07:39 -08:00** — Added by-value lambda captures. Closure
+      objects store captured locals, lambda functions receive a hidden
+      closure pointer, and capture references in bodies load through it.
+      `std::thread` now accepts function pointers and captureless lambdas via
+      a `void*` entry overload; reference/default captures and capturing
+      lambdas converted to function pointers are diagnosed. 264 cases /
+      5639 assertions.
 
 ## 10. Updating this file
 
