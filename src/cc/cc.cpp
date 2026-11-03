@@ -628,6 +628,7 @@ struct Type {
     std::weak_ptr<Type> pointer_base;
     int count = 0;
     bool is_unsigned = false;
+    bool is_long_long = false;
     std::vector<Member> members;
     std::string tag;
     int total_size = 0;
@@ -643,7 +644,7 @@ struct Type {
         case Kind::Char: return 1;
         case Kind::Short: return 2;
         case Kind::Bool: return 1;
-        case Kind::Int: return 4;
+        case Kind::Int: return is_long_long ? 8 : 4;
         case Kind::Float: return 4;
         case Kind::Double: return 8;
         case Kind::Pointer: return 4;
@@ -660,7 +661,7 @@ struct Type {
         case Kind::Char: return 1;
         case Kind::Short: return 2;
         case Kind::Bool: return 1;
-        case Kind::Int: return 4;
+        case Kind::Int: return is_long_long ? 8 : 4;
         case Kind::Float: return 4;
         case Kind::Double: return 8;
         case Kind::Pointer: return 4;
@@ -689,6 +690,16 @@ struct Type {
 TypePtr type_int() { return std::make_shared<Type>(Type{Type::Kind::Int, nullptr, 0}); }
 TypePtr type_uint() {
     auto type = type_int();
+    type->is_unsigned = true;
+    return type;
+}
+TypePtr type_long_long() {
+    auto type = type_int();
+    type->is_long_long = true;
+    return type;
+}
+TypePtr type_unsigned_long_long() {
+    auto type = type_long_long();
     type->is_unsigned = true;
     return type;
 }
@@ -721,6 +732,11 @@ bool is_unsigned_scalar(const TypePtr& type) {
     return type != nullptr && type->is_unsigned &&
            (type->kind == Type::Kind::Char || type->kind == Type::Kind::Short ||
             type->kind == Type::Kind::Int);
+}
+
+bool is_long_long_type(const TypePtr& type) {
+    return type != nullptr && type->kind == Type::Kind::Int &&
+           type->is_long_long;
 }
 
 TypePtr common_fp_type(const TypePtr& left, const TypePtr& right) {
@@ -870,7 +886,10 @@ private:
         case Type::Kind::Void: return "void";
         case Type::Kind::Char: return type->is_unsigned ? "unsigned char" : "char";
         case Type::Kind::Short: return type->is_unsigned ? "unsigned short" : "short";
-        case Type::Kind::Int: return type->is_unsigned ? "unsigned int" : "int";
+        case Type::Kind::Int: return type->is_long_long
+                                       ? (type->is_unsigned ? "unsigned long long"
+                                                            : "long long")
+                                       : (type->is_unsigned ? "unsigned int" : "int");
         case Type::Kind::Bool: return "_Bool";
         case Type::Kind::Float: return "float";
         case Type::Kind::Double: return "double";
@@ -1208,6 +1227,7 @@ private:
         bool unsigned_flag = false;
         bool signed_flag = false;
         bool long_flag = false;
+        bool long_long_flag = false;
         bool short_flag = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
@@ -1223,7 +1243,7 @@ private:
                 short_flag = true;
             } else if (qualifier == "long") {
                 if (long_flag) {
-                    error("long long is not supported");
+                    long_long_flag = true;
                 }
                 long_flag = true;
             }
@@ -1260,6 +1280,13 @@ private:
         }
         if (long_flag && base->kind == Type::Kind::Double) {
             error("long double is not supported");
+        }
+        if (long_long_flag) {
+            if (base->kind != Type::Kind::Int) {
+                error("long long requires an integer type");
+            } else {
+                base->is_long_long = true;
+            }
         }
         if (long_flag && short_flag) {
             error("long short is not a valid type");
@@ -1499,6 +1526,13 @@ private:
                 } else if (actual->kind == Type::Kind::Short) {
                     data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
                     data_ += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
+                } else if (actual->is_long_long) {
+                    const std::uint64_t bits = static_cast<std::uint64_t>(value);
+                    data_ += "    .word " +
+                             std::to_string(static_cast<std::uint32_t>(bits)) + "\n";
+                    data_ += "    .word " +
+                             std::to_string(static_cast<std::uint32_t>(bits >> 32)) +
+                             "\n";
                 } else {
                     data_ += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
                 }
@@ -1565,6 +1599,14 @@ private:
         }
 
         auto found = functions_.find(name);
+        if (is_long_long_type(result_type)) {
+            error("long long function returns are not supported yet");
+        }
+        for (const TypePtr& parameter : parameters) {
+            if (is_long_long_type(parameter)) {
+                error("long long function parameters are not supported yet");
+            }
+        }
         if (found == functions_.end()) {
             functions_.emplace(
                 name, FunctionSignature{name, result_type, parameters, variadic, false});
@@ -2007,6 +2049,9 @@ private:
                 emit("    PUSH R0");
                 TypePtr value_type = gen_expression();
                 convert_value(value_type, actual);
+                if (is_long_long_type(actual)) {
+                    emit("    MOV R2, R1");
+                }
                 emit("    POP R1");
                 gen_store(actual);
             }
@@ -2075,7 +2120,11 @@ private:
     }
 
     void gen_load(const TypePtr& type) {
-        if (type->kind == Type::Kind::Char) {
+        if (is_long_long_type(type)) {
+            emit("    MOV R2, R0");
+            emit("    LOAD R0, [R2]");
+            emit("    LOAD R1, [R2 + 4]");
+        } else if (type->kind == Type::Kind::Char) {
             emit(type->is_unsigned ? "    LOAD8U R0, [R0]" : "    LOAD8S R0, [R0]");
         } else if (type->kind == Type::Kind::Short) {
             emit(type->is_unsigned ? "    LOAD16U R0, [R0]" : "    LOAD16S R0, [R0]");
@@ -2093,8 +2142,23 @@ private:
         }
     }
 
+    void normalize_long_long(const TypePtr& type) {
+        if (is_long_long_type(type)) {
+            return;
+        }
+        if (is_unsigned_scalar(type)) {
+            emit("    MOV R1, #0");
+        } else {
+            emit("    MOV R1, R0");
+            emit("    SAR R1, R1, #31");
+        }
+    }
+
     void gen_store(const TypePtr& type) {
-        if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
+        if (is_long_long_type(type)) {
+            emit("    STORE R0, [R1]");
+            emit("    STORE R2, [R1 + 4]");
+        } else if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
             emit("    STORE8 R0, [R1]");
         } else if (type->kind == Type::Kind::Short) {
             emit("    STORE16 R0, [R1]");
@@ -2110,7 +2174,17 @@ private:
     }
 
     void convert_value(const TypePtr& from, const TypePtr& to) {
-        if (from == nullptr || to == nullptr || from->kind == to->kind) {
+        if (from == nullptr || to == nullptr) {
+            return;
+        }
+        if (is_long_long_type(to) && !is_long_long_type(from)) {
+            normalize_long_long(from);
+            return;
+        }
+        if (!is_long_long_type(to) && is_long_long_type(from)) {
+            return;
+        }
+        if (from->kind == to->kind) {
             return;
         }
         const bool from_fp = is_fp_type(from);
@@ -2179,7 +2253,10 @@ private:
             emit("    ADJSP #-8");
             emit("    FSTORE.D F0, [SP]");
         } else {
-            emit("    PUSH R0");
+            normalize_long_long(type);
+            emit("    ADJSP #-8");
+            emit("    STORE R0, [SP]");
+            emit("    STORE R1, [SP + 4]");
         }
     }
 
@@ -2188,7 +2265,8 @@ private:
             emit("    FLOAD.D F1, [SP]");
             emit("    ADJSP #8");
         } else {
-            emit("    POP R1");
+            emit("    LOAD R1, [SP]");
+            emit("    ADJSP #8");
         }
         const TypePtr common = common_fp_type(left, right);
         const std::string suffix = common->kind == Type::Kind::Double ? ".D" : ".S";
@@ -2265,12 +2343,97 @@ private:
         error("operator '" + op + "' is not supported for floating-point values");
     }
 
+    void gen_long_long_binary(const std::string& op, const TypePtr& left,
+                              const TypePtr& right) {
+        emit("    LOAD R2, [SP]");
+        emit("    LOAD R3, [SP + 4]");
+        emit("    ADJSP #8");
+        normalize_long_long(right);
+        emit("    MOV R4, R0");
+        emit("    MOV R5, R1");
+        emit("    MOV R0, R2");
+        emit("    MOV R1, R3");
+        const bool unsigned_operation =
+            is_unsigned_scalar(left) || is_unsigned_scalar(right);
+        if (op == "+") {
+            const std::string no_carry = new_label("llnocarry");
+            emit("    ADD R0, R0, R4");
+            emit("    MOV R6, #0");
+            emit("    JNC " + no_carry);
+            emit("    MOV R6, #1");
+            emit(no_carry + ":");
+            emit("    ADD R1, R1, R5");
+            emit("    ADD R1, R1, R6");
+        } else if (op == "-") {
+            const std::string no_borrow = new_label("llnoborrow");
+            emit("    SUB R0, R0, R4");
+            emit("    MOV R6, #0");
+            emit("    JCS " + no_borrow);
+            emit("    MOV R6, #1");
+            emit(no_borrow + ":");
+            emit("    SUB R1, R1, R5");
+            emit("    SUB R1, R1, R6");
+        } else if (op == "&") {
+            emit("    AND R0, R0, R4");
+            emit("    AND R1, R1, R5");
+        } else if (op == "|") {
+            emit("    OR R0, R0, R4");
+            emit("    OR R1, R1, R5");
+        } else if (op == "^") {
+            emit("    XOR R0, R0, R4");
+            emit("    XOR R1, R1, R5");
+        } else if (op == "==" || op == "!=" || op == "<" || op == "<=" ||
+                   op == ">" || op == ">=") {
+            const std::string true_label = new_label("lltrue");
+            const std::string false_label = new_label("llfalse");
+            const std::string done = new_label("lldone");
+            emit("    CMP R1, R3");
+            if (op == "==" || op == "!=") {
+                emit("    JNZ " + false_label);
+                emit("    CMP R0, R4");
+                emit("    JZ " + true_label);
+                emit("    JMP " + false_label);
+            } else {
+                if (unsigned_operation) {
+                    if (op == "<" || op == "<=") emit("    JNC " + true_label);
+                    if (op == ">" || op == ">=") emit("    JHI " + true_label);
+                    if (op == "<" || op == "<=") emit("    JHI " + false_label);
+                    if (op == ">" || op == ">=") emit("    JNC " + false_label);
+                } else {
+                    if (op == "<" || op == "<=") emit("    JLT " + true_label);
+                    if (op == ">" || op == ">=") emit("    JGT " + true_label);
+                    if (op == "<" || op == "<=") emit("    JGT " + false_label);
+                    if (op == ">" || op == ">=") emit("    JLT " + false_label);
+                }
+                emit("    CMP R0, R4");
+                if (op == "<") emit("    JNC " + true_label);
+                if (op == "<=") emit("    JLS " + true_label);
+                if (op == ">") emit("    JHI " + true_label);
+                if (op == ">=") emit("    JCS " + true_label);
+                emit("    JMP " + false_label);
+            }
+            emit(true_label + ":");
+            emit("    MOV R0, #1");
+            emit("    JMP " + done);
+            emit(false_label + ":");
+            emit("    MOV R0, #0");
+            emit(done + ":");
+        } else {
+            error("long long operator is not supported yet: " + op);
+        }
+    }
+
     void gen_binary(const std::string& op, const TypePtr& left, const TypePtr& right) {
         if (is_fp_type(left) || is_fp_type(right)) {
             gen_fp_binary(op, left, right);
             return;
         }
-        emit("    POP R1");
+        if (is_long_long_type(left) || is_long_long_type(right)) {
+            gen_long_long_binary(op, left, right);
+            return;
+        }
+        emit("    LOAD R1, [SP]");
+        emit("    ADJSP #8");
         if (op == "+" || op == "-") {
             if (left->is_pointer() && !right->is_pointer()) {
                 const int size = left->element() ? left->element()->size() : 1;
@@ -2419,6 +2582,9 @@ private:
         if (type->kind == Type::Kind::Bool) {
             convert_value(type_int(), type);
         }
+        if (is_long_long_type(type)) {
+            emit("    MOV R2, R1");
+        }
         emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
         gen_store(type);
         if (!prefix) {
@@ -2452,6 +2618,9 @@ private:
         if (type->kind == Type::Kind::Bool) {
             convert_value(type_int(), type);
         }
+        if (is_long_long_type(type)) {
+            emit("    MOV R2, R1");
+        }
         emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
         gen_store(type);
     }
@@ -2478,6 +2647,9 @@ private:
                     emit("    PUSH R0");
                     TypePtr value_type = gen_expression();
                     convert_value(value_type, type);
+                    if (is_long_long_type(type)) {
+                        emit("    MOV R2, R1");
+                    }
                     emit("    POP R1");
                     gen_store(type);
                 } else {
@@ -2533,10 +2705,16 @@ private:
                                ? type_int()
                                : (is_fp_type(left) || is_fp_type(right)
                                       ? common_fp_type(left, right)
-                                      : (is_unsigned_scalar(left) ||
-                                                 is_unsigned_scalar(right)
-                                             ? type_uint()
-                                             : left));
+                                      : (is_long_long_type(left) ||
+                                                 is_long_long_type(right)
+                                             ? (is_unsigned_scalar(left) ||
+                                                        is_unsigned_scalar(right)
+                                                    ? type_unsigned_long_long()
+                                                    : type_long_long())
+                                             : (is_unsigned_scalar(left) ||
+                                                        is_unsigned_scalar(right)
+                                                    ? type_uint()
+                                                    : left)));
                     matched = true;
                     break;
                 }
@@ -2880,8 +3058,24 @@ private:
         }
         if (peek().kind == TokenKind::Number) {
             const Token token = take();
-            emit("    MOV R0, #" + std::to_string(token.value));
-            return token.is_unsigned ? type_uint() : type_int();
+            const std::uint64_t bits = static_cast<std::uint64_t>(token.value);
+            emit("    MOV R0, #" +
+                 std::to_string(static_cast<std::uint32_t>(bits)));
+            if (token.value > 0x7FFFFFFFLL || token.value < -0x80000000LL) {
+                if (token.is_unsigned && token.value <= 0xFFFFFFFFLL) {
+                    emit("    MOV R1, #0");
+                    return type_uint();
+                }
+                emit("    MOV R1, #" +
+                     std::to_string(static_cast<std::uint32_t>(bits >> 32)));
+                return token.is_unsigned ? type_unsigned_long_long()
+                                         : type_long_long();
+            }
+            if (token.is_unsigned) {
+                emit("    MOV R1, #0");
+                return type_uint();
+            }
+            return type_int();
         }
         if (peek().kind == TokenKind::Character) {
             const std::int64_t value = take().value;
@@ -3271,10 +3465,16 @@ private:
                                ? type_int()
                                : (is_fp_type(left) || is_fp_type(right)
                                       ? common_fp_type(left, right)
-                                      : (is_unsigned_scalar(left) ||
-                                                 is_unsigned_scalar(right)
-                                             ? type_uint()
-                                             : left));
+                                      : (is_long_long_type(left) ||
+                                                 is_long_long_type(right)
+                                             ? (is_unsigned_scalar(left) ||
+                                                        is_unsigned_scalar(right)
+                                                    ? type_unsigned_long_long()
+                                                    : type_long_long())
+                                             : (is_unsigned_scalar(left) ||
+                                                        is_unsigned_scalar(right)
+                                                    ? type_uint()
+                                                    : left)));
                     matched = true;
                     break;
                 }

@@ -378,6 +378,21 @@ TEST_CASE("C supports global aggregate and array initializers") {
     CHECK(program.result == 248);
 }
 
+TEST_CASE("C long long stores 64-bit values and carries") {
+    const ProgramResult program = compile_and_run(
+        "long long global = 5;\n"
+        "int main(void) {\n"
+        "    long long a = 4294967295;\n"
+        "    long long b = a + 1;\n"
+        "    long long c = b + 4294967295;\n"
+        "    return b == 4294967296 && c == 8589934591 &&\n"
+        "                   global == 5 && sizeof(long long) == 8\n"
+        "               ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C supports nested designated initializers") {
     const ProgramResult program = compile_and_run(
         "struct Inner { int x; int y; };\n"
