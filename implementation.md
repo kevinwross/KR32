@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 13:24 -08:00
+> **Last updated:** 2026-11-03 13:34 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1572,6 +1572,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 13:24 -08:00** — Extended register-class ABI coverage to
       one- and two-byte trivial classes; 8-byte aggregates still use the
       hidden-pointer path. 309 cases / 5802 assertions.
+- **2026-11-03 13:34 -08:00** — Two-word trivial aggregates (up to eight
+      bytes) now return in `R0`/`R1`; callers preserve the high word while
+      materializing the result. Eight-byte parameters still use hidden
+      pointers. 310 cases / 5804 assertions.
 
 ## 10. Updating this file
 

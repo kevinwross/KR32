@@ -5254,7 +5254,8 @@ private:
         const TypePtr call_result = resolve_type(function->result);
         const ClassInfo* call_result_class = class_of(call_result);
         const bool register_result =
-            call_result_class != nullptr && is_register_class(call_result_class);
+            call_result_class != nullptr &&
+            is_register_return_class(call_result_class);
         int class_result_temp = -1;
         if (call_result_class != nullptr && !register_result) {
             class_result_temp = allocate_local(call_result);
@@ -5283,8 +5284,14 @@ private:
         record_call_site(call_start, call_end, call_landing);
         if (register_result) {
             const int result_object = allocate_local(call_result);
+            if (call_result_class->size > 4) {
+                emit("    MOV R2, R1");
+            }
             emit("    LEA R1, [R7 + " + std::to_string(result_object) + "]");
             emit("    STORE R0, [R1]");
+            if (call_result_class->size > 4) {
+                emit("    STORE R2, [R1 + 4]");
+            }
             emit("    LEA R0, [R7 + " + std::to_string(result_object) + "]");
         }
         if (class_result_temp >= 0) {
@@ -5426,14 +5433,26 @@ private:
                     const int source_temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     emit("    STORE R0, [R7 + " + std::to_string(source_temp) + "]");
-                    if (is_register_class(result_class)) {
-                        emit("    LOAD R0, [R7 + " + std::to_string(source_temp) + "]");
-                        emit("    LOAD R0, [R0]");
+                    if (is_register_return_class(result_class)) {
+                        emit("    LOAD R1, [R7 + " + std::to_string(source_temp) + "]");
+                        emit("    LOAD R0, [R1]");
                         const int value_temp =
                             allocate_local(Type::make_builtin(BuiltinKind::Int));
                         emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+                        int high_temp = -1;
+                        if (result_class->size > 4) {
+                            emit("    LOAD R1, [R1 + 4]");
+                            high_temp =
+                                allocate_local(Type::make_builtin(BuiltinKind::Int));
+                            emit("    STORE R1, [R7 + " +
+                                 std::to_string(high_temp) + "]");
+                        }
                         emit_all_local_destructors();
                         emit("    LOAD R0, [R7 + " + std::to_string(value_temp) + "]");
+                        if (high_temp >= 0) {
+                            emit("    LOAD R1, [R7 + " +
+                                 std::to_string(high_temp) + "]");
+                        }
                         emit("    JMP " + return_label_);
                         return;
                     }
@@ -5940,6 +5959,13 @@ private:
                !info->polymorphic && !info->abstract &&
                info->base == nullptr && info->constructors.empty() &&
                info->destructor == nullptr && info->members.size() <= 1;
+    }
+
+    bool is_register_return_class(const ClassInfo* info) const {
+        return info != nullptr && info->size > 0 && info->size <= 8 &&
+               !info->polymorphic && !info->abstract &&
+               info->base == nullptr && info->constructors.empty() &&
+               info->destructor == nullptr && info->members.size() <= 2;
     }
 
     int prepare_initializer_list_argument(ClassInfo* info, const TypePtr& type,
@@ -6467,7 +6493,7 @@ private:
         }
         current_sret_slot_ = -1;
         if (ClassInfo* result_class = class_of(resolve_type(function.result));
-            result_class != nullptr && !is_register_class(result_class)) {
+            result_class != nullptr && !is_register_return_class(result_class)) {
             current_sret_slot_ = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R4, [R7 + " + std::to_string(current_sret_slot_) + "]");
         }

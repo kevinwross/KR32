@@ -1467,6 +1467,15 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("eight-byte classes return in two registers") {
+    const ProgramResult program = compile_and_run(
+        "struct Pair { int first; int second; };\n"
+        "Pair make() { Pair pair; pair.first = 40; pair.second = 2; return pair; }\n"
+        "int main() { Pair pair = make(); return pair.first + pair.second; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("trivial byte and short classes use register ABI") {
     const ProgramResult program = compile_and_run(
         "struct Byte { char value; };\n"
