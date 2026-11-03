@@ -5137,11 +5137,24 @@ private:
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
                 if (is_register_class(parameter_class)) {
                     gen_expr(*expression.arguments[index]);
-                    emit("    LOAD R0, [R0]");
-                    slot.offset =
+                    const int address_temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+                    emit("    LOAD R0, [R1]");
+                    if (parameter_class->size > 4) {
+                        emit("    LOAD R1, [R1 + 4]");
+                    }
+                    slot.type = parameter;
+                    slot.offset = allocate_local(parameter);
                     emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
-                    ++integer_argument;
+                    if (parameter_class->size > 4) {
+                        emit("    STORE R1, [R7 + " +
+                             std::to_string(slot.offset + 4) + "]");
+                        integer_argument += 2;
+                    } else {
+                        ++integer_argument;
+                    }
                     slots.push_back(std::move(slot));
                     continue;
                 }
@@ -5239,6 +5252,15 @@ private:
                      std::to_string(fp_register) + ", [R7 + " +
                      std::to_string(slot.offset) + "]");
                 ++fp_register;
+            } else if (ClassInfo* register_class = class_of(slot.type);
+                       register_class != nullptr &&
+                       is_register_class(register_class) &&
+                       register_class->size > 4) {
+                emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
+                     std::to_string(slot.offset) + "]");
+                emit("    LOAD R" + std::to_string(integer_register + 1) +
+                     ", [R7 + " + std::to_string(slot.offset + 4) + "]");
+                integer_register += 2;
             } else if (is_long_long(slot.type)) {
                 emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
                      std::to_string(slot.offset) + "]");
@@ -5949,20 +5971,22 @@ private:
                data_member->type->element != nullptr;
     }
 
-    bool is_initializer_list_class(ClassInfo* info) const {
+    bool is_initializer_list_class(const ClassInfo* info) const {
         return info != nullptr &&
                info->qualified.find("initializer_list__") != std::string::npos;
     }
 
     bool is_register_class(const ClassInfo* info) const {
-        return info != nullptr && info->size > 0 && info->size <= 4 &&
+        return info != nullptr && info->size > 0 && info->size <= 8 &&
+               !is_initializer_list_class(info) &&
                !info->polymorphic && !info->abstract &&
                info->base == nullptr && info->constructors.empty() &&
-               info->destructor == nullptr && info->members.size() <= 1;
+               info->destructor == nullptr && info->members.size() <= 2;
     }
 
     bool is_register_return_class(const ClassInfo* info) const {
         return info != nullptr && info->size > 0 && info->size <= 8 &&
+               !is_initializer_list_class(info) &&
                !info->polymorphic && !info->abstract &&
                info->base == nullptr && info->constructors.empty() &&
                info->destructor == nullptr && info->members.size() <= 2;
@@ -6570,17 +6594,24 @@ private:
             } else if (ClassInfo* register_class = class_of(local.type);
                        register_class != nullptr &&
                        is_register_class(register_class)) {
-                if (integer_argument < 4) {
-                    if (!saved_integer_arguments.empty()) {
-                        emit("    LOAD R0, [R7 + " +
-                             std::to_string(saved_integer_arguments[
-                                 static_cast<std::size_t>(integer_argument)]) +
-                             "]");
-                    } else {
-                        emit("    MOV R0, R" + std::to_string(integer_argument));
+                const int registers = register_class->size <= 4 ? 1 : 2;
+                if (integer_argument + registers <= 4) {
+                    for (int register_index = 0; register_index < registers;
+                         ++register_index) {
+                        if (!saved_integer_arguments.empty()) {
+                            emit("    LOAD R0, [R7 + " +
+                                 std::to_string(saved_integer_arguments[
+                                     static_cast<std::size_t>(integer_argument +
+                                                              register_index)]) +
+                                 "]");
+                        } else {
+                            emit("    MOV R0, R" +
+                                 std::to_string(integer_argument + register_index));
+                        }
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(local.offset + register_index * 4) + "]");
                     }
-                    emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
-                    ++integer_argument;
+                    integer_argument += registers;
                 } else {
                     error(parameter.location,
                           "more than four integer parameters are not supported yet");

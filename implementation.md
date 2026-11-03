@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 13:34 -08:00
+> **Last updated:** 2026-11-03 13:42 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1576,6 +1576,9 @@ Newest entries at the bottom. Use the local time zone.
       bytes) now return in `R0`/`R1`; callers preserve the high word while
       materializing the result. Eight-byte parameters still use hidden
       pointers. 310 cases / 5804 assertions.
+- **2026-11-03 13:42 -08:00** — Two-word trivial aggregates now also pass
+      in register pairs; initializer-list classes remain on the hidden-pointer
+      path. 310 cases / 5804 assertions.
 
 ## 10. Updating this file
 
