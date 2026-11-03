@@ -8,6 +8,7 @@
 #include "kr32/cxx/cxx.h"
 #include "kr32/debug/debug.h"
 #include "kr32/link/linker.h"
+#include "kr32/vm/threads.h"
 
 #include <cstdint>
 #include <string>
@@ -886,6 +887,29 @@ TEST_CASE("function-local statics initialize once behind a guard") {
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);
+}
+
+TEST_CASE("C++ long long casts extend and wide shifts work") {
+    const ProgramResult cast_program = compile_and_run(
+        "int main() {\n"
+        "    unsigned int value = 4294967295;\n"
+        "    long long wide = (long long)value;\n"
+        "    int negative = -1;\n"
+        "    unsigned long long sign_extended = (unsigned long long)negative;\n"
+        "    return (int)(wide >> 32) == 0 &&\n"
+        "           (int)(sign_extended >> 32) == -1 ? 42 : 0;\n"
+        "}\n");
+    CHECK(cast_program.ok);
+    CHECK(cast_program.result == 42);
+
+    const ProgramResult shift_program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 1;\n"
+        "    long long high = value << 40;\n"
+        "    return (high >> 40) == 1 ? 42 : 0;\n"
+        "}\n");
+    CHECK(shift_program.ok);
+    CHECK(shift_program.result == 42);
 }
 
 TEST_CASE("C++ long long compound assignments preserve both halves") {

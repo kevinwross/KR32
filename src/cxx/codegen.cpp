@@ -4052,6 +4052,14 @@ private:
                 emit("    MOV R0, #1");
                 emit(done + ":");
             }
+            if (is_long_long(target) && !is_long_long(source)) {
+                if (is_unsigned_integer(source)) {
+                    emit("    MOV R1, #0");
+                } else {
+                    emit("    MOV R1, R0");
+                    emit("    SAR R1, R1, #31");
+                }
+            }
             return target;
         }
         case ExprKind::Sizeof: {
@@ -4462,9 +4470,12 @@ private:
             emit("    CALL " + helper);
         } else if (op == "<<" || op == ">>") {
             const std::string zero = new_label("llshift0");
+            const std::string wide = new_label("llshiftwide");
             const std::string done = new_label("llshiftdone");
             emit("    CMP R4, #0");
             emit("    JZ " + zero);
+            emit("    CMP R4, #32");
+            emit("    JCS " + wide);
             emit("    MOV R6, R0");
             if (op == "<<") {
                 emit("    SHL R0, R0, R4");
@@ -4483,6 +4494,20 @@ private:
                 emit("    SHL R6, R1, R4");
                 emit("    OR R0, R0, R6");
                 emit("    SAR R1, R1, R4");
+            }
+            emit("    JMP " + done);
+            emit(wide + ":");
+            emit("    SUB R12, R4, #32");
+            if (op == "<<") {
+                emit("    MOV R1, R0");
+                emit("    SHL R1, R1, R12");
+                emit("    MOV R0, #0");
+            } else if (unsigned_operation) {
+                emit("    SHR R0, R1, R12");
+                emit("    MOV R1, #0");
+            } else {
+                emit("    SAR R0, R1, R12");
+                emit("    SAR R1, R1, #31");
             }
             emit("    JMP " + done);
             emit(zero + ":");
