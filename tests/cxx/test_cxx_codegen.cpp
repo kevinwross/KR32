@@ -1729,6 +1729,35 @@ TEST_CASE("auto initializer_list variables hold braced values") {
     CHECK(program.result == 9);
 }
 
+TEST_CASE("initializer_list begin and end iterate values") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "int main() {\n"
+        "    auto values = {7, 8};\n"
+        "    int total = 0;\n"
+        "    for (const int* p = values.begin(); p != values.end(); ++p) {\n"
+        "        total += *p;\n"
+        "    }\n"
+        "    return total;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 15);
+}
+
+TEST_CASE("pointer-returning methods initialize locals") {
+    const ProgramResult program = compile_and_run(
+        "struct Holder { int* value; int* get() { return value; } };\n"
+        "int main() {\n"
+        "    int number = 42;\n"
+        "    Holder holder;\n"
+        "    holder.value = &number;\n"
+        "    int* pointer = holder.get();\n"
+        "    return *pointer;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("initializer_list parameters accept braced arguments") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"

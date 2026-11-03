@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 11:59 -08:00
+> **Last updated:** 2026-11-03 12:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1538,6 +1538,9 @@ Newest entries at the bottom. Use the local time zone.
       closures by materializing the closure and generating a per-lambda thread
       entry thunk. Compile-level coverage added; execution requires a
       multi-core cluster. 298 cases / 5778 assertions.
+- **2026-11-03 12:08 -08:00** — Added `initializer_list::begin`/`end`
+      intrinsics and fixed member-call initializers for scalar locals,
+      including pointer-returning methods. 300 cases / 5782 assertions.
 
 ## 10. Updating this file
 

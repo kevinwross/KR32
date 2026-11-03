@@ -2045,6 +2045,14 @@ private:
                     }
                 }
             }
+            std::string list_method;
+            ClassInfo* list_info = nullptr;
+            MemberInfo* list_data = nullptr;
+            MemberInfo* list_size = nullptr;
+            if (initializer_list_member_call(expression, list_method, list_info,
+                                             list_data, list_size)) {
+                return Type::make_pointer(list_data->type->element);
+            }
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
             }
@@ -4734,6 +4742,31 @@ private:
     }
 
     TypePtr gen_call(const Expr& expression) {
+        std::string list_method;
+        ClassInfo* list_info = nullptr;
+        MemberInfo* list_data = nullptr;
+        MemberInfo* list_size = nullptr;
+        if (initializer_list_member_call(expression, list_method, list_info,
+                                         list_data, list_size)) {
+            gen_expr(*expression.children[0]->children[0]);
+            const int object_temp =
+                allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
+            emit("    STORE R0, [R7 + " + std::to_string(object_temp) + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(object_temp) + "]");
+            emit("    LOAD R0, [R1 + " +
+                 std::to_string(list_data->offset) + "]");
+            if (list_method == "end") {
+                emit("    LOAD R1, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    LOAD R1, [R1 + " +
+                     std::to_string(list_size->offset) + "]");
+                const int element_size = type_size(list_data->type->element);
+                if (element_size != 1) {
+                    emit("    MUL R1, R1, #" + std::to_string(element_size));
+                }
+                emit("    ADD R0, R0, R1");
+            }
+            return Type::make_pointer(list_data->type->element);
+        }
         std::string intrinsic;
         if (matrix_intrinsic_name(expression, intrinsic)) {
             return emit_matrix_intrinsic(expression, intrinsic);
@@ -5652,6 +5685,31 @@ private:
         }
     }
 
+    bool initializer_list_member_call(const Expr& call,
+                                      std::string& method,
+                                      ClassInfo*& info,
+                                      MemberInfo*& data_member,
+                                      MemberInfo*& size_member) {
+        if (call.children.empty() || call.children[0]->kind != ExprKind::Member) {
+            return false;
+        }
+        const Expr& member = *call.children[0];
+        method = member.name.to_string();
+        if (method != "begin" && method != "end") {
+            return false;
+        }
+        info = class_of(type_of(*member.children[0], false));
+        if (!is_initializer_list_class(info)) {
+            return false;
+        }
+        data_member = find_member(info, "data_");
+        size_member = find_member(info, "size_");
+        return data_member != nullptr && size_member != nullptr &&
+               data_member->type != nullptr &&
+               data_member->type->kind == TypeKind::Pointer &&
+               data_member->type->element != nullptr;
+    }
+
     bool is_initializer_list_class(ClassInfo* info) const {
         return info != nullptr &&
                info->qualified.find("initializer_list__") != std::string::npos;
@@ -6036,6 +6094,10 @@ private:
                 bool function_call = false;
                 if (!initializer->children.empty() &&
                     initializer->children[0]->kind == ExprKind::Lambda) {
+                    function_call = true;
+                }
+                if (!initializer->children.empty() &&
+                    initializer->children[0]->kind == ExprKind::Member) {
                     function_call = true;
                 }
                 if (!initializer->children.empty() &&
