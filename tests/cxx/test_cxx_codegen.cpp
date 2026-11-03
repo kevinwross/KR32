@@ -1446,6 +1446,33 @@ TEST_CASE("captureless lambda thread runs on a cluster") {
     CHECK(host.cluster().core(1).exit_code() == 42);
 }
 
+TEST_CASE("capturing thread shares globals after join") {
+    container::Image image;
+    std::string error;
+    REQUIRE(build_cluster_image(
+        "#include <thread>\n"
+        "int result = 0;\n"
+        "int main() {\n"
+        "    int value = 42;\n"
+        "    std::thread worker([value]() { result = value; }, 0);\n"
+        "    worker.join();\n"
+        "    return result;\n"
+        "}\n",
+        image, error));
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    REQUIRE(host.load_image(image, error));
+    host.start(image.entry);
+    for (int step = 0; step < 2000000; ++step) {
+        if (host.cluster().core(0).halted()) {
+            break;
+        }
+        (void)host.step();
+    }
+    REQUIRE(host.cluster().core(0).halted());
+    CHECK(host.cluster().core(0).exit_code() == 42);
+}
+
 TEST_CASE("mutex works in a capturing lambda thread") {
     container::Image image;
     std::string error;
