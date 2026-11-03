@@ -9,6 +9,7 @@
 #include "kr32/debug/debug.h"
 #include "kr32/link/linker.h"
 #include "kr32/vm/threads.h"
+#include "kr32/vm/threads.h"
 
 #include <cstdint>
 #include <string>
@@ -110,6 +111,40 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
     }
     program.diagnostics = "step limit";
     return program;
+}
+
+bool build_cluster_image(std::string_view source, container::Image& image,
+                         std::string& error) {
+    const cxx::Result compiled = cxx::compile(source);
+    if (!compiled.ok) {
+        error = "compile failed";
+        return false;
+    }
+    container::Image object;
+    assembler::Error assembly_error;
+    if (!assembler::assemble_object(compiled.assembly, object, assembly_error)) {
+        error = assembly_error.message;
+        return false;
+    }
+    container::Image runtime;
+    if (!assembler::assemble_object(cc::runtime_assembly(), runtime,
+                                    assembly_error)) {
+        error = assembly_error.message;
+        return false;
+    }
+    std::vector<container::Image> objects;
+    objects.push_back(std::move(object));
+    objects.push_back(std::move(runtime));
+    linker::Map map;
+    linker::Error link_error;
+    linker::Options options;
+    options.stack_top = 0x0011'0000;
+    options.stack_limit = 0x0001'0000;
+    if (!linker::link(objects, options, image, map, link_error)) {
+        error = link_error.message;
+        return false;
+    }
+    return true;
 }
 
 ProgramResult compile_and_run(std::string_view source) {
@@ -1380,6 +1415,36 @@ TEST_CASE("std thread accepts capturing lambda closures") {
         "    return 0;\n"
         "}\n");
     CHECK(compiled.ok);
+}
+
+TEST_CASE("capturing lambda thread runs on a cluster") {
+    container::Image image;
+    std::string error;
+    REQUIRE(build_cluster_image(
+        "#include <thread>\n"
+        "int main() {\n"
+        "    int value = 42;\n"
+        "    std::thread worker([value]() {\n"
+        "        (void)__builtin_kr32_syscall(47, value, 0, 0);\n"
+        "    }, 0);\n"
+        "    worker.join();\n"
+        "    return 0;\n"
+        "}\n",
+        image, error));
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    REQUIRE(host.load_image(image, error));
+    host.start(image.entry);
+    for (int step = 0; step < 2000000; ++step) {
+        if (host.cluster().core(0).halted() &&
+            host.cluster().core(1).halted()) {
+            break;
+        }
+        (void)host.step();
+    }
+    CHECK(host.cluster().core(0).halted());
+    CHECK(host.cluster().core(1).halted());
+    CHECK(host.cluster().core(1).exit_code() == 42);
 }
 
 TEST_CASE("std thread accepts function pointers and captureless lambdas") {
