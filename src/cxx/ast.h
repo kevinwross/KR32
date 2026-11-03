@@ -61,6 +61,7 @@ struct Type {
     std::uint32_t array_size = 0;    // Array (0 = unknown)
     std::string array_bound_name;    // Array bound symbol (template parameter)
     int array_bound_offset = 0;      // Constant offset applied to the bound
+    int array_bound_scale = 1;       // Constant multiplier applied to the bound
     std::vector<TypePtr> parameters; // Function
     std::vector<TypePtr> template_arguments; // Named template-id
     bool variadic = false;           // Function

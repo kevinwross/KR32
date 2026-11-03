@@ -80,7 +80,8 @@ struct Array {
 ```
 
 - Integer non-type parameters
-- Array bounds derived from a parameter plus a constant offset
+- Array bounds derived from a parameter plus a constant multiplier and/or
+  offset
 - Constant expressions in non-type arguments
 - Template static data members emitted weak and merged across translation
   units

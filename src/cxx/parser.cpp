@@ -768,11 +768,13 @@ private:
         std::vector<std::uint32_t> dimensions;
         std::vector<std::string> bound_names;
         std::vector<int> bound_offsets;
+        std::vector<int> bound_scales;
         while (at("[")) {
             advance();
             std::uint32_t size = 0;
             std::string bound_name;
             int bound_offset = 0;
+            int bound_scale = 1;
             if (!at("]")) {
                 const Token& token = peek();
                 if (token.kind == TokenKind::IntegerLiteral) {
@@ -781,6 +783,13 @@ private:
                 } else if (token.kind == TokenKind::Identifier) {
                     bound_name = token.text;
                     advance();
+                    if (at("*")) {
+                        advance();
+                        if (peek().kind == TokenKind::IntegerLiteral) {
+                            bound_scale = static_cast<int>(peek().integer);
+                            advance();
+                        }
+                    }
                     if (at("+") || at("-")) {
                         const bool negative = at("-");
                         advance();
@@ -801,6 +810,7 @@ private:
             dimensions.push_back(size);
             bound_names.push_back(bound_name);
             bound_offsets.push_back(bound_offset);
+            bound_scales.push_back(bound_scale);
         }
         // The first declarator dimension is the outermost array:
         // int a[10][5][2] is array<10, array<5, array<2, int>>>.
@@ -808,6 +818,7 @@ private:
             TypePtr array = Type::make_array(type, dimensions[index - 1]);
             array->array_bound_name = bound_names[index - 1];
             array->array_bound_offset = bound_offsets[index - 1];
+            array->array_bound_scale = bound_scales[index - 1];
             type = array;
         }
         declarator.type = type;

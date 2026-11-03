@@ -1829,6 +1829,21 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("non-type template array bounds accept constant multipliers") {
+    const ProgramResult program = compile_and_run(
+        "template <int N> struct Array {\n"
+        "    int values[N * 2 + 1];\n"
+        "    int size() { return N * 2 + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Array<2> array;\n"
+        "    array.values[4] = 42;\n"
+        "    return array.size() + array.values[4] - 6;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 41);
+}
+
 TEST_CASE("non-type template array bounds accept constant offsets") {
     const ProgramResult program = compile_and_run(
         "template <int N> struct Array {\n"
