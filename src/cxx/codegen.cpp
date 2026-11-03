@@ -4519,6 +4519,9 @@ private:
             }
             TypePtr range_type;
             int list_array_offset = -1;
+            bool list_range = false;
+            MemberInfo* list_data_member = nullptr;
+            MemberInfo* list_size_member = nullptr;
             if (statement.expression->kind == ExprKind::InitializerList) {
                 if (statement.expression->children.empty()) {
                     error(statement.location,
@@ -4537,6 +4540,23 @@ private:
                                       *statement.expression);
             } else {
                 range_type = type_of(*statement.expression, false);
+                ClassInfo* list_info = class_of(range_type);
+                if (is_initializer_list_class(list_info)) {
+                    list_data_member = find_member(list_info, "data_");
+                    list_size_member = find_member(list_info, "size_");
+                    if (list_data_member == nullptr ||
+                        list_size_member == nullptr ||
+                        list_data_member->type == nullptr ||
+                        list_data_member->type->kind != TypeKind::Pointer ||
+                        list_data_member->type->element == nullptr) {
+                        error(statement.location,
+                              "initializer_list layout is not supported");
+                        return;
+                    }
+                    list_range = true;
+                    range_type = Type::make_array(
+                        resolve_type(list_data_member->type->element), 0);
+                }
             }
             if (!range_type || range_type->kind != TypeKind::Array ||
                 !range_type->element) {
@@ -4545,14 +4565,31 @@ private:
                 return;
             }
             push_scope();
-            if (list_array_offset >= 0) {
-                emit("    LEA R0, [R7 + " + std::to_string(list_array_offset) + "]");
-            } else {
-                gen_expr(*statement.expression);
-            }
             const int base_temp =
                 allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
-            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            int count_temp = -1;
+            if (list_range) {
+                gen_expr(*statement.expression);
+                const int object_temp =
+                    allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
+                emit("    STORE R0, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    LOAD R1, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    LOAD R0, [R1 + " +
+                     std::to_string(list_data_member->offset) + "]");
+                emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+                emit("    LOAD R1, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    LOAD R0, [R1 + " +
+                     std::to_string(list_size_member->offset) + "]");
+                count_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
+            } else {
+                if (list_array_offset >= 0) {
+                    emit("    LEA R0, [R7 + " + std::to_string(list_array_offset) + "]");
+                } else {
+                    gen_expr(*statement.expression);
+                }
+                emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            }
             const int index_temp =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    MOV R0, #0");
@@ -4574,7 +4611,11 @@ private:
             continue_labels_.push_back(increment);
             emit(start + ":");
             emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
-            emit("    MOV R1, #" + std::to_string(range_type->array_size));
+            if (count_temp >= 0) {
+                emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
+            } else {
+                emit("    MOV R1, #" + std::to_string(range_type->array_size));
+            }
             emit("    CMP R0, R1");
             emit("    JGE " + end);
             emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");

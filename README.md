@@ -27,7 +27,8 @@ semantics, `std::initializer_list` parameters and `auto` variables,
 captureless and
 value/reference/default-capturing lambdas,
 by-value class parameters/returns with `sret`, exit-time static destruction,
-range-based `for` over arrays and braced initializer lists, `goto`/labels, and
+range-based `for` over arrays, braced initializer lists, and
+`initializer_list` variables, `goto`/labels, and
 C++ debug records. A
 freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
