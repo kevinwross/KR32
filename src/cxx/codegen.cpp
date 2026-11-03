@@ -3242,7 +3242,7 @@ private:
             emit("    LOAD R1, [R7 + " + std::to_string(closure_temp) + "]");
             emit("    MOV R2, #0");
             emit("    SYSCALL #44");
-            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    LEA R1, [R7 + " + std::to_string(address_temp) + "]");
             emit("    STORE R0, [R1]");
             return;
         }

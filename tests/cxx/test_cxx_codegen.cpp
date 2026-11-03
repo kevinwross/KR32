@@ -1446,6 +1446,36 @@ TEST_CASE("captureless lambda thread runs on a cluster") {
     CHECK(host.cluster().core(1).exit_code() == 42);
 }
 
+TEST_CASE("mutex works in a capturing lambda thread") {
+    container::Image image;
+    std::string error;
+    REQUIRE(build_cluster_image(
+        "#include <thread>\n"
+        "#include <mutex>\n"
+        "int main() {\n"
+        "    std::mutex guard;\n"
+        "    std::thread worker([&guard]() {\n"
+        "        guard.lock();\n"
+        "        guard.unlock();\n"
+        "    }, 0);\n"
+        "    worker.join();\n"
+        "    return 42;\n"
+        "}\n",
+        image, error));
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    REQUIRE(host.load_image(image, error));
+    host.start(image.entry);
+    for (int step = 0; step < 2000000; ++step) {
+        if (host.cluster().core(0).halted()) {
+            break;
+        }
+        (void)host.step();
+    }
+    REQUIRE(host.cluster().core(0).halted());
+    CHECK(host.cluster().core(0).exit_code() == 42);
+}
+
 TEST_CASE("function pointer thread runs on a cluster") {
     container::Image image;
     std::string error;

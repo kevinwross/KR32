@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 14:22 -08:00
+> **Last updated:** 2026-11-03 14:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1591,6 +1591,9 @@ Newest entries at the bottom. Use the local time zone.
       captureless-lambda `std::thread` entries. 314 cases / 5818 assertions.
 - **2026-11-03 14:22 -08:00** — Added multi-core runtime coverage for
       function-pointer `std::thread` entries. 315 cases / 5823 assertions.
+- **2026-11-03 14:30 -08:00** — Fixed capturing-thread construction to store
+      the thread handle at the object address, restoring `join()` and mutex
+      synchronization across cluster threads. 316 cases / 5827 assertions.
 
 ## 10. Updating this file
 
