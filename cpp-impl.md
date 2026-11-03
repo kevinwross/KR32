@@ -14,6 +14,7 @@ M9.12 (CLI integration, cross-platform gate, tag `m9`) are complete.
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)
+**Known gaps/handoff:** [cpp-handoff.md](cpp-handoff.md)
 **Standalone driver:** `kr32-cxx` (`src/cxx/tool/main.cpp`)
 
 ## 1. Rules

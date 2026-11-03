@@ -20,8 +20,9 @@ editable start address, and always-visible variables, call-stack, and console
 panels. See
 [docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++ M9
 subset is implemented through exceptions, matrices, threads/TLS/atomics, and
-C++ debug records; see [cpp-impl.md](cpp-impl.md) for the remaining GUI/DAP
-thread polish and deferred features.
+C++ debug records; see [cpp-impl.md](cpp-impl.md) and
+[cpp-handoff.md](cpp-handoff.md) for the remaining GUI/DAP thread polish,
+known gaps, and deferred features.
 
 ## Build
 
