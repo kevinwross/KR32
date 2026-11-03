@@ -2384,13 +2384,13 @@ private:
             emit("    XOR R1, R1, R5");
         } else if (op == "*") {
             emit("    MUL R6, R0, R4");
-            emit("    MULHU R8, R0, R4");
-            emit("    MUL R9, R0, R5");
-            emit("    MUL R10, R1, R4");
-            emit("    ADD R8, R8, R9");
-            emit("    ADD R8, R8, R10");
+            emit("    MULHU R12, R0, R4");
+            emit("    MUL R13, R0, R5");
+            emit("    MUL R14, R1, R4");
+            emit("    ADD R12, R12, R13");
+            emit("    ADD R12, R12, R14");
             emit("    MOV R0, R6");
-            emit("    MOV R1, R8");
+            emit("    MOV R1, R12");
         } else if (op == "<<" || op == ">>") {
             const std::string zero = new_label("llshift0");
             const std::string wide = new_label("llshiftwide");
@@ -2403,9 +2403,9 @@ private:
             if (op == "<<") {
                 emit("    SHL R0, R0, R4");
                 emit("    SHL R1, R1, R4");
-                emit("    MOV R8, #32");
-                emit("    SUB R8, R8, R4");
-                emit("    SHR R6, R6, R8");
+                emit("    MOV R12, #32");
+                emit("    SUB R12, R12, R4");
+                emit("    SHR R6, R6, R12");
                 emit("    OR R1, R1, R6");
             } else if (unsigned_operation) {
                 emit("    SHR R0, R0, R4");
@@ -2420,16 +2420,16 @@ private:
             }
             emit("    JMP " + done);
             emit(wide + ":");
-            emit("    SUB R8, R4, #32");
+            emit("    SUB R12, R4, #32");
             if (op == "<<") {
                 emit("    MOV R1, R0");
-                emit("    SHL R1, R1, R8");
+                emit("    SHL R1, R1, R12");
                 emit("    MOV R0, #0");
             } else if (unsigned_operation) {
-                emit("    SHR R0, R1, R8");
+                emit("    SHR R0, R1, R12");
                 emit("    MOV R1, #0");
             } else {
-                emit("    SAR R0, R1, R8");
+                emit("    SAR R0, R1, R12");
                 emit("    MOV R1, R1");
                 emit("    SAR R1, R1, #31");
             }
