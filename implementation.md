@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 23:39 -08:00
+> **Last updated:** 2026-11-02 23:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1321,6 +1321,12 @@ Newest entries at the bottom. Use the local time zone.
       multi-TU deduplication, external member definitions, non-type template
       parameters, and nested templates remain deferred. 249 cases / 5554
       assertions.
+- **2026-11-02 23:44 -08:00** — Made class-template member functions weak
+      in every instantiation, so two translation units that instantiate the
+      same `Box<int>` link through the existing weak-symbol merge instead of
+      colliding. Added a two-TU class-template link/run regression. COMDAT
+      section groups and nontrivial template static data remain deferred.
+      250 cases / 5558 assertions.
 
 ## 10. Updating this file
 

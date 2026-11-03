@@ -753,7 +753,7 @@ private:
             child_copy->is_virtual = child->is_virtual;
             child_copy->is_override = child->is_override;
             child_copy->is_pure = child->is_pure;
-            child_copy->is_inline = child->is_inline;
+            child_copy->is_inline = child->is_inline || child->kind == DeclKind::Function;
             child_copy->is_constructor = child->is_constructor;
             child_copy->is_destructor = child->is_destructor;
             child_copy->is_operator = child->is_operator;

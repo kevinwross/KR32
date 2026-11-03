@@ -1152,6 +1152,29 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("class template instantiations are weak across translation units") {
+    const std::string header =
+        "template <typename T> class Box {\n"
+        "public:\n"
+        "    T value;\n"
+        "    T get() { return value; }\n"
+        "};\n";
+    const cxx::Result first = cxx::compile(
+        header +
+        "int use_box() { Box<int> b; b.value = 42; return b.get(); }\n",
+        cxx::Options{.source_name = "template_a.cpp"});
+    const cxx::Result second = cxx::compile(
+        header +
+        "int use_box();\n"
+        "int main() { Box<int> b; b.value = 1; return use_box() + b.get(); }\n",
+        cxx::Options{.source_name = "template_b.cpp"});
+    REQUIRE(first.ok);
+    REQUIRE(second.ok);
+    const ProgramResult program = run_assemblies({first.assembly, second.assembly});
+    CHECK(program.ok);
+    CHECK(program.result == 43);
+}
+
 TEST_CASE("class templates instantiate fields, methods, and constructors") {
     const ProgramResult program = compile_and_run(
         "template <typename T> class Box {\n"
