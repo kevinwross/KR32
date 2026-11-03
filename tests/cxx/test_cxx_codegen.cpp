@@ -2213,6 +2213,33 @@ TEST_CASE("functions return braced initializer_lists") {
     CHECK(program.result == 10);
 }
 
+TEST_CASE("initializer_list constructors accept empty braced lists") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "struct Count {\n"
+        "    int total;\n"
+        "    Count(std::initializer_list<int> values) {\n"
+        "        total = 0;\n"
+        "        for (int value : values) total += value;\n"
+        "    }\n"
+        "};\n"
+        "int main() { Count count{}; return count.total; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("functions return empty braced initializer_lists") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "std::initializer_list<int> empty() { return {}; }\n"
+        "int main() {\n"
+        "    std::initializer_list<int> values = empty();\n"
+        "    return values.size_;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("initializer_list constructors keep 64-bit elements") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"
