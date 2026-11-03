@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 10:14 -08:00
+> **Last updated:** 2026-11-03 10:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1479,6 +1479,10 @@ Newest entries at the bottom. Use the local time zone.
       surface: `std::this_thread::sleep_for`, `std::mutex::try_lock_for`,
       and `std::recursive_mutex::try_lock_for`. Timeouts currently do not
       block; only immediate acquisition is implemented. 286 cases / 5751
+      assertions.
+- **2026-11-03 10:20 -08:00** — Timed thread helpers now busy-wait on
+      host seconds instead of returning immediately; `sleep_for` and
+      `try_lock_for` honor coarse whole-second timeouts. 286 cases / 5751
       assertions.
 
 ## 10. Updating this file

@@ -21,7 +21,12 @@ inline int thread_self() {
     return __builtin_kr32_syscall(50, 0, 0, 0);
 }
 inline void sleep_for(int milliseconds) {
-    if (milliseconds > 0) {
+    if (milliseconds <= 0) {
+        return;
+    }
+    const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0);
+    const int seconds = (milliseconds + 999) / 1000;
+    while ((int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) {
         thread_yield();
     }
 }
@@ -59,8 +64,21 @@ struct mutex {
         return __atomic_compare_exchange_n(&state, &expected, 1, 0, 0, 0);
     }
     bool try_lock_for(int milliseconds) {
-        (void)milliseconds;
-        return try_lock();
+        if (try_lock()) {
+            return true;
+        }
+        if (milliseconds <= 0) {
+            return false;
+        }
+        const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0);
+        const int seconds = (milliseconds + 999) / 1000;
+        while ((int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) {
+            thread_yield();
+            if (try_lock()) {
+                return true;
+            }
+        }
+        return false;
     }
     void unlock() {
         __atomic_store_n(&state, 0, 0);
@@ -106,8 +124,21 @@ struct recursive_mutex {
         return true;
     }
     bool try_lock_for(int milliseconds) {
-        (void)milliseconds;
-        return try_lock();
+        if (try_lock()) {
+            return true;
+        }
+        if (milliseconds <= 0) {
+            return false;
+        }
+        const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0);
+        const int seconds = (milliseconds + 999) / 1000;
+        while ((int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) {
+            thread_yield();
+            if (try_lock()) {
+                return true;
+            }
+        }
+        return false;
     }
     void unlock() {
         if (owner != thread_self()) {
