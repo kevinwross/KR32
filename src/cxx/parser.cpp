@@ -1711,7 +1711,9 @@ private:
         if (consume("return")) {
             statement->kind = StmtKind::Return;
             if (!at(";")) {
-                statement->expression = parse_expression();
+                statement->expression = at("{")
+                                            ? parse_initializer_list_expression()
+                                            : parse_expression();
             }
             expect(";", "after return");
             return statement;

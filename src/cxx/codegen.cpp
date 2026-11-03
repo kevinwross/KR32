@@ -5450,6 +5450,68 @@ private:
             return;
         case StmtKind::Return: {
             if (statement.expression) {
+                ClassInfo* list_result =
+                    current_function_ != nullptr
+                        ? class_of(resolve_type(current_function_->result))
+                        : nullptr;
+                if (statement.expression->kind == ExprKind::InitializerList &&
+                    is_initializer_list_class(list_result)) {
+                    MemberInfo* data_member = find_member(list_result, "data_");
+                    MemberInfo* size_member = find_member(list_result, "size_");
+                    if (data_member == nullptr || size_member == nullptr ||
+                        data_member->type == nullptr ||
+                        data_member->type->kind != TypeKind::Pointer ||
+                        data_member->type->element == nullptr) {
+                        error(statement.location,
+                              "initializer_list layout is not supported");
+                        return;
+                    }
+                    const TypePtr element = data_member->type->element;
+                    const int element_size = type_size(element);
+                    const std::size_t count =
+                        statement.expression->children.size();
+                    const std::string label = new_label("initlist_return");
+                    bss_ += ".align 4\n" + label + ":\n    .space " +
+                            std::to_string(std::max(1, static_cast<int>(count) *
+                                                           element_size)) + "\n";
+                    for (std::size_t index = 0; index < count; ++index) {
+                        gen_expr(*statement.expression->children[index]);
+                        if (is_long_long(element)) {
+                            const TypePtr value_type =
+                                type_of(*statement.expression->children[index]);
+                            if (!is_long_long(value_type)) {
+                                emit("    MOV R1, R0");
+                                emit(std::string("    ") +
+                                     (is_unsigned_integer(value_type) ? "SHR" : "SAR") +
+                                     " R1, R1, #31");
+                            }
+                            emit("    MOV R2, R1");
+                        }
+                        emit("    LEA R1, [" + label + "]");
+                        if (index != 0) {
+                            emit("    ADD R1, R1, #" +
+                                 std::to_string(index * element_size));
+                        }
+                        store_value(element);
+                    }
+                    if (current_sret_slot_ < 0) {
+                        error(statement.location,
+                              "initializer_list return requires a destination object");
+                    } else {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(current_sret_slot_) + "]");
+                        emit("    LEA R1, [" + label + "]");
+                        emit("    STORE R1, [R0 + " +
+                             std::to_string(data_member->offset) + "]");
+                        emit("    MOV R1, #" + std::to_string(count));
+                        emit("    STORE R1, [R0 + " +
+                             std::to_string(size_member->offset) + "]");
+                    }
+                    emit_all_local_destructors();
+                    emit("    MOV R0, #0");
+                    emit("    JMP " + return_label_);
+                    return;
+                }
                 const TypePtr result_type = type_of(*statement.expression);
                 if (ClassInfo* result_class = class_of(result_type)) {
                     gen_expr(*statement.expression);
