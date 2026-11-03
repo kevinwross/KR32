@@ -1,7 +1,9 @@
 # KR32 C runtime and libc
 
 KR32 C is freestanding. There is no host libc, no separate libc archive, and no
-dynamic linking. Every C executable built with `kr32 build` receives:
+dynamic linking. Both the C and C++ front ends compile to the same `.k32`
+object/executable model and link the **same** C runtime/libc: C++ `new`/`delete`
+lower to `malloc`/`free`, and C++ code can call the C libc directly. Every C executable built with `kr32 build` receives:
 
 1. a small assembly runtime for startup and host syscalls, and
 2. a libc layer written in KR32 C and compiled by the KR32 C compiler.

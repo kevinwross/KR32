@@ -41,6 +41,7 @@ struct Label {
     std::uint32_t section = 0;
     std::uint32_t offset = 0;
     bool global = false;
+    bool weak = false;
 };
 
 std::string trim(std::string_view text) {
@@ -204,6 +205,26 @@ bool parse_register(std::string_view text, int& reg) {
 bool parse_fpr(std::string_view text, int& reg) {
     const std::string value = trim(text);
     if (value.size() < 2 || (value[0] != 'f' && value[0] != 'F')) {
+        return false;
+    }
+    std::size_t index = 1;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 1) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 1);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
+bool parse_tile(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 2 || (value[0] != 't' && value[0] != 'T')) {
         return false;
     }
     std::size_t index = 1;
@@ -422,6 +443,10 @@ public:
         add_section(".text", container::SectionType::Text,
                     container::Alloc | container::Execute);
         add_section(".rodata", container::SectionType::Rodata, container::Alloc);
+        add_section(".cpp_except", container::SectionType::Rodata,
+                    container::Alloc);
+        add_section(".tls", container::SectionType::Data,
+                    container::Alloc | container::Write);
         add_section(".data", container::SectionType::Data,
                     container::Alloc | container::Write);
         add_section(".bss", container::SectionType::Bss,
@@ -547,15 +572,19 @@ private:
 
     bool pass1_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
-        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss" ||
+        if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
+            name == ".tls" || name == ".data" || name == ".bss" ||
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
-        if (name == ".global" || name == ".globl") {
+        if (name == ".global" || name == ".globl" || name == ".weak") {
             if (statement.operands.size() != 1) {
-                return fail(statement.line, ".global expects one name");
+                return fail(statement.line, ".global/.weak expects one name");
             }
             globals_.insert(statement.operands[0]);
+            if (name == ".weak") {
+                weak_symbols_.insert(statement.operands[0]);
+            }
             externs_.erase(statement.operands[0]);
             return true;
         }
@@ -927,6 +956,19 @@ private:
                                instruction, relocation, addend, statement.line);
         }
 
+        if (mnemonic == "setsp") {
+            if (operands.size() != 1) {
+                return fail_operands("Rs");
+            }
+            int source = 0;
+            if (!parse_register(operands[0], source)) {
+                return fail(statement.line, "expected a source register");
+            }
+            instruction.opcode = 0x3F;
+            set_source(source);
+            return true;
+        }
+
         if (mnemonic == "not" || mnemonic == "neg") {
             if (operands.size() != 2) {
                 return fail_operands("Rd, Rs");
@@ -1033,7 +1075,7 @@ private:
         }
 
         if (mnemonic == "nop" || mnemonic == "ret" || mnemonic == "halt" ||
-            mnemonic == "brk") {
+            mnemonic == "brk" || mnemonic == "fence") {
             if (!operands.empty()) {
                 return fail_operands("no operands");
             }
@@ -1041,6 +1083,7 @@ private:
             if (mnemonic == "ret") instruction.opcode = 0x3B;
             if (mnemonic == "halt") instruction.opcode = 0x43;
             if (mnemonic == "brk") instruction.opcode = 0x44;
+            if (mnemonic == "fence") instruction.opcode = 0x48;
             return true;
         }
 
@@ -1171,6 +1214,108 @@ private:
             }
         }
 
+        {
+            static const std::map<std::string, std::uint32_t> matrix_ops = {
+                {"mmul", 0x000}, {"mmac", 0x001}, {"mvec", 0x002},
+                {"mtrans", 0x003}, {"vdot", 0x004}, {"mpush", 0x005},
+                {"mpop", 0x006}, {"mdrop", 0x007},
+            };
+            const auto operation = matrix_ops.find(mnemonic);
+            if (operation != matrix_ops.end()) {
+                instruction.opcode = 0x61;
+                instruction.immediate = static_cast<std::int16_t>(operation->second);
+                if (mnemonic == "mdrop") {
+                    if (!operands.empty()) {
+                        return fail_operands("no operands");
+                    }
+                    return true;
+                }
+                if (mnemonic == "mpush" || mnemonic == "mpop") {
+                    if (operands.size() != 1) {
+                        return fail_operands("Td");
+                    }
+                    int tile = 0;
+                    if (!parse_tile(operands[0], tile)) {
+                        return fail(statement.line, "expected a tile register");
+                    }
+                    instruction.rd = static_cast<std::uint8_t>(tile);
+                    return true;
+                }
+                if (operands.size() < 2 || operands.size() > 3) {
+                    return fail_operands("Td, Ta, Tb");
+                }
+                int destination = 0;
+                int left = 0;
+                int right = 0;
+                if (mnemonic == "vdot") {
+                    if (!parse_fpr(operands[0], destination) ||
+                        !parse_tile(operands[1], left) ||
+                        !parse_tile(operands[2], right)) {
+                        return fail(statement.line, "expected Fd, Ta, Tb");
+                    }
+                } else {
+                    if (!parse_tile(operands[0], destination) ||
+                        !parse_tile(operands[1], left) ||
+                        (operands.size() == 3 && !parse_tile(operands[2], right))) {
+                        return fail(statement.line, "expected Td, Ta, Tb");
+                    }
+                }
+                instruction.rd = static_cast<std::uint8_t>(destination);
+                instruction.rs1 = static_cast<std::uint8_t>(left);
+                instruction.field = static_cast<std::uint8_t>(right);
+                return true;
+            }
+        }
+
+        if (mnemonic == "mload" || mnemonic == "mstore" ||
+            mnemonic == "vload" || mnemonic == "vstore") {
+            if (operands.size() < 2 || operands.size() > 3) {
+                return fail_operands("Td, [addr], optional #stride");
+            }
+            int tile = 0;
+            if (!parse_tile(operands[0], tile)) {
+                return fail(statement.line, "expected a tile register");
+            }
+            MemoryOperand memory;
+            if (!parse_memory_operand(operands[1], memory)) {
+                return false;
+            }
+            const bool vector = mnemonic == "vload" || mnemonic == "vstore";
+            instruction.opcode = (mnemonic == "mload" || mnemonic == "vload") ? 0x52 : 0x53;
+            instruction.rd = static_cast<std::uint8_t>(tile);
+            instruction.literal = vector;
+            if (memory.base >= 0) {
+                set_source(memory.base);
+            }
+            instruction.field = static_cast<std::uint8_t>(memory.mode);
+            if (operands.size() == 3) {
+                if (vector) {
+                    return fail(statement.line, "strided VLOAD/VSTORE is reserved");
+                }
+                Expr stride;
+                std::string stride_text = trim(operands[2]);
+                if (!stride_text.empty() && stride_text.front() == '#') {
+                    stride_text = trim(std::string_view(stride_text).substr(1));
+                }
+                if (!eval_expr(stride_text, constants_, stride, error_, statement.line)) {
+                    return false;
+                }
+                if (memory.displacement.value != 0 || memory.displacement.symbolic) {
+                    return fail(statement.line,
+                                "strided MLOAD/MSTORE requires a zero displacement");
+                }
+                instruction.extension = true;
+                instruction.extension_word = static_cast<std::uint32_t>(stride.value);
+                instruction.immediate = 0;
+                return true;
+            }
+            return set_payload(memory.displacement,
+                               memory.displacement.symbolic ||
+                                   memory.displacement.value < -1024 ||
+                                   memory.displacement.value > 1023,
+                               instruction, relocation, addend, statement.line);
+        }
+
         return fail(statement.line, "unsupported instruction: " + mnemonic);
     }
 
@@ -1250,9 +1395,14 @@ private:
         }
 
         for (const auto& [name, label] : labels_) {
-            image.symbols.push_back({name, label.offset, 0, static_cast<std::uint16_t>(label.section),
-                                     label.global ? container::SymbolBind::Global
-                                                  : container::SymbolBind::Local});
+            container::SymbolBind bind = container::SymbolBind::Local;
+            if (label.global) {
+                bind = weak_symbols_.find(name) != weak_symbols_.end()
+                           ? container::SymbolBind::Weak
+                           : container::SymbolBind::Global;
+            }
+            image.symbols.push_back({name, label.offset, 0,
+                                     static_cast<std::uint16_t>(label.section), bind});
         }
         for (const std::string& name : externs_) {
             if (labels_.find(name) == labels_.end()) {
@@ -1265,12 +1415,13 @@ private:
 
     bool pass2_directive(const Statement& statement) {
         const std::string& name = statement.mnemonic;
-        if (name == ".text" || name == ".rodata" || name == ".data" || name == ".bss" ||
+        if (name == ".text" || name == ".rodata" || name == ".cpp_except" ||
+            name == ".tls" || name == ".data" || name == ".bss" ||
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
-        if (name == ".global" || name == ".globl" || name == ".extern" ||
-            name == ".equ" || name == ".set") {
+        if (name == ".global" || name == ".globl" || name == ".weak" ||
+            name == ".extern" || name == ".equ" || name == ".set") {
             return true;
         }
         if (name == ".word") {
@@ -1369,6 +1520,7 @@ private:
     std::map<std::string, std::int64_t> constants_;
     std::map<std::string, Label> labels_;
     std::set<std::string> globals_;
+    std::set<std::string> weak_symbols_;
     std::set<std::string> externs_;
     std::vector<container::Relocation> image_relocations_;
 };

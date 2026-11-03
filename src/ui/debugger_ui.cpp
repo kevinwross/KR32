@@ -910,6 +910,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         std::uint32_t size = 0;
         bool local = false;
         bool ok = false;
+        int indent = 0;
     };
     std::vector<Entry> entries;
     const debug::Function* function = session_.function_at(session_.machine().pc());
@@ -924,7 +925,27 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             entry.local = true;
             std::string error;
             entry.ok = session_.read_variable(variable.name, entry.value, error);
-            entries.push_back(std::move(entry));
+            entries.push_back(entry);
+            if (entry.ok && !variable.type.empty() && variable.type.back() == '*') {
+                for (const debug::ClassInfo& klass : session_.info().classes) {
+                    if (variable.type.find(klass.name) == std::string::npos) {
+                        continue;
+                    }
+                    for (const debug::Member& member : klass.members) {
+                        Entry member_entry;
+                        member_entry.name = "." + member.name;
+                        member_entry.type = member.type;
+                        member_entry.address = entry.value + member.offset;
+                        member_entry.size = member.size;
+                        member_entry.local = true;
+                        member_entry.indent = 1;
+                        member_entry.ok = session_.read_memory(
+                            member_entry.address, member_entry.size, member_entry.value);
+                        entries.push_back(std::move(member_entry));
+                    }
+                    break;
+                }
+            }
         }
     }
     for (const debug::Global& global : session_.info().globals) {
@@ -953,10 +974,13 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         if (hover_var_ == visible_row) {
             canvas.fill(row, Color{42, 58, 74, 255});
         }
+        const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
         const std::string text =
-            entry.name + " = " + (entry.ok ? "0x" + hex(entry.value, 8) : "?");
+            indent_text + entry.name + " = " +
+            (entry.ok ? "0x" + hex(entry.value, 8) : "?");
         canvas.text(rect.x + 6, y, trim_to(text, static_cast<std::size_t>((rect.width - 20) / 7)),
-                    entry.ok ? kText : kBad, FontRole::MonoSmall);
+                    entry.ok ? (entry.indent > 0 ? kDim : kText) : kBad,
+                    FontRole::MonoSmall);
         var_hover_rows_.push_back(
             VarHoverRow{row, entry.name, entry.type, entry.address, entry.value, entry.size,
                         entry.local, entry.ok});
@@ -1181,10 +1205,27 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
 }
 
 void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
-    draw_panel(canvas, rect, "CALL STACK");
+    draw_panel(canvas, rect, "THREADS / CALL STACK");
+    const std::vector<debug::ThreadInfo>& threads = session_.threads();
+    int y = rect.y + 24;
+    const int max_thread_rows = 3;
+    const int thread_rows =
+        std::min(static_cast<int>(threads.size()), max_thread_rows);
+    for (int index = 0; index < thread_rows; ++index) {
+        const debug::ThreadInfo& thread = threads[static_cast<std::size_t>(index)];
+        canvas.text(rect.x + 6, y,
+                    "T" + std::to_string(thread.id) + " " +
+                        trim_to(thread.name + " " + hex(thread.pc, 8),
+                                static_cast<std::size_t>((rect.width - 16) / 7)),
+                    thread.id == session_.selected_thread() ? kAccent : kDim,
+                    FontRole::MonoSmall);
+        y += 14;
+    }
+    const int frames_top = y + (thread_rows > 0 ? 4 : 0);
     const std::vector<debug::Frame> frames = session_.call_stack();
     const int row_height = 14;
-    const int visible = std::max(1, (rect.height - 26) / row_height);
+    const int visible =
+        std::max(1, (rect.y + rect.height - frames_top - 4) / row_height);
     stack_scroll_ =
         std::clamp(stack_scroll_, 0, std::max(0, static_cast<int>(frames.size()) - visible));
     int visible_row = 0;
@@ -1192,15 +1233,15 @@ void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
          index < static_cast<int>(frames.size()) && visible_row < visible;
          ++index, ++visible_row) {
         const debug::Frame& frame = frames[static_cast<std::size_t>(index)];
-        const int y = rect.y + 24 + visible_row * row_height;
-        canvas.text(rect.x + 6, y,
+        const int row_y = frames_top + visible_row * row_height;
+        canvas.text(rect.x + 6, row_y,
                     "#" + std::to_string(index) + " " +
                         trim_to(frame.function + " " + hex(frame.pc, 8),
                                 static_cast<std::size_t>((rect.width - 20) / 7)),
                     index == 0 ? kAccent : kText, FontRole::MonoSmall);
     }
     if (frames.empty()) {
-        canvas.text(rect.x + 6, rect.y + 24, "(no frames)", kDim, FontRole::MonoSmall);
+        canvas.text(rect.x + 6, frames_top, "(no frames)", kDim, FontRole::MonoSmall);
     }
     draw_scrollbar(canvas, rect, stack_scroll_, static_cast<int>(frames.size()), visible,
                    stack_scroll_track_, stack_scroll_thumb_);

@@ -114,6 +114,21 @@ bool parse_info(const container::Image& image, Info& info, std::string& error) {
             TypeInfo type;
             stream >> type.name >> type.size;
             info.types.push_back(std::move(type));
+        } else if (kind == 'C') {
+            ClassInfo klass;
+            stream >> klass.name >> klass.size >> klass.base;
+            info.classes.push_back(std::move(klass));
+        } else if (kind == 'M') {
+            std::string class_name;
+            Member member;
+            stream >> class_name >> member.name >> member.offset >> member.type >>
+                member.size;
+            for (ClassInfo& klass : info.classes) {
+                if (klass.name == class_name) {
+                    klass.members.push_back(std::move(member));
+                    break;
+                }
+            }
         }
     }
 
@@ -158,6 +173,29 @@ bool Session::load(const container::Image& image, std::string& error) {
     }
     breakpoints_.clear();
     return true;
+}
+
+void Session::set_threads(std::vector<ThreadInfo> threads) {
+    threads_ = std::move(threads);
+    if (threads_.empty()) {
+        selected_thread_ = 0;
+        return;
+    }
+    selected_thread_ = threads_.front().id;
+    for (const ThreadInfo& thread : threads_) {
+        if (thread.current) {
+            selected_thread_ = thread.id;
+        }
+    }
+}
+
+void Session::select_thread(std::uint32_t id) {
+    for (const ThreadInfo& thread : threads_) {
+        if (thread.id == id) {
+            selected_thread_ = id;
+            return;
+        }
+    }
 }
 
 void Session::set_breakpoint(std::uint32_t address) {

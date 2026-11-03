@@ -14,8 +14,13 @@ add_executable(kr32_tests
     unit/test_cc.cpp
     unit/test_debug.cpp
     unit/test_host.cpp
+    unit/test_threads.cpp
     unit/test_assembler.cpp
-    unit/test_disassembler.cpp)
+    unit/test_disassembler.cpp
+    cxx/test_cxx_abi.cpp
+    cxx/test_cxx_api.cpp
+    cxx/test_cxx_parser.cpp
+    cxx/test_cxx_codegen.cpp)
 
 target_link_libraries(kr32_tests PRIVATE
     kr32_core
@@ -24,10 +29,12 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_container
     kr32_link
     kr32_cc
+    kr32_cxx
     kr32_debug
     kr32_vm
     kr32_warnings)
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
+target_include_directories(kr32_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
 
 if(TARGET kr32_ui)
@@ -47,6 +54,17 @@ if(TARGET kr32_cxx_tool)
     add_test(NAME cxx_tool_help COMMAND kr32_cxx_tool --help)
     set_tests_properties(cxx_tool_help PROPERTIES
         PASS_REGULAR_EXPRESSION "kr32-cxx")
+
+    # Driver error paths are part of the harness contract: a bad invocation must
+    # exit non-zero and must not try to compile the input.
+    add_test(NAME cxx_tool_missing_input COMMAND kr32_cxx_tool)
+    set_tests_properties(cxx_tool_missing_input PROPERTIES WILL_FAIL TRUE)
+
+    add_test(NAME cxx_tool_bad_emit COMMAND kr32_cxx_tool --emit elf input.cpp)
+    set_tests_properties(cxx_tool_bad_emit PROPERTIES WILL_FAIL TRUE)
+
+    add_test(NAME cxx_tool_missing_output_path COMMAND kr32_cxx_tool -o)
+    set_tests_properties(cxx_tool_missing_output_path PROPERTIES WILL_FAIL TRUE)
 endif()
 
 add_test(NAME cli_version COMMAND $<TARGET_FILE:kr32> version)
@@ -59,6 +77,14 @@ set_tests_properties(cli_help PROPERTIES
 
 add_test(NAME cli_stub COMMAND $<TARGET_FILE:kr32> build)
 set_tests_properties(cli_stub PROPERTIES WILL_FAIL TRUE)
+
+add_test(NAME cli_cxx_help COMMAND $<TARGET_FILE:kr32> cxx --help)
+set_tests_properties(cli_cxx_help PROPERTIES PASS_REGULAR_EXPRESSION "kr32 cxx")
+
+add_test(NAME run_cxx_demo
+    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/hello.cpp --run
+            -o ${CMAKE_BINARY_DIR}/hello-cxx.k32)
+set_tests_properties(run_cxx_demo PROPERTIES PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
 add_test(NAME run_demo
     COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)

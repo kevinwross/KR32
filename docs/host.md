@@ -1,6 +1,6 @@
 # Host services and sandbox (M7)
 
-The guest reaches the host through `SYSCALL` vectors 32..43. Arguments are in
+The guest reaches the host through `SYSCALL` vectors 32..50. Arguments are in
 `R0..R3`; the result is in `R0`. Error results are small negative values
 (`0xFFFFFFFF`, `0xFFFFFFFC`, ...).
 
@@ -18,6 +18,21 @@ The guest reaches the host through `SYSCALL` vectors 32..43. Arguments are in
 | 41 | random | — | deterministic xorshift value |
 | 42 | argc | — | guest argument count |
 | 43 | arg | index, buffer, size | copied length |
+| 44 | thread_create | entry, arg, stack_size | handle or `-1` |
+| 45 | thread_join | handle | exit code (guest join is stage-2) |
+| 46 | thread_yield | — | 0 |
+| 47 | thread_exit | code | halts the thread |
+| 48 | futex_wait | address, expected | 0 blocked, 1 value mismatch |
+| 49 | futex_wake | address, count | woken count |
+| 50 | thread_self | — | current thread handle |
+
+Thread services are provided by `vm::ClusterHost`, which maps one guest thread
+per `core::Cluster` core and advances one core turn at a time. A thread handle
+is `core + 1`; a mismatch in `futex_wait` returns immediately with `1`, and a
+matching wait suspends the thread until `futex_wake`. Guest `thread_join` blocks
+by servicing other runnable cores until the target exits and returns its exit
+code. Each thread receives a TCB at `R11` with the frozen offsets in
+`docs/abi.md` and a 128-byte FPR save area.
 
 Open flags: bits 0..1 select read/write (`0` read, `1` write, `2` both),
 bit 2 creates, bit 3 truncates, bit 4 appends.

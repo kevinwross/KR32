@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 13:09 -08:00
+> **Last updated:** 2026-11-02 17:23 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -549,14 +549,25 @@ multi-core selector/per-core panel layout remains a UI follow-up.
 
 **Status:** implementation started 2026-11-02. The design contract is
 [docs/cpp-plan.md](docs/cpp-plan.md); the implementation/task tracker is
-[cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phase M9.1
-(ABI, API, and test harness) is in progress. The standalone API and `kr32-cxx`
-driver skeleton are in place. Confirmed decisions include custom C++11 subset,
-one thread per core with cooperative oversubscription, `R11` TP, library
-matrices plus intrinsics, `double` align 8/16-byte call boundaries, explicit
-per-thread transform stacks, full destructor unwinding, scalar FP library,
-stack-based FP varargs, Itanium-like mangling, and class-member/`this` debug
-support.
+[cpp-impl.md](cpp-impl.md). The `m9-cxx` worktree/branch is active; phases M9.1
+(ABI/API/test harness), M9.2 (preprocessor, lexer, AST, parser, diagnostics),
+M9.3 (scopes, name lookup, overloads, mangling, integer code generation), M9.4
+(scalar `float`/`double`, FP calls, conversions, and stack varargs), M9.5
+(classes, constructors/destructors, single inheritance), M9.6 (virtual dispatch
+and RTTI), M9.7 (matrix/transform-stack codegen), M9.8 (function templates,
+weak symbols, and static initialization), and M9.9 (`new`/`delete`, exceptions,
+cleanup) are complete; M9.10 (threads/TLS/atomics) is complete. M9.11 (C++
+debug/GUI/DAP) and M9.12 (CLI/cross-platform/tag) are complete for the
+Windows/WSL gate; tag `m9` marks the final commit. C++ ABI revision 1 is frozen in
+[docs/abi.md](docs/abi.md) with machine-checkable constants in
+`include/kr32/cxx/abi.h`. The standalone API and `kr32-cxx` driver skeleton are
+in place, and `compile()` now produces assembly for the supported integer,
+scalar-FP, class, virtual/RTTI, matrix, function-template, allocation, and
+exception subset. Confirmed decisions include custom C++11 subset, one
+thread per core with cooperative oversubscription, `R11` TP, library matrices
+plus intrinsics, `double` align 8/16-byte call boundaries, explicit per-thread
+transform stacks, full destructor unwinding, scalar FP library, stack-based FP
+varargs, Itanium-like mangling, and class-member/`this` debug support.
 
 **Tasks**
 
@@ -567,30 +578,93 @@ support.
 - [x] Approve the tracker and create the `m9-cxx` worktree/branch.
 - [x] Add the stable `kr32::cxx::compile` API, standalone `kr32-cxx` driver, and
       the `cxx_tool_help` CTest.
+- [x] Freeze C++ ABI revision 1 in `docs/abi.md` and
+      `include/kr32/cxx/abi.h`; add host ABI/API tests, driver error-path tests,
+      the `--emit obj` output contract, and the `KR32_BUILD_CXX_TOOL` option.
 - [x] Choose a custom C++ front end; no external front-end dependency.
+- [x] C++ preprocessor, lexer, AST, recursive-descent parser, and diagnostics
+      (M9.2); host parser tests including a malformed-input corpus.
+- [x] Integer C++ semantic analysis, namespace/`using` lookup, overload
+      resolution, Itanium-like mangling, and direct assembly lowering (M9.3);
+      functions, recursion, references, arrays, globals, `extern "C"`, and
+      multi-TU tests run through the existing linker/VM.
 - [ ] `kr32_cxx` module: front end, lowering, code generation, weak/COMDAT
       merge.
-- [ ] C++ ABI and runtime: classes, virtual dispatch, templates, exceptions,
-      RTTI, `new`/`delete`, static initialization.
-- [ ] Scalar `float`/`double` codegen, FP calls/spills, and ABI alignment.
-- [ ] Variadic functions with promoted `float`/`double` arguments and `va_list`.
-- [ ] Matrix library and intrinsics: `mat4`/`vec4`, tile allocation,
-      `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, transform-stack push/pop.
-- [ ] Thread runtime: guest threads on KR32 cores, TLS/TP, atomics, mutex,
-      condition variables, `std::thread` subset.
-- [ ] Debug info for C++ names, types, and lines; GUI and DAP support.
-- [ ] `kr32 cxx`, `kr32 build file.cpp`.
+- [x] Classes, constructors/destructors, `this`, member access/mangling, static
+      members, single inheritance, and memberwise copy (M9.5).
+- [x] Vtables, virtual dispatch/overrides, abstract classes/pure virtuals,
+      typeinfo/`typeid`, and pointer `dynamic_cast` (M9.6).
+- [x] Function templates, weak template/inline symbols, and static
+      initialization (M9.8). Class templates, COMDAT groups, static
+      destruction, and guarded local statics remain deferred.
+- [x] `new`/`delete`, class arrays, and static construction/destruction (M9.9).
+- [x] R7 frame-chain unwinder with `.cpp_except` call-site ranges, cleanup
+      landing pads, `_Unwind_Resume`, and restored `SP`/`R7`.
+- [x] Refcounted class exceptions with `__cxa_begin_catch`/`end_catch`,
+      `__cxa_rethrow`, and `__cxa_atexit` registry (M9.9).
+- [x] Scalar `float`/`double` codegen, FP calls/spills, conversions, and ABI
+      alignment (M9.4); `.float`/`.double` object-assembler support ported from
+      main.
+- [x] Variadic functions with promoted `float`/`double` arguments and `va_list`
+      (M9.4 stack slots and builtins).
+- [x] Matrix library and intrinsics: `mat4`/`vec4`, object-assembler tile
+      encoding, `MMUL`/`MMAC`/`MVEC`/`MTRANS`/`VDOT`, and transform-stack
+      push/pop/drop (M9.7).
+- [x] Host thread/futex services in `vm::ClusterHost` over `core::Cluster`
+      (M9.10 stage 1).
+- [x] Guest TCB at `R11`, frozen offsets, per-thread stacks/TLS, guest join,
+      and FPR/TSP context save/restore (M9.10 stage 2).
+- [x] Compiler `thread_local`, LL/SC atomics, thread/mutex/condvar header
+      surface, guarded local statics, and initialized TLS (M9.10).
+- [x] C++ debug records for sources/lines/functions/locals/globals/classes/
+      members/`this`, thread snapshots, DAP/GUI listing, and class-member
+      expansion (M9.11).
+- [x] `kr32 cxx`, `kr32 build file.cpp`, runtime auto-link, CLI help/diagnostics,
+      docs, and Windows/WSL gate (M9.12, tag `m9`).
+- [ ] Deferred: full per-thread variable expansion, clickable GUI thread/source
+      switching, and the extra compiler/configuration matrix.
 - [ ] Tests: classes, templates, virtual calls, exceptions, threads, FP, matrix,
       and standard-library subset.
 
 **Test plan and gate**
 
-- [ ] C++ hello world and a class/template demo run.
-- [ ] Float/double arithmetic and calls match ISA semantics.
-- [ ] Variadic `double`/`va_list` tests pass.
-- [ ] Matrix multiply/transform/dot and transform-stack tests pass.
-- [ ] Exceptions unwind correctly.
-- [ ] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
+- [x] ABI layout/constant tests and API/driver harness tests pass on
+      Windows/WSL (M9.1 gate: 21/21 CTest).
+- [x] Preprocessor/lexer/parser/AST tests, including malformed input, pass on
+      Windows/WSL (M9.2 gate: 131 cases / 4617 assertions).
+- [x] Integer C++ functions, overloads, references, arrays, globals, `extern "C"`,
+      and cross-TU linking compile, link, and run (M9.3 gate: 142 cases / 4646
+      assertions).
+- [x] Float/double arithmetic, calls, conversions, globals, `long double` alias,
+      NaN comparison, and promoted stack varargs pass (M9.4 gate: 153 cases /
+      4689 assertions).
+- [x] Class layout, constructors/destructors, `this`, member access, single
+      inheritance, static members, FP members, and copy pass (M9.5 gate: 159
+      cases / 4702 assertions).
+- [x] Virtual override dispatch, `typeid`, pointer `dynamic_cast`, and
+      abstract-class rejection pass (M9.6 gate: 162 cases / 4711 assertions).
+- [x] Matrix multiply/add/transpose, vector transform, dot, aliasing, and
+      transform-stack push/pop/drop pass (M9.7 gate: 165 cases / 4735
+      assertions).
+- [x] Function templates, weak template/inline symbols across TUs, and static
+      initialization order pass (M9.8 gate: 169 cases / 4745 assertions).
+- [x] `new`/`delete`, class arrays, static construction/destruction, and
+      refcounted class exceptions pass (M9.9).
+- [x] R7 frame-chain unwinding, multi-frame cleanup landing pads,
+      `_Unwind_Resume`, nested/cross-function try/catch, and rethrow pass
+      (M9.9 gate: 178 cases / 4802 assertions).
+- [x] C++ hello world and a class/template demo run.
+- [x] Host thread/futex services over `core::Cluster` pass (M9.10 stage 1:
+      183 cases / 4841 assertions).
+- [x] Guest TCB layout, context save/restore, and guest join pass (M9.10
+      stage 2: 186 cases / 4885 assertions).
+- [x] `thread_local`, LL/SC atomics, two-core counter, and header surface pass
+      (M9.10 stage 3: 191 cases / 4917 assertions).
+- [x] Two C++ threads with a mutex-protected counter, guarded statics, and
+      initialized TLS pass (M9.10 gate: 193 cases / 4951 assertions).
+- [x] C++ debug classes/members/`this`/lines and thread snapshots pass (M9.11:
+      195 cases / 4972 assertions; 23/23 CTest after CLI tests).
+- [x] Guest threads run on multiple KR32 cores with mutex/atomic/TLS tests.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
 - [ ] Commit and tag `m9`; log entry added.
@@ -909,6 +983,15 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 09:35 -08:00** — Tracker approved; created the `m9-cxx`
       worktree/branch and assigned phase M9.1 (ABI, API, test harness) to the
       first subagent. M9.0 is complete; M9.1 is in progress.
+- **2026-11-02 09:44 -08:00** — Completed M9.1. Froze C++ ABI revision 1 in
+      [docs/abi.md](docs/abi.md) (FP layout/registers, varargs, `this` and
+      mangling, vtable/RTTI, exception cleanup, `R11` TP/TCB/TLS, tiles and
+      transform stack, weak/COMDAT, static initialization) with matching
+      constants in `include/kr32/cxx/abi.h`. Added host ABI/API tests under
+      `tests/cxx`, driver error-path tests, the `--emit obj` contract, and the
+      `KR32_BUILD_CXX_TOOL` option/install rules. Windows MSVC Debug and WSL GCC
+      headless both pass 21/21 CTest tests; `kr32_tests` reports 115 test cases
+      and 4473 assertions. M9.2 (front end) is next.
 - **2026-11-02 09:55 -08:00** — UI interaction pass: made the memory address
       field/label reliably clickable (including keypad input), added register
       cell editing for GPR/PC/SP, clickable Z/N/C/V/I flag boxes, variable
@@ -925,6 +1008,13 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-02 10:43 -08:00** — Restored the FPR panel to two columns of eight,
       widened the Cores panel, and added a DOUBLE/FLOAT interpretation toggle.
       FPR editing and hover now follow the active view; the default is double.
+- **2026-11-02 10:50 -08:00** — Accepted all M9.1 ABI review recommendations
+      (`this` in R0, void ctor/dtor returns, uniform 8-byte varargs, 8/16-byte
+      aggregate rule, address-point vtable/RTTI, `.cpp_except` exceptions,
+      direction-only TCB offsets deferred to M9.10, EBO disabled, `long double`
+      alias, bare-pointer `va_list`, `KR32_BUILD_CXX_TOOL` default ON). No ABI
+      contract change; [docs/abi.md](docs/abi.md) now records the approved review
+      decisions and [cpp-impl.md](cpp-impl.md) remains M9.1 done. M9.2 is next.
 - **2026-11-02 10:59 -08:00** — Added `examples/types.c`: scalar `_Bool`,
       `char`, signed/unsigned char, `int`, and signed/unsigned int variables
       with per-type square functions, console output, and a `build_c_types`
@@ -936,11 +1026,39 @@ Newest entries at the bottom. Use the local time zone.
       globals. Added `.float`/`.double` data directives to both assemblers, FP
       opcode support to the object assembler, FP debug type/variable records,
       `examples/floats.c`, and FP unit/integration tests.
+- **2026-11-02 11:10 -08:00** — Completed M9.2. Added the C++ preprocessor,
+      lexer, AST, and recursive-descent parser under `src/cxx`, wired
+      `kr32::cxx::compile` through preprocess → lex → parse, and added host
+      parser tests including a malformed-input corpus. Windows MSVC Debug and WSL
+      GCC headless both pass 21/21 CTest tests; `kr32_tests` reports 131 test
+      cases and 4617 assertions. M9.3 (semantic analysis, mangling, integer
+      code generation) is next.
 - **2026-11-02 11:16 -08:00** — Added C variadic functions and FP varargs:
       fixed args use the normal register ABI, variadic args use uniform
       8-byte stack slots (float promotes to double; char/bool promote to int),
       and `stdarg.h` supplies `va_list`, `va_start`, `va_arg`, `va_copy`, and
       `va_end`. Added `examples/varargs.c`, CTest coverage, and ABI docs.
+- **2026-11-02 11:25 -08:00** — Completed M9.3. Added symbol collection,
+      namespace scopes, `using`/`using namespace`, overload resolution,
+      Itanium-like mangling, and direct assembly lowering for functions, calls,
+      locals, globals, arrays, pointers, references, integer operations, and
+      control flow. `compile()` now returns assembly for the supported subset.
+      Added codegen tests for recursion, namespaces/overloads, references,
+      arrays/loops, globals, `extern "C"`, multi-TU linking, and unsupported
+      class diagnostics. Windows/WSL both pass 21/21 CTest tests; `kr32_tests`
+      reports 142 test cases and 4646 assertions. M9.4 (scalar `float`/`double`)
+      is next; the main-branch `.float`/`.double` data directives and FP
+      instruction support are available for that phase.
+- **2026-11-02 11:32 -08:00** — Completed M9.4. Ported the main-branch
+      object-assembler FP support (`.float`/`.double`, `FLOAD`/`FSTORE`, FP
+      arithmetic/compare, `FCVT`) and added scalar `float`/`double` codegen:
+      literals, mixed int/FP arithmetic and conversions, FP arguments in
+      `F0-F7`, results in `F0`, frame spills, FP globals, references to
+      `double`, `long double` as a `double` alias, NaN comparisons, and
+      stack-passed variadic arguments with promoted doubles plus `va_list`
+      builtins. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports
+      153 test cases and 4689 assertions. M9.5 (classes,
+      constructors/destructors, single inheritance) is next.
 - **2026-11-02 11:46 -08:00** — Built the freestanding C libc layer in KR32 C:
       `sizeof`, `_Alignof`, `offsetof`, `_Static_assert`, and `stddef.h`; a new
       linker `__heap_end`; a boundary-tag best-fit allocator with address-ordered
@@ -952,11 +1070,44 @@ Newest entries at the bottom. Use the local time zone.
       platform file picker (Windows `GetOpenFileName`, Linux zenity/kdialog)
       and loads the selected `.k32` or `.c` file. Previously LOAD and BUILD both
       called `restart()`.
+- **2026-11-02 12:15 -08:00** — Completed M9.5. Added class layout (base at
+      offset zero, natural member alignment, empty classes, FP members), `this`
+      in `R0`, member access and calls, constructors with member initializer
+      lists, destructors at scope exit and return paths, single inheritance
+      with base constructor/destructor order, static members, and memberwise
+      copy construction/assignment. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 159 test cases and 4702 assertions. M9.6 (virtual
+      dispatch and RTTI) is next.
+- **2026-11-02 12:20 -08:00** — Completed M9.6. Added vtable address-point
+      layout, vptr installation in constructors/destructors, inherited and
+      overridden virtual slots, virtual calls through pointers, abstract-class
+      rejection/pure-virtual stubs, typeinfo (`_ZTI`/`_ZTS`), `typeid`, and
+      pointer `dynamic_cast`. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 162 test cases and 4711 assertions. M9.7
+      (matrix/transform codegen) is next.
 - **2026-11-02 12:25 -08:00** — Clarified FPR display for float producers:
       registers with a zero upper half are labelled with their `f32` value in
       DOUBLE view, and the hover tooltip shows both interpretations and raw hex.
       Verified `float 2.5f` loads as `0x40200000`; the earlier `5.3e-315` was
       the raw 64-bit double interpretation, not a bad load.
+- **2026-11-02 12:26 -08:00** — Completed M9.7. Ported tile and
+      transform-stack instruction encoding into the object assembler, added
+      `include/kr32/matrix.hpp` and freestanding preprocessor injection for
+      `kr32::vec4`/`mat4`, and lowered matrix multiply/add/transpose, vector
+      transform, dot, and transform-stack push/pop/drop to tile instructions.
+      Added tile-encoding and matrix/aliasing/stack tests. Windows/WSL both pass
+      21/21 CTest tests; `kr32_tests` reports 165 test cases and 4735
+      assertions. M9.8 (templates and static initialization) is next.
+- **2026-11-02 12:31 -08:00** — Completed M9.8 for function templates, weak
+      symbols, and static initialization. Added explicit template-argument
+      capture, instantiation by explicit arguments/deduction with
+      deduplication, weak emission for template/inline symbols, `.weak`
+      object-assembler support, and pre-main initialization of non-constant
+      globals in declaration order. Added multi-TU template/inline and static
+      init tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports
+      169 test cases and 4745 assertions. Class templates, COMDAT groups, static
+      destruction, and guarded local statics remain deferred; M9.9
+      (`new`/`delete` and exceptions) is next.
 - **2026-11-02 12:33 -08:00** — Updated `examples/types.c` to use libc
       `printf` with `%d`, `%u`, `%.2f`, and `%.4f` instead of the hand-written
       `putchar` helpers, demonstrating the new libc and FP formatting.
@@ -964,6 +1115,12 @@ Newest entries at the bottom. Use the local time zone.
       `<stdio.h>`/`<stdlib.h>`/`<string.h>`/`<stdarg.h>`/`<stddef.h>`/`<math.h>`
       injection now occupies exactly one source line, so debugger line mappings
       no longer shift after an include. Added a regression test with `stdio.h`.
+- **2026-11-02 12:36 -08:00** — Started M9.9. Added `new`/`delete` lowering to
+      `malloc`/`free` for scalars, objects, and scalar arrays, including
+      constructor and destructor calls. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 171 test cases and 4753 assertions. Exceptions,
+      table-driven cleanup/full unwinding, class-array helpers, and static
+      destruction remain; M9.9 stays in progress.
 - **2026-11-02 12:38 -08:00** — Scoped debug line lookup to the containing
       function. Runtime/libc addresses with no line records no longer inherit
       the last line of `main`, which caused line 71 to flash when stepping into
@@ -972,6 +1129,27 @@ Newest entries at the bottom. Use the local time zone.
       `src/cc/libc.c`, embed it via CMake, keep its debug records with source id
       1, and load/switch between all debug source files in the GUI. Stepping
       into `printf`/`malloc` now shows `src/cc/libc.c` and its locals.
+- **2026-11-02 12:51 -08:00** — Extended M9.9 with scalar/pointer exceptions.
+      Added throw, catch-by-type, catch-all, nested try/catch, `throw;`,
+      cross-function propagation via per-call pending checks, and destructor
+      unwinding for live locals/caller frames. Windows/WSL both pass 21/21 CTest
+      tests; `kr32_tests` reports 174 test cases and 4765 assertions. M9.9
+      remains in progress for the table-driven `.cpp_except`/LSDA/`__cxa_*`
+      runtime, class exceptions, class arrays, static destruction, and
+      constructor-completion flags.
+- **2026-11-02 12:56 -08:00** — Added class-array `new[]`/`delete[]` support with
+      a count cookie, default construction of every element, reverse
+      destruction, and cookie-base free. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 174 test cases and 4767 assertions. M9.9 remains in
+      progress for the table-driven ABI exception runtime, class exceptions,
+      static destruction, and constructor-completion flags.
+- **2026-11-02 13:01 -08:00** — Added static construction and reverse-order
+      destruction for global objects via `__kr32_cxx_fini`, plus
+      `kr32/runtime.hpp` declarations with C-linkage runtime symbols.
+      Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 175 test
+      cases and 4769 assertions. M9.9 remains in progress for the table-driven
+      ABI exception runtime, class exceptions, and constructor-completion
+      flags.
 - **2026-11-02 13:02 -08:00** — Added the remaining C string/memory routines:
       `strcpy`, `strncpy`, `strcat`, `strncat`, `strcmp`, `strncmp`, `strchr`,
       `strrchr`, `strstr`, `strtok`, `strdup`, `memmove`, `memcmp`, and
@@ -982,6 +1160,70 @@ Newest entries at the bottom. Use the local time zone.
       `printf`; validated balance at height 6 and added a CTest. Also broke
       self-referential C struct type cycles in the compiler with weak pointer
       element types.
+- **2026-11-02 13:17 -08:00** — Added `.cpp_except` LSDA records and
+      `__kr32_personality_v0` table-driven catch selection, class exception
+      objects with `__cxa_allocate_exception`/`begin_catch`/`end_catch`,
+      constructor-completion cleanup for throwing class-array constructors, and
+      a fixed-capacity `__cxa_atexit` registry. Windows/WSL both pass 21/21
+      CTest tests; `kr32_tests` reports 177 test cases and 4798 assertions.
+      M9.9 remains in progress for the true R7-chain unwinder/cleanup landing
+      pads, exception-object destruction, and general temporary completion
+      flags.
+- **2026-11-02 13:33 -08:00** — Completed M9.9. Replaced the pending-flag path
+      with an R7 frame-chain unwinder (`.cpp_except` function descriptors and
+      call-site ranges, cleanup landing pads, restored `SP`/`R7`,
+      `_Unwind_Resume`, `SETSP` stack restore), refcounted class-exception
+      destruction, `__cxa_rethrow`, and class-array constructor cleanup that
+      resumes through handlers. Windows/WSL both pass 21/21 CTest tests;
+      `kr32_tests` reports 178 test cases and 4802 assertions. M9.10
+      (threads/TLS/atomics) is next.
+- **2026-11-02 13:52 -08:00** — Completed M9.10 stage 1: `vm::ClusterHost`
+      over `core::Cluster` with one guest thread per core, create/join/yield/
+      exit, futex wait/wake, and syscall vectors 44..50. Added stage-1 thread
+      tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 183
+      test cases and 4841 assertions. M9.10 remains in progress for guest
+      TCB/TLS, FPR/TSP context, compiler `thread_local`/atomics, and
+      synchronization headers.
+- **2026-11-02 14:03 -08:00** — Completed M9.10 stage 2: exact TCB layout at
+      `R11`, per-thread stacks/TLS, guest join, and full GPR/SP/PC/FLAGS/FPR/TSP
+      context save-restore. Added TCB, context, and guest-join tests. Windows/WSL
+      both pass 21/21 CTest tests; `kr32_tests` reports 186 test cases and 4885
+      assertions. M9.10 remains in progress for compiler `thread_local`/atomics
+      and synchronization headers.
+- **2026-11-02 14:16 -08:00** — Completed M9.10 stage 3: compiler
+      `thread_local` via R11-relative TLS, LL/SC atomics, object-assembler
+      LL/SC/FENCE, and the `kr32/thread.hpp` thread/mutex/condition_variable/
+      atomic surface. Added two-core LL/SC counter, TLS, atomic, and header
+      tests. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 191
+      test cases and 4917 assertions. M9.10 remains in progress for guarded
+      statics, initialized TLS, and multi-thread mutex/condvar tests.
+- **2026-11-02 14:27 -08:00** — Completed M9.10. Added guarded function-local
+      statics, initialized `.tls` images loaded into thread TCBs, and a
+      two-thread C++ mutex-protected counter test. Fixed scalar call
+      initializers, `!` codegen, and cluster LL/SC reservation invalidation.
+      Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 193 test
+      cases and 4951 assertions. M9.11 (C++ debug/GUI/DAP) is next.
+- **2026-11-02 14:48 -08:00** — Started M9.11. Added C++ debug records for
+      sources, lines, functions, locals, globals, classes, members, `this`, and
+      types; extended `debug::Info` with class/member records. Added
+      `debug::ThreadInfo` snapshots/selection, DAP `threads` listing and
+      synthetic per-thread frames, and a GUI thread prefix in the call-stack
+      panel. Windows/WSL both pass 21/21 CTest tests; `kr32_tests` reports 195
+      test cases and 4972 assertions. M9.11 remains in progress for full
+      per-thread stacks/variables and GUI thread selection.
+- **2026-11-02 15:07 -08:00** — Completed M9.11/M9.12. Added DAP/GUI class
+      member expansion, wired `kr32 cxx` and `kr32 build file.cpp` with C
+      runtime auto-link, updated README/debug docs, added `cli_cxx_help` and
+      `run_cxx_demo` CTest cases, and passed Windows/WSL (23/23 CTest; 195 test
+      cases / 4972 assertions). Tag `m9` marks the final M9.12 commit. Deeper
+      per-thread variable expansion and the extra compiler/configuration matrix
+      remain deferred.
+- **2026-11-02 17:23 -08:00** — Merged `m9-cxx` into `main`. Resolved the
+      C/libc and C++ ABI, object-assembler, UI, test, and tracker conflicts;
+      both front ends now share one freestanding C runtime/libc. The merged tree
+      passes the UI-enabled Windows matrix and WSL matrix, and
+      `kr32 build examples/hello.cpp --run` returns 42.
+
 
 ## 10. Updating this file
 

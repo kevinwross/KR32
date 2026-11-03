@@ -8,23 +8,24 @@ checklists, dependency notes, test gates, and running log are in
 [implementation.md](implementation.md). The instruction encoding draft is in
 [docs/isa-v1.md](docs/isa-v1.md).
 
-**Status:** M8 complete (2026-11-02). MMIO timer/block/console devices, an IRQ
-route table, tick-driven device timing, DMA, a cooperative shared-RAM multicore
-cluster, IPIs, and LL/SC spinlock runs are implemented. The C compiler supports
-integer, `float`, and `double` scalars with FP calls, expressions, and debug
-types. A freestanding C libc now supplies `printf` (including FP formats),
-coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h` (`sizeof`,
-`offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC atomics, and bit
-operations; see [docs/libc.md](docs/libc.md). The debugger opens at 1440x900 and
-uses embedded Inter and JetBrains Mono fonts, separate source-line and
-instruction stepping controls, responsive resizing, KR16-style gutters with
-breakpoint toggles and a Run to line/address context menu, a HEX word column,
-disassembly hover help for instructions and addressing modes, an expandable
-CORES panel, a four-line memory dump docked under the source pane with an
-editable start address, and always-visible variables, call-stack, and console
-panels. See
-[docs/devices.md](docs/devices.md) and [docs/ui.md](docs/ui.md). The C++
-toolchain is the remaining planned milestone.
+**Status:** M9 complete (2026-11-02). The C and C++ front ends coexist in the
+same `kr32` executable and share one freestanding libc/runtime. The C compiler
+supports integer, `float`, and `double` scalars with FP calls, expressions, and
+debug types. The C++ subset covers classes, inheritance, virtual dispatch/RTTI,
+templates, matrices, exceptions/unwinding, `new`/`delete`, threads/TLS/atomics,
+and C++ debug records. A freestanding C libc supplies `printf` (including FP
+formats), coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
+(`sizeof`, `offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC
+atomics, and string/memory routines; see [docs/libc.md](docs/libc.md). The
+debugger opens at 1440x900 and uses embedded Inter and JetBrains Mono fonts,
+separate source-line and instruction stepping controls, responsive resizing,
+KR16-style gutters with breakpoint toggles and a Run to line/address context
+menu, a HEX word column, disassembly hover help for instructions and addressing
+modes, an expandable CORES panel, a four-line memory dump docked under the
+source pane with an editable start address, and always-visible variables,
+call-stack, and console panels. See [docs/devices.md](docs/devices.md) and
+[docs/ui.md](docs/ui.md). Remaining C++ polish is tracked in
+[cpp-impl.md](cpp-impl.md).
 
 ## Build
 
@@ -84,6 +85,8 @@ kr32 build examples/varargs.c -o varargs-c.k32 --run
 kr32 build examples/libc.c -o libc-c.k32 --run
 kr32 build examples/strings.c -o strings-c.k32 --run
 kr32 build examples/binarytree.c -o binarytree-c.k32 --run
+kr32 cxx examples/hello.cpp -S -o hello-cxx.s
+kr32 build examples/hello.cpp -o hello-cxx.k32 --run
 kr32 gui examples/libc.c
 kr32 dis demo.bin
 kr32 run examples/demo.asm
@@ -109,8 +112,9 @@ object. `build` runs compile/assemble, link, and optional `--run` in one
 command. `size` reports `.k32` sections and `debug` dumps the `.debug_info`
 records. `gui` opens the source/disassembly debugger or renders headless PPM
 screenshots. `shell` runs tool commands interactively or from piped input, and
-`dap` exposes the debugger to DAP clients. The `cxx` command remains a stub for
-M9.
+`dap` exposes the debugger to DAP clients. `cxx` compiles a C++ source to
+assembly or an object, and `build file.cpp` compiles, links the shared
+C/C++ libc, and optionally runs the result.
 
 ## Layout
 

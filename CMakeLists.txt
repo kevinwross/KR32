@@ -4,6 +4,7 @@ project(KR32 VERSION 0.1.0 LANGUAGES CXX)
 
 option(KR32_BUILD_UI "Build the SDL2 windowed debugger" ON)
 option(KR32_BUILD_TESTS "Build tests" ON)
+option(KR32_BUILD_CXX_TOOL "Build the standalone kr32-cxx C++ driver" ON)
 option(KR32_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 option(KR32_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -66,13 +67,22 @@ target_include_directories(kr32_cc PRIVATE "${KR32_LIBC_GENERATED_DIR}")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
              "${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc.c")
 
-kr32_add_library(kr32_cxx src/cxx/cxx.cpp)
+kr32_add_library(kr32_cxx
+    src/cxx/cxx.cpp
+    src/cxx/ast.cpp
+    src/cxx/lexer.cpp
+    src/cxx/preprocessor.cpp
+    src/cxx/parser.cpp
+    src/cxx/codegen.cpp)
 target_link_libraries(kr32_cxx PUBLIC kr32_asm kr32_container)
+target_include_directories(kr32_cxx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
 
-add_executable(kr32_cxx_tool src/cxx/tool/main.cpp)
-target_link_libraries(kr32_cxx_tool PRIVATE kr32_cxx kr32_warnings)
-target_compile_features(kr32_cxx_tool PRIVATE cxx_std_20)
-set_target_properties(kr32_cxx_tool PROPERTIES OUTPUT_NAME kr32-cxx)
+if(KR32_BUILD_CXX_TOOL)
+    add_executable(kr32_cxx_tool src/cxx/tool/main.cpp)
+    target_link_libraries(kr32_cxx_tool PRIVATE kr32_cxx kr32_warnings)
+    target_compile_features(kr32_cxx_tool PRIVATE cxx_std_20)
+    set_target_properties(kr32_cxx_tool PROPERTIES OUTPUT_NAME kr32-cxx)
+endif()
 
 kr32_add_library(kr32_dis src/dis/disassembler.cpp)
 target_link_libraries(kr32_dis PUBLIC kr32_core kr32_container)
@@ -80,7 +90,7 @@ target_link_libraries(kr32_dis PUBLIC kr32_core kr32_container)
 kr32_add_library(kr32_debug src/debug/debug.cpp)
 target_link_libraries(kr32_debug PUBLIC kr32_core kr32_container)
 
-kr32_add_library(kr32_vm src/vm/vm.cpp src/vm/host.cpp)
+kr32_add_library(kr32_vm src/vm/vm.cpp src/vm/host.cpp src/vm/threads.cpp)
 target_link_libraries(kr32_vm PUBLIC kr32_core)
 
 kr32_add_library(kr32_dap src/dap/dap.cpp)
@@ -160,7 +170,10 @@ if(KR32_BUILD_TESTS)
     add_subdirectory(tests)
 endif()
 
-install(TARGETS kr32 kr32_cxx_tool RUNTIME DESTINATION bin)
+install(TARGETS kr32 RUNTIME DESTINATION bin)
+if(KR32_BUILD_CXX_TOOL)
+    install(TARGETS kr32_cxx_tool RUNTIME DESTINATION bin)
+endif()
 
 set(CPACK_PACKAGE_NAME "KR32")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")

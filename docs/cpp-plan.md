@@ -409,6 +409,17 @@ kr32-cxx input.cpp [--emit asm|obj] [-o output]
 - Source files are read by the driver; the library stays filesystem-free.
 - Later, `kr32 cxx` and `kr32 build file.cpp` call the same API.
 
+Output contract:
+
+- On success, exactly the requested output form is populated: `Result::assembly`
+  for `Emit::Assembly` and `Result::object` (a `.k32` relocatable object image)
+  for `Emit::Object`.
+- On failure, `ok` is false and at least one diagnostic explains why. Callers
+  must check `ok` before using either output vector.
+- Until the object emitter exists, `Emit::Object` fails with a clear diagnostic
+  instead of returning an empty object. The driver requires `-o` for object
+  output so it never silently discards produced bytes.
+
 ## 12. Directory, CMake, and ownership
 
 ```text
@@ -422,6 +433,9 @@ tests/cxx/                       C++ compiler tests
 - Keep `kr32_cxx` as a normal library target linked to `kr32_asm` and
   `kr32_container` (and later the runtime/linker pieces it needs).
 - Add a separate `kr32-cxx` executable target.
+- `KR32_BUILD_CXX_TOOL` (default `ON`) builds the `kr32-cxx` driver; the
+  `kr32_cxx` library is always built so `kr32` can link it. When the driver is
+  enabled it installs to `bin` with the main executable.
 - Do not create a second build system; use the root presets and warnings.
 - Use a separate Git worktree/branch for M9 so UI work and compiler work do not
   contend for the same working tree.

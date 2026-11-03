@@ -125,6 +125,44 @@ TEST_CASE("object assembler emits float and double data and FP instructions") {
     CHECK(word_at(data->data, 12) == 0x4004'0000);
 }
 
+TEST_CASE("object assembler emits tile and transform-stack instructions") {
+    const container::Image image = assemble(
+        ".text\n"
+        "_start:\n"
+        "    MMUL T1, T2, T3\n"
+        "    VDOT F0, T1, T2\n"
+        "    MPUSH T1\n"
+        "    MPOP T2\n"
+        "    MDROP\n"
+        "    MLOAD T1, [R0]\n"
+        "    VLOAD T2, [R1]\n");
+    const container::Section* text = find_section(image, ".text");
+    REQUIRE(text != nullptr);
+    REQUIRE(text->data.size() == 7 * 4);
+    CHECK(word_at(text->data, 0) == 0xC224'6000);
+    CHECK(word_at(text->data, 4) == 0xC202'4004);
+    CHECK(word_at(text->data, 8) == 0xC220'0005);
+    CHECK(word_at(text->data, 12) == 0xC240'0006);
+    CHECK(word_at(text->data, 16) == 0xC200'0007);
+    CHECK((word_at(text->data, 20) >> 25) == 0x52);
+    CHECK((word_at(text->data, 24) >> 25) == 0x52);
+}
+
+TEST_CASE("object assembler emits atomics") {
+    const container::Image image = assemble(
+        ".text\n"
+        "_start:\n"
+        "    LL R1, [R2]\n"
+        "    SC R1, [R2]\n"
+        "    FENCE\n");
+    const container::Section* text = find_section(image, ".text");
+    REQUIRE(text != nullptr);
+    REQUIRE(text->data.size() == 3 * 4);
+    CHECK(word_at(text->data, 0) == 0x8C24'4800);
+    CHECK(word_at(text->data, 4) == 0x8E24'4800);
+    CHECK(word_at(text->data, 8) == 0x9000'0000);
+}
+
 TEST_CASE("object assembler relocates data references") {
     const container::Image image = assemble(
         ".text\n"
