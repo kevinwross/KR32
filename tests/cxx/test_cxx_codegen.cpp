@@ -1344,6 +1344,30 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("C++ long long globals and fields keep both halves") {
+    const ProgramResult program = compile_and_run(
+        "long long global = 10000000000;\n"
+        "struct Box { long long value; };\n"
+        "int main() {\n"
+        "    Box box;\n"
+        "    box.value = global;\n"
+        "    return (int)(box.value / 1000000000);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
+TEST_CASE("C++ long long static members keep both halves") {
+    const ProgramResult program = compile_and_run(
+        "struct Box { static long long value; };\n"
+        "long long Box::value = 10000000000;\n"
+        "int main() {\n"
+        "    return Box::value == 10000000000 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C++ long long literals carry across 64-bit addition") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"

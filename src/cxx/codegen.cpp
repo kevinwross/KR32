@@ -6683,6 +6683,16 @@ private:
                     }
                     if (size == 1) {
                         output += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                    } else if (is_long_long(global->type)) {
+                        const std::uint64_t bits =
+                            static_cast<std::uint64_t>(value);
+                        output += "    .word " +
+                                  std::to_string(static_cast<std::uint32_t>(bits)) +
+                                  "\n";
+                        output += "    .word " +
+                                  std::to_string(
+                                      static_cast<std::uint32_t>(bits >> 32)) +
+                                  "\n";
                     } else {
                         output += "    .word " + std::to_string(value & 0xFFFFFFFFU) + "\n";
                     }

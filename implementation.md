@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:34 -08:00
+> **Last updated:** 2026-11-03 09:39 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1453,6 +1453,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 09:34 -08:00** — C++ long-long literals beyond 32 bits now
       emit both halves, including negative literals; added 64-bit addition
       carry propagation and regressions. 280 cases / 5733 assertions.
+- **2026-11-03 09:39 -08:00** — C++ long-long globals, fields, and
+      static data members now emit/load both halves; constant globals emit
+      two words. Added field/global/static regressions. 282 cases / 5737
+      assertions.
 
 ## 10. Updating this file
 
