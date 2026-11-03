@@ -81,6 +81,9 @@ private:
     void finish_fpr_edit(bool commit);
     void draw_fpr_popup(Canvas& canvas);
     void draw_fpr_tooltip(Canvas& canvas);
+    void draw_register_tooltip(Canvas& canvas);
+    void draw_flag_tooltip(Canvas& canvas);
+    void draw_memory_tooltip(Canvas& canvas);
     [[nodiscard]] std::string format_fpr(std::uint64_t value, bool scientific) const;
     [[nodiscard]] std::string format_fpr_float(std::uint32_t value, bool scientific) const;
     void draw_variable_tooltip(Canvas& canvas);
@@ -153,6 +156,13 @@ private:
     std::vector<Rect> flag_cells_;
     int hover_flag_ = -1;
     int hover_fpr_ = -1;
+    int hover_register_ = -1;
+    int hover_memory_byte_ = -1;
+    struct MemoryByteCell {
+        Rect rect{};
+        std::uint32_t address = 0;
+    };
+    std::vector<MemoryByteCell> memory_byte_cells_;
     int editing_fpr_ = -1;
     bool fpr_float_view_ = false;
     std::string fpr_edit_;

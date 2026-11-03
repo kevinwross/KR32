@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 21:50 -08:00
+> **Last updated:** 2026-11-02 22:06 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1270,6 +1270,11 @@ Newest entries at the bottom. Use the local time zone.
       line, instead of requiring a single precomputed target line. Added a
       false-if regression and renamed the libc demo to `libc-test.c`.
       227 cases / 5345 assertions; 33/33 Windows; 30/30 WSL.
+- **2026-11-02 22:06 -08:00** — Audited the KR16 hover surface and filled the KR32 gaps:
+      GPR/PC/SP tooltips, flag meaning/state tooltips, memory-byte tooltips
+      with cell highlighting, and richer variable tooltips for decimal/signed
+      values, characters, strings, pointers, arrays, and aggregates. The
+      existing instruction/addressing and FPR hovers remain.
 
 ## 10. Updating this file
 

@@ -281,6 +281,7 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     error_.clear();
     prepare_initial_stop();
     memory_address_ = session_.machine().sp() & ~0xFU;
+    hover_memory_byte_ = -1;
     status_ = "paused at " + hex(session_.machine().pc(), 8);
     return true;
 }
@@ -825,6 +826,14 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
         canvas.fill(sp_cell_, Color{44, 64, 84, 255});
         canvas.frame(sp_cell_, kAccent);
     }
+    if (hover_register_ == 16) {
+        canvas.fill(pc_cell_, Color{42, 58, 74, 255});
+        canvas.frame(pc_cell_, kAccent);
+    }
+    if (hover_register_ == 17) {
+        canvas.fill(sp_cell_, Color{42, 58, 74, 255});
+        canvas.frame(sp_cell_, kAccent);
+    }
     canvas.text(rect.x, y,
                 "PC " + (editing_register_ == 16 ? register_edit_ + "_" : hex(machine.pc(), 8)),
                 editing_register_ == 16 ? kAccent : kText, FontRole::MonoSmall);
@@ -863,6 +872,9 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
             register_cells_.push_back(cell);
             if (editing_register_ == index) {
                 canvas.fill(cell, Color{44, 64, 84, 255});
+                canvas.frame(cell, kAccent);
+            } else if (hover_register_ == index) {
+                canvas.fill(cell, Color{42, 58, 74, 255});
                 canvas.frame(cell, kAccent);
             }
             canvas.text(x, y, "R" + std::to_string(index), kDim, FontRole::MonoSmall);
@@ -1232,6 +1244,133 @@ void DebuggerUI::draw_fpr_tooltip(Canvas& canvas) {
     }
 }
 
+void DebuggerUI::draw_register_tooltip(Canvas& canvas) {
+    if (hover_register_ < 0 || hover_register_ > 17 || editing_register_ >= 0 ||
+        menu_.open) {
+        return;
+    }
+    const core::Machine& machine = session_.core(selected_core_);
+    std::uint32_t value = 0;
+    std::string name;
+    if (hover_register_ == 16) {
+        name = "PC";
+        value = machine.pc();
+    } else if (hover_register_ == 17) {
+        name = "SP";
+        value = machine.sp();
+    } else {
+        name = "R" + std::to_string(hover_register_);
+        value = machine.reg(static_cast<std::size_t>(hover_register_));
+    }
+    const std::int32_t signed_value = static_cast<std::int32_t>(value);
+    std::vector<std::string> lines{name, "0x" + hex(value, 8),
+                                   "unsigned: " + std::to_string(value)};
+    if (signed_value < 0) {
+        lines.push_back("signed: " + std::to_string(signed_value));
+    }
+    if (value >= 32 && value < 127) {
+        lines.push_back(std::string("char: '") + static_cast<char>(value) + "'");
+    }
+
+    int width = 0;
+    for (const std::string& line : lines) {
+        width = std::max(width, Canvas::text_width(line, FontRole::MonoSmall));
+    }
+    width += 20;
+    const int height = 8 + static_cast<int>(lines.size()) * 17;
+    int x = mouse_x_ + 16;
+    int y = mouse_y_ - height - 12;
+    if (y < 4) y = mouse_y_ + 22;
+    if (x + width > canvas.width() - 4) x = canvas.width() - width - 4;
+    x = std::max(4, x);
+    y = std::min(y, canvas.height() - height - 4);
+    y = std::max(4, y);
+    canvas.fill(Rect{x, y, width, height}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, height}, kAccent);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(x + 10, y + 4 + static_cast<int>(index) * 17, lines[index],
+                    index == 0 ? kText : kDim, FontRole::MonoSmall);
+    }
+}
+
+void DebuggerUI::draw_flag_tooltip(Canvas& canvas) {
+    if (hover_flag_ < 0 || hover_flag_ > 5 || menu_.open) {
+        return;
+    }
+    static const char* names[] = {"Zero (Z)", "Negative (N)", "Carry (C)",
+                                  "Overflow (V)", "Interrupt (I)", "Kernel (K)"};
+    static const char* descriptions[] = {
+        "result is zero", "result sign bit is set", "unsigned carry/borrow",
+        "signed overflow", "interrupts enabled", "kernel mode"};
+    static const std::uint32_t bits[] = {core::kFlagZ, core::kFlagN,
+                                         core::kFlagC, core::kFlagV,
+                                         core::kFlagI, core::kFlagK};
+    const bool set = (session_.core(selected_core_).flags() & bits[hover_flag_]) != 0;
+    std::vector<std::string> lines{names[hover_flag_], set ? "set" : "clear",
+                                   descriptions[hover_flag_]};
+    int width = 0;
+    for (const std::string& line : lines) {
+        width = std::max(width, Canvas::text_width(line, FontRole::MonoSmall));
+    }
+    width += 20;
+    const int height = 8 + static_cast<int>(lines.size()) * 17;
+    int x = mouse_x_ + 16;
+    int y = mouse_y_ - height - 12;
+    if (y < 4) y = mouse_y_ + 22;
+    if (x + width > canvas.width() - 4) x = canvas.width() - width - 4;
+    x = std::max(4, x);
+    y = std::min(y, canvas.height() - height - 4);
+    y = std::max(4, y);
+    canvas.fill(Rect{x, y, width, height}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, height}, kAccent);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(x + 10, y + 4 + static_cast<int>(index) * 17, lines[index],
+                    index == 0 ? kText : kDim, FontRole::MonoSmall);
+    }
+}
+
+void DebuggerUI::draw_memory_tooltip(Canvas& canvas) {
+    if (hover_memory_byte_ < 0 ||
+        hover_memory_byte_ >= static_cast<int>(memory_byte_cells_.size()) || menu_.open) {
+        return;
+    }
+    const std::uint32_t address =
+        memory_byte_cells_[static_cast<std::size_t>(hover_memory_byte_)].address;
+    std::uint32_t value = 0;
+    if (!session_.read_memory(address, 1, value)) {
+        return;
+    }
+    std::string ascii;
+    if (value >= 32 && value < 127) {
+        ascii = std::string("  '") + static_cast<char>(value) + "'";
+    }
+    std::vector<std::string> lines{
+        "Byte 0x" + hex(address, 8),
+        "0x" + hex(value, 2) + ascii,
+        "unsigned: " + std::to_string(value),
+        "signed: " + std::to_string(static_cast<std::int8_t>(value)),
+    };
+    int width = 0;
+    for (const std::string& line : lines) {
+        width = std::max(width, Canvas::text_width(line, FontRole::MonoSmall));
+    }
+    width += 20;
+    const int height = 8 + static_cast<int>(lines.size()) * 17;
+    int x = mouse_x_ + 16;
+    int y = mouse_y_ - height - 12;
+    if (y < 4) y = mouse_y_ + 22;
+    if (x + width > canvas.width() - 4) x = canvas.width() - width - 4;
+    x = std::max(4, x);
+    y = std::min(y, canvas.height() - height - 4);
+    y = std::max(4, y);
+    canvas.fill(Rect{x, y, width, height}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, height}, kAccent);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(x + 10, y + 4 + static_cast<int>(index) * 17, lines[index],
+                    index == 0 ? kText : kDim, FontRole::MonoSmall);
+    }
+}
+
 void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
     if (hover_var_ < 0 || hover_var_ >= static_cast<int>(var_hover_rows_.size()) ||
         menu_.open) {
@@ -1243,7 +1382,89 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
     lines.push_back("type: " + (row.type.empty() ? "?" : row.type));
     lines.push_back("size: " + std::to_string(row.size) + " bytes");
     lines.push_back("address: 0x" + hex(row.address, 8));
-    lines.push_back("value: " + (row.ok ? "0x" + hex(row.value, 8) : "?"));
+
+    auto read_byte = [&](std::uint32_t address, std::uint32_t& value) {
+        return session_.read_memory(address, 1, value);
+    };
+    auto read_string = [&](std::uint32_t address) {
+        std::string text;
+        bool terminated = false;
+        for (int index = 0; index < 24; ++index) {
+            std::uint32_t value = 0;
+            if (!read_byte(address + static_cast<std::uint32_t>(index), value)) {
+                break;
+            }
+            if (value == 0) {
+                terminated = true;
+                break;
+            }
+            text.push_back(value >= 32 && value < 127 ? static_cast<char>(value) : '.');
+        }
+        if (!terminated) {
+            text += "...";
+        }
+        return text;
+    };
+    const bool pointer = !row.type.empty() && row.type.back() == '*';
+    const bool array = row.type.find('[') != std::string::npos;
+    const bool character = row.type.find("char") != std::string::npos;
+    if (!row.ok) {
+        lines.push_back("unavailable");
+    } else if (pointer) {
+        lines.push_back("value: 0x" + hex(row.value, 8));
+        if (row.value == 0) {
+            lines.push_back("<null>");
+        } else if (character) {
+            lines.push_back("\"" + read_string(row.value) + "\"");
+        } else {
+            std::uint32_t dereference = 0;
+            if (session_.read_memory(row.value, 4, dereference)) {
+                lines.push_back("*ptr: 0x" + hex(dereference, 8));
+            } else {
+                lines.push_back("*ptr: unavailable");
+            }
+        }
+    } else if (array || row.size > 4) {
+        if (character && array) {
+            lines.push_back("\"" + read_string(row.address) + "\"");
+        } else {
+            lines.push_back("aggregate: " + std::to_string(row.size) + " bytes");
+            const auto bracket = row.type.find('[');
+            int count = 0;
+            if (bracket != std::string::npos) {
+                count = std::atoi(row.type.c_str() + bracket + 1);
+            }
+            if (count > 0) {
+                lines.push_back("array[" + std::to_string(count) + "]");
+                for (int index = 0; index < std::min(4, count); ++index) {
+                    std::uint32_t element = 0;
+                    if (session_.read_memory(row.address + static_cast<std::uint32_t>(index * 4),
+                                             4, element)) {
+                        lines.push_back("[" + std::to_string(index) + "] = 0x" +
+                                        hex(element, 8));
+                    }
+                }
+            }
+        }
+    } else {
+        std::uint32_t value = row.value;
+        if (row.size == 2) {
+            value &= 0xFFFFU;
+        }
+        lines.push_back("value: 0x" +
+                        hex(value, row.size == 1 ? 2 : (row.size == 2 ? 4 : 8)));
+        const std::int32_t signed_value =
+            row.size == 1 ? static_cast<std::int8_t>(value)
+                          : (row.size == 2 ? static_cast<std::int16_t>(value)
+                                           : static_cast<std::int32_t>(value));
+        lines.push_back("decimal: " + std::to_string(value));
+        if (signed_value < 0) {
+            lines.push_back("signed: " + std::to_string(signed_value));
+        }
+        if (row.size == 1 && value >= 32 && value < 127) {
+            lines.push_back(std::string("char: '") + static_cast<char>(value) + "'");
+        }
+    }
 
     int width = 0;
     for (const std::string& line : lines) {
@@ -1338,9 +1559,13 @@ void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
 
     const int bytes_per_row = rect.width >= 600 ? 16 : 8;
     constexpr int rows = 4;
+    memory_byte_cells_.clear();
+    const int text_x = rect.x + 6;
+    const int char_width = std::max(1, Canvas::text_width("0", FontRole::MonoSmall));
     for (int row = 0; row < rows; ++row) {
         const std::uint32_t address =
             memory_address_ + static_cast<std::uint32_t>(row * bytes_per_row);
+        const int text_y = rect.y + 28 + row * 18;
         std::string hex_part = "0x" + hex(address, 8) + "  ";
         std::string ascii_part;
         for (int column = 0; column < bytes_per_row; ++column) {
@@ -1352,9 +1577,27 @@ void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
             ascii_part.push_back(ok && value >= 32 && value <= 126
                                      ? static_cast<char>(value)
                                      : '.');
+            const Rect hex_cell{text_x + (12 + column * 3) * char_width, text_y - 2,
+                                char_width * 2, 16};
+            memory_byte_cells_.push_back({hex_cell, byte_address});
+            const int ascii_column = 12 + bytes_per_row * 3 + 2 + column;
+            const Rect ascii_cell{text_x + ascii_column * char_width, text_y - 2,
+                                  char_width, 16};
+            memory_byte_cells_.push_back({ascii_cell, byte_address});
         }
-        canvas.text(rect.x + 6, rect.y + 28 + row * 18,
-                    hex_part + "  " + ascii_part, kText, FontRole::MonoSmall);
+        for (const MemoryByteCell& cell : memory_byte_cells_) {
+            if (cell.address < address ||
+                cell.address >= address + static_cast<std::uint32_t>(bytes_per_row)) {
+                continue;
+            }
+            const int index = static_cast<int>(&cell - memory_byte_cells_.data());
+            if (index == hover_memory_byte_) {
+                canvas.fill(cell.rect, Color{42, 58, 74, 255});
+                canvas.frame(cell.rect, kAccent);
+            }
+        }
+        canvas.text(text_x, text_y, hex_part + "  " + ascii_part,
+                    kText, FontRole::MonoSmall);
     }
 }
 
@@ -1384,6 +1627,7 @@ void DebuggerUI::finish_memory_address_edit(bool commit) {
         }
         if (valid) {
             memory_address_ = value & ~0xFU;
+            hover_memory_byte_ = -1;
             status_ = "memory address 0x" + hex(memory_address_, 8);
         }
     }
@@ -1740,9 +1984,28 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     hover_var_ = -1;
     hover_flag_ = -1;
     hover_fpr_ = -1;
+    hover_register_ = -1;
+    hover_memory_byte_ = -1;
     for (std::size_t index = 0; index < fpr_cells_.size(); ++index) {
         if (fpr_cells_[index].contains(x, y)) {
             hover_fpr_ = static_cast<int>(index);
+            break;
+        }
+    }
+    for (std::size_t index = 0; index < register_cells_.size(); ++index) {
+        if (register_cells_[index].contains(x, y)) {
+            hover_register_ = static_cast<int>(index);
+            break;
+        }
+    }
+    if (pc_cell_.contains(x, y)) {
+        hover_register_ = 16;
+    } else if (sp_cell_.contains(x, y)) {
+        hover_register_ = 17;
+    }
+    for (std::size_t index = 0; index < memory_byte_cells_.size(); ++index) {
+        if (memory_byte_cells_[index].rect.contains(x, y)) {
+            hover_memory_byte_ = static_cast<int>(index);
             break;
         }
     }
@@ -1815,6 +2078,9 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_call_stack(canvas, areas.call_stack);
     draw_console(canvas, areas.console);
     draw_error(canvas);
+    draw_memory_tooltip(canvas);
+    draw_register_tooltip(canvas);
+    draw_flag_tooltip(canvas);
     draw_variable_tooltip(canvas);
     draw_fpr_tooltip(canvas);
     draw_asm_tooltip(canvas);
@@ -1952,14 +2218,17 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
     }
     if (memory_up_rect_.contains(x, y)) {
         memory_address_ = memory_address_ >= 16 ? (memory_address_ - 16) & ~0xFU : 0;
+        hover_memory_byte_ = -1;
         return true;
     }
     if (memory_down_rect_.contains(x, y)) {
         memory_address_ = std::min(memory_address_ + 16U, 0xFFFF'FFF0U) & ~0xFU;
+        hover_memory_byte_ = -1;
         return true;
     }
     if (memory_pointer_rect_.contains(x, y)) {
         memory_address_ = session_.machine().sp() & ~0xFU;
+        hover_memory_byte_ = -1;
         return true;
     }
     if (y >= kToolbarHeight) {
@@ -2051,6 +2320,7 @@ bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
         memory_address_ = static_cast<std::uint32_t>(
             std::clamp<std::int64_t>(next, 0, 0xFFFF'FFF0));
         memory_address_ &= ~0xFU;
+        hover_memory_byte_ = -1;
         return true;
     }
     return false;

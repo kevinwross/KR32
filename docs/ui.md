@@ -95,7 +95,13 @@ one 16-byte row.
 - The core flag row shows **Z N C V I K**. Click Z/N/C/V/I to toggle the bit;
   K is the current privilege mode and is read-only.
 - Hovering a variable row shows a tooltip with its local/global kind, type,
-  size, address, and value.
+  size, address, hex/decimal value, signed value, character interpretation,
+  pointer target/string preview, and array/aggregate details.
+- Hovering a GPR, PC, or SP cell shows its name, hex value, unsigned/signed
+  decimal value, and character value when printable.
+- Hovering a flag shows its full name, set/clear state, and meaning.
+- Hovering a memory byte shows its address, hex byte, printable character,
+  and unsigned/signed decimal value.
 
 ## Gutter behavior
 
