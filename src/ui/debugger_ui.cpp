@@ -15,6 +15,7 @@
 
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
+#include "kr32/cxx/cxx.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
@@ -107,6 +108,47 @@ bool compile_c_source(const std::string& path, container::Image& image, std::str
     return true;
 }
 
+bool compile_cxx_source(const std::string& path, container::Image& image, std::string& error) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        error = "cannot open " + path;
+        return false;
+    }
+    const std::string source((std::istreambuf_iterator<char>(input)),
+                             std::istreambuf_iterator<char>());
+    cxx::Options options;
+    options.source_name = path;
+    const cxx::Result compiled = cxx::compile(source, options);
+    if (!compiled.ok) {
+        if (!compiled.diagnostics.empty()) {
+            const cxx::Diagnostic& diagnostic = compiled.diagnostics.front();
+            error = path + ":" + std::to_string(diagnostic.line) + ":" +
+                    std::to_string(diagnostic.column) + ": " + diagnostic.message;
+        } else {
+            error = path + ": compile failed";
+        }
+        return false;
+    }
+    container::Image user;
+    assembler::Error assembly_error;
+    if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
+        error = path + ": " + assembly_error.message;
+        return false;
+    }
+    container::Image runtime;
+    if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
+        error = "runtime: " + assembly_error.message;
+        return false;
+    }
+    linker::Map map;
+    linker::Error link_error;
+    if (!linker::link({user, runtime}, linker::Options{}, image, map, link_error)) {
+        error = path + ": " + link_error.message;
+        return false;
+    }
+    return true;
+}
+
 bool has_c_extension(const std::string& path) {
     const std::size_t dot = path.find_last_of('.');
     if (dot == std::string::npos) {
@@ -116,6 +158,17 @@ bool has_c_extension(const std::string& path) {
     std::transform(extension.begin(), extension.end(), extension.begin(),
                    [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     return extension == "c";
+}
+
+bool has_cxx_extension(const std::string& path) {
+    const std::size_t dot = path.find_last_of('.');
+    if (dot == std::string::npos) {
+        return false;
+    }
+    std::string extension = path.substr(dot + 1);
+    std::transform(extension.begin(), extension.end(), extension.begin(),
+                   [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
+    return extension == "cpp" || extension == "cc" || extension == "cxx";
 }
 
 } // namespace
@@ -152,6 +205,11 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     std::string source_path;
     if (has_c_extension(path)) {
         if (!compile_c_source(path, image_, error)) {
+            return false;
+        }
+        source_path = path;
+    } else if (has_cxx_extension(path)) {
+        if (!compile_cxx_source(path, image_, error)) {
             return false;
         }
         source_path = path;

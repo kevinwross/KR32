@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 17:36 -08:00
+> **Last updated:** 2026-11-02 17:41 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1228,6 +1228,11 @@ Newest entries at the bottom. Use the local time zone.
       public `cxx::Emit::Object` path, decoded `SETSP` in the disassembler, and
       merged the C/C++ logs and documentation. Full merged gate: 217 unit cases
       / 5202 assertions; 31/31 Windows CTest; 29/29 WSL CTest.
+- **2026-11-02 17:41 -08:00** — Integrated C++ source loading into the GUI:
+      LOAD accepts `.cpp`/`.cc`/`.cxx`, compiles with `cxx::compile`, and links
+      the same shared C libc. Headless GUI C++ load passes. Remaining P0
+      multi-TU/thread-debug work is assigned to a follow-up branch; see
+      `cpp-handoff.md`.
 
 
 ## 10. Updating this file

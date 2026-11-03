@@ -123,7 +123,7 @@ if(KR32_BUILD_UI)
         src/ui/help.cpp src/resources/embedded_fonts.cpp)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
-        kr32_core kr32_cc kr32_asm kr32_link)
+        kr32_core kr32_cc kr32_cxx kr32_asm kr32_link)
 endif()
 
 kr32_add_library(kr32_cli src/cli/cli.cpp)

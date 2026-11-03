@@ -211,6 +211,13 @@ if(KR32_BUILD_UI)
     set_tests_properties(ui_headless PROPERTIES
         DEPENDS build_c_hello
         PASS_REGULAR_EXPRESSION "ui-render")
+
+    add_test(NAME ui_headless_cxx
+        COMMAND $<TARGET_FILE:kr32> gui --headless
+            ${CMAKE_SOURCE_DIR}/examples/hello.cpp
+            --screenshot ${CMAKE_BINARY_DIR}/hello-cxx-ui.ppm)
+    set_tests_properties(ui_headless_cxx PROPERTIES
+        PASS_REGULAR_EXPRESSION "ui-render")
 endif()
 
 add_test(NAME boundary_clean

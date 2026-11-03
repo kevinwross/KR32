@@ -1,8 +1,9 @@
 # KR32 C++ toolchain implementation plan (M9)
 
 **Status:** approved and started 2026-11-02. Design approved in
-[docs/cpp-plan.md](docs/cpp-plan.md); implementation runs in the `m9-cxx`
-worktree/branch. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
+[docs/cpp-plan.md](docs/cpp-plan.md). The implementation was developed in the
+`m9-cxx` worktree/branch and merged into `main`; both C and C++ front ends now
+share the C runtime/libc. Phases M9.1 (ABI/API/test harness), M9.2 (preprocessor,
 lexer, parser, AST, diagnostics), M9.3 (scopes, name lookup, overloads,
 mangling, integer code generation), M9.4 (scalar `float`/`double`, FP calls,
 conversions, and stack varargs), M9.5 (classes, constructors/destructors,
@@ -10,7 +11,8 @@ single inheritance), M9.6 (virtual dispatch and RTTI), M9.7 (matrix and
 transform-stack codegen), M9.8 (function templates, weak symbols, and static
 initialization), M9.9 (`new`/`delete`, exceptions, cleanup), and M9.10 (threads,
 TLS, atomics, synchronization), M9.11 (C++ debug information and GUI/DAP), and
-M9.12 (CLI integration, cross-platform gate, tag `m9`) are complete.
+M9.12 (CLI integration, cross-platform gate, tag `m9`) are complete. Remaining
+post-merge correctness gaps are tracked in [cpp-handoff.md](cpp-handoff.md).
 
 **Design source of truth:** [docs/cpp-plan.md](docs/cpp-plan.md)
 **Milestone checklist:** [implementation.md](implementation.md)

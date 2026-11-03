@@ -208,7 +208,8 @@ bool open_file_dialog(std::string& path) {
     dialog.lStructSize = sizeof(dialog);
     dialog.hwndOwner = GetActiveWindow();
     dialog.lpstrFilter =
-        L"KR32 images (*.k32;*.c)\0*.k32;*.c\0All files (*.*)\0*.*\0";
+        L"KR32 sources and images (*.k32;*.c;*.cpp;*.cc;*.cxx)\0"
+        L"*.k32;*.c;*.cpp;*.cc;*.cxx\0All files (*.*)\0*.*\0";
     dialog.lpstrFile = file;
     dialog.nMaxFile = 32768;
     dialog.lpstrDefExt = L"k32";
@@ -229,9 +230,10 @@ bool open_file_dialog(std::string& path) {
     return true;
 #else
     const char* commands[] = {
-        "zenity --file-selection --title='Load KR32 image' "
-        "--file-filter='KR32 images | *.k32 *.c' --file-filter='All files | *' 2>/dev/null",
-        "kdialog --getopenfilename . 'KR32 images (*.k32 *.c)|All files (*)' 2>/dev/null",
+        "zenity --file-selection --title='Load KR32 source or image' "
+        "--file-filter='KR32 sources and images | *.k32 *.c *.cpp *.cc *.cxx' "
+        "--file-filter='All files | *' 2>/dev/null",
+        "kdialog --getopenfilename . 'KR32 sources and images (*.k32 *.c *.cpp *.cc *.cxx)|All files (*)' 2>/dev/null",
     };
     for (const char* command : commands) {
         FILE* pipe = popen(command, "r");

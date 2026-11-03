@@ -50,7 +50,8 @@ executables load directly.
 
 **Load** opens the platform file picker (the native common dialog on Windows;
 `zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
-a selected `.c` source. **Build** reloads/recompiles the currently loaded source.
+a selected `.c` or `.cpp` source. **Build** reloads/recompiles the currently
+loaded source.
 
 The **SOURCE** panel follows the current PC across debug source files. Stepping
 into libc functions such as `printf` or `malloc` switches the title and text to
