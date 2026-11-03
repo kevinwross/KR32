@@ -1344,6 +1344,27 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("partial class template specializations match pointer patterns") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> class Box {\n"
+        "public:\n"
+        "    T value;\n"
+        "    int kind() { return 1; }\n"
+        "};\n"
+        "template <typename T> class Box<T*> {\n"
+        "public:\n"
+        "    T* value;\n"
+        "    int kind() { return 2; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Box<int*> pointer_box;\n"
+        "    Box<int> value_box;\n"
+        "    return pointer_box.kind() * 10 + value_box.kind();\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 21);
+}
+
 TEST_CASE("C++ long long arrays and references keep both halves") {
     const ProgramResult array_program = compile_and_run(
         "int main() {\n"

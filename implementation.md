@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 09:44 -08:00
+> **Last updated:** 2026-11-03 09:49 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1461,6 +1461,10 @@ Newest entries at the bottom. Use the local time zone.
       C++ arrays and references; TLS image initialization now copies the full
       eight bytes (TLS long-long execution still fails and remains deferred).
       283 cases / 5741 assertions.
+- **2026-11-03 09:49 -08:00** — Added partial class-template
+      specializations with one-level pointer patterns (`Box<T*>`), including
+      template-parameter binding and generic fallback. Added regression. 284
+      cases / 5743 assertions.
 
 ## 10. Updating this file
 

@@ -682,6 +682,12 @@ private:
                             declaration->specialization_arguments[index]);
                     }
                     class_specializations_[key] = declaration.get();
+                } else if (!declaration->specialization_arguments.empty()) {
+                    PartialTemplate partial;
+                    partial.name = qualified;
+                    partial.pattern = declaration->specialization_arguments;
+                    partial.decl = declaration.get();
+                    class_partial_specializations_.push_back(std::move(partial));
                 } else {
                     class_templates_[qualified] = declaration.get();
                 }
@@ -776,6 +782,28 @@ private:
         }
     }
 
+    bool match_partial_pattern(
+        const TypePtr& pattern, const TypePtr& actual,
+        const std::set<std::string>& parameters,
+        std::map<std::string, TypePtr>& bindings) {
+        if (!pattern || !actual) {
+            return pattern == actual;
+        }
+        if (pattern->kind == TypeKind::Named && pattern->name.parts.size() == 1 &&
+            parameters.count(pattern->name.parts[0]) != 0) {
+            bindings[pattern->name.parts[0]] = actual;
+            return true;
+        }
+        if (pattern->kind == TypeKind::Pointer) {
+            if (actual->kind != TypeKind::Pointer || !actual->element) {
+                return false;
+            }
+            return match_partial_pattern(pattern->element, actual->element,
+                                         parameters, bindings);
+        }
+        return mangle_type(pattern) == mangle_type(actual);
+    }
+
     TypePtr instantiate_class_template(const TypePtr& named) {
         const std::string template_name = named->name.to_string();
         std::string key = template_name;
@@ -808,27 +836,58 @@ private:
             name.parts.push_back(key);
             return Type::make_named(name);
         }
-        const auto found_template = class_templates_.find(template_name);
-        if (found_template == class_templates_.end()) {
-            return named;
+        const Decl* source = nullptr;
+        std::map<std::string, TypePtr> bindings;
+        for (const PartialTemplate& partial : class_partial_specializations_) {
+            if (partial.name != template_name ||
+                partial.pattern.size() != named->template_arguments.size()) {
+                continue;
+            }
+            std::set<std::string> parameters;
+            for (const DeclPtr& parameter : partial.decl->template_parameters) {
+                if (parameter && !parameter->name.parts.empty()) {
+                    parameters.insert(parameter->name.parts[0]);
+                }
+            }
+            std::map<std::string, TypePtr> candidate_bindings;
+            bool matches = true;
+            for (std::size_t index = 0; index < partial.pattern.size(); ++index) {
+                if (!match_partial_pattern(partial.pattern[index],
+                                           named->template_arguments[index],
+                                           parameters, candidate_bindings)) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
+                source = partial.decl;
+                bindings = std::move(candidate_bindings);
+                break;
+            }
         }
+        if (source == nullptr) {
+            const auto found_template = class_templates_.find(template_name);
+            if (found_template == class_templates_.end()) {
+                return named;
+            }
+            source = found_template->second;
+            for (std::size_t index = 0;
+                 index < source->template_parameters.size() &&
+                 index < named->template_arguments.size();
+                 ++index) {
+                const DeclPtr& parameter = source->template_parameters[index];
+                if (parameter && !parameter->name.parts.empty()) {
+                    bindings[parameter->name.parts[0]] =
+                        named->template_arguments[index];
+                }
+            }
+        }
+
         const auto existing = class_index_.find(key);
         if (existing != class_index_.end()) {
             Name name;
             name.parts.push_back(key);
             return Type::make_named(name);
-        }
-
-        const Decl* source = found_template->second;
-        std::map<std::string, TypePtr> bindings;
-        for (std::size_t index = 0;
-             index < source->template_parameters.size() &&
-             index < named->template_arguments.size();
-             ++index) {
-            const DeclPtr& parameter = source->template_parameters[index];
-            if (parameter && !parameter->name.parts.empty()) {
-                bindings[parameter->name.parts[0]] = named->template_arguments[index];
-            }
         }
 
         auto clone = std::make_shared<Decl>();
@@ -6736,6 +6795,12 @@ private:
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;
     std::map<std::string, std::unique_ptr<ClassInfo>> class_index_;
     std::map<std::string, const Decl*> class_templates_;
+    struct PartialTemplate {
+        std::string name;
+        std::vector<TypePtr> pattern;
+        const Decl* decl = nullptr;
+    };
+    std::vector<PartialTemplate> class_partial_specializations_;
     std::map<std::string, const Decl*> class_specializations_;
     std::vector<DeclPtr> template_class_storage_;
 
