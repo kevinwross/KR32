@@ -889,6 +889,20 @@ TEST_CASE("function-local statics initialize once behind a guard") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("floating point converts to long long") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    double positive = 10000000000.0;\n"
+        "    double negative = -10000000000.0;\n"
+        "    long long p = (long long)positive;\n"
+        "    long long n = (long long)negative;\n"
+        "    return (int)(p / 1000000000) == 10 &&\n"
+        "           (int)(n / 1000000000) == -10 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("C++ long long converts to floating point") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"

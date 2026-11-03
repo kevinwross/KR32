@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 12:52 -08:00
+> **Last updated:** 2026-11-03 13:00 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1560,6 +1560,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 12:52 -08:00** — Added 64-bit integer to `double`/`float`
       conversion using high-word scaling and unsigned low-word conversion.
       305 cases / 5794 assertions.
+- **2026-11-03 13:00 -08:00** — Added floating-point to signed 64-bit
+      conversion with high/low decomposition, negation, and 32-bit
+      reconstruction. 306 cases / 5796 assertions.
 
 ## 10. Updating this file
 

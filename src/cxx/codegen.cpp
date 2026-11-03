@@ -4052,6 +4052,50 @@ private:
                      ".W F0, R0");
             } else if (is_fp(target) && is_fp(source)) {
                 convert_fp(source, target);
+            } else if (!is_fp(target) && is_fp(source) &&
+                       is_long_long(target)) {
+                if (is_float32(source)) {
+                    emit("    FCVT.D.S F0, F0");
+                }
+                const std::string zero = intern_fp_constant(0.0, false);
+                const std::string two32 = intern_fp_constant(4294967296.0, false);
+                const int negative_temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    FLOAD.D F1, [" + zero + "]");
+                emit("    FLT.D R0, F0, F1");
+                emit("    STORE R0, [R7 + " + std::to_string(negative_temp) + "]");
+                const std::string positive = new_label("llconvpos");
+                emit("    CMP R0, #0");
+                emit("    JZ " + positive);
+                emit("    FNEG.D F0, F0");
+                emit(positive + ":");
+                emit("    FLOAD.D F1, [" + two32 + "]");
+                emit("    FDIV.D F2, F0, F1");
+                emit("    FCVT.W.D R1, F2");
+                emit("    FCVT.D.W F3, R1");
+                emit("    FMUL.D F3, F3, F1");
+                emit("    FSUB.D F4, F0, F3");
+                emit("    FCVT.WU.D R0, F4");
+                const std::string done = new_label("llconvdone");
+                emit("    LOAD R2, [R7 + " + std::to_string(negative_temp) + "]");
+                emit("    CMP R2, #0");
+                emit("    JZ " + done);
+                emit("    MOV R2, R0");
+                emit("    MOV R3, R1");
+                emit("    MOV R0, #0");
+                emit("    MOV R1, #0");
+                const std::string no_borrow = new_label("llconvnoborrow");
+                const std::string borrow_done = new_label("llconvborrow");
+                emit("    SUB R0, R0, R2");
+                emit("    MOV R6, #0");
+                emit("    JCS " + no_borrow);
+                emit("    MOV R6, #1");
+                emit("    JMP " + borrow_done);
+                emit(no_borrow + ":");
+                emit(borrow_done + ":");
+                emit("    SUB R1, R1, R3");
+                emit("    SUB R1, R1, R6");
+                emit(done + ":");
             } else if (!is_fp(target) && is_fp(source)) {
                 emit(std::string("    FCVT.W.") + (is_float32(source) ? "S" : "D") +
                      " R0, F0");
@@ -4064,7 +4108,7 @@ private:
                 emit("    MOV R0, #1");
                 emit(done + ":");
             }
-            if (is_long_long(target) && !is_long_long(source)) {
+            if (is_long_long(target) && !is_long_long(source) && !is_fp(source)) {
                 if (is_unsigned_integer(source)) {
                     emit("    MOV R1, #0");
                 } else {
