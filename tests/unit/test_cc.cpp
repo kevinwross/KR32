@@ -378,6 +378,24 @@ TEST_CASE("C supports global aggregate and array initializers") {
     CHECK(program.result == 248);
 }
 
+TEST_CASE("C short and unsigned short use 16-bit storage") {
+    const ProgramResult program = compile_and_run(
+        "struct P { short a; short b; };\n"
+        "short add(short x, short y) { return x + y; }\n"
+        "short g = 300;\n"
+        "int main(void) {\n"
+        "    short s = -2;\n"
+        "    unsigned short u = 65535;\n"
+        "    struct P p = {3, 4};\n"
+        "    short* q = &s;\n"
+        "    *q = *q + 5;\n"
+        "    return add(s, p.a) + p.b + (u > 0) + (g == 300) +\n"
+        "           sizeof(short) + sizeof(p);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 18);
+}
+
 TEST_CASE("C supports aggregate and nested array initializers") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; char c; };\n"

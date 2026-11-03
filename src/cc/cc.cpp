@@ -621,7 +621,7 @@ struct Member {
 };
 
 struct Type {
-    enum class Kind { Void, Char, Int, Bool, Float, Double, Pointer, Array, Struct, Union };
+    enum class Kind { Void, Char, Short, Int, Bool, Float, Double, Pointer, Array, Struct, Union };
 
     Kind kind = Kind::Int;
     TypePtr base;
@@ -641,6 +641,7 @@ struct Type {
         switch (kind) {
         case Kind::Void: return 1;
         case Kind::Char: return 1;
+        case Kind::Short: return 2;
         case Kind::Bool: return 1;
         case Kind::Int: return 4;
         case Kind::Float: return 4;
@@ -657,6 +658,7 @@ struct Type {
         switch (kind) {
         case Kind::Void: return 1;
         case Kind::Char: return 1;
+        case Kind::Short: return 2;
         case Kind::Bool: return 1;
         case Kind::Int: return 4;
         case Kind::Float: return 4;
@@ -691,6 +693,7 @@ TypePtr type_uint() {
     return type;
 }
 TypePtr type_char() { return std::make_shared<Type>(Type{Type::Kind::Char, nullptr, 0}); }
+TypePtr type_short() { return std::make_shared<Type>(Type{Type::Kind::Short, nullptr, 0}); }
 TypePtr type_bool() { return std::make_shared<Type>(Type{Type::Kind::Bool, nullptr, 0}); }
 TypePtr type_float() { return std::make_shared<Type>(Type{Type::Kind::Float, nullptr, 0}); }
 TypePtr type_double() { return std::make_shared<Type>(Type{Type::Kind::Double, nullptr, 0}); }
@@ -716,7 +719,8 @@ bool is_fp_type(const TypePtr& type) {
 
 bool is_unsigned_scalar(const TypePtr& type) {
     return type != nullptr && type->is_unsigned &&
-           (type->kind == Type::Kind::Char || type->kind == Type::Kind::Int);
+           (type->kind == Type::Kind::Char || type->kind == Type::Kind::Short ||
+            type->kind == Type::Kind::Int);
 }
 
 TypePtr common_fp_type(const TypePtr& left, const TypePtr& right) {
@@ -865,6 +869,7 @@ private:
         switch (type->kind) {
         case Type::Kind::Void: return "void";
         case Type::Kind::Char: return type->is_unsigned ? "unsigned char" : "char";
+        case Type::Kind::Short: return type->is_unsigned ? "unsigned short" : "short";
         case Type::Kind::Int: return type->is_unsigned ? "unsigned int" : "int";
         case Type::Kind::Bool: return "_Bool";
         case Type::Kind::Float: return "float";
@@ -888,6 +893,7 @@ private:
     bool is_type_start() const {
         const std::string& text = peek().text;
         return text == "int" || text == "char" || text == "void" || text == "_Bool" ||
+               text == "short" ||
                text == "float" || text == "double" ||
                text == "struct" || text == "union" || text == "enum" ||
                text == "const" || text == "unsigned" || text == "signed" ||
@@ -1202,25 +1208,25 @@ private:
         bool unsigned_flag = false;
         bool signed_flag = false;
         bool long_flag = false;
+        bool short_flag = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
                peek().text == "register" || peek().text == "typedef" ||
-               peek().text == "long") {
+               peek().text == "long" || peek().text == "short") {
             const std::string qualifier = take().text;
             if (qualifier == "unsigned") {
                 unsigned_flag = true;
             } else if (qualifier == "signed") {
                 signed_flag = true;
+            } else if (qualifier == "short") {
+                short_flag = true;
             } else if (qualifier == "long") {
                 if (long_flag) {
                     error("long long is not supported");
                 }
                 long_flag = true;
             }
-        }
-        if (peek().text == "short") {
-            error("short is not supported yet");
         }
         TypePtr base;
         if (match("struct")) {
@@ -1232,6 +1238,9 @@ private:
         } else if (peek().kind == TokenKind::Identifier &&
                    typedefs_.find(peek().text) != typedefs_.end()) {
             base = typedefs_[take().text];
+        } else if (match("short") || short_flag) {
+            match("int");
+            base = type_short();
         } else if (match("int")) {
             base = type_int();
         } else if (match("char")) {
@@ -1252,9 +1261,13 @@ private:
         if (long_flag && base->kind == Type::Kind::Double) {
             error("long double is not supported");
         }
+        if (long_flag && short_flag) {
+            error("long short is not a valid type");
+        }
         if (unsigned_flag) {
-            if (base->kind != Type::Kind::Int && base->kind != Type::Kind::Char) {
-                error("unsigned is only supported for int and char");
+            if (base->kind != Type::Kind::Int && base->kind != Type::Kind::Char &&
+                base->kind != Type::Kind::Short) {
+                error("unsigned is only supported for short, int, and char");
             }
             base->is_unsigned = true;
         }
@@ -1455,6 +1468,9 @@ private:
                 data_ += ".global " + name + "\n" + name + ":\n";
                 if (actual->kind == Type::Kind::Char) {
                     data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                } else if (actual->kind == Type::Kind::Short) {
+                    data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                    data_ += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
                 } else {
                     data_ += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
                 }
@@ -1475,7 +1491,10 @@ private:
     }
 
     int allocate_local(const TypePtr& type) {
-        const int size = std::max(1, type->size());
+        const int size =
+            type != nullptr && type->kind == Type::Kind::Short
+                ? 4
+                : std::max(1, type->size());
         const int alignment = std::max(4, type->alignment());
         frame_size_ = align_up(frame_size_, alignment);
         const int offset = frame_size_;
@@ -2001,6 +2020,8 @@ private:
     void gen_load(const TypePtr& type) {
         if (type->kind == Type::Kind::Char) {
             emit(type->is_unsigned ? "    LOAD8U R0, [R0]" : "    LOAD8S R0, [R0]");
+        } else if (type->kind == Type::Kind::Short) {
+            emit(type->is_unsigned ? "    LOAD16U R0, [R0]" : "    LOAD16S R0, [R0]");
         } else if (type->kind == Type::Kind::Bool) {
             emit("    LOAD8S R0, [R0]");
         } else if (type->kind == Type::Kind::Float) {
@@ -2018,6 +2039,8 @@ private:
     void gen_store(const TypePtr& type) {
         if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
             emit("    STORE8 R0, [R1]");
+        } else if (type->kind == Type::Kind::Short) {
+            emit("    STORE16 R0, [R1]");
         } else if (type->kind == Type::Kind::Float) {
             emit("    FSTORE.W F0, [R1]");
         } else if (type->kind == Type::Kind::Double) {
@@ -2056,6 +2079,12 @@ private:
             if (!to->is_unsigned) {
                 emit("    SHL R0, R0, #24");
                 emit("    SAR R0, R0, #24");
+            }
+        } else if (to->kind == Type::Kind::Short) {
+            emit("    AND R0, R0, #65535");
+            if (!to->is_unsigned) {
+                emit("    SHL R0, R0, #16");
+                emit("    SAR R0, R0, #16");
             }
         } else if (to->kind == Type::Kind::Bool) {
             const std::string nonzero = new_label("bool");
@@ -3018,6 +3047,7 @@ private:
                             if (argument->kind == Type::Kind::Float) {
                                 target = type_double();
                             } else if (argument->kind == Type::Kind::Char ||
+                                       argument->kind == Type::Kind::Short ||
                                        argument->kind == Type::Kind::Bool) {
                                 target = type_int();
                             }
