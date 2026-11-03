@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 08:56 -08:00
+> **Last updated:** 2026-11-03 09:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1429,6 +1429,11 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 08:56 -08:00** — Range-for now accepts braced initializer
       lists by materializing a temporary array and iterating it; added
       regression. 273 cases / 5719 assertions.
+- **2026-11-03 09:02 -08:00** — Added `std::initializer_list<T>`
+      function parameters and braced-call arguments: the compiler materializes
+      the backing array and list object, and overload resolution recognizes
+      initializer-list parameters. Sanitized namespaced class-template keys
+      for assembler-safe symbols. 274 cases / 5721 assertions.
 
 ## 10. Updating this file
 

@@ -1344,6 +1344,21 @@ TEST_CASE("class template instantiations are weak across translation units") {
     CHECK(program.result == 43);
 }
 
+TEST_CASE("initializer_list parameters accept braced arguments") {
+    const ProgramResult program = compile_and_run(
+        "#include <initializer_list>\n"
+        "int sum(std::initializer_list<int> values) {\n"
+        "    int total = 0;\n"
+        "    for (int index = 0; index < values.size_; ++index) {\n"
+        "        total += values.data_[index];\n"
+        "    }\n"
+        "    return total;\n"
+        "}\n"
+        "int main() { return sum({1, 2, 3, 4}); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("range-for iterates braced initializer lists") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"

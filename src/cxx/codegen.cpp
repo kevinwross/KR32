@@ -651,7 +651,13 @@ private:
                 const std::string qualified = qualify(prefix, declaration->name);
                 if (declaration->is_specialization &&
                     !declaration->specialization_arguments.empty()) {
-                    std::string key = qualified + "__";
+                    std::string key = qualified;
+                    for (std::size_t position = key.find("::");
+                         position != std::string::npos;
+                         position = key.find("::", position)) {
+                        key.replace(position, 2, "__");
+                    }
+                    key += "__";
                     for (std::size_t index = 0;
                          index < declaration->specialization_arguments.size();
                          ++index) {
@@ -758,7 +764,12 @@ private:
 
     TypePtr instantiate_class_template(const TypePtr& named) {
         const std::string template_name = named->name.to_string();
-        std::string key = template_name + "__";
+        std::string key = template_name;
+        for (std::size_t position = key.find("::"); position != std::string::npos;
+             position = key.find("::", position)) {
+            key.replace(position, 2, "__");
+        }
+        key += "__";
         for (std::size_t index = 0; index < named->template_arguments.size(); ++index) {
             if (index != 0) {
                 key += "_";
@@ -2161,6 +2172,37 @@ private:
         if (candidates.empty()) {
             // Template candidates are instantiated after argument types are
             // known, below.
+        }
+        bool has_initializer_list_argument = false;
+        for (const ExprPtr& argument : call.arguments) {
+            if (argument && argument->kind == ExprKind::InitializerList) {
+                has_initializer_list_argument = true;
+                break;
+            }
+        }
+        if (has_initializer_list_argument) {
+            for (Function* candidate : candidates) {
+                if (candidate->parameters.size() != call.arguments.size()) {
+                    continue;
+                }
+                bool matches = true;
+                for (std::size_t index = 0; index < call.arguments.size(); ++index) {
+                    if (!call.arguments[index] ||
+                        call.arguments[index]->kind != ExprKind::InitializerList) {
+                        continue;
+                    }
+                    ClassInfo* parameter_class =
+                        class_of(resolve_type(candidate->parameters[index]));
+                    if (!is_initializer_list_class(parameter_class)) {
+                        matches = false;
+                        break;
+                    }
+                }
+                if (matches) {
+                    call_targets_[&call] = candidate;
+                    return candidate;
+                }
+            }
         }
         std::vector<TypePtr> argument_types;
         std::vector<bool> lvalues;
@@ -4113,6 +4155,23 @@ private:
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
+                if (is_initializer_list_class(parameter_class) &&
+                    expression.arguments[index]->kind ==
+                        ExprKind::InitializerList) {
+                    const int object = prepare_initializer_list_argument(
+                        parameter_class, parameter, *expression.arguments[index]);
+                    slot.offset =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    if (object >= 0) {
+                        emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
+                    } else {
+                        emit("    MOV R0, #0");
+                    }
+                    emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                    ++integer_argument;
+                    slots.push_back(std::move(slot));
+                    continue;
+                }
                 gen_expr(*expression.arguments[index]);
                 const int argument_object = allocate_local(parameter);
                 emit("    MOV R1, R0");
@@ -4772,6 +4831,40 @@ private:
                 emit("    CALL " + base_destructor->symbol);
             }
         }
+    }
+
+    bool is_initializer_list_class(ClassInfo* info) const {
+        return info != nullptr &&
+               info->qualified.find("initializer_list__") != std::string::npos;
+    }
+
+    int prepare_initializer_list_argument(ClassInfo* info, const TypePtr& type,
+                                          const Expr& initializer) {
+        MemberInfo* data_member = find_member(info, "data_");
+        MemberInfo* size_member = find_member(info, "size_");
+        if (data_member == nullptr || size_member == nullptr ||
+            data_member->type == nullptr ||
+            data_member->type->kind != TypeKind::Pointer ||
+            data_member->type->element == nullptr) {
+            error(initializer.location,
+                  "initializer_list layout is not supported");
+            return -1;
+        }
+        const TypePtr element_type = data_member->type->element;
+        const std::uint32_t count =
+            static_cast<std::uint32_t>(initializer.children.size());
+        const TypePtr array_type = Type::make_array(element_type, count);
+        const int array_offset = allocate_local(array_type);
+        zero_object(array_offset, type_size(array_type));
+        gen_array_initializer(array_type, array_offset, initializer);
+        const int object_offset = allocate_local(type);
+        emit("    LEA R0, [R7 + " + std::to_string(array_offset) + "]");
+        emit("    STORE R0, [R7 + " +
+             std::to_string(object_offset + data_member->offset) + "]");
+        emit("    MOV R0, #" + std::to_string(count));
+        emit("    STORE R0, [R7 + " +
+             std::to_string(object_offset + size_member->offset) + "]");
+        return object_offset;
     }
 
     void gen_array_initializer(const TypePtr& type, int offset, const Expr& initializer) {

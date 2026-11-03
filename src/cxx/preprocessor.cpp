@@ -500,8 +500,22 @@ private:
         }
         if (directive == "include") {
             const std::string header(trim(rest));
-            if (header.find("kr32/thread.hpp") != std::string::npos ||
-                header.find("thread.hpp") != std::string::npos ||
+            if (header.find("<initializer_list>") != std::string::npos ||
+                header.find("initializer_list") != std::string::npos) {
+                if (!initializer_list_header_injected_) {
+                    initializer_list_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "template <typename T> class initializer_list {\n"
+                        "public:\n"
+                        "    const T* data_;\n"
+                        "    int size_;\n"
+                        "};\n"
+                        "}\n");
+                }
+                return;
+            }
+            if (header.find("kr32/thread.hpp") != std::string::npos ||                header.find("thread.hpp") != std::string::npos ||
                 header.find("<thread>") != std::string::npos ||
                 header.find("<mutex>") != std::string::npos ||
                 header.find("<condition_variable>") != std::string::npos ||
@@ -960,6 +974,7 @@ private:
     std::set<std::string> expanding_;
     std::vector<Conditional> conditions_;
     bool thread_header_injected_ = false;
+    bool initializer_list_header_injected_ = false;
 };
 
 } // namespace

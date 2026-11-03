@@ -23,7 +23,8 @@ per-thread
 `thread_local` construction/destruction, conditional
 expressions, switch statements, global and local aggregate initializers,
 designated initializers, access control (including friends), unsigned integer
-semantics, captureless and value/reference/default-capturing lambdas,
+semantics, `std::initializer_list` parameters, captureless and
+value/reference/default-capturing lambdas,
 by-value class parameters/returns with `sret`, exit-time static destruction,
 range-based `for` over arrays and braced initializer lists, `goto`/labels, and
 C++ debug records. A
