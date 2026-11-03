@@ -3006,7 +3006,8 @@ private:
                 if (type && type->kind == TypeKind::LValueRef) {
                     type = type->element;
                 }
-                if (type && type->kind == TypeKind::Array) {
+                if (type && (type->kind == TypeKind::Array ||
+                             class_of(type) != nullptr)) {
                     return type;
                 }
                 if (is_fp(type)) {
@@ -3023,7 +3024,8 @@ private:
                     emit("    LEA R0, [" + global->symbol + "]");
                 }
                 TypePtr type = resolve_type(global->type);
-                if (type && type->kind == TypeKind::Array) {
+                if (type && (type->kind == TypeKind::Array ||
+                             class_of(type) != nullptr)) {
                     return type;
                 }
                 if (is_fp(type)) {
@@ -3719,6 +3721,17 @@ private:
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
+            } else if (ClassInfo* parameter_class = class_of(parameter)) {
+                gen_expr(*expression.arguments[index]);
+                const int argument_object = allocate_local(parameter);
+                emit("    MOV R1, R0");
+                emit("    MOV R2, #" + std::to_string(parameter_class->size));
+                emit("    LEA R0, [R7 + " + std::to_string(argument_object) + "]");
+                emit("    CALL memcpy");
+                slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    LEA R0, [R7 + " + std::to_string(argument_object) + "]");
+                emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                ++integer_argument;
             } else if (is_fp(parameter)) {
                 gen_as_fp(*expression.arguments[index], parameter);
                 slot.fp = true;
@@ -3772,6 +3785,13 @@ private:
                 ++integer_register;
             }
         }
+        const TypePtr call_result = resolve_type(function->result);
+        const ClassInfo* call_result_class = class_of(call_result);
+        int class_result_temp = -1;
+        if (call_result_class != nullptr) {
+            class_result_temp = allocate_local(call_result);
+            emit("    LEA R4, [R7 + " + std::to_string(class_result_temp) + "]");
+        }
         const std::string call_start = new_label("cs_start");
         emit(call_start + ":");
         if (virtual_dispatch) {
@@ -3793,6 +3813,9 @@ private:
         emit_unwind_landing(call_landing);
         emit(call_continue + ":");
         record_call_site(call_start, call_end, call_landing);
+        if (class_result_temp >= 0) {
+            emit("    LEA R0, [R7 + " + std::to_string(class_result_temp) + "]");
+        }
         return resolve_type(function->result);
     }
 
@@ -3922,6 +3945,29 @@ private:
             }
             return;
         case StmtKind::Return: {
+            if (statement.expression) {
+                const TypePtr result_type = type_of(*statement.expression);
+                if (ClassInfo* result_class = class_of(result_type)) {
+                    gen_expr(*statement.expression);
+                    const int source_temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    STORE R0, [R7 + " + std::to_string(source_temp) + "]");
+                    if (current_sret_slot_ < 0) {
+                        error(statement.location,
+                              "class return requires a destination object");
+                    } else {
+                        emit("    LOAD R0, [R7 + " + std::to_string(current_sret_slot_) +
+                             "]");
+                        emit("    LOAD R1, [R7 + " + std::to_string(source_temp) + "]");
+                        emit("    MOV R2, #" + std::to_string(result_class->size));
+                        emit("    CALL memcpy");
+                    }
+                    emit_all_local_destructors();
+                    emit("    MOV R0, #0");
+                    emit("    JMP " + return_label_);
+                    return;
+                }
+            }
             TypePtr result_type;
             int value_temp = -1;
             if (statement.expression) {
@@ -4488,6 +4534,39 @@ private:
                 }
             }
             if (declaration.initializer &&
+                declaration.initializer->kind == ExprKind::Call) {
+                bool callee_is_class = false;
+                if (!declaration.initializer->children.empty() &&
+                    declaration.initializer->children[0]->kind ==
+                        ExprKind::Name) {
+                    const std::string callee_name =
+                        declaration.initializer->children[0]->name.to_string();
+                    callee_is_class =
+                        find_class(declaration.initializer->children[0]->name) !=
+                            nullptr ||
+                        !declaration.initializer->children[0]
+                             ->template_type_arguments.empty() ||
+                        info->qualified.rfind(callee_name, 0) == 0;
+                }
+                Function* called =
+                    callee_is_class ? nullptr : resolve_call(*declaration.initializer);
+                if (called != nullptr &&
+                    class_of(resolve_type(called->result)) == info) {
+                    gen_expr(*declaration.initializer);
+                    const int result_address =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    STORE R0, [R7 + " + std::to_string(result_address) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(result_address) + "]");
+                    emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    MOV R2, #" + std::to_string(info->size));
+                    emit("    CALL memcpy");
+                    if (Function* destructor = find_destructor(info)) {
+                        local_destructors_.back().push_back({local.offset, destructor});
+                    }
+                    return;
+                }
+            }
+            if (declaration.initializer &&
                 declaration.initializer->kind == ExprKind::InitializerList &&
                 find_constructor(info, declaration.initializer->children.size()) == nullptr) {
                 gen_class_aggregate_initializer(info, local.offset,
@@ -4612,6 +4691,32 @@ private:
             this_offset_ = local.offset;
             integer_argument = 1;
         }
+        current_sret_slot_ = -1;
+        if (ClassInfo* result_class = class_of(resolve_type(function.result))) {
+            current_sret_slot_ = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R4, [R7 + " + std::to_string(current_sret_slot_) + "]");
+            (void)result_class;
+        }
+        bool has_class_parameter = false;
+        for (const Param& parameter : function.decl->parameters) {
+            const TypePtr parameter_type = resolve_type(parameter.type);
+            if (parameter_type &&
+                parameter_type->kind != TypeKind::LValueRef &&
+                parameter_type->kind != TypeKind::RValueRef &&
+                class_of(parameter_type) != nullptr) {
+                has_class_parameter = true;
+                break;
+            }
+        }
+        std::vector<int> saved_integer_arguments;
+        if (has_class_parameter) {
+            for (int index = 0; index < 4; ++index) {
+                const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R" + std::to_string(index) + ", [R7 + " +
+                     std::to_string(temp) + "]");
+                saved_integer_arguments.push_back(temp);
+            }
+        }
         for (std::size_t index = 0; index < function.decl->parameters.size(); ++index) {
             const Param& parameter = function.decl->parameters[index];
             Local local;
@@ -4638,9 +4743,36 @@ private:
                     error(parameter.location,
                           "more than eight FP parameters are not supported yet");
                 }
+            } else if (!local.is_reference && class_of(local.type) != nullptr) {
+                if (integer_argument < 4) {
+                    const ClassInfo* parameter_class = class_of(local.type);
+                    emit("    MOV R2, #" + std::to_string(parameter_class->size));
+                    if (!saved_integer_arguments.empty()) {
+                        emit("    LOAD R1, [R7 + " +
+                             std::to_string(saved_integer_arguments[
+                                 static_cast<std::size_t>(integer_argument)]) +
+                             "]");
+                    } else {
+                        emit("    MOV R1, R" + std::to_string(integer_argument));
+                    }
+                    emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    CALL memcpy");
+                    ++integer_argument;
+                } else {
+                    error(parameter.location,
+                          "more than four integer parameters are not supported yet");
+                }
             } else if (integer_argument < 4) {
-                emit("    STORE R" + std::to_string(integer_argument) + ", [R7 + " +
-                     std::to_string(local.offset) + "]");
+                if (!saved_integer_arguments.empty()) {
+                    emit("    LOAD R0, [R7 + " +
+                         std::to_string(saved_integer_arguments[
+                             static_cast<std::size_t>(integer_argument)]) +
+                         "]");
+                    emit("    STORE R0, [R7 + " + std::to_string(local.offset) + "]");
+                } else {
+                    emit("    STORE R" + std::to_string(integer_argument) + ", [R7 + " +
+                         std::to_string(local.offset) + "]");
+                }
                 ++integer_argument;
             } else {
                 error(parameter.location,
@@ -5509,6 +5641,7 @@ private:
     std::string current_prefix_;
     ClassInfo* current_class_ = nullptr;
     int this_offset_ = -1;
+    int current_sret_slot_ = -1;
     Function* current_function_ = nullptr;
     std::string return_label_;
     std::string va_base_placeholder_;

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 23:44 -08:00
+> **Last updated:** 2026-11-02 23:53 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1327,6 +1327,14 @@ Newest entries at the bottom. Use the local time zone.
       colliding. Added a two-TU class-template link/run regression. COMDAT
       section groups and nontrivial template static data remain deferred.
       250 cases / 5558 assertions.
+- **2026-11-02 23:53 -08:00** — Added the first by-value class ABI:
+      caller-owned copies for class parameters, hidden `R4` destination
+      pointers for class returns, and caller-side `sret` temporaries. Class
+      parameters are copied in the callee so mutations do not affect the
+      caller; class-returning calls can feed declarations, assignments, and
+      other calls. `docs/abi.md` records the implemented convention and notes
+      that the full revision-1 aggregate classification is still target
+      work. 251 cases / 5560 assertions.
 
 ## 10. Updating this file
 

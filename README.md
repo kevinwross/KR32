@@ -12,12 +12,14 @@ checklists, dependency notes, test gates, and running log are in
 same `kr32` executable and share one freestanding libc/runtime. The C compiler
 supports integer, `unsigned int`/`unsigned char`, `long` (32-bit), `float`, and
 `double` scalars with FP calls, expressions, multidimensional arrays, global and
-local aggregate/array initializers, compound assignment, `++`/`--`, conditional expressions,
-`do`-`while`, and switch statements. The C++ subset covers classes,
+local aggregate/array initializers, compound assignment, `++`/`--`, conditional
+expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
 inheritance, virtual dispatch/RTTI, function and class templates, matrices,
-exceptions/unwinding, `new`/`delete`, threads/TLS/atomics, conditional expressions, switch statements,
-global and local aggregate initializers, access control, range-based `for`, `goto`/labels, and
-C++ debug records. A freestanding C libc supplies `printf` (including FP formats),
+exceptions/unwinding, `new`/`delete`, threads/TLS/atomics, conditional
+expressions, switch statements, global and local aggregate initializers, access
+control, by-value class parameters/returns with `sret`, range-based `for`,
+`goto`/labels, and C++ debug records. A freestanding C libc supplies `printf`
+(including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
 (`sizeof`, `offsetof`, `_Alignof`, `_Static_assert`), math builtins, LL/SC
 atomics, and string/memory routines; see [docs/libc.md](docs/libc.md). The

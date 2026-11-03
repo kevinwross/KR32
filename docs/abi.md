@@ -199,6 +199,14 @@ shape and adds:
 
 ### C++ aggregate parameter and return convention
 
+**Implementation note (M9 integration):** the current compiler implements
+by-value class arguments by passing an invisible pointer to a caller-owned
+copy. Class results use a hidden destination pointer in `R4`; the callee copies
+the returned object there and the caller receives its address in `R0`. This is
+the implemented convention for the current front end. The fuller revision-1
+classification below remains the target contract and is not yet used for small
+register-class aggregates.
+
 Revision 1 uses a deliberately small set of aggregate classes:
 
 - A trivial aggregate of 4 bytes or less with no FP members is passed in one

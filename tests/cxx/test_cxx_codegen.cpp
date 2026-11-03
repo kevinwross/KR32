@@ -1152,6 +1152,21 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("by-value class parameters copy and sret returns objects") {
+    const ProgramResult program = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "int sum(P p) { p.x = 100; return p.x + p.y; }\n"
+        "P add(P a, P b) { P p; p.x = a.x + b.x; p.y = a.y + b.y; return p; }\n"
+        "int main() {\n"
+        "    P p; p.x = 1; p.y = 2;\n"
+        "    P q; q.x = 4; q.y = 5;\n"
+        "    P n = add(p, q);\n"
+        "    return sum(p) + p.x + n.x * 10 + n.y;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 160);
+}
+
 TEST_CASE("class template instantiations are weak across translation units") {
     const std::string header =
         "template <typename T> class Box {\n"
