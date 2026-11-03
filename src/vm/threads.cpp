@@ -116,8 +116,8 @@ std::uint32_t ClusterHost::setup_thread(std::uint32_t core,
     (void)machine.write32(tcb + tcb::FprSave, tcb + tcb::HeaderSize);
     (void)machine.write32(tcb + tcb::CurrentException, 0);
     (void)machine.write32(tcb + tcb::Reserved, 0);
-    for (std::size_t index = tcb::Tls; index < tls_template_.size(); ++index) {
-        (void)machine.write8(tcb + static_cast<std::uint32_t>(index),
+    for (std::size_t index = 0; index < tls_template_.size(); ++index) {
+        (void)machine.write8(tcb + tcb::Tls + static_cast<std::uint32_t>(index),
                              tls_template_[index]);
     }
 

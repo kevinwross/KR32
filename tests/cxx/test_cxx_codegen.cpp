@@ -888,6 +888,14 @@ TEST_CASE("function-local statics initialize once behind a guard") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("thread_local long long keeps both halves") {
+    const ProgramResult program = compile_and_run(
+        "thread_local long long value = 10000000000;\n"
+        "int main() { return (int)(value / 1000000000); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("thread_local class objects construct and destruct") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
