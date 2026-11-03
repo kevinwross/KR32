@@ -440,6 +440,7 @@ private:
         int vtable_index = -1;
         std::string member_name;
         ClassInfo* owner = nullptr;
+        Access access = Access::Public;
     };
 
     struct Global {
@@ -462,6 +463,8 @@ private:
         TypePtr type;
         int offset = 0;
         bool is_static = false;
+        Access access = Access::Public;
+        ClassInfo* owner = nullptr;
     };
 
     struct ClassInfo {
@@ -553,6 +556,27 @@ private:
             }
         }
         return nullptr;
+    }
+
+    bool can_access(const ClassInfo* owner, Access access) const {
+        if (owner == nullptr || access == Access::Public) {
+            return true;
+        }
+        if (current_class_ == nullptr) {
+            return false;
+        }
+        if (current_class_ == owner) {
+            return true;
+        }
+        if (access == Access::Protected) {
+            for (ClassInfo* base = current_class_->base; base != nullptr;
+                 base = base->base) {
+                if (base == owner) {
+                    return true;
+                }
+            }
+        }
+        return false;
     }
 
     void collect_classes(const std::vector<DeclPtr>& declarations,
@@ -652,6 +676,8 @@ private:
             field.name = member->name.to_string();
             field.type = type;
             field.offset = info.size;
+            field.access = member->access;
+            field.owner = &info;
             info.size += size;
             info.align = std::max(info.align, alignment);
             info.member_index[field.name] = nullptr;
@@ -856,6 +882,7 @@ private:
         function->qualified = qualified;
         function->extern_c = declaration.is_extern_c;
         function->is_static = declaration.is_static;
+        function->access = declaration.access;
         function->defined = declaration.body != nullptr;
         function->variadic = declaration.variadic;
         function->owner = owner;
@@ -2125,6 +2152,11 @@ private:
             if (current_class_ != nullptr && expression.name.parts.size() == 1) {
                 if (MemberInfo* member =
                         find_member(current_class_, expression.name.parts[0])) {
+                    if (!can_access(member->owner, member->access)) {
+                        diagnose_once(expression, "member is not accessible");
+                        emit("    MOV R0, #0");
+                        return;
+                    }
                     if (this_offset_ < 0) {
                         diagnose_once(expression, "member used outside a member function");
                         emit("    MOV R0, #0");
@@ -2187,6 +2219,11 @@ private:
                 return;
             }
             if (MemberInfo* member = find_member(info, member_name)) {
+                if (!can_access(member->owner, member->access)) {
+                    diagnose_once(expression, "member is not accessible");
+                    emit("    MOV R0, #0");
+                    return;
+                }
                 if (expression.is_arrow) {
                     gen_expr(*expression.children[0]);
                 } else {
@@ -2258,6 +2295,11 @@ private:
             return;
         }
         Function* constructor = find_constructor(info, arguments.size());
+        if (constructor != nullptr &&
+            !can_access(constructor->owner, constructor->access)) {
+            error(*info->decl, "constructor is not accessible");
+            return;
+        }
         if (!constructor) {
             if (!arguments.empty()) {
                 error(*info->decl, "no matching constructor for " + info->qualified);
@@ -3506,6 +3548,11 @@ private:
             emit("    MOV R0, #0");
             return Type::make_builtin(BuiltinKind::Int);
         }
+        if (!can_access(function->owner, function->access)) {
+            diagnose_once(expression, "member function is not accessible");
+            emit("    MOV R0, #0");
+            return Type::make_builtin(BuiltinKind::Int);
+        }
         const bool member_call = function->is_member;
         bool virtual_dispatch = false;
         if (function->is_virtual && function->vtable_index >= 0) {
@@ -3998,6 +4045,11 @@ private:
             return;
         }
         Function* constructor = find_constructor(info, arguments.size());
+        if (constructor != nullptr &&
+            !can_access(constructor->owner, constructor->access)) {
+            error(*info->decl, "constructor is not accessible");
+            return;
+        }
         if (!constructor) {
             if (arguments.empty()) {
                 zero_object(offset, info->size);

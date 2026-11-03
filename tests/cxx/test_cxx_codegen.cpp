@@ -1152,6 +1152,34 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("C++ access control rejects private members and allows class internals") {
+    const ProgramResult internal = compile_and_run(
+        "class P {\n"
+        "private:\n"
+        "    int secret;\n"
+        "public:\n"
+        "    int x;\n"
+        "    P() { secret = 7; x = 1; }\n"
+        "    int get() { return secret; }\n"
+        "};\n"
+        "int main() { P p; p.x = 2; return p.get() + p.x; }\n");
+    CHECK(internal.ok);
+    CHECK(internal.result == 9);
+
+    const cxx::Result outside = cxx::compile(
+        "class P { private: int secret; public: P() { secret = 1; } };\n"
+        "int main() { P p; p.secret = 2; return 0; }\n");
+    CHECK_FALSE(outside.ok);
+    REQUIRE_FALSE(outside.diagnostics.empty());
+
+    const ProgramResult protected_access = compile_and_run(
+        "class B { protected: int x; public: B() { x = 1; } };\n"
+        "class D : public B { public: int get() { return x; } };\n"
+        "int main() { D d; return d.get(); }\n");
+    CHECK(protected_access.ok);
+    CHECK(protected_access.result == 1);
+}
+
 TEST_CASE("C++ aggregate and nested array initializers run") {
     const ProgramResult program = compile_and_run(
         "struct P { int x; int y; };\n"
