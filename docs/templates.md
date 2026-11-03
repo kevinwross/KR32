@@ -95,7 +95,7 @@ T Box<T>::value = 42;
 
 - Definition initializers attach to each instantiation
 - Late static-template globals are emitted after function code generation
-- Accessed through an instance or scope-qualified member
+- Static members are currently accessed through an instance
 
 ## Deferred
 
