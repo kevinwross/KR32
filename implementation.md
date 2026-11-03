@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 10:20 -08:00
+> **Last updated:** 2026-11-03 10:28 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1484,6 +1484,9 @@ Newest entries at the bottom. Use the local time zone.
       host seconds instead of returning immediately; `sleep_for` and
       `try_lock_for` honor coarse whole-second timeouts. 286 cases / 5751
       assertions.
+- **2026-11-03 10:28 -08:00** — Added `std::this_thread::sleep_until`
+      with past-deadline fast return and coarse host-second waiting.
+      287 cases / 5753 assertions.
 
 ## 10. Updating this file
 

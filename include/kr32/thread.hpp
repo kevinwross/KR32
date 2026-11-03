@@ -30,6 +30,14 @@ inline void sleep_for(int milliseconds) {
         thread_yield();
     }
 }
+inline void sleep_until(int seconds) {
+    if (seconds <= 0) {
+        return;
+    }
+    while ((int)__builtin_kr32_syscall(40, 0, 0, 0) < seconds) {
+        thread_yield();
+    }
+}
 inline int futex_wait(int* address, int expected) {
     return __builtin_kr32_syscall(48, (int)address, expected, 0);
 }
@@ -196,6 +204,8 @@ struct thread {
 namespace this_thread {
 inline void yield() { thread_yield(); }
 inline int get_id() { return thread_self(); }
+inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); }
+inline void sleep_until(int seconds) { kr32::sleep_until(seconds); }
 } // namespace this_thread
 
 } // namespace kr32
@@ -227,5 +237,6 @@ namespace this_thread {
 inline void yield() { kr32::thread_yield(); }
 inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); }
 inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); }
+inline void sleep_until(int seconds) { kr32::sleep_until(seconds); }
 } // namespace this_thread
 } // namespace std

@@ -1221,6 +1221,17 @@ TEST_CASE("lambdas capture by reference and by default") {
     CHECK(by_default.result == 42);
 }
 
+TEST_CASE("std this_thread sleep_until accepts a past deadline") {
+    const ProgramResult program = compile_and_run(
+        "#include <thread>\n"
+        "int main() {\n"
+        "    std::this_thread::sleep_until(0);\n"
+        "    return 42;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("std timed thread helpers accept zero waits") {
     const ProgramResult program = compile_and_run(
         "#include <thread>\n"

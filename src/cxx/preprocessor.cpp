@@ -531,7 +531,7 @@ private:
                     "inline void thread_yield() { (void)__builtin_kr32_syscall(46, 0, 0, 0); }\n"
                     "inline void thread_exit(int code) { (void)__builtin_kr32_syscall(47, code, 0, 0); }\n"
                     "inline int thread_self() { return __builtin_kr32_syscall(50, 0, 0, 0); }\n"
-                    "inline void sleep_for(int milliseconds) { if (milliseconds <= 0) { return; } const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0); const int seconds = (milliseconds + 999) / 1000; while ((int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) { thread_yield(); } }\n"
+                    "inline void sleep_for(int milliseconds) { if (milliseconds <= 0) { return; } const int start = (int)__builtin_kr32_syscall(40, 0, 0, 0); const int seconds = (milliseconds + 999) / 1000; while ((int)__builtin_kr32_syscall(40, 0, 0, 0) - start < seconds) { thread_yield(); } }\ninline void sleep_until(int seconds) { if (seconds <= 0) { return; } while ((int)__builtin_kr32_syscall(40, 0, 0, 0) < seconds) { thread_yield(); } }\n"
                     "inline int futex_wait(int* address, int expected) { return __builtin_kr32_syscall(48, (int)address, expected, 0); }\n"
                     "inline int futex_wake(int* address, int count) { return __builtin_kr32_syscall(49, (int)address, count, 0); }\n"
                     "struct atomic_int {\n"
@@ -582,7 +582,7 @@ private:
                     "namespace this_thread {\n"
                     "inline void yield() { thread_yield(); }\n"
                     "inline int get_id() { return thread_self(); }\n"
-                    "inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); }\n"
+                    "inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); } inline void sleep_until(int seconds) { kr32::sleep_until(seconds); }\n"
                     "}\n"
                     "}\n"
                     "namespace std {\n"
@@ -603,7 +603,7 @@ private:
                     "    void detach() { handle = 0; }\n"
                     "    void yield() { kr32::thread_yield(); }\n"
                     "};\n"
-                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); } inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); } }\n"
+                    "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); } inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); } inline void sleep_until(int seconds) { kr32::sleep_until(seconds); } }\n"
                     "}\n");
                 return;
             }
