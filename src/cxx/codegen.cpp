@@ -607,9 +607,7 @@ private:
                 continue;
             }
             if (declaration->is_template) {
-                error(*declaration,
-                      "class templates are not supported yet; function templates "
-                      "and weak instantiation are implemented");
+                class_templates_[qualify(prefix, declaration->name)] = declaration.get();
                 continue;
             }
             auto info = std::make_unique<ClassInfo>();
@@ -701,9 +699,100 @@ private:
         }
     }
 
+    TypePtr instantiate_class_template(const TypePtr& named) {
+        const std::string template_name = named->name.to_string();
+        const auto found_template = class_templates_.find(template_name);
+        if (found_template == class_templates_.end()) {
+            return named;
+        }
+        std::string key = template_name + "__";
+        for (std::size_t index = 0; index < named->template_arguments.size(); ++index) {
+            if (index != 0) {
+                key += "_";
+            }
+            key += named->template_arguments[index]
+                       ? mangle_type(named->template_arguments[index])
+                       : "x";
+        }
+        const auto existing = class_index_.find(key);
+        if (existing != class_index_.end()) {
+            Name name;
+            name.parts.push_back(key);
+            return Type::make_named(name);
+        }
+
+        const Decl* source = found_template->second;
+        std::map<std::string, TypePtr> bindings;
+        for (std::size_t index = 0;
+             index < source->template_parameters.size() &&
+             index < named->template_arguments.size();
+             ++index) {
+            const DeclPtr& parameter = source->template_parameters[index];
+            if (parameter && !parameter->name.parts.empty()) {
+                bindings[parameter->name.parts[0]] = named->template_arguments[index];
+            }
+        }
+
+        auto clone = std::make_shared<Decl>();
+        clone->kind = DeclKind::Class;
+        clone->location = source->location;
+        clone->name.parts = {key};
+        clone->is_template = false;
+        for (const DeclPtr& child : source->children) {
+            if (!child) {
+                continue;
+            }
+            auto child_copy = std::make_shared<Decl>();
+            child_copy->kind = child->kind;
+            child_copy->location = child->location;
+            child_copy->name = child->name;
+            child_copy->type = substitute_type(child->type, bindings);
+            child_copy->body = child->body;
+            child_copy->initializer = nullptr;
+            child_copy->is_static = child->is_static;
+            child_copy->is_virtual = child->is_virtual;
+            child_copy->is_override = child->is_override;
+            child_copy->is_pure = child->is_pure;
+            child_copy->is_inline = child->is_inline;
+            child_copy->is_constructor = child->is_constructor;
+            child_copy->is_destructor = child->is_destructor;
+            child_copy->is_operator = child->is_operator;
+            child_copy->is_explicit = child->is_explicit;
+            child_copy->is_defaulted = child->is_defaulted;
+            child_copy->is_deleted = child->is_deleted;
+            child_copy->is_template = false;
+            child_copy->variadic = child->variadic;
+            child_copy->is_const = child->is_const;
+            child_copy->access = child->access;
+            for (const Param& parameter : child->parameters) {
+                Param copied;
+                copied.type = substitute_type(parameter.type, bindings);
+                copied.name = parameter.name;
+                copied.variadic = parameter.variadic;
+                child_copy->parameters.push_back(std::move(copied));
+            }
+            clone->children.push_back(std::move(child_copy));
+        }
+        template_class_storage_.push_back(clone);
+
+        auto info = std::make_unique<ClassInfo>();
+        info->decl = clone.get();
+        info->qualified = key;
+        ClassInfo* raw = info.get();
+        class_index_[key] = std::move(info);
+        collect_class_members(*clone, key);
+        layout_class(*raw);
+        Name name;
+        name.parts.push_back(key);
+        return Type::make_named(name);
+    }
+
     TypePtr resolve_type(TypePtr type) {
         if (!type) {
             return type;
+        }
+        if (type->kind == TypeKind::Named && !type->template_arguments.empty()) {
+            return instantiate_class_template(type);
         }
         if (type->kind == TypeKind::Named) {
             const auto alias = type_aliases_.find(type->name.to_string());
@@ -5383,6 +5472,8 @@ private:
     std::map<std::string, std::set<std::string>> imports_;
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;
     std::map<std::string, std::unique_ptr<ClassInfo>> class_index_;
+    std::map<std::string, const Decl*> class_templates_;
+    std::vector<DeclPtr> template_class_storage_;
 
     std::vector<std::map<std::string, Local>> local_scopes_;
     std::vector<std::vector<std::pair<int, Function*>>> local_destructors_;

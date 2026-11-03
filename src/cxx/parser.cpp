@@ -1146,6 +1146,11 @@ private:
             consume_template_close();
         }
         std::vector<DeclPtr> declarations;
+        for (const DeclPtr& parameter : parameters) {
+            if (parameter && !parameter->name.parts.empty()) {
+                add_known_type(parameter->name);
+            }
+        }
         if (at("class") || at("struct") || at("union")) {
             DeclPtr definition = parse_class_definition();
             add_known_type(definition->name);

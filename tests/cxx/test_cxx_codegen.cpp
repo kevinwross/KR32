@@ -1152,6 +1152,23 @@ TEST_CASE("class compound assignment reports an unsupported operation") {
           std::string::npos);
 }
 
+TEST_CASE("class templates instantiate fields, methods, and constructors") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> class Box {\n"
+        "public:\n"
+        "    T value;\n"
+        "    Box(T initial) { value = initial; }\n"
+        "    T get() { return value; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Box<int> number(42);\n"
+        "    Box<char> letter('A');\n"
+        "    return number.get() + letter.get();\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 107);
+}
+
 TEST_CASE("C++ access control rejects private members and allows class internals") {
     const ProgramResult internal = compile_and_run(
         "class P {\n"

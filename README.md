@@ -14,8 +14,8 @@ supports integer, `unsigned int`/`unsigned char`, `long` (32-bit), `float`, and
 `double` scalars with FP calls, expressions, multidimensional arrays, global and
 local aggregate/array initializers, compound assignment, `++`/`--`, conditional expressions,
 `do`-`while`, and switch statements. The C++ subset covers classes,
-inheritance, virtual dispatch/RTTI, templates, matrices, exceptions/unwinding,
-`new`/`delete`, threads/TLS/atomics, conditional expressions, switch statements,
+inheritance, virtual dispatch/RTTI, function and class templates, matrices,
+exceptions/unwinding, `new`/`delete`, threads/TLS/atomics, conditional expressions, switch statements,
 global and local aggregate initializers, access control, range-based `for`, `goto`/labels, and
 C++ debug records. A freestanding C libc supplies `printf` (including FP formats),
 coalescing `malloc`/`free`, `calloc`, `realloc`, `stddef.h`
