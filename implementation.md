@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-02 22:15 -08:00
+> **Last updated:** 2026-11-02 22:46 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1281,6 +1281,13 @@ Newest entries at the bottom. Use the local time zone.
       headers/footers, free-list links, and counts, then resynchronize the
       counters. Verified the globals in the GUI variables panel and added
       heapwalk regression coverage; 228 cases / 5359 assertions.
+- **2026-11-02 22:46 -08:00** — Expanded both language front ends: C now supports all
+      compound assignments, prefix/postfix increments, pointer-scaled
+      arithmetic, multidimensional arrays, conditional expressions, and
+      correct switch fallthrough/default dispatch. C++ now preserves
+      multidimensional-array dimension order, scales pointer increments and
+      compound assignments, and implements switch with fallthrough. Added
+      C/C++ regression coverage; 240 cases / 5482 assertions.
 
 ## 10. Updating this file
 

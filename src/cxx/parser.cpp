@@ -660,6 +660,7 @@ private:
             parse_parameter_list(declarator.parameters, declarator.variadic);
             parse_function_suffix(declarator);
         }
+        std::vector<std::uint32_t> dimensions;
         while (at("[")) {
             advance();
             std::uint32_t size = 0;
@@ -674,7 +675,12 @@ private:
                 }
             }
             expect("]", "in array declarator");
-            type = Type::make_array(type, size);
+            dimensions.push_back(size);
+        }
+        // The first declarator dimension is the outermost array:
+        // int a[10][5][2] is array<10, array<5, array<2, int>>>.
+        for (auto it = dimensions.rbegin(); it != dimensions.rend(); ++it) {
+            type = Type::make_array(type, *it);
         }
         declarator.type = type;
         return true;

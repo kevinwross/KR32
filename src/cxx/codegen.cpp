@@ -2940,6 +2940,9 @@ private:
         case ExprKind::Index: {
             gen_address(expression);
             const TypePtr type = type_of(expression);
+            if (type && type->kind == TypeKind::Array) {
+                return type;
+            }
             if (is_fp(type)) {
                 load_fp(type);
             } else {
@@ -3097,6 +3100,17 @@ private:
                 emit("    ADD R0, R0, #1");
             } else {
                 emit("    SUB R0, R0, #1");
+            }
+            if (resolved && resolved->kind == TypeKind::Pointer) {
+                const int element_size =
+                    resolved->element ? type_size(resolve_type(resolved->element)) : 1;
+                if (element_size > 1) {
+                    if (op == "++") {
+                        emit("    ADD R0, R0, #" + std::to_string(element_size - 1));
+                    } else {
+                        emit("    SUB R0, R0, #" + std::to_string(element_size - 1));
+                    }
+                }
             }
             if (byte_value) {
                 emit("    STORE8 R0, [R1]");
@@ -3339,6 +3353,11 @@ private:
     TypePtr gen_assignment(const Expr& expression) {
         const TypePtr lhs_type = type_of(*expression.children[0], false);
         if (ClassInfo* info = class_of(lhs_type)) {
+            if (expression.text != "=") {
+                diagnose_once(expression,
+                              "compound assignment on a class is not supported yet");
+                return lhs_type;
+            }
             gen_address(*expression.children[0]);
             const int destination =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -3371,6 +3390,18 @@ private:
             emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
             gen_expr(*expression.children[1]);
             emit("    MOV R1, R0");
+            if (is_pointer(lhs_type)) {
+                if (op != "+" && op != "-") {
+                    diagnose_once(expression,
+                                  "only += and -= are valid for pointer compound assignment");
+                } else {
+                    const int element_size =
+                        lhs_type->element ? type_size(lhs_type->element) : 1;
+                    if (element_size > 1) {
+                        emit("    MUL R1, R1, #" + std::to_string(element_size));
+                    }
+                }
+            }
             emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
             if (op == "+") emit("    ADD R0, R0, R1");
             else if (op == "-") emit("    SUB R0, R0, R1");
@@ -3788,10 +3819,61 @@ private:
             emit("    JMP " + return_label_);
             return;
         }
-        case StmtKind::Switch:
+        case StmtKind::Switch: {
+            if (!statement.condition) {
+                return;
+            }
+            gen_expr(*statement.condition);
+            const int switch_value =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(switch_value) + "]");
+            const std::string end = new_label("switchend");
+            const std::string dispatch = new_label("switchdispatch");
+            emit("    JMP " + dispatch);
+            break_labels_.push_back(end);
+            push_scope();
+            std::vector<std::pair<std::int64_t, std::string>> cases;
+            std::string default_label;
+            if (statement.body && statement.body->kind == StmtKind::Compound) {
+                for (const StmtPtr& child : statement.body->statements) {
+                    if (!child) {
+                        continue;
+                    }
+                    if (child->kind == StmtKind::Case) {
+                        std::int64_t value = 0;
+                        if (!child->expression || !eval_const(*child->expression, value)) {
+                            error(child->location, "case label must be a constant integer");
+                            continue;
+                        }
+                        const std::string label = new_label("casebody");
+                        cases.push_back({value, label});
+                        emit(label + ":");
+                    } else if (child->kind == StmtKind::Default) {
+                        default_label = new_label("defaultbody");
+                        emit(default_label + ":");
+                    } else {
+                        gen_statement(*child);
+                    }
+                }
+            } else if (statement.body) {
+                gen_statement(*statement.body);
+            }
+            emit("    JMP " + end);
+            emit(dispatch + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(switch_value) + "]");
+            for (const auto& entry : cases) {
+                emit("    MOV R1, #" + std::to_string(entry.first));
+                emit("    CMP R0, R1");
+                emit("    JZ " + entry.second);
+            }
+            emit("    JMP " + (default_label.empty() ? end : default_label));
+            emit(end + ":");
+            pop_scope();
+            break_labels_.pop_back();
+            return;
+        }
         case StmtKind::Case:
         case StmtKind::Default:
-            error(statement.location, "switch statements are not supported until a later M9 phase");
             return;
         case StmtKind::RangeFor:
             error(statement.location, "range-for is not supported until M9.7");

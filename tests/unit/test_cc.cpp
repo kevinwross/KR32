@@ -275,6 +275,122 @@ TEST_CASE("libc malloc reuses and coalesces free blocks") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("C compound assignments and increments follow C semantics") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int x = 6;\n"
+        "    x += 1; x -= 1; x *= 2; x /= 2; x %= 7;\n"
+        "    x <<= 1; x >>= 1; x &= 7; x |= 8; x ^= 1;\n"
+        "    ++x; x++;\n"
+        "    return x;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 17);
+}
+
+TEST_CASE("C pointer compound assignments scale by element size") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int values[4];\n"
+        "    int *p = values;\n"
+        "    p++;\n"
+        "    *p = 11;\n"
+        "    p += 2;\n"
+        "    *p = 22;\n"
+        "    return values[1] + values[3];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 33);
+}
+
+TEST_CASE("C increments work in for loops and on array elements") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int values[3];\n"
+        "    values[0] = 1; values[1] = 2; values[2] = 3;\n"
+        "    values[0] += 4; values[1]++;\n"
+        "    int total = 0;\n"
+        "    for (int i = 0; i < 3; i++) total += values[i];\n"
+        "    int *p = values;\n"
+        "    *p++ = 9;\n"
+        "    return total + values[0];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 5 + 3 + 3 + 9);
+}
+
+TEST_CASE("C floating-point increments and compound assignments convert back") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    float value = 1.5f;\n"
+        "    value++;\n"
+        "    ++value;\n"
+        "    value += 2.0f;\n"
+        "    return (int)value;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 5);
+}
+
+TEST_CASE("C postfix increments return the old value and truncate chars") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int i = 3;\n"
+        "    int a = i++;\n"
+        "    int b = ++i;\n"
+        "    char c = 127;\n"
+        "    c++;\n"
+        "    c += 2;\n"
+        "    _Bool z = 1;\n"
+        "    z++;\n"
+        "    z += 1;\n"
+        "    return a + b + (int)c + z;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 3 + 5 - 126 + 1);
+}
+
+TEST_CASE("C supports multidimensional arrays") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int a[2][3][4];\n"
+        "    a[0][0][0] = 1;\n"
+        "    a[1][2][3] = 42;\n"
+        "    return a[0][0][0] + a[1][2][3];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 43);
+}
+
+TEST_CASE("C conditional expressions select a value") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int x = 5;\n"
+        "    int i = 2;\n"
+        "    int ternary = (x > i) ? 0 : 1;\n"
+        "    return ternary + (i > x ? 10 : 20);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 20);
+}
+
+TEST_CASE("C switch supports fallthrough and default") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int x = 1;\n"
+        "    int total = 0;\n"
+        "    switch (x) {\n"
+        "    case 1: total = total + 1;\n"
+        "    case 2: total = total + 2; break;\n"
+        "    case 3: total = total + 4; break;\n"
+        "    default: total = total + 8;\n"
+        "    }\n"
+        "    return total;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 3);
+}
+
 TEST_CASE("libc heapwalk validates block links and free counts") {
     const ProgramResult program = compile_and_run(
         "#include <stdlib.h>\n"

@@ -1115,6 +1115,70 @@ TEST_CASE("class copy construction and assignment are memberwise byte copies") {
     CHECK(program.result == 42);
 }
 
+TEST_CASE("multidimensional arrays preserve dimension order") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int a[2][3][4];\n"
+        "    a[0][0][0] = 1;\n"
+        "    a[1][2][3] = 42;\n"
+        "    return a[0][0][0] + a[1][2][3];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 43);
+}
+
+TEST_CASE("pointer increments and compound assignments scale by element size") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int values[3];\n"
+        "    int* p = values;\n"
+        "    p++;\n"
+        "    *p = 11;\n"
+        "    p += 1;\n"
+        "    *p = 22;\n"
+        "    return values[1] + values[2];\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 33);
+}
+
+TEST_CASE("class compound assignment reports an unsupported operation") {
+    const cxx::Result result = cxx::compile(
+        "struct Pair { int x; };\n"
+        "int main() { Pair a; Pair b; a += b; return 0; }\n");
+    CHECK_FALSE(result.ok);
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.front().message.find("compound assignment") !=
+          std::string::npos);
+}
+
+TEST_CASE("conditional expressions and switch fallthrough run") {
+    const ProgramResult ternary = compile_and_run(
+        "int main() {\n"
+        "    int x = 5;\n"
+        "    int i = 2;\n"
+        "    int result = (x > i) ? 0 : 1;\n"
+        "    return result + (i > x ? 10 : 20);\n"
+        "}\n");
+    CHECK(ternary.ok);
+    CHECK(ternary.result == 20);
+
+    const ProgramResult fallthrough = compile_and_run(
+        "int main() {\n"
+        "    int x = 1;\n"
+        "    int total = 0;\n"
+        "    switch (x) {\n"
+        "    case 1: total += 1;\n"
+        "    case 2: total += 2; break;\n"
+        "    case 3: total += 4; break;\n"
+        "    default: total += 8;\n"
+        "    }\n"
+        "    return total;\n"
+        "}\n");
+    CHECK(fallthrough.ok);
+    CHECK(fallthrough.result == 3);
+}
+
 TEST_CASE("classes lay out members and call member functions") {
     const ProgramResult program = compile_and_run(
         "class Point {\n"

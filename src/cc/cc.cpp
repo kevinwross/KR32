@@ -1214,6 +1214,22 @@ private:
         return token.text;
     }
 
+    TypePtr parse_array_suffix(TypePtr type) {
+        std::vector<int> dimensions;
+        while (match("[")) {
+            int count = 0;
+            if (peek().kind == TokenKind::Number) {
+                count = static_cast<int>(take().value);
+            }
+            expect("]");
+            dimensions.push_back(count);
+        }
+        for (auto it = dimensions.rbegin(); it != dimensions.rend(); ++it) {
+            type = type_array(type, *it);
+        }
+        return type;
+    }
+
     void parse_top_level() {
         if (match(";")) {
             return;
@@ -1242,15 +1258,7 @@ private:
     }
 
     void parse_global(const TypePtr& type, const std::string& name) {
-        TypePtr actual = type;
-        if (match("[")) {
-            std::int64_t count = 0;
-            if (peek().kind == TokenKind::Number) {
-                count = take().value;
-            }
-            expect("]");
-            actual = type_array(type, static_cast<int>(count));
-        }
+        TypePtr actual = parse_array_suffix(type);
         if (match("=")) {
             if (actual->kind == Type::Kind::Array) {
                 error("array initializers are not supported yet");
@@ -1475,38 +1483,46 @@ private:
             emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
             expect("{");
             const std::string end = new_label("switchend");
+            const std::string dispatch = new_label("switchdispatch");
+            std::vector<std::pair<std::int64_t, std::string>> cases;
+            std::string default_label;
+            emit("    JMP " + dispatch);
+            break_labels_.push_back(end);
             while (!match("}")) {
                 if (match("case")) {
                     const std::int64_t value = parse_constant_value();
                     expect(":");
-                    const std::string next = new_label("case");
-                    emit("    LOAD R0, [R7 + " + std::to_string(temp) + "]");
-                    emit("    MOV R1, #" + std::to_string(value));
-                    emit("    CMP R0, R1");
-                    emit("    JNZ " + next);
-                    break_labels_.push_back(end);
+                    const std::string label = new_label("casebody");
+                    cases.push_back({value, label});
+                    emit(label + ":");
                     while (!at_end() && peek().text != "}" && peek().text != "case" &&
                            peek().text != "default") {
                         parse_statement();
                     }
-                    break_labels_.pop_back();
-                    emit("    JMP " + end);
-                    emit(next + ":");
                     continue;
                 }
                 if (match("default")) {
                     expect(":");
-                    break_labels_.push_back(end);
+                    default_label = new_label("defaultbody");
+                    emit(default_label + ":");
                     while (!at_end() && peek().text != "}" && peek().text != "case" &&
                            peek().text != "default") {
                         parse_statement();
                     }
-                    break_labels_.pop_back();
-                    emit("    JMP " + end);
                     continue;
                 }
                 error("expected case, default, or '}'");
             }
+            break_labels_.pop_back();
+            emit("    JMP " + end);
+            emit(dispatch + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(temp) + "]");
+            for (const auto& entry : cases) {
+                emit("    MOV R1, #" + std::to_string(entry.first));
+                emit("    CMP R0, R1");
+                emit("    JZ " + entry.second);
+            }
+            emit("    JMP " + (default_label.empty() ? end : default_label));
             emit(end + ":");
             return;
         }
@@ -1641,15 +1657,7 @@ private:
     void parse_local_declaration() {
         TypePtr type = parse_type();
         const std::string name = parse_name();
-        TypePtr actual = type;
-        if (match("[")) {
-            std::int64_t count = 0;
-            if (peek().kind == TokenKind::Number) {
-                count = take().value;
-            }
-            expect("]");
-            actual = type_array(type, static_cast<int>(count));
-        }
+        TypePtr actual = parse_array_suffix(type);
         const int offset = allocate_local(actual);
         locals_[name] = Variable{name, actual, offset, "", false};
         debug_type(actual);
@@ -1685,9 +1693,10 @@ private:
             return address;
         }
         if (match("*")) {
-            TypePtr pointer = gen_expression();
+            TypePtr pointer = parse_unary();
             if (!pointer->is_pointer()) {
-                error("dereference of a non-pointer");
+                error("dereference of a non-pointer (" + type_name(pointer) +
+                      ") near '" + peek().text + "'");
             }
             type = pointer->element();
             bool address = true;
@@ -1698,28 +1707,6 @@ private:
     }
 
     void parse_assignment_statement() {
-        const bool looks_lvalue =
-            (peek().kind == TokenKind::Identifier &&
-             (peek(1).text == "=" || peek(1).text == "[" || peek(1).text == "." ||
-              peek(1).text == "->")) ||
-            peek().text == "*";
-        if (looks_lvalue) {
-            const std::size_t saved_position = position_;
-            const std::size_t saved_text = text_.size();
-            const int saved_label = label_counter_;
-            TypePtr type;
-            if (gen_lvalue(type) && match("=")) {
-                emit("    PUSH R0");
-                TypePtr value_type = gen_expression();
-                convert_value(value_type, type);
-                emit("    POP R1");
-                gen_store(type);
-                return;
-            }
-            position_ = saved_position;
-            text_.resize(saved_text);
-            label_counter_ = saved_label;
-        }
         gen_expression();
     }
 
@@ -1830,7 +1817,7 @@ private:
     }
 
     TypePtr gen_expression() {
-        return parse_logical_or();
+        return gen_assignment_expression();
     }
 
     void push_value(const TypePtr& type) {
@@ -2005,6 +1992,160 @@ private:
         }
     }
 
+    static bool is_assignment_operator(std::string_view text) {
+        return text == "=" || text == "+=" || text == "-=" || text == "*=" ||
+               text == "/=" || text == "%=" || text == "<<=" || text == ">>=" ||
+               text == "&=" || text == "|=" || text == "^=";
+    }
+
+    void gen_increment(const TypePtr& type, int delta, bool prefix) {
+        if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
+            type->kind == Type::Kind::Union) {
+            error("increment/decrement requires a scalar lvalue");
+        }
+        if (is_fp_type(type)) {
+            const int address_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
+            emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+            gen_load(type);
+            int old_slot = -1;
+            if (!prefix) {
+                old_slot = allocate_local(type_double());
+                emit("    FSTORE.D F0, [R7 + " + std::to_string(old_slot) + "]");
+            }
+            const bool wide = type->kind == Type::Kind::Double;
+            const std::string label = new_label("fpone");
+            rodata_ += label + ":\n    ." + (wide ? "double" : "float") + " 1.0\n";
+            emit(std::string("    FLOAD.") + (wide ? "D" : "W") + " F1, [" + label + "]");
+            emit(std::string("    ") + (delta > 0 ? "FADD" : "FSUB") + (wide ? ".D" : ".S") +
+                 " F0, F0, F1");
+            emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
+            gen_store(type);
+            if (!prefix) {
+                emit("    FLOAD.D F0, [R7 + " + std::to_string(old_slot) + "]");
+            }
+            return;
+        }
+        const int address_slot = allocate_local(type_int());
+        emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
+        emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+        gen_load(type);
+        int old_slot = -1;
+        if (!prefix) {
+            old_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(old_slot) + "]");
+        }
+        int amount = delta;
+        if (type->is_pointer()) {
+            const int size = type->element() ? type->element()->size() : 1;
+            amount *= size;
+        }
+        if (amount >= 0) {
+            emit("    ADD R0, R0, #" + std::to_string(amount));
+        } else {
+            emit("    SUB R0, R0, #" + std::to_string(-amount));
+        }
+        if (type->kind == Type::Kind::Bool) {
+            convert_value(type_int(), type);
+        }
+        emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
+        gen_store(type);
+        if (!prefix) {
+            emit("    LOAD R0, [R7 + " + std::to_string(old_slot) + "]");
+        }
+    }
+
+    void gen_compound_assignment(const TypePtr& type, const std::string& op) {
+        if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
+            type->kind == Type::Kind::Union) {
+            error("compound assignment requires a scalar lvalue");
+        }
+        const int address_slot = allocate_local(type_int());
+        emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
+        emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+        gen_load(type);
+        push_value(type);
+        TypePtr right = gen_expression();
+        if (type->is_pointer()) {
+            if (op != "+" && op != "-") {
+                error("only += and -= are valid for pointer compound assignment");
+            }
+            if (right->is_pointer()) {
+                error("pointer compound assignment requires an integer operand");
+            }
+        } else if (is_fp_type(right) && !is_fp_type(type)) {
+            convert_value(right, type);
+            right = type;
+        }
+        gen_binary(op, type, right);
+        if (type->kind == Type::Kind::Bool) {
+            convert_value(type_int(), type);
+        }
+        emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
+        gen_store(type);
+    }
+
+    TypePtr gen_assignment_expression() {
+        const bool looks_lvalue =
+            (peek().kind == TokenKind::Identifier &&
+             (is_assignment_operator(peek(1).text) || peek(1).text == "[" ||
+              peek(1).text == "." || peek(1).text == "->")) ||
+            peek().text == "*";
+        if (looks_lvalue) {
+            const std::size_t saved_position = position_;
+            const std::size_t saved_text = text_.size();
+            const std::size_t saved_rodata = rodata_.size();
+            const std::size_t saved_data = data_.size();
+            const std::size_t saved_bss = bss_.size();
+            const std::size_t saved_debug = debug_.size();
+            const int saved_frame = frame_size_;
+            const int saved_label = label_counter_;
+            TypePtr type;
+            if (gen_lvalue(type) && is_assignment_operator(peek().text)) {
+                const std::string op = take().text;
+                if (op == "=") {
+                    emit("    PUSH R0");
+                    TypePtr value_type = gen_expression();
+                    convert_value(value_type, type);
+                    emit("    POP R1");
+                    gen_store(type);
+                } else {
+                    gen_compound_assignment(type, op.substr(0, op.size() - 1));
+                }
+                return type;
+            }
+            position_ = saved_position;
+            text_.resize(saved_text);
+            rodata_.resize(saved_rodata);
+            data_.resize(saved_data);
+            bss_.resize(saved_bss);
+            debug_.resize(saved_debug);
+            frame_size_ = saved_frame;
+            label_counter_ = saved_label;
+        }
+        return parse_conditional();
+    }
+
+    TypePtr parse_conditional() {
+        TypePtr condition = parse_logical_or();
+        if (!match("?")) {
+            return condition;
+        }
+        value_to_integer(condition);
+        const std::string else_label = new_label("condelse");
+        const std::string end_label = new_label("condend");
+        emit("    CMP R0, #0");
+        emit("    JZ " + else_label);
+        TypePtr result = gen_expression();
+        expect(":");
+        emit("    JMP " + end_label);
+        emit(else_label + ":");
+        TypePtr alternative = gen_expression();
+        convert_value(alternative, result);
+        emit(end_label + ":");
+        return result;
+    }
+
     void gen_binary_chain(TypePtr (Compiler::*next)(), const std::vector<std::string>& ops) {
         TypePtr left = (this->*next)();
         while (true) {
@@ -2157,6 +2298,15 @@ private:
                 address = true;
                 continue;
             }
+            if (peek().text == "++" || peek().text == "--") {
+                if (!address) {
+                    error("increment/decrement requires an lvalue");
+                }
+                const std::string op = take().text;
+                gen_increment(type, op == "++" ? 1 : -1, false);
+                address = false;
+                break;
+            }
             break;
         }
         return type;
@@ -2248,6 +2398,15 @@ private:
         if (peek().text == "__builtin_offsetof") {
             take();
             return parse_offsetof();
+        }
+        if (peek().text == "++" || peek().text == "--") {
+            const std::string op = take().text;
+            TypePtr type;
+            if (!gen_lvalue(type)) {
+                error("increment/decrement requires an lvalue");
+            }
+            gen_increment(type, op == "++" ? 1 : -1, true);
+            return type;
         }
         if (match("-")) {
             TypePtr type = parse_unary();
@@ -2659,6 +2818,11 @@ private:
                            type->kind == Type::Kind::Union ||
                            type->kind == Type::Kind::Array;
             gen_lvalue_address(name);
+            if (peek().text == "++" || peek().text == "--") {
+                const std::string op = take().text;
+                gen_increment(type, op == "++" ? 1 : -1, false);
+                return type;
+            }
             if (!address) {
                 gen_load(type);
             }
