@@ -2167,6 +2167,18 @@ TEST_CASE("auto deduces class return types from calls") {
     CHECK(program.result == 10);
 }
 
+TEST_CASE("constructors are selected by class argument type") {
+    const ProgramResult program = compile_and_run(
+        "struct Value {\n"
+        "    int number;\n"
+        "    Value(int value) { number = value; }\n"
+        "    Value(Value other) { number = other.number; }\n"
+        "};\n"
+        "int main() { Value first(42); Value second{first}; return second.number; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("functions return braced initializer_lists") {
     const ProgramResult program = compile_and_run(
         "#include <initializer_list>\n"

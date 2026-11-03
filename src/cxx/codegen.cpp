@@ -3252,7 +3252,7 @@ private:
             error(*info->decl, "cannot instantiate abstract class: " + info->qualified);
             return;
         }
-        Function* constructor = find_constructor(info, arguments.size());
+        Function* constructor = find_constructor_for_arguments(info, arguments);
         if (constructor != nullptr &&
             !can_access(constructor->owner, constructor->access)) {
             error(*info->decl, "constructor is not accessible");
@@ -5821,6 +5821,40 @@ private:
         return nullptr;
     }
 
+    Function* find_constructor_for_arguments(
+        ClassInfo* info, const std::vector<ExprPtr>& arguments) {
+        Function* best = nullptr;
+        int best_score = -100000;
+        for (ClassInfo* current = info; current != nullptr; current = current->base) {
+            for (Function* constructor : current->constructors) {
+                if (constructor->parameters.size() != arguments.size()) {
+                    continue;
+                }
+                int score = 0;
+                for (std::size_t index = 0; index < arguments.size(); ++index) {
+                    const TypePtr parameter =
+                        resolve_type(constructor->parameters[index]);
+                    const TypePtr argument =
+                        arguments[index] ? resolve_type(type_of(*arguments[index]))
+                                         : nullptr;
+                    ClassInfo* parameter_class = class_of(parameter);
+                    ClassInfo* argument_class =
+                        argument ? class_of(argument) : nullptr;
+                    if (parameter_class != nullptr || argument_class != nullptr) {
+                        score += parameter_class == argument_class ? 10 : -100;
+                    } else {
+                        score += 1;
+                    }
+                }
+                if (score > best_score) {
+                    best_score = score;
+                    best = constructor;
+                }
+            }
+        }
+        return best;
+    }
+
     void zero_object(int offset, int size) {
         for (int cursor = 0; cursor < size; cursor += 4) {
             emit("    MOV R0, #0");
@@ -5834,7 +5868,7 @@ private:
             error(*info->decl, "cannot instantiate abstract class: " + info->qualified);
             return;
         }
-        Function* constructor = find_constructor(info, arguments.size());
+        Function* constructor = find_constructor_for_arguments(info, arguments);
         if (constructor != nullptr &&
             !can_access(constructor->owner, constructor->access)) {
             error(*info->decl, "constructor is not accessible");

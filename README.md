@@ -15,7 +15,8 @@ supports integer, `short`/`unsigned short`, `unsigned int`/`unsigned char`,
 `double` scalars with FP calls, expressions, multidimensional arrays, global and
 local aggregate/array initializers, designated initializers, compound
 assignment, `++`/`--`, conditional
-expressions, `do`-`while`, and switch statements. The C++ subset covers classes,
+expressions, `do`-`while`, and switch statements. The C++ subset covers classes
+with type-aware constructor selection,
 inheritance, virtual dispatch/RTTI, function and class templates with explicit
 specializations (full and pointer-pattern partial), integer non-type parameters and array bounds with constant multipliers/offsets, template static data and function-local statics merged across translation units, 64-bit `long long` locals/functions/globals/fields/static/arrays/references/thread-locals/arithmetic/compound-assignment/casts/float-conversion/wide-shifts/`printf`, matrices,
 exceptions/unwinding, `new`/`delete`, callable `std::thread` (function pointers, captureless and capturing lambdas, with cluster runtime coverage for all three, mutex synchronization, shared globals, and detached workers) /`std::thread::id`/`kr32::thread::id`/TLS/atomics, coarse timed `try_lock_for`/`sleep_for`/`sleep_until`/condition `wait_for`,
