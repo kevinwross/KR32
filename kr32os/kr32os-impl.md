@@ -202,16 +202,16 @@ These are shared by M1-M4 and must be implemented in order.
 
 Tasks:
 
-- [ ] Add `build.ps1`, `build.sh`, and `CMakeLists.txt` with a `NONE` project.
-- [ ] Build the BIOS flat at `0xFFFF_0000`.
-- [ ] Build the kernel flat at `0x0002_0000`.
-- [ ] Minimal `bios/entry.S`: reset vector jumps to `0x0002_0000`.
-- [ ] Minimal `boot/entry.S`: set stack, call `kmain`.
-- [ ] Minimal `kernel/main.c`: print `KR32OS M0` through the temporary host
+- [x] Add `build.ps1`, `build.sh`, and `CMakeLists.txt` with a `NONE` project.
+- [x] Build the BIOS flat at `0xFFFF_0000`.
+- [x] Build the kernel flat at `0x0002_0000`.
+- [x] Minimal `bios/entry.S`: reset vector jumps to `0x0002_0000`.
+- [x] Minimal `boot/entry.S`: set stack, call `kmain`.
+- [x] Minimal `kernel/main.c`: print `KR32OS M0` through the temporary host
       `putchar` debug path, then exit 0.
-- [ ] Add CTest `run_os_m0` that runs the built OS and checks the banner/exit.
-- [ ] Update `kr32os/README.md` with build commands.
-- [ ] Log the milestone.
+- [x] Add CTest `run_os_m0` that runs the built OS and checks the banner/exit.
+- [x] Update `kr32os/README.md` with build commands.
+- [x] Log the milestone.
 
 Acceptance:
 

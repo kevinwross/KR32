@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 11:21 -08:00
+> **Last updated:** 2026-11-04 11:23 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1731,6 +1731,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-04 11:21 -08:00** — Approved the five M0-M4 plan decisions:
       CRC-checked kernel.meta, form-feed clear, saved-context trampoline,
       M0-first ordering, and a 10,000-instruction virtual timer tick.
+- **2026-11-04 11:23 -08:00** — KR32OS M0 complete: PowerShell/Bash/CMake
+      build scaffolding, flat BIOS and kernel, banner, and `run_os_m0` CTest.
+      Windows and WSL builds pass.
 
 ## 10. Updating this file
 

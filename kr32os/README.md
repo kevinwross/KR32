@@ -14,6 +14,29 @@ Scaffold only. Architecture is recorded in [DESIGN.md](DESIGN.md); the M0-M4
 implementation plan is in [kr32os-impl.md](kr32os-impl.md) and is pending review
 before coding starts.
 
+## Build
+
+Windows:
+
+```text
+powershell -ExecutionPolicy Bypass -File kr32os/build.ps1
+```
+
+WSL/Linux:
+
+```text
+bash kr32os/build.sh
+```
+
+Both scripts accept `KR32` through the environment; `build.ps1` also accepts
+`-Kr32 <path>`. The default is the host Debug build.
+
+Run M0:
+
+```text
+kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+```
+
 ## Planned layout
 
 ```text

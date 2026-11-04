@@ -138,6 +138,13 @@ add_test(NAME run_os_smoke
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsSmoke.cmake)
 
+add_test(NAME run_os_m0
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsM0.cmake)
+
 add_test(NAME build_hello
     COMMAND $<TARGET_FILE:kr32> build
         ${CMAKE_SOURCE_DIR}/examples/hello.s
