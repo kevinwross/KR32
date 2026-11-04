@@ -276,7 +276,8 @@ Tasks:
 - [ ] Implement exception report for `#UD`, `#DIV0`, `#BRK`, `#PF`, `#GP`,
       `#ALIGN`, and `#DF`.
 - [ ] Route timer IRQ line through the IRQ router.
-- [ ] Program the timer for 100 Hz and count ticks.
+- [ ] Program a virtual 100 Hz timer using a fixed instruction-count reload;
+      document that this is not wall-clock time.
 - [ ] Include tick count in `mem` output.
 - [ ] Add kernel fault tests and timer IRQ test.
 - [ ] Run gates, log, and commit M3.
@@ -408,3 +409,5 @@ Also run `kr32 --smoke-ui` after UI input changes.
    scheduler arrives in M5.
 4. Approve starting M0 immediately after review, with host prerequisites H1-H4
    implemented in milestone order.
+5. Treat "100 Hz" as a virtual instruction-count timer, not wall-clock time;
+   KR32's timer device counts VM ticks and has no real-time calibration.
