@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 11:06 -08:00
+> **Last updated:** 2026-11-04 11:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1723,6 +1723,8 @@ Newest entries at the bottom. Use the local time zone.
       quoting rules, flat-initrd path model, and M5 block-IRQ transition.
 - **2026-11-04 11:06 -08:00** — Recorded W^X user mappings, kernel-only
       framebuffer access, init-test behavior, and eager fork plus initrd exec.
+- **2026-11-04 11:09 -08:00** — Recorded 32-byte directory entries, kernel
+      shell through M5, framebuffer text/fill API, and interruptible idle loop.
 
 ## 10. Updating this file
 

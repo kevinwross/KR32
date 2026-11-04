@@ -70,6 +70,10 @@ Status: draft for the interactive design session.
 - Init: M4 init test exits; the kernel shell remains.
 - Framebuffer: kernel-only initially; no direct user mapping.
 - Fork/exec: eager page copy plus initrd `exec`; copy-on-write later.
+- Directory entries: fixed 32-byte records with inode number and 28-byte name.
+- Shell: kernel shell remains through M5; user shell follows stable fork/exec and fds.
+- Framebuffer: kernel text console plus screen fill initially.
+- Idle cores: interruptible idle loop; timer/serial IRQs wake the core.
 
 
 ## Boot contract (initial assumption)
@@ -119,6 +123,18 @@ share the same page tables. Framebuffer PTEs are writable, non-executable, and
 supervisor-only initially. User processes do not map the framebuffer; the kernel
 draws directly or exposes a narrow drawing API. A trusted user-mode GUI process
 can receive a mapping later.
+
+The first kernel framebuffer API is a text console plus a full-screen fill:
+
+```text
+fb_fill(color)
+fb_console_putc(ch)
+fb_console_clear()
+```
+
+The text console uses a small fixed bitmap font and a configurable foreground
+and background color. Scrolling and a cursor are part of the console layer, not
+the raw framebuffer.
 
 The loader writes BootInfo at the fixed physical page `0x0003_F000` and passes
 its address in `R2`. The BIOS validates the magic, version, struct size, and
@@ -371,6 +387,16 @@ timestamps. Direct pointers cover small files without an indirect block; the
 single-indirect block covers the next stage of growth. Double-indirect blocks
 are deliberately deferred.
 
+Directory data is an array of fixed 32-byte entries:
+
+```c
+uint32_t inode;
+char name[28];
+```
+
+An inode number of zero marks an empty entry. Names are NUL-terminated within
+the 28-byte field. Fixed entries make scanning and validation simple.
+
 The block device is extended with an LBA register at offset `0x18`, addressed in
 512-byte sectors. A filesystem 4 KiB block is eight consecutive sectors. The
 existing DMA address/count interface remains. Requests complete immediately
@@ -411,7 +437,9 @@ process is disturbed.
 
 The M4 init process is a test program: it runs in user mode, prints a result, and
 exits. The kernel reaps it and the kernel shell continues. A user-mode shell can
-replace this later, but the kernel shell remains the recovery path.
+replace this later, but the kernel shell remains the recovery path. The switch is
+deferred until M5's fork/exec, descriptor table, and process lifecycle are
+stable.
 
 When `fork` arrives, it eagerly copies user pages into a new address space.
 `exec` loads a new flat image from the initrd into that address space. COW is a
@@ -470,6 +498,10 @@ user FP and transform-stack state correct even though switches are slower.
 The runnable queue is a circular doubly linked list. The scheduler takes the
 current thread off the head, runs it for one quantum, and appends it to the
 tail. There is one runnable thread per core in the first multicore milestone.
+
+When no thread is runnable, the core enters an interruptible idle loop with
+interrupts enabled. Timer and serial IRQs wake it. KR32 `HALT` stops a core
+permanently, so it is not used for idle.
 
 ## Multicore policy
 
@@ -546,8 +578,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- What are the filesystem inode and directory-entry field layouts?
-- When should a user-mode shell replace the kernel shell?
-- What drawing API should the kernel expose for the framebuffer?
+- What are the exact inode fields and permission bits?
 - When should eager fork copying become copy-on-write?
 - How should `exec` pass arguments and environment to the new image?
+- Which bitmap font and glyph size should the framebuffer console use?
+- When should the user shell become the default shell?
