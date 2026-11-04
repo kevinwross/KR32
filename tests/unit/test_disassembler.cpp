@@ -37,6 +37,18 @@ TEST_CASE("the disassembler prints the base instruction forms") {
           std::string::npos);
 }
 
+TEST_CASE("the disassembler prints bulk stack mnemonics") {
+    const std::string text = disassemble_text(
+        "PUSHR\n"
+        "POPR\n"
+        "PUSHFP\n"
+        "POPFP\n");
+    CHECK(text.find("PUSHR") != std::string::npos);
+    CHECK(text.find("POPR") != std::string::npos);
+    CHECK(text.find("PUSHFP") != std::string::npos);
+    CHECK(text.find("POPFP") != std::string::npos);
+}
+
 TEST_CASE("the disassembler shows the extension word target") {
     const std::string text = disassemble_text("JMP 0x00400000\n");
     CHECK(text.find("JMP 0x00400000") != std::string::npos);

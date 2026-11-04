@@ -134,7 +134,8 @@ displacement is inline or in the extension word.
 | 0x07 | `STORE8` | data movement |
 | 0x08 | `STORE16` | data movement |
 | 0x09 | `LEA` | data movement |
-| 0x0A–0x0F | reserved | |
+| 0x0A | `POPFP` | FP context (`F15..F0`) |
+| 0x0B–0x0F | reserved | |
 | 0x10 | `LOADX` | indexed |
 | 0x11 | `STOREX` | indexed |
 | 0x12 | `LOAD8UX` | indexed |
@@ -189,7 +190,9 @@ displacement is inline or in the extension word.
 | 0x4A | `WRCR` | system |
 | 0x4B | `RDSP` | transform stack |
 | 0x4C | `WRSP` | transform stack |
-| 0x4D–0x4F | reserved | |
+| 0x4D | `PUSHR` | bulk stack (`R1..R15`) |
+| 0x4E | `POPR` | bulk stack (`R15..R1`) |
+| 0x4F | `PUSHFP` | bulk FP stack (`F0..F15`) |
 
 ### 4.2 Memory extensions (0x50–0x5F)
 
@@ -211,7 +214,7 @@ displacement is inline or in the extension word.
 
 ### 4.4 Reserved (0x63–0x7F)
 
-The map uses 67 of the 128 top-level slots; 61 are reserved, 29 of them in
+The map uses 71 of the 128 top-level slots; 57 are reserved, 29 of them in
 `0x63–0x7F`. A reserved opcode raises `#UD`.
 
 ## 5. Base instructions
@@ -289,6 +292,10 @@ A count of zero leaves the destination unchanged and leaves `C` unchanged.
 | `RET` | | pop `PC` |
 | `PUSH` | `Rs` | `SP -= 4`; store `Rs` |
 | `POP` | `Rd` | load `Rd`; `SP += 4` |
+| `PUSHR` | | `SP -= 60`; push `R1..R15` in ascending order |
+| `POPR` | | pop `R15..R1`; `SP += 60` |
+| `PUSHFP` | | `SP -= 128`; push `F0..F15` as low word then high word |
+| `POPFP` | | pop `F15..F0` as high word then low word; `SP += 128` |
 | `ADJSP` | `#imm` | `SP += imm` |
 | `SETSP` | `Rs1` | `SP = Rs1` (used by the exception unwinder) |
 
@@ -296,8 +303,37 @@ The target is `Rs1` when `L = 0` and the inline/extension payload when `L = 1`.
 `JCOND` puts the condition in 16..13; `JMP` and `CALL` reserve that field.
 Branch targets must be 4-byte aligned; otherwise `#ALIGN`.
 
-`SP` must be 4-byte aligned for `PUSH`, `POP`, `CALL`, `RET`, and `ADJSP`;
-otherwise `#ALIGN`.
+`SP` must be 4-byte aligned for `PUSH`, `POP`, `PUSHR`, `POPR`, `PUSHFP`,
+`POPFP`, `CALL`, `RET`, and `ADJSP`; otherwise `#ALIGN`.
+
+`PUSHR`/`POPR` deliberately exclude `R0`: `R0` is the integer ABI return
+register, so a syscall wrapper can preserve `R1..R15` without destroying the
+dispatcher's result. Interrupt handlers that also need `R0` do:
+
+```asm
+PUSH R0
+PUSHR
+...
+POPR
+POP R0
+```
+
+`PUSHFP`/`POPFP` save the complete 64-bit bit pattern of all sixteen FPRs; they
+do not save `TSP` or tile registers. `TSP` is saved explicitly with `RDSP` and
+`WRSP`:
+
+```asm
+RDSP R0
+PUSH R0
+...
+POP R0
+WRSP R0
+```
+
+Bulk stack operations are not restartable if a stack access faults. `PUSHR` and
+`PUSHFP` restore `SP` to its original value when a store faults; words already
+written remain in memory. `POPR`/`POPFP` may leave earlier registers restored
+before the fault. Bulk operations leave the integer flags unchanged.
 
 #### Condition codes
 
@@ -551,6 +587,10 @@ has its own `PTBR`. There is no TLB in v1.
 | `FADD.S F1, F2, F3` | `0xC024_6000` |
 | `MMUL T1, T2, T3` | `0xC224_6000` |
 | `BSWAP R1, R2` | `0xC424_0000` |
+| `PUSHR` | `0x9A00_0000` |
+| `POPR` | `0x9C00_0000` |
+| `PUSHFP` | `0x9E00_0000` |
+| `POPFP` | `0x1400_0000` |
 
 The extension word is little-endian and is always the word after the base word.
 

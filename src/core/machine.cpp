@@ -1657,6 +1657,54 @@ StepResult Machine::execute(const isa::Instruction& instruction,
         tsp_ = regs_[rd];
         return finish_next();
 
+    case 0x4D: { // PUSHR (R1..R15)
+        const std::uint32_t old_sp = sp_;
+        for (std::size_t index = 1; index < 16; ++index) {
+            if (!push32(regs_[index])) {
+                sp_ = old_sp;
+                return fail_gp(sp_);
+            }
+        }
+        return finish_next();
+    }
+
+    case 0x4E: { // POPR (R15..R1)
+        for (std::size_t index = 15; index >= 1; --index) {
+            std::uint32_t value = 0;
+            if (!pop32(value)) {
+                return fail_gp(sp_);
+            }
+            regs_[index] = value;
+        }
+        return finish_next();
+    }
+
+    case 0x4F: { // PUSHFP (F0..F15)
+        const std::uint32_t old_sp = sp_;
+        for (std::size_t index = 0; index < 16; ++index) {
+            const std::uint64_t value = fpr_[index];
+            if (!push32(static_cast<std::uint32_t>(value)) ||
+                !push32(static_cast<std::uint32_t>(value >> 32U))) {
+                sp_ = old_sp;
+                return fail_gp(sp_);
+            }
+        }
+        return finish_next();
+    }
+
+    case 0x0A: { // POPFP (F15..F0)
+        for (int index = 15; index >= 0; --index) {
+            std::uint32_t high = 0;
+            std::uint32_t low = 0;
+            if (!pop32(high) || !pop32(low)) {
+                return fail_gp(sp_);
+            }
+            fpr_[static_cast<std::size_t>(index)] =
+                (static_cast<std::uint64_t>(high) << 32U) | low;
+        }
+        return finish_next();
+    }
+
     case 0x50: // FLOAD
     case 0x51: { // FSTORE
         std::uint32_t address = 0;

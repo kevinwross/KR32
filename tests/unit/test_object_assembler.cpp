@@ -195,6 +195,20 @@ TEST_CASE("object assembler emits source line records for assembly") {
     CHECK(find_symbol(image, ".Lsource_0") != nullptr);
 }
 
+TEST_CASE("object assembler encodes bulk stack operations") {
+    const container::Image image = assemble(
+        "PUSHR\n"
+        "POPR\n"
+        "PUSHFP\n"
+        "POPFP\n");
+    const container::Section* text = find_section(image, ".text");
+    REQUIRE(text != nullptr);
+    REQUIRE(text->data.size() == 4 * 4);
+    CHECK(word_at(text->data, 0) == 0x9A000000U);
+    CHECK(word_at(text->data, 4) == 0x9C000000U);
+    CHECK(word_at(text->data, 8) == 0x9E000000U);
+    CHECK(word_at(text->data, 12) == 0x14000000U);
+}
 TEST_CASE("object assembler rejects duplicate labels and undefined directives") {
     container::Image image;
     assembler::Error error;

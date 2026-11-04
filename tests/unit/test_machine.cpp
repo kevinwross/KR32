@@ -356,3 +356,50 @@ TEST_CASE("the same program produces the same state twice") {
     CHECK(first.sp() == second.sp());
     CHECK(first.ticks() == second.ticks());
 }
+
+TEST_CASE("PUSHR and POPR preserve R1 through R15 and leave R0 alone") {
+    Machine machine = make_machine();
+    write_instruction(machine, kr32::core::kRamBase, make(0x4D));
+    write_instruction(machine, kr32::core::kRamBase + 4, make(0x4E));
+    machine.reset(kr32::core::kRamBase);
+    const std::uint32_t stack = machine.stack_top() - 0x100;
+    machine.set_sp(stack);
+    machine.set_reg(0, 0xA0);
+    for (std::uint8_t index = 1; index < 16; ++index) {
+        machine.set_reg(index, 0x1000U + index);
+    }
+    REQUIRE(machine.step().kind == kr32::core::StepResult::Kind::Retired);
+    CHECK(machine.sp() == stack - 60);
+    CHECK(machine.reg(0) == 0xA0U);
+    for (std::uint8_t index = 1; index < 16; ++index) {
+        machine.set_reg(index, 0);
+    }
+    REQUIRE(machine.step().kind == kr32::core::StepResult::Kind::Retired);
+    CHECK(machine.sp() == stack);
+    CHECK(machine.reg(0) == 0xA0U);
+    for (std::uint8_t index = 1; index < 16; ++index) {
+        CHECK(machine.reg(index) == 0x1000U + index);
+    }
+}
+
+TEST_CASE("PUSHFP and POPFP preserve all FPR bit patterns") {
+    Machine machine = make_machine();
+    write_instruction(machine, kr32::core::kRamBase, make(0x4F));
+    write_instruction(machine, kr32::core::kRamBase + 4, make(0x0A));
+    machine.reset(kr32::core::kRamBase);
+    const std::uint32_t stack = machine.stack_top() - 0x100;
+    machine.set_sp(stack);
+    for (std::uint8_t index = 0; index < 16; ++index) {
+        machine.set_fpr(index, 0xDEAD'0000'0000'0000ULL | index);
+    }
+    REQUIRE(machine.step().kind == kr32::core::StepResult::Kind::Retired);
+    CHECK(machine.sp() == stack - 128);
+    for (std::uint8_t index = 0; index < 16; ++index) {
+        machine.set_fpr(index, 0);
+    }
+    REQUIRE(machine.step().kind == kr32::core::StepResult::Kind::Retired);
+    CHECK(machine.sp() == stack);
+    for (std::uint8_t index = 0; index < 16; ++index) {
+        CHECK(machine.fpr(index) == (0xDEAD'0000'0000'0000ULL | index));
+    }
+}

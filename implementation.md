@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 13:33 -08:00
+> **Last updated:** 2026-11-04 14:28 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1756,6 +1756,10 @@ Newest entries at the bottom. Use the local time zone.
       assembly `.file` line records for BIOS/boot/stubs, and automatic source
       following for assembly and C. `gui --os` now loads `.bin` plus its
       sibling `.sym`; both raw and container OS images are supported.
+- **2026-11-04 14:28 -08:00** — ISA bulk stack operations: `PUSHR`/`POPR`
+      for R1-R15 and `PUSHFP`/`POPFP` for all FPRs, with encoder, decoder,
+      assemblers, disassembler, help, docs, tests, and OS syscall/timer stubs
+      updated. TSP remains saved explicitly through `RDSP`/`WRSP`.
 
 ## 10. Updating this file
 

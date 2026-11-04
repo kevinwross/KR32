@@ -1155,7 +1155,9 @@ private:
         }
 
         if (mnemonic == "nop" || mnemonic == "ret" || mnemonic == "iret" ||
-            mnemonic == "halt" || mnemonic == "brk" || mnemonic == "fence") {
+            mnemonic == "halt" || mnemonic == "brk" || mnemonic == "fence" ||
+            mnemonic == "pushr" || mnemonic == "popr" ||
+            mnemonic == "pushfp" || mnemonic == "popfp") {
             if (!operands.empty()) {
                 return fail_operands("no operands");
             }
@@ -1165,6 +1167,10 @@ private:
             if (mnemonic == "halt") instruction.opcode = 0x43;
             if (mnemonic == "brk") instruction.opcode = 0x44;
             if (mnemonic == "fence") instruction.opcode = 0x48;
+            if (mnemonic == "pushr") instruction.opcode = 0x4D;
+            if (mnemonic == "popr") instruction.opcode = 0x4E;
+            if (mnemonic == "pushfp") instruction.opcode = 0x4F;
+            if (mnemonic == "popfp") instruction.opcode = 0x0A;
             return true;
         }
 

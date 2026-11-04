@@ -329,6 +329,18 @@ std::string format_instruction(const isa::Instruction& instruction,
     case 0x4C:
         out << "WRSP " << reg(instruction.rd);
         break;
+    case 0x4D:
+        out << "PUSHR";
+        break;
+    case 0x4E:
+        out << "POPR";
+        break;
+    case 0x4F:
+        out << "PUSHFP";
+        break;
+    case 0x0A:
+        out << "POPFP";
+        break;
 
     case 0x50:
     case 0x51: {

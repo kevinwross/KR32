@@ -70,6 +70,10 @@ TEST_CASE("golden base encodings") {
     expect_encoding(make(0x39, 0, 7, 0), 0x720E0000);
     expect_encoding(make(0x3E, 0, 0, 0, false, true, -16), 0x7C000FF0);
     expect_encoding(make(0x43), 0x86000000);
+    expect_encoding(make(0x4D), 0x9A000000);
+    expect_encoding(make(0x4E), 0x9C000000);
+    expect_encoding(make(0x4F), 0x9E000000);
+    expect_encoding(make(0x0A), 0x14000000);
     expect_encoding(make(0x60, 1, 2, 3), 0xC0246000);
     expect_encoding(make(0x61, 1, 2, 3), 0xC2246000);
     expect_encoding(make(0x62, 1, 2, 0), 0xC4240000);
