@@ -451,7 +451,7 @@ void DebuggerUI::draw_settings(Canvas& canvas) {
 
     canvas.text(x + 18, y + 46, "Command line arguments", kText, FontRole::MonoSmall);
     canvas.text(x + 18, y + 64,
-                "Passed to sys_argc/sys_arg; quote arguments with spaces.",
+                "Passed to main(argc, argv) and sys_argc/sys_arg; quote spaces.",
                 kDim, FontRole::MonoSmall);
     canvas.fill(settings_args_rect_,
                 settings_args_focused_ ? Color{34, 46, 58, 255} : kPanelAlt);
@@ -516,6 +516,8 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
         return false;
     }
     session_.set_arguments(parsed.arguments);
+    session_.set_program_name(
+        std::filesystem::path(path).filename().string());
     std::string source_path;
     if (has_c_extension(path)) {
         if (!compile_c_source(path, image_, error, settings_write_listing_)) {

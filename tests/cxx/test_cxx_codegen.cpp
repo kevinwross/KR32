@@ -89,6 +89,14 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
             current.halt(current.reg(0));
             return true;
         }
+        if (vector == 42) {
+            current.set_reg(0, 0);
+            return true;
+        }
+        if (vector == 43) {
+            current.set_reg(0, 0xFFFF'FFFCU);
+            return true;
+        }
         if (vector >= 44 && vector <= 50) {
             current.set_reg(0, 0);
             return true;

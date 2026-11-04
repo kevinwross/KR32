@@ -124,6 +124,9 @@ public:
     [[nodiscard]] const std::vector<std::string>& arguments() const {
         return arguments_;
     }
+    void set_program_name(std::string name) {
+        program_name_ = std::move(name);
+    }
 
     void set_breakpoint(std::uint32_t address);
     void clear_breakpoint(std::uint32_t address);
@@ -171,6 +174,7 @@ private:
     std::function<std::vector<ThreadInfo>()> thread_provider_;
     std::uint32_t selected_thread_ = 0;
     std::vector<std::string> arguments_;
+    std::string program_name_ = "program";
     std::string console_;
 };
 

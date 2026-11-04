@@ -104,6 +104,13 @@ add_test(NAME run_cxx_tls
 set_tests_properties(run_cxx_tls PROPERTIES
     PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
+add_test(NAME run_mainentry
+    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/mainentry.c --run
+            --arg one --arg "two words"
+            -o ${CMAKE_BINARY_DIR}/mainentry.k32)
+set_tests_properties(run_mainentry PROPERTIES
+    PASS_REGULAR_EXPRESSION "argv\\[2\\] = two words")
+
 add_test(NAME run_demo
     COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)
 set_tests_properties(run_demo PROPERTIES

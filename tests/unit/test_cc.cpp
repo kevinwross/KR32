@@ -65,6 +65,14 @@ ProgramResult compile_and_run(std::string_view source) {
             current.halt(current.reg(0));
             return true;
         }
+        if (vector == 42) {
+            current.set_reg(0, 0);
+            return true;
+        }
+        if (vector == 43) {
+            current.set_reg(0, 0xFFFF'FFFCU);
+            return true;
+        }
         return false;
     });
 

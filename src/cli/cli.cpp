@@ -228,7 +228,15 @@ int run_machine(core::Machine& machine,
                 std::uint64_t max_steps,
                 bool trace,
                 bool stats,
-                const vm::HostOptions& host_options = {}) {
+                const vm::HostOptions& host_options = {},
+                bool setup_arguments = true) {
+    if (setup_arguments) {
+        std::string argument_error;
+        if (!machine.setup_arguments(host_options.args, "program", argument_error)) {
+            std::printf("ARGV %s\n", argument_error.c_str());
+            return 1;
+        }
+    }
     vm::Host host(host_options);
     host.install(machine);
 
@@ -1211,7 +1219,8 @@ int command_vm(int argc, char** argv) {
         machine.reset();
     }
 
-    return run_machine(machine, max_steps, trace, stats, host_options);
+    return run_machine(machine, max_steps, trace, stats, host_options,
+                       bios.empty());
 }
 
 std::vector<std::string> tokenize_shell(const std::string& line) {

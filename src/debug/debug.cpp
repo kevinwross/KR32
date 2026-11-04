@@ -156,6 +156,9 @@ bool Session::load(const container::Image& image, std::string& error) {
         }
     }
     machine_.reset(image.entry);
+    if (!machine_.setup_arguments(arguments_, program_name_, error)) {
+        return false;
+    }
     machine_.set_syscall_handler([this](core::Machine& current, std::uint32_t vector) {
         if (vector == 33) {
             console_.push_back(static_cast<char>(current.reg(0) & 0xFFU));

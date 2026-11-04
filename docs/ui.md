@@ -81,7 +81,8 @@ one 16-byte row.
 
 The toolbar gear at the upper right opens the settings dialog. It provides:
 
-- **Command line arguments** passed to the guest through `sys_argc`/`sys_arg`.
+- **Command line arguments** passed to `main(argc, argv)` and available through
+  `sys_argc`/`sys_arg`.
   Arguments use Windows-style quoting; backslashes are literal unless they
   precede a double quote.
 - **Stop at main after load**; disable it to pause at the image entry instead.

@@ -144,6 +144,58 @@ void Machine::reset(std::uint32_t pc, std::uint32_t sp) {
     exit_code_ = 0;
 }
 
+bool Machine::setup_arguments(const std::vector<std::string>& arguments,
+                              std::string_view program_name,
+                              std::string& error) {
+    std::vector<std::string> all;
+    all.reserve(arguments.size() + 1);
+    all.emplace_back(program_name.empty() ? "program" : std::string(program_name));
+    all.insert(all.end(), arguments.begin(), arguments.end());
+
+    const std::uint32_t count = static_cast<std::uint32_t>(all.size());
+    std::uint64_t bytes = static_cast<std::uint64_t>(count + 1) * 4U;
+    for (const std::string& argument : all) {
+        bytes += static_cast<std::uint64_t>(argument.size()) + 1U;
+    }
+    bytes = (bytes + 15U) & ~std::uint64_t{15};
+    if (sp_ < kRamBase + 4096U ||
+        sp_ - kRamBase < bytes + 4096U) {
+        error = "not enough stack space for argc/argv";
+        return false;
+    }
+
+    const std::uint32_t base =
+        (sp_ - static_cast<std::uint32_t>(bytes)) & ~15U;
+    const std::uint32_t strings = base + (count + 1U) * 4U;
+    std::uint32_t cursor = strings;
+    for (std::uint32_t index = 0; index < count; ++index) {
+        const std::string& argument = all[index];
+        if (!write32(base + index * 4U, cursor)) {
+            error = "cannot write argv pointer";
+            return false;
+        }
+        for (char ch : argument) {
+            if (!write8(cursor++, static_cast<std::uint8_t>(ch))) {
+                error = "cannot write argv string";
+                return false;
+            }
+        }
+        if (!write8(cursor++, 0)) {
+            error = "cannot write argv terminator";
+            return false;
+        }
+    }
+    if (!write32(base + count * 4U, 0)) {
+        error = "cannot write argv null terminator";
+        return false;
+    }
+    sp_ = base;
+    ksp_ = base;
+    regs_[0] = count;
+    regs_[1] = base;
+    return true;
+}
+
 bool Machine::load_image(std::uint32_t address,
                          const std::uint8_t* data,
                          std::size_t size) {

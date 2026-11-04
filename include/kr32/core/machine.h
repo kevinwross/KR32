@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <functional>
 #include <memory>
+#include <string>
+#include <string_view>
 #include <vector>
 
 #include "kr32/isa/encoding.h"
@@ -104,6 +106,12 @@ public:
 
     // Explicit reset used by raw-image tests and the CLI.
     void reset(std::uint32_t pc, std::uint32_t sp = 0);
+
+    // Builds argc/argv on the guest stack, lowers SP below the argument block,
+    // and places argc in R0 and argv in R1 for the startup stub to forward.
+    [[nodiscard]] bool setup_arguments(
+        const std::vector<std::string>& arguments,
+        std::string_view program_name, std::string& error);
 
     [[nodiscard]] bool load_image(std::uint32_t address,
                                   const std::uint8_t* data,

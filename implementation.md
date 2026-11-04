@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 08:17 -08:00
+> **Last updated:** 2026-11-04 08:52 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1677,6 +1677,13 @@ Newest entries at the bottom. Use the local time zone.
       delivery and settings-dialog rendering.
 - **2026-11-04 08:17 -08:00** — Added settings-dialog regression coverage and
       fixed the minimum-width layout clamp that could assert at 800px wide.
+- **2026-11-04 08:37 -08:00** — The program loader now builds `argc`/`argv` on the guest stack
+      before entry and passes them to `main`; added
+      `examples/mainentry.c` and a CLI regression.
+- **2026-11-04 08:52 -08:00** — `main(argc, argv)` is now populated by the
+      program loader from `HostOptions.args`; added
+      `examples/mainentry.c`, settings-dialog controls, and C/C++ argv
+      regressions. 347 cases / 5934 assertions.
 
 ## 10. Updating this file
 

@@ -160,4 +160,11 @@ The assembly startup/runtime provides `_start`, `putchar`, `getchar`, `exit`,
 `open`, `close`, `read`, `write`, `seek`, `sys_time`, `sys_random`, `sys_argc`,
 `sys_arg`, `memcpy`, `memset`, and `strlen`.
 
+The program loader builds a conventional `argv` array on the guest stack before
+entry and places `argc` in `R0` and `argv` in `R1`; `_start` forwards those
+registers to `main`. `argv[0]` is the loader-provided program label (`program`
+for the CLI default, or the loaded source filename in the GUI); host `--arg`
+values follow as `argv[1..]`. Programs may also use `sys_argc`/`sys_arg`
+directly.
+
 `malloc`, `free`, `calloc`, `realloc`, and `printf` are implemented in C.

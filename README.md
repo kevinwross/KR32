@@ -100,6 +100,7 @@ kr32 size hello.k32
 kr32 build examples/hello.s -o hello.k32 --run
 kr32 cc examples/hello.c -S -o hello.s
 kr32 build examples/hello.c -o hello-c.k32 --run
+kr32 build examples/mainentry.c --run --arg one --arg "two words"
 kr32 build examples/types.c -o types-c.k32 --run
 kr32 build examples/floats.c -o floats-c.k32 --run
 kr32 build examples/varargs.c -o varargs-c.k32 --run

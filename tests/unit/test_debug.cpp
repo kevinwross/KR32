@@ -86,6 +86,21 @@ TEST_CASE("debug sessions expose guest command-line arguments") {
     CHECK(session.machine().exit_code() == 0);
 }
 
+TEST_CASE("C++ debug sessions expose guest command-line arguments") {
+    const container::Image image = compile_cxx_debug_image(
+        "int main(int argc, char** argv) {\n"
+        "    if (argc != 2) return 1;\n"
+        "    return argv[1][0] == 'h' ? 0 : 2;\n"
+        "}\n");
+    debug::Session session;
+    session.set_arguments({"hello"});
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const core::StepResult result = session.run(100000);
+    CHECK(result.kind == core::StepResult::Kind::Halted);
+    CHECK(session.machine().exit_code() == 0);
+}
+
 TEST_CASE("C++ debug info covers templates and lambdas") {
     const container::Image image = compile_cxx_debug_image(
         "template <typename T> T twice(T value) { return value + value; }\n"
