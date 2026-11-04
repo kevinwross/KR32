@@ -814,6 +814,8 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
     register_cells_.clear();
     fpr_cells_.clear();
     flag_cells_.clear();
+    register_cells_.resize(16);
+    fpr_cells_.resize(16);
     const int column_width = std::max(100, (rect.width - 8) / 2);
 
     pc_cell_ = Rect{rect.x - 2, y - 2, column_width - 4, 18};
@@ -869,7 +871,7 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
             const int index = row + column * 8;
             const int x = rect.x + column * column_width;
             const Rect cell{x - 2, y - 2, column_width - 4, 16};
-            register_cells_.push_back(cell);
+            register_cells_[static_cast<std::size_t>(index)] = cell;
             if (editing_register_ == index) {
                 canvas.fill(cell, Color{44, 64, 84, 255});
                 canvas.frame(cell, kAccent);
@@ -920,7 +922,7 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
                 }
             }
             const Rect cell{x - 2, y - 2, column_width - 4, 16};
-            fpr_cells_.push_back(cell);
+            fpr_cells_[static_cast<std::size_t>(index)] = cell;
             if (hover_fpr_ == index) {
                 canvas.fill(cell, Color{42, 58, 74, 255});
                 canvas.frame(cell, kAccent);
