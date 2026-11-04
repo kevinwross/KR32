@@ -79,8 +79,13 @@ private:
     void finish_register_edit(bool commit);
     void begin_fpr_edit(int index);
     void finish_fpr_edit(bool commit);
+    void begin_tile_edit(int index);
+    void finish_tile_edit(bool commit);
     void draw_fpr_popup(Canvas& canvas);
+    void draw_tile_popup(Canvas& canvas);
     void draw_fpr_tooltip(Canvas& canvas);
+    void draw_tile_tooltip(Canvas& canvas);
+    void draw_control_tooltip(Canvas& canvas);
     void draw_register_tooltip(Canvas& canvas);
     void draw_flag_tooltip(Canvas& canvas);
     void draw_memory_tooltip(Canvas& canvas);
@@ -172,6 +177,22 @@ private:
     Rect fpr_input_rect_{};
     Rect fpr_ok_rect_{};
     Rect fpr_cancel_rect_{};
+    std::vector<Rect> tile_cells_;
+    int hover_tile_ = -1;
+    int editing_tile_ = -1;
+    std::string tile_edit_;
+    bool tile_edit_fresh_ = true;
+    Rect tile_popup_{};
+    Rect tile_input_rect_{};
+    Rect tile_ok_rect_{};
+    Rect tile_cancel_rect_{};
+    struct ControlHoverRow {
+        Rect row{};
+        std::string title;
+        std::string detail;
+    };
+    std::vector<ControlHoverRow> control_hover_rows_;
+    int hover_control_ = -1;
 
     struct VarHoverRow {
         Rect row{};

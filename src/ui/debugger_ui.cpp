@@ -6,6 +6,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
@@ -813,9 +814,12 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
     int y = rect.y;
     register_cells_.clear();
     fpr_cells_.clear();
+    tile_cells_.clear();
     flag_cells_.clear();
+    control_hover_rows_.clear();
     register_cells_.resize(16);
     fpr_cells_.resize(16);
+    tile_cells_.resize(16);
     const int column_width = std::max(100, (rect.width - 8) / 2);
 
     pc_cell_ = Rect{rect.x - 2, y - 2, column_width - 4, 18};
@@ -934,42 +938,88 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
     }
 
     canvas.fill(Rect{rect.x, y + 2, rect.width, 1}, kBorder);
-    y += 8;
+    y += 9;
+    const Rect tsp_row{rect.x - 2, y - 2, rect.width - 4, 18};
+    control_hover_rows_.push_back(
+        ControlHoverRow{tsp_row, "TSP 0x" + hex(machine.tsp(), 8),
+                        "Transform stack pointer (TSP). RDSP/WRSP access it; "
+                        "the 4x4 matrix below is tile T0."});
+    if (hover_control_ == static_cast<int>(control_hover_rows_.size()) - 1) {
+        canvas.fill(tsp_row, Color{42, 58, 74, 255});
+    }
     canvas.text(rect.x, y, "TSP " + hex(machine.tsp(), 8), kAccent, FontRole::MonoSmall);
-    y += 14;
+    canvas.text(rect.x + rect.width - 54, y, "T0 4x4", kDim, FontRole::MonoSmall);
+    y += 21;
+    const int tile_column_width = std::max(46, (rect.width - 8) / 4);
     for (int row = 0; row < 4; ++row) {
-        std::string line;
         for (int column = 0; column < 4; ++column) {
+            const int index = row * 4 + column;
+            const int x = rect.x + column * tile_column_width;
+            const Rect cell{x, y - 2, tile_column_width - 4, 17};
+            tile_cells_[static_cast<std::size_t>(index)] = cell;
+            if (hover_tile_ == index) {
+                canvas.fill(cell, Color{42, 58, 74, 255});
+                canvas.frame(cell, kAccent);
+            } else if (index == editing_tile_) {
+                canvas.fill(cell, Color{44, 64, 84, 255});
+                canvas.frame(cell, kAccent);
+            } else if ((row + column) % 2 == 0) {
+                canvas.fill(cell, Color{24, 34, 44, 255});
+            }
             char buffer[24] = {};
-            std::snprintf(buffer, sizeof(buffer), "%7.2f",
-                          machine.tile_value(0, static_cast<std::size_t>(row * 4 + column)));
-            line += buffer;
-            line += " ";
+            std::snprintf(buffer, sizeof(buffer), "%.2f", machine.tile_value(
+                0, static_cast<std::size_t>(index)));
+            canvas.text(x + 3, y,
+                        editing_tile_ == index ? tile_edit_ + "_" : buffer,
+                        editing_tile_ == index ? kAccent : kText,
+                        FontRole::MonoSmall);
         }
-        canvas.text(rect.x, y, line, kText, FontRole::MonoSmall);
-        y += 11;
+        y += 19;
     }
 
     canvas.fill(Rect{rect.x, y + 2, rect.width, 1}, kBorder);
-    y += 8;
+    y += 9;
     for (std::uint32_t number : {3U, 6U, 10U}) {
         std::uint32_t value = 0;
         if (machine.read_control_register(number, value)) {
+            const std::string title =
+                "CR" + std::to_string(number) + " 0x" + hex(value, 8);
+            std::string detail;
+            if (number == 3) {
+                detail = "Virtual base of the 256-entry interrupt vector table (VTBR).";
+            } else if (number == 6) {
+                detail = "Kernel stack pointer (KSP).";
+            } else {
+                detail = "Memory control (MCTL): bit 0 PGE, bit 1 WP.";
+            }
+            const Rect row{rect.x - 2, y - 2, rect.width - 4, 18};
+            control_hover_rows_.push_back(ControlHoverRow{row, title, detail});
+            if (hover_control_ == static_cast<int>(control_hover_rows_.size()) - 1) {
+                canvas.fill(row, Color{42, 58, 74, 255});
+            }
             canvas.text(rect.x, y, "CR" + std::to_string(number) + " " + hex(value, 8),
                         kDim, FontRole::MonoSmall);
-            y += 12;
+            y += 18;
         }
     }
     std::uint32_t ptbr = 0;
     if (machine.read_control_register(8, ptbr)) {
+        const std::string title = "PTBR 0x" + hex(ptbr, 8);
+        const Rect row{rect.x - 2, y - 2, rect.width - 4, 18};
+        control_hover_rows_.push_back(
+            ControlHoverRow{row, title,
+                            "Physical base of the page directory. Must be 4 KiB aligned."});
+        if (hover_control_ == static_cast<int>(control_hover_rows_.size()) - 1) {
+            canvas.fill(row, Color{42, 58, 74, 255});
+        }
         canvas.text(rect.x, y, "PTBR " + hex(ptbr, 8), kDim, FontRole::MonoSmall);
-        y += 12;
+        y += 18;
         for (int index = 0; index < 4; ++index) {
             std::uint32_t entry = 0;
             if (machine.read_physical32(ptbr + static_cast<std::uint32_t>(index * 4), entry)) {
                 canvas.text(rect.x, y, "PTE" + std::to_string(index) + " " + hex(entry, 8),
                             kDim, FontRole::MonoSmall);
-                y += 12;
+                y += 14;
             }
         }
     }
@@ -1157,6 +1207,146 @@ void DebuggerUI::finish_fpr_edit(bool commit) {
     editing_fpr_ = -1;
     fpr_edit_.clear();
     fpr_edit_fresh_ = false;
+}
+
+void DebuggerUI::begin_tile_edit(int index) {
+    if (index < 0 || index > 15) return;
+    editing_tile_ = index;
+    char buffer[32] = {};
+    std::snprintf(buffer, sizeof(buffer), "%.6g",
+                  session_.core(selected_core_).tile_value(
+                      0, static_cast<std::size_t>(index)));
+    tile_edit_ = buffer;
+    tile_edit_fresh_ = true;
+}
+
+void DebuggerUI::finish_tile_edit(bool commit) {
+    if (editing_tile_ < 0) return;
+    if (commit && !tile_edit_.empty()) {
+        char* end = nullptr;
+        const float value = std::strtof(tile_edit_.c_str(), &end);
+        if (end != nullptr && *end == '\0') {
+            session_.core(selected_core_).set_tile_value(
+                0, static_cast<std::size_t>(editing_tile_), value);
+            status_ = "T" + std::to_string(editing_tile_ / 4) + "[" +
+                      std::to_string(editing_tile_ % 4) + "] updated";
+        } else {
+            status_ = "invalid floating-point value";
+        }
+    }
+    editing_tile_ = -1;
+    tile_edit_.clear();
+    tile_edit_fresh_ = false;
+}
+
+void DebuggerUI::draw_tile_popup(Canvas& canvas) {
+    if (editing_tile_ < 0) return;
+    const int width = 430;
+    const int height = 170;
+    const int x = (canvas.width() - width) / 2;
+    const int y = (canvas.height() - height) / 2;
+    tile_popup_ = Rect{x, y, width, height};
+    tile_input_rect_ = Rect{x + 16, y + 42, width - 32, 24};
+    tile_ok_rect_ = Rect{x + width - 190, y + height - 40, 80, 24};
+    tile_cancel_rect_ = Rect{x + width - 100, y + height - 40, 84, 24};
+    canvas.fill(tile_popup_, Color{18, 26, 34, 255});
+    canvas.frame(tile_popup_, kAccent, 2);
+    canvas.text(x + 16, y + 14,
+                "Edit T" + std::to_string(editing_tile_ / 4) + "[" +
+                    std::to_string(editing_tile_ % 4) + "]",
+                kAccent, FontRole::UiBold);
+    canvas.text(x + 16, y + 28,
+                "Floating point: 3.14159   100   1e2   -0.5",
+                kDim, FontRole::MonoSmall);
+    canvas.fill(tile_input_rect_, kPanelAlt);
+    canvas.frame(tile_input_rect_, kAccent);
+    canvas.text(tile_input_rect_.x + 6, tile_input_rect_.y + 4,
+                tile_edit_ + "_", kText, FontRole::MonoSmall);
+    char expanded[32] = {};
+    char* end = nullptr;
+    const float value = std::strtof(tile_edit_.c_str(), &end);
+    if (end != nullptr && *end == '\0') {
+        std::snprintf(expanded, sizeof(expanded), "%.6f", value);
+    } else {
+        std::snprintf(expanded, sizeof(expanded), "invalid");
+    }
+    canvas.text(x + 16, y + 76, "Value: " + std::string(expanded), kDim,
+                FontRole::MonoSmall);
+    canvas.text(x + 16, y + 94, "Stored as 32-bit float in tile T0.", kDim,
+                FontRole::MonoSmall);
+    canvas.fill(tile_ok_rect_, kPanelAlt);
+    canvas.frame(tile_ok_rect_, kBorder);
+    canvas.text(tile_ok_rect_.x + 26, tile_ok_rect_.y + 4, "OK", kText,
+                FontRole::MonoSmall);
+    canvas.fill(tile_cancel_rect_, kPanelAlt);
+    canvas.frame(tile_cancel_rect_, kBorder);
+    canvas.text(tile_cancel_rect_.x + 10, tile_cancel_rect_.y + 4, "CANCEL", kText,
+                FontRole::MonoSmall);
+}
+
+void DebuggerUI::draw_tile_tooltip(Canvas& canvas) {
+    if (hover_tile_ < 0 || hover_tile_ > 15 || editing_tile_ >= 0 || menu_.open) return;
+    const float value = session_.core(selected_core_).tile_value(
+        0, static_cast<std::size_t>(hover_tile_));
+    std::uint32_t bits = 0;
+    std::memcpy(&bits, &value, sizeof(bits));
+    char expanded[32] = {};
+    std::snprintf(expanded, sizeof(expanded), "%.6f", value);
+    std::vector<std::string> lines{
+        "T" + std::to_string(hover_tile_ / 4) + "[" +
+            std::to_string(hover_tile_ % 4) + "]",
+        "value: " + std::string(expanded),
+        "hex: 0x" + hex(bits, 8),
+    };
+    int width = 0;
+    for (const std::string& line : lines) {
+        width = std::max(width, Canvas::text_width(line, FontRole::MonoSmall));
+    }
+    width += 20;
+    const int height = 8 + static_cast<int>(lines.size()) * 17;
+    int x = mouse_x_ + 16;
+    int y = mouse_y_ - height - 12;
+    if (y < 4) y = mouse_y_ + 22;
+    if (x + width > canvas.width() - 4) x = canvas.width() - width - 4;
+    x = std::max(4, x);
+    y = std::min(y, canvas.height() - height - 4);
+    y = std::max(4, y);
+    canvas.fill(Rect{x, y, width, height}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, height}, kAccent);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(x + 10, y + 4 + static_cast<int>(index) * 17, lines[index],
+                    index == 0 ? kText : kDim, FontRole::MonoSmall);
+    }
+}
+
+void DebuggerUI::draw_control_tooltip(Canvas& canvas) {
+    if (hover_control_ < 0 ||
+        hover_control_ >= static_cast<int>(control_hover_rows_.size()) ||
+        editing_tile_ >= 0 || menu_.open) {
+        return;
+    }
+    const ControlHoverRow& row =
+        control_hover_rows_[static_cast<std::size_t>(hover_control_)];
+    std::vector<std::string> lines{row.title, row.detail};
+    int width = 0;
+    for (const std::string& line : lines) {
+        width = std::max(width, Canvas::text_width(line, FontRole::MonoSmall));
+    }
+    width += 20;
+    const int height = 8 + static_cast<int>(lines.size()) * 17;
+    int x = mouse_x_ + 16;
+    int y = mouse_y_ - height - 12;
+    if (y < 4) y = mouse_y_ + 22;
+    if (x + width > canvas.width() - 4) x = canvas.width() - width - 4;
+    x = std::max(4, x);
+    y = std::min(y, canvas.height() - height - 4);
+    y = std::max(4, y);
+    canvas.fill(Rect{x, y, width, height}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, height}, kAccent);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        canvas.text(x + 10, y + 4 + static_cast<int>(index) * 17, lines[index],
+                    index == 0 ? kText : kDim, FontRole::MonoSmall);
+    }
 }
 
 void DebuggerUI::draw_fpr_popup(Canvas& canvas) {
@@ -1986,11 +2176,25 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     hover_var_ = -1;
     hover_flag_ = -1;
     hover_fpr_ = -1;
+    hover_tile_ = -1;
+    hover_control_ = -1;
     hover_register_ = -1;
     hover_memory_byte_ = -1;
     for (std::size_t index = 0; index < fpr_cells_.size(); ++index) {
         if (fpr_cells_[index].contains(x, y)) {
             hover_fpr_ = static_cast<int>(index);
+            break;
+        }
+    }
+    for (std::size_t index = 0; index < tile_cells_.size(); ++index) {
+        if (tile_cells_[index].contains(x, y)) {
+            hover_tile_ = static_cast<int>(index);
+            break;
+        }
+    }
+    for (std::size_t index = 0; index < control_hover_rows_.size(); ++index) {
+        if (control_hover_rows_[index].row.contains(x, y)) {
+            hover_control_ = static_cast<int>(index);
             break;
         }
     }
@@ -2085,9 +2289,12 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_flag_tooltip(canvas);
     draw_variable_tooltip(canvas);
     draw_fpr_tooltip(canvas);
+    draw_tile_tooltip(canvas);
+    draw_control_tooltip(canvas);
     draw_asm_tooltip(canvas);
     draw_context_menu(canvas);
     draw_fpr_popup(canvas);
+    draw_tile_popup(canvas);
 }
 
 bool DebuggerUI::click(int x, int y, int width, int height) {
@@ -2106,6 +2313,14 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         return true;
     }
     const Layout areas = layout(width, height);
+    if (editing_tile_ >= 0) {
+        if (tile_ok_rect_.contains(x, y)) {
+            finish_tile_edit(true);
+        } else if (tile_cancel_rect_.contains(x, y)) {
+            finish_tile_edit(false);
+        }
+        return true;
+    }
     if (editing_fpr_ >= 0) {
         if (fpr_ok_rect_.contains(x, y)) {
             finish_fpr_edit(true);
@@ -2146,6 +2361,13 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         finish_memory_address_edit(true);
         finish_register_edit(true);
         begin_fpr_edit(static_cast<int>(index));
+        return true;
+    }
+    for (std::size_t index = 0; index < tile_cells_.size(); ++index) {
+        if (!tile_cells_[index].contains(x, y)) continue;
+        finish_memory_address_edit(true);
+        finish_register_edit(true);
+        begin_tile_edit(static_cast<int>(index));
         return true;
     }
     if (pc_cell_.contains(x, y)) {
@@ -2329,6 +2551,37 @@ bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
 }
 
 bool DebuggerUI::key(int key_value, bool shift) {
+    if (editing_tile_ >= 0) {
+        if (key_value == kr32::platform::key::Escape) {
+            finish_tile_edit(false);
+            return true;
+        }
+        if (key_value == kr32::platform::key::Enter) {
+            finish_tile_edit(true);
+            return true;
+        }
+        if (key_value == kr32::platform::key::Backspace) {
+            if (tile_edit_fresh_) {
+                tile_edit_.clear();
+                tile_edit_fresh_ = false;
+            } else if (!tile_edit_.empty()) {
+                tile_edit_.pop_back();
+            }
+            return true;
+        }
+        const bool allowed =
+            (key_value >= '0' && key_value <= '9') || key_value == '.' ||
+            key_value == '+' || key_value == '-' || key_value == 'e' ||
+            key_value == 'E';
+        if (allowed && tile_edit_.size() < 40) {
+            if (tile_edit_fresh_) {
+                tile_edit_.clear();
+                tile_edit_fresh_ = false;
+            }
+            tile_edit_.push_back(static_cast<char>(key_value));
+        }
+        return true;
+    }
     if (editing_fpr_ >= 0) {
         if (key_value == kr32::platform::key::Escape) {
             finish_fpr_edit(false);

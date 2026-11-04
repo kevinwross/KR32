@@ -64,10 +64,13 @@ eight. The FPR header has a **DOUBLE / FLOAT** toggle: DOUBLE interprets the ful
 64-bit register, while FLOAT interprets the low 32 bits used by `.S`
 instructions. In DOUBLE view, a register whose upper 32 bits are zero is also
 labelled with its float value (`f32`), since that is how `.W` loads and
-`.S` results appear. Click an FPR to open the floating-point editor. Click a core
-row to select it or collapse/expand its details. The **MEMORY** panel is docked
-beneath the source pane and shows four address/hex/ASCII lines. **VARIABLES**,
-**CALL STACK**, and **CONSOLE** remain visible along the bottom row.
+`.S` results appear. Click an FPR to open the floating-point editor. Click a
+T0 matrix cell to edit it as a floating-point value. Hovering a T0 cell, the TSP
+pointer, a control register, or PTBR shows a tooltip with the value and its
+meaning. Click a core row to select it or collapse/expand its details. The
+**MEMORY** panel is docked beneath the source pane and shows four
+address/hex/ASCII lines. **VARIABLES**, **CALL STACK**, and **CONSOLE** remain
+visible along the bottom row.
 
 The memory starting address is editable: click anywhere on the **ADDR** field or
 label, type up to eight hex digits, then press Enter; Escape cancels. **PTR**

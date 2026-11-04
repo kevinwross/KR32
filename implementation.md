@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 19:59 -08:00
+> **Last updated:** 2026-11-03 20:22 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1667,6 +1667,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 19:59 -08:00** — Fixed register/FPR hit targets in the
       debugger UI. Cells are now stored by register index instead of
       row-major draw order, so clicking R1 edits R1 and FPR/FPR targets align.
+- **2026-11-03 20:22 -08:00** — Added selectable T0/TSP matrix cells with
+      floating-point edit popups, widened cell spacing, and hover tooltips for
+      tile cells, TSP, CR3/CR6/CR10, and PTBR. Control rows have more vertical
+      spacing.
 
 ## 10. Updating this file
 
