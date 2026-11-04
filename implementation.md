@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 10:44 -08:00
+> **Last updated:** 2026-11-04 10:49 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1704,6 +1704,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-04 10:44 -08:00** — Recorded OS user-runtime, syscall table,
       process model, initrd, timer quantum, image limit, and filesystem design
       decisions.
+- **2026-11-04 10:49 -08:00** — Recorded POSIX errno values, the fixed
+      BootInfo page/R2 ABI, generated initrd assembly embedding, and the minimal
+      writable-filesystem layout.
 
 ## 10. Updating this file
 
