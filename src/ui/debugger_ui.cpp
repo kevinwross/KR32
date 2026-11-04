@@ -2430,13 +2430,15 @@ void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
     } else if (x >= areas.disassembly.x && x < areas.disassembly.x + kAsmGutter &&
                y >= areas.disassembly.y + 24 &&
                y < areas.disassembly.y + areas.disassembly.height) {
-        const int row = (y - (areas.disassembly.y + 24)) / 20;
-        const int rows = std::max(1, (areas.disassembly.height - 28) / 20);
-        const std::uint32_t pc = session_.machine().pc();
-        const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
-        std::uint32_t start = pc >= before ? pc - before : 0;
-        start = std::max(start, session_.machine().ram_base());
-        address = start + static_cast<std::uint32_t>(row * 4);
+        for (const AsmRow& row : asm_rows_) {
+            if (y >= row.row.y && y < row.row.y + row.row.height) {
+                address = row.address;
+                break;
+            }
+        }
+        if (address == 0) {
+            return;
+        }
     } else {
         return;
     }
@@ -2990,13 +2992,12 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
     }
     if (x >= areas.disassembly.x && x < areas.disassembly.x + kAsmGutter &&
         y >= areas.disassembly.y + 24 && y < areas.disassembly.y + areas.disassembly.height) {
-        const int row = (y - (areas.disassembly.y + 24)) / 20;
-        const std::uint32_t pc = session_.machine().pc();
-        const int rows = std::max(1, (areas.disassembly.height - 28) / 20);
-        const std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
-        std::uint32_t start = pc >= before ? pc - before : 0;
-        start = std::max(start, session_.machine().ram_base());
-        toggle_instruction_breakpoint(start + static_cast<std::uint32_t>(row * 4));
+        for (const AsmRow& row : asm_rows_) {
+            if (y >= row.row.y && y < row.row.y + row.row.height) {
+                toggle_instruction_breakpoint(row.address);
+                return true;
+            }
+        }
         return true;
     }
     return false;
