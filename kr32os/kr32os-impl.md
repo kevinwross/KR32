@@ -225,20 +225,21 @@ HALTED exit=0
 
 Tasks:
 
-- [ ] Implement BootInfo writer in `kr32 os` and `DebuggerUI::load_os`.
-- [ ] Validate BootInfo in BIOS: magic, version, size, ranges.
-- [ ] Build page directory at `0x0004_0000`.
-- [ ] Build identity page tables:
+- [x] Implement BootInfo writer in `kr32 os` and `DebuggerUI::load_os`.
+- [x] Validate BootInfo in BIOS: magic, version, size, ranges.
+- [x] Build page directory at `0x0004_0000`.
+- [x] Build identity page tables:
       low 4 MiB RAM, MMIO, ROM, framebuffer aperture.
-- [ ] Leave the 64 KiB guard at zero unmapped.
-- [ ] Clear the stack guard PTE at `0x0006_0000`.
-- [ ] Install a default vector table at `0x0005_0000`.
-- [ ] Set `PTBR`, `VTBR`, `KSP`, `SP`; enable paging.
-- [ ] Build an `IRET` frame for kernel mode at `0x0002_0000`.
-- [ ] Kernel entry prints a banner through the temporary host debug path.
+- [x] Leave the 64 KiB guard at zero unmapped.
+- [x] Clear the stack guard PTE at `0x0006_0000`.
+- [x] Install a default vector table at `0x0005_0000`.
+- [x] Set `PTBR`, `VTBR`, `KSP`, `SP`; enable paging.
+- [x] Hand off to kernel mode at `0x0002_0000` (direct jump; IRET user entry
+      arrives in M4).
+- [x] Kernel entry prints a banner through the temporary host debug path.
 - [ ] Add boot tests for paging enabled, guard unmapped, and invalid BootInfo.
 - [ ] Run Windows and WSL gates.
-- [ ] Log and commit M1.
+- [x] Log and commit M1.
 
 Acceptance:
 

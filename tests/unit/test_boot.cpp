@@ -1,7 +1,9 @@
 #include "doctest.h"
 
 #include "kr32/asm/assembler.h"
+#include "kr32/core/devices.h"
 #include "kr32/core/machine.h"
+#include "kr32/os/bootinfo.h"
 
 #include <cstdint>
 #include <string_view>
@@ -41,6 +43,37 @@ void map_identity(kr32::core::Machine& machine,
 }
 
 } // namespace
+
+TEST_CASE("BootInfo is written at the fixed page and R2 points to it") {
+    kr32::core::Machine machine(
+        kr32::core::Machine::Options{1U * 1024U * 1024U, 0, true});
+    kr32::os::BootInfo info{};
+    info.magic = kr32::os::kBootInfoMagic;
+    info.version = kr32::os::kBootInfoVersion;
+    info.size = sizeof(kr32::os::BootInfo);
+    info.ram_base = kr32::core::kRamBase;
+    info.ram_size = 1U * 1024U * 1024U;
+    info.kernel_base = 0x0002'0000;
+    info.kernel_size = 0x100;
+    info.kernel_entry = 0x0002'0000;
+    info.framebuffer_base = kr32::core::kFramebufferBase;
+    info.framebuffer_size = kr32::core::kFramebufferSize;
+    info.framebuffer_stride = kr32::core::kFramebufferStride;
+    info.framebuffer_format = 1;
+
+    std::string error;
+    REQUIRE_MESSAGE(kr32::os::write_boot_info(machine, info, error), error);
+    CHECK(machine.reg(2) == kr32::os::kBootInfoAddress);
+    std::uint32_t magic = 0;
+    REQUIRE(machine.read_physical32(kr32::os::kBootInfoAddress, magic));
+    CHECK(magic == kr32::os::kBootInfoMagic);
+    std::uint32_t version = 0;
+    REQUIRE(machine.read_physical32(kr32::os::kBootInfoAddress + 4, version));
+    CHECK(version == kr32::os::kBootInfoVersion);
+    std::uint32_t size = 0;
+    REQUIRE(machine.read_physical32(kr32::os::kBootInfoAddress + 8, size));
+    CHECK(size == sizeof(kr32::os::BootInfo));
+}
 
 TEST_CASE("BIOS boots through paging into user code and a syscall") {
     kr32::core::Machine machine(

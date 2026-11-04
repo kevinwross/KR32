@@ -4,12 +4,14 @@
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
+#include "kr32/core/devices.h"
 #include "kr32/core/machine.h"
 #include "kr32/cxx/cxx.h"
 #include "kr32/dap/dap.h"
 #include "kr32/debug/debug.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/link/linker.h"
+#include "kr32/os/bootinfo.h"
 #include "kr32/os/defaults.h"
 #include "kr32/version.h"
 #include "kr32/vm/host.h"
@@ -1245,6 +1247,24 @@ int command_vm(int argc, char** argv) {
             return 1;
         }
         machine.reset();
+        os::BootInfo boot{};
+        boot.magic = os::kBootInfoMagic;
+        boot.version = os::kBootInfoVersion;
+        boot.size = sizeof(os::BootInfo);
+        boot.ram_base = core::kRamBase;
+        boot.ram_size = ram_size;
+        boot.kernel_base = 0x0002'0000;
+        boot.kernel_size = static_cast<std::uint32_t>(kernel.size());
+        boot.kernel_entry = 0x0002'0000;
+        boot.framebuffer_base = core::kFramebufferBase;
+        boot.framebuffer_size = core::kFramebufferSize;
+        boot.framebuffer_stride = core::kFramebufferStride;
+        boot.framebuffer_format = 1;
+        std::string boot_error;
+        if (!os::write_boot_info(machine, boot, boot_error)) {
+            std::fprintf(stderr, "kr32 os: %s\n", boot_error.c_str());
+            return 1;
+        }
         std::printf("os: %s\nbios: %s\n", paths.kernel.c_str(), paths.bios.c_str());
         return run_machine(machine, max_steps, trace, stats, host_options, true);
     }

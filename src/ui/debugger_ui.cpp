@@ -18,10 +18,12 @@
 
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
+#include "kr32/core/devices.h"
 #include "kr32/cxx/cxx.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
+#include "kr32/os/bootinfo.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/help.h"
 
@@ -638,6 +640,22 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     session_.set_program_name(
         std::filesystem::path(kernel_path).filename().string());
     if (!session_.load_raw(kernel, 0x0002'0000, bios, error)) {
+        return false;
+    }
+    os::BootInfo boot{};
+    boot.magic = os::kBootInfoMagic;
+    boot.version = os::kBootInfoVersion;
+    boot.size = sizeof(os::BootInfo);
+    boot.ram_base = session_.machine().ram_base();
+    boot.ram_size = session_.machine().ram_size();
+    boot.kernel_base = 0x0002'0000;
+    boot.kernel_size = static_cast<std::uint32_t>(kernel.size());
+    boot.kernel_entry = 0x0002'0000;
+    boot.framebuffer_base = core::kFramebufferBase;
+    boot.framebuffer_size = core::kFramebufferSize;
+    boot.framebuffer_stride = core::kFramebufferStride;
+    boot.framebuffer_format = 1;
+    if (!os::write_boot_info(session_.machine(), boot, error)) {
         return false;
     }
     path_ = kernel_path;
