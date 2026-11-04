@@ -43,6 +43,35 @@ The low 4 MiB is identity-mapped, so the kernel's linked addresses are valid
 both before and after paging is enabled. The guard page protects the vector
 table and page tables from ordinary stack growth.
 
+Initial high-memory layout:
+
+```text
+0x0801_0000..0xFBFF_FFFF  unbacked gap
+0xFC00_0000..0xFDFF_FFFF  framebuffer aperture (32 MiB)
+0xFE00_0000..0xFFEF_FFFF  unbacked gap
+0xFFF0_0000..0xFFFE_FFFF  MMIO window
+0xFFFF_0000..0xFFFF_FFFF  ROM
+```
+
+The framebuffer uses a 1920x1080 RGBA surface with a 7680-byte stride. Front and
+back buffers are at offsets `0x000000` and `0x7E9000`. Control registers live at
+`0xFFF0_4000`. ROM and MMIO are mapped supervisor-only (`U = 0`); ROM is
+read-only and executable, while MMIO is writable and non-executable.
+
+The framebuffer aperture needs eight page tables (`PDE 0x3F0..0x3F7`) in the
+low page-table region. Those mappings are identical for every process and can
+share the same page tables. Framebuffer PTEs are writable, non-executable, and
+supervisor-only initially.
+
+The BootInfo structure carries:
+
+```c
+uint32_t framebuffer_base;   // 0xFC000000
+uint32_t framebuffer_size;   // 0x02000000
+uint32_t framebuffer_stride; // 7680
+uint32_t framebuffer_format; // 1 = RGBA8888
+```
+
 For M1-M3 there is one kernel address space. When user processes arrive, the
 kernel low-memory identity window must either be replicated in every process
 page table with supervisor-only permissions, or the trap path must switch to a

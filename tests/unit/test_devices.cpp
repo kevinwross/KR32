@@ -10,6 +10,39 @@
 
 using namespace kr32;
 
+TEST_CASE("framebuffer aperture stores pixels and exposes control registers") {
+    core::Machine machine(core::Machine::Options{1U * 1024U * 1024U, 0, true});
+    core::DeviceBus devices;
+    devices.attach_machine(machine);
+    machine.attach_devices(&devices);
+
+    constexpr std::uint32_t pixel_offset = 0x1234;
+    REQUIRE(machine.write_physical32(core::kFramebufferBase + pixel_offset, 0x11223344U));
+    std::uint32_t value = 0;
+    REQUIRE(machine.read_physical32(core::kFramebufferBase + pixel_offset, value));
+    CHECK(value == 0x11223344U);
+    CHECK(devices.framebuffer().pixels()[pixel_offset] == 0x44U);
+
+    REQUIRE(machine.write_physical8(core::kFramebufferBase + pixel_offset + 1, 0xAAU));
+    std::uint8_t byte = 0;
+    REQUIRE(machine.read_physical8(core::kFramebufferBase + pixel_offset + 1, byte));
+    CHECK(byte == 0xAAU);
+    REQUIRE(machine.read_physical32(core::kFramebufferBase + pixel_offset, value));
+    CHECK(value == 0x1122AA44U);
+
+    REQUIRE(machine.write_physical32(core::kFramebufferControlBase + core::FramebufferDevice::Control,
+                                     1));
+    CHECK(devices.framebuffer().enabled());
+    REQUIRE(machine.write_physical32(core::kFramebufferControlBase + core::FramebufferDevice::Width,
+                                     800));
+    REQUIRE(machine.read_physical32(core::kFramebufferControlBase + core::FramebufferDevice::Width,
+                                    value));
+    CHECK(value == 800U);
+    REQUIRE(machine.read_physical32(core::kFramebufferControlBase + core::FramebufferDevice::Stride,
+                                    value));
+    CHECK(value == 3200U);
+}
+
 TEST_CASE("timer and console MMIO are accessible through the machine") {
     core::Machine machine(core::Machine::Options{1U * 1024U * 1024U, 0, true});
     core::DeviceBus devices;

@@ -17,6 +17,16 @@ inline constexpr std::uint32_t kTimerBase = kDeviceBase;
 inline constexpr std::uint32_t kBlockBase = kDeviceBase + 0x1000;
 inline constexpr std::uint32_t kConsoleBase = kDeviceBase + 0x2000;
 inline constexpr std::uint32_t kIrqRouterBase = kDeviceBase + 0x3000;
+inline constexpr std::uint32_t kFramebufferControlBase = kDeviceBase + 0x4000;
+
+// Dedicated 32 MiB display aperture below the MMIO window.
+inline constexpr std::uint32_t kFramebufferBase = 0xFC00'0000;
+inline constexpr std::uint32_t kFramebufferSize = 0x0200'0000;
+inline constexpr std::uint32_t kFramebufferWidth = 1920;
+inline constexpr std::uint32_t kFramebufferHeight = 1080;
+inline constexpr std::uint32_t kFramebufferStride = kFramebufferWidth * 4;
+inline constexpr std::uint32_t kFramebufferSurfaceBytes =
+    kFramebufferWidth * kFramebufferHeight * 4;
 
 class Device {
 public:
@@ -108,6 +118,43 @@ private:
     std::string output_;
 };
 
+class FramebufferDevice {
+public:
+    static constexpr std::uint32_t Control = 0x00;
+    static constexpr std::uint32_t Width = 0x04;
+    static constexpr std::uint32_t Height = 0x08;
+    static constexpr std::uint32_t Stride = 0x0C;
+    static constexpr std::uint32_t Format = 0x10;
+    static constexpr std::uint32_t Front = 0x14;
+    static constexpr std::uint32_t Back = 0x18;
+    static constexpr std::uint32_t Status = 0x1C;
+
+    FramebufferDevice();
+
+    [[nodiscard]] bool read_control(std::uint32_t offset, std::uint32_t& value) const;
+    [[nodiscard]] bool write_control(std::uint32_t offset, std::uint32_t value);
+    [[nodiscard]] bool read_pixel(std::uint32_t offset, std::uint32_t& value) const;
+    [[nodiscard]] bool write_pixel(std::uint32_t offset, std::uint32_t value);
+    void reset();
+
+    [[nodiscard]] const std::vector<std::uint8_t>& pixels() const { return pixels_; }
+    [[nodiscard]] std::vector<std::uint8_t>& pixels() { return pixels_; }
+    [[nodiscard]] std::uint32_t width() const { return width_; }
+    [[nodiscard]] std::uint32_t height() const { return height_; }
+    [[nodiscard]] std::uint32_t stride() const { return stride_; }
+    [[nodiscard]] bool enabled() const { return (control_ & 1U) != 0; }
+
+private:
+    std::vector<std::uint8_t> pixels_;
+    std::uint32_t control_ = 0;
+    std::uint32_t width_ = kFramebufferWidth;
+    std::uint32_t height_ = kFramebufferHeight;
+    std::uint32_t stride_ = kFramebufferStride;
+    std::uint32_t format_ = 1;
+    std::uint32_t front_ = 0;
+    std::uint32_t back_ = kFramebufferSurfaceBytes;
+};
+
 class IrqRouter {
 public:
     IrqRouter();
@@ -137,6 +184,8 @@ public:
     [[nodiscard]] TimerDevice& timer() { return timer_; }
     [[nodiscard]] BlockDevice& block() { return block_; }
     [[nodiscard]] ConsoleDevice& console() { return console_; }
+    [[nodiscard]] FramebufferDevice& framebuffer() { return framebuffer_; }
+    [[nodiscard]] const FramebufferDevice& framebuffer() const { return framebuffer_; }
     [[nodiscard]] IrqRouter& irq_router() { return irq_router_; }
 
     [[nodiscard]] std::uint32_t raise_count() const { return raise_count_; }
@@ -147,6 +196,7 @@ private:
     TimerDevice timer_;
     BlockDevice block_;
     ConsoleDevice console_;
+    FramebufferDevice framebuffer_;
     IrqRouter irq_router_;
     std::function<void(std::uint32_t)> irq_handler_;
     std::uint32_t raise_count_ = 0;

@@ -177,6 +177,112 @@ void ConsoleDevice::reset() {
     output_.clear();
 }
 
+FramebufferDevice::FramebufferDevice()
+    : pixels_(kFramebufferSize, std::uint8_t{0}) {}
+
+bool FramebufferDevice::read_control(std::uint32_t offset,
+                                     std::uint32_t& value) const {
+    switch (offset) {
+    case Control:
+        value = control_;
+        return true;
+    case Width:
+        value = width_;
+        return true;
+    case Height:
+        value = height_;
+        return true;
+    case Stride:
+        value = stride_;
+        return true;
+    case Format:
+        value = format_;
+        return true;
+    case Front:
+        value = front_;
+        return true;
+    case Back:
+        value = back_;
+        return true;
+    case Status:
+        value = enabled() ? 1U : 0U;
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool FramebufferDevice::write_control(std::uint32_t offset, std::uint32_t value) {
+    switch (offset) {
+    case Control:
+        control_ = value & 1U;
+        return true;
+    case Width:
+        if (value == 0 || value > kFramebufferWidth) return false;
+        width_ = value;
+        stride_ = width_ * 4U;
+        return true;
+    case Height:
+        if (value == 0 || value > kFramebufferHeight) return false;
+        height_ = value;
+        return true;
+    case Stride:
+        if (value < width_ * 4U || value > kFramebufferStride || (value & 3U) != 0) {
+            return false;
+        }
+        stride_ = value;
+        return true;
+    case Format:
+        if (value != 1) return false;
+        format_ = value;
+        return true;
+    case Front:
+    case Back:
+        if ((value & 3U) != 0 || value > kFramebufferSize - 4U) return false;
+        if (offset == Front) front_ = value;
+        if (offset == Back) back_ = value;
+        return true;
+    case Status:
+        return false;
+    default:
+        return false;
+    }
+}
+
+bool FramebufferDevice::read_pixel(std::uint32_t offset,
+                                   std::uint32_t& value) const {
+    if (offset > pixels_.size() || pixels_.size() - offset < 4) {
+        return false;
+    }
+    value = static_cast<std::uint32_t>(pixels_[offset]) |
+            (static_cast<std::uint32_t>(pixels_[offset + 1]) << 8) |
+            (static_cast<std::uint32_t>(pixels_[offset + 2]) << 16) |
+            (static_cast<std::uint32_t>(pixels_[offset + 3]) << 24);
+    return true;
+}
+
+bool FramebufferDevice::write_pixel(std::uint32_t offset, std::uint32_t value) {
+    if (offset > pixels_.size() || pixels_.size() - offset < 4) {
+        return false;
+    }
+    pixels_[offset] = static_cast<std::uint8_t>(value & 0xFFU);
+    pixels_[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+    pixels_[offset + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFFU);
+    pixels_[offset + 3] = static_cast<std::uint8_t>((value >> 24) & 0xFFU);
+    return true;
+}
+
+void FramebufferDevice::reset() {
+    std::fill(pixels_.begin(), pixels_.end(), std::uint8_t{0});
+    control_ = 0;
+    width_ = kFramebufferWidth;
+    height_ = kFramebufferHeight;
+    stride_ = kFramebufferStride;
+    format_ = 1;
+    front_ = 0;
+    back_ = kFramebufferSurfaceBytes;
+}
+
 IrqRouter::IrqRouter() {
     reset();
 }
@@ -215,10 +321,16 @@ void DeviceBus::set_irq_handler(std::function<void(std::uint32_t)> handler) {
 }
 
 bool DeviceBus::contains(std::uint32_t address) const {
+    if (address >= kFramebufferBase && address < kFramebufferBase + kFramebufferSize) {
+        return true;
+    }
     return address >= kDeviceBase && address < kDeviceBase + kDeviceWindow;
 }
 
 bool DeviceBus::read32(std::uint32_t address, std::uint32_t& value) {
+    if (address >= kFramebufferBase && address < kFramebufferBase + kFramebufferSize) {
+        return framebuffer_.read_pixel(address - kFramebufferBase, value);
+    }
     if (!contains(address)) return false;
     if (address >= kTimerBase && address < kTimerBase + 0x1000) {
         return timer_.read(address - kTimerBase, value);
@@ -232,10 +344,16 @@ bool DeviceBus::read32(std::uint32_t address, std::uint32_t& value) {
     if (address >= kIrqRouterBase && address < kIrqRouterBase + 0x1000) {
         return irq_router_.read(address - kIrqRouterBase, value);
     }
+    if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
+        return framebuffer_.read_control(address - kFramebufferControlBase, value);
+    }
     return false;
 }
 
 bool DeviceBus::write32(std::uint32_t address, std::uint32_t value) {
+    if (address >= kFramebufferBase && address < kFramebufferBase + kFramebufferSize) {
+        return framebuffer_.write_pixel(address - kFramebufferBase, value);
+    }
     if (!contains(address)) return false;
     if (address >= kTimerBase && address < kTimerBase + 0x1000) {
         return timer_.write(address - kTimerBase, value);
@@ -249,6 +367,9 @@ bool DeviceBus::write32(std::uint32_t address, std::uint32_t value) {
     if (address >= kIrqRouterBase && address < kIrqRouterBase + 0x1000) {
         return irq_router_.write(address - kIrqRouterBase, value);
     }
+    if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
+        return framebuffer_.write_control(address - kFramebufferControlBase, value);
+    }
     return false;
 }
 
@@ -260,6 +381,7 @@ void DeviceBus::reset() {
     timer_.reset();
     block_.reset();
     console_.reset();
+    framebuffer_.reset();
     irq_router_.reset();
     raise_count_ = 0;
 }

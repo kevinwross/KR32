@@ -519,7 +519,9 @@ switches to `KSP`; `IRET` reverses the frame. `#PF` carries
 | --- | --- |
 | `0x0000_0000..0x0000_FFFF` | 64 KiB guard region, never backed |
 | `0x0001_0000..0x0800_FFFF` | RAM, 128 MiB default |
-| `0x0801_0000..0xFFEF_FFFF` | unbacked gap |
+| `0x0801_0000..0xFBFF_FFFF` | unbacked gap |
+| `0xFC00_0000..0xFDFF_FFFF` | 32 MiB framebuffer aperture |
+| `0xFE00_0000..0xFFEF_FFFF` | unbacked gap |
 | `0xFFF0_0000..0xFFFE_FFFF` | 960 KiB MMIO window |
 | `0xFFFF_0000..0xFFFF_FFFF` | 64 KiB ROM |
 

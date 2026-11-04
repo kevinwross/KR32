@@ -10,10 +10,35 @@ Devices live in the 960 KiB window at `0xFFF0_0000`:
 | `0xFFF0_1000` | block | 1 |
 | `0xFFF0_2000` | console | 2 |
 | `0xFFF0_3000` | IRQ router | 3 |
+| `0xFFF0_4000` | framebuffer control | 4 |
 
 Accesses go through the normal load/store path. `Machine` checks the device
 window before RAM/ROM and forwards aligned 32-bit accesses to the `DeviceBus`;
 byte accesses use a read/modify/write of the containing word.
+
+## Framebuffer
+
+The 32 MiB framebuffer aperture lives at `0xFC00_0000..0xFDFF_FFFF`, separate
+from the MMIO window:
+
+| Base | Contents |
+| --- | --- |
+| `0xFC00_0000` | front surface: 1920×1080, 32-bit RGBA, 7680-byte stride |
+| `0xFC7E_9000` | back surface |
+
+Pixel accesses use normal little-endian 32-bit storage. Control registers are
+in the MMIO page at `0xFFF0_4000`:
+
+| Offset | Register |
+| --- | --- |
+| `0x00` | enable |
+| `0x04` | width |
+| `0x08` | height |
+| `0x0C` | stride |
+| `0x10` | format (`1` = RGBA8888) |
+| `0x14` | front-buffer offset |
+| `0x18` | back-buffer offset |
+| `0x1C` | status |
 
 ## Timer
 
