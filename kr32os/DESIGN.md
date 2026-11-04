@@ -52,7 +52,11 @@ Status: draft for the interactive design session.
 - Filesystem inodes: fixed table with direct and single-indirect block pointers.
 - Scheduler: circular doubly linked run queue.
 - User faults: kill the faulting process; kernel faults still panic.
-- Process table: fixed size, PID 1 reserved for init, monotonic PID reuse.
+- Process table: fixed 256 entries, PID 1 reserved for init, monotonic PID reuse.
+- Exit status: POSIX-like wait-status encoding (high byte exit code, low bits
+  fault/signal reason).
+- Writable filesystem superblock: fixed 4 KiB block with `K32F` magic.
+- Shell file commands: `ls`, `cat`, and `run`.
 
 
 ## Boot contract (initial assumption)
@@ -305,11 +309,28 @@ A writable block filesystem follows after the block driver is stable. Its
 planned layout is 4 KiB blocks with:
 
 ```text
-block 0       superblock (magic, version, block count, root inode)
+block 0       superblock
 block 1..N    free bitmap
 next          inode table
 remaining     file and directory data blocks
 ```
+
+The 4 KiB superblock contains:
+
+```c
+uint32_t magic;              /* "K32F" */
+uint32_t version;            /* 1 */
+uint32_t block_size;         /* 4096 */
+uint32_t block_count;
+uint32_t inode_count;
+uint32_t root_inode;
+uint32_t bitmap_start;
+uint32_t inode_table_start;
+uint32_t data_start;
+```
+
+The magic is the little-endian value `0x4632_334B`. Version 1 uses 64-byte
+inodes and no double-indirect blocks.
 
 The filesystem remains separate from the initrd lookup layer so user programs
 can move from read-only initrd files to persistent storage without changing the
@@ -343,9 +364,20 @@ The reaping ABI is `waitpid(pid, status_ptr, options)`. `pid` selects a child or
 uses a reserved "any child" value; `status_ptr` receives the exit status; and
 `options` is reserved zero for now. The kernel reaps init when no parent exists.
 
-The process table is fixed-size. PID 1 is reserved for init; PIDs increase
-monotonically and are reused only after a slot is reaped. A fixed table keeps
-lookup and memory bounded while the scheduler is simple.
+Status uses POSIX-like encoding:
+
+```text
+bits 0..6    termination reason: 0 normal, nonzero fault/signal code
+bit 7        core/fatal marker, currently zero
+bits 8..15   normal exit code
+```
+
+A normal `exit(3)` produces `3 << 8`; a fault records a nonzero low reason so
+the shell can distinguish a crash from a requested exit.
+
+The process table has 256 fixed entries. PID 1 is reserved for init; PIDs
+increase monotonically and are reused only after a slot is reaped. A fixed table
+keeps lookup and memory bounded while the scheduler is simple.
 
 The first kernel shell commands are:
 
@@ -355,6 +387,14 @@ echo     print its arguments
 clear    clear the serial console
 mem      physical page and heap statistics
 ps       process table
+```
+
+Once the initrd is available, add:
+
+```text
+ls       list initrd files
+cat      print a file
+run      load and start a user program from the initrd
 ```
 
 ## Timer and scheduling quantum
@@ -453,8 +493,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- What are the exact superblock fields and filesystem magic/version constants?
+- What are the initrd magic/version constants and maximum entry count?
 - When should block I/O move from immediate completion to IRQ completion?
-- Which shell file commands (`ls`, `cat`, `run`) follow the first five built-ins?
-- What exit-status encoding should distinguish normal exit from fault termination?
-- How many entries should the fixed process table hold?
+- How are `run` arguments, stdin, and stdout passed to a loaded program?
+- What happens when the 256-entry process table is full?
+- What are the eventual `fork`/`exec` semantics?
