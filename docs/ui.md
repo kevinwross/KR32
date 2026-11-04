@@ -72,6 +72,12 @@ meaning. Click a core row to select it or collapse/expand its details. The
 address/hex/ASCII lines. **VARIABLES**, **CALL STACK**, and **CONSOLE** remain
 visible along the bottom row.
 
+When the pointer is over the **CONSOLE** panel, printable keys, Enter,
+Backspace, and Ctrl-V are routed to the guest serial tty. Enter sends LF,
+Backspace sends DEL (`0x7F`), and Ctrl-V pastes clipboard text normalized to LF.
+Function keys remain debugger shortcuts. The serial RX queue is 4 KiB with an
+overrun status bit.
+
 The memory starting address is editable: click anywhere on the **ADDR** field or
 label, type up to eight hex digits, then press Enter; Escape cancels. **PTR**
 follows the current SP, and the **^** / **v** buttons move the dump up or down

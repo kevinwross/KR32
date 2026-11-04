@@ -11,10 +11,25 @@ Devices live in the 960 KiB window at `0xFFF0_0000`:
 | `0xFFF0_2000` | console | 2 |
 | `0xFFF0_3000` | IRQ router | 3 |
 | `0xFFF0_4000` | framebuffer control | 4 |
+| `0xFFF0_5000` | serial tty | 5 |
 
 Accesses go through the normal load/store path. `Machine` checks the device
 window before RAM/ROM and forwards aligned 32-bit accesses to the `DeviceBus`;
 byte accesses use a read/modify/write of the containing word.
+
+## Serial tty
+
+The serial device provides a raw byte stream for KR32OS:
+
+| Offset | Register |
+| --- | --- |
+| `0x00` | data: read consumes RX, write transmits TX |
+| `0x04` | status: bit 0 RX-ready, bit 1 TX-ready, bit 2 overrun |
+| `0x08` | peek: next RX byte without consuming it; `0xFFFF_FFFF` when empty |
+
+The RX queue is 4 KiB. If it fills, new bytes are dropped and the overrun bit is
+set. The shell performs line editing and echo. The existing console device
+remains available for host/debug output.
 
 ## Framebuffer
 

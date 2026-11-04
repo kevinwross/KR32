@@ -23,6 +23,15 @@ Status: draft for the interactive design session.
   validation and copy-in/copy-out helpers.
 - Multicore: single core through M4; bring up secondary cores after the
   scheduler and user-mode path are stable.
+- Console: a new MMIO serial/tty device at `0xFFF05000`; the existing console
+  remains a host/debug output path.
+- UI input: hover the console panel to send text keys, Enter, Backspace, and
+  Ctrl-V paste; function keys stay as debugger shortcuts.
+- First user process: flat image at `0x00400000`, stack top `0x07F00000` with a
+  guard page at `0x07E00000`; the first program is an embedded initrd blob.
+- Physical memory: bitmap page allocator, one bit per 4 KiB page.
+- Early exceptions: panic with vector/PC/FAR/error diagnostics, then halt.
+
 
 ## Boot contract (initial assumption)
 
@@ -166,6 +175,50 @@ The host's `32..50` vectors remain debug/host services and must not become part
 of the OS ABI. The OS console path should use the MMIO console once devices are
 attached to an OS boot; the host console is only a temporary bring-up aid.
 
+## Serial console
+
+The OS-facing tty is a separate MMIO device at `0xFFF0_5000`:
+
+| Offset | Register |
+| --- | --- |
+| `0x00` | data: read consumes RX, write transmits TX |
+| `0x04` | status: RX-ready, TX-ready, overrun |
+| `0x08` | peek: next RX byte without consuming it; `0xFFFFFFFF` when empty |
+
+The RX FIFO is 4 KiB. When full, new bytes are dropped and the overrun bit is
+reported. The first shell polls status/peek; an RX interrupt comes later.
+
+The device is raw: the shell performs line editing and echo. Ctrl-C, Ctrl-D, and
+other control combinations are delivered as their byte values. Ctrl-V is the
+one reserved UI shortcut and pastes clipboard text, normalized to LF.
+
+The existing console at `0xFFF0_2000` remains a host/debug output path. The UI
+console panel displays serial output and captures input while the pointer is
+over the console panel. Printable keys, Enter, Backspace, and Ctrl-V are sent to
+the guest; F-keys remain debugger shortcuts.
+
+## User address space
+
+```text
+0x0000_0000..0x003F_FFFF  kernel low-memory window, user-inaccessible
+0x0040_0000..            user image / heap
+0x07E0_0000              user stack guard page
+0x07E0_1000..0x07EF_FFFF  user stack (grows down from 0x07F0_0000)
+0x07F0_0000              initial user stack top
+```
+
+The first user image is a flat binary copied from an embedded initrd blob in the
+kernel image. It contains no relocations or dynamic loader. The user heap starts
+after the image and must stop before the stack guard.
+
+The physical page allocator is a bitmap with one bit per 4 KiB page. Kernel,
+page-table, BootInfo, framebuffer, MMIO, ROM, and stack-guard pages are reserved
+before any user page is allocated.
+
+Early exceptions print the vector, PC, FAR, and error code to the serial console
+and halt. Process termination and recovery are deferred until process state is
+well-defined.
+
 ## Multicore policy
 
 M0–M4 run on the boot core only. Secondary cores remain parked until the
@@ -184,9 +237,11 @@ thread per core at a time.
 
 1. **M0 — scaffold:** build scripts, linker layout, boot stub, halt on entry.
 2. **M1 — boot banner:** kernel entry at `0x0002_0000`, console output, clean halt.
-3. **M2 — console + shell:** line input, prompt, `help`, `echo`, `clear`, `mem`.
+3. **M2 — console + shell:** serial tty output, polled RX, prompt, `help`,
+   `echo`, `clear`, `mem`.
 4. **M3 — faults + timer:** vector table, exception diagnostics, timer IRQ.
-5. **M4 — memory + processes:** page allocator, kernel heap, first user-mode image.
+5. **M4 — memory + processes:** bitmap page allocator, kernel heap, embedded
+   initrd, first user-mode image.
 6. **M5 — scheduler + multicore:** context switching, per-core state, IPIs, secondary cores.
 
 ## M1 implementation sketch
@@ -237,7 +292,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- How should the host expose console input and output to an OS boot: through
-  DeviceBus MMIO only, or through a narrow host debug channel as well?
-- What is the exact user address-space layout above the kernel's low 4 MiB?
+- What are the exact syscall numbers and initial call signatures?
+- How large may the user image/heap grow before the stack guard?
+- What block-device and filesystem model should follow the embedded initrd?
+- What is the first scheduler quantum and preemption policy?
 - When should the free-list allocator replace the bump allocator?
