@@ -613,6 +613,7 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     os_mode_ = false;
     bios_path_.clear();
     source_scroll_ = 0;
+    asm_scroll_ = 0;
     error_.clear();
     if (settings_stop_at_main_) {
         prepare_initial_stop();
@@ -679,6 +680,7 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     source_view_path_.clear();
     loaded_ = true;
     source_scroll_ = 0;
+    asm_scroll_ = 0;
     error_.clear();
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
@@ -786,6 +788,8 @@ void DebuggerUI::step_line_out() {
 
 void DebuggerUI::set_status_from_result(const core::StepResult& result) {
     source_follow_ = true;
+    // Keep the instruction view centered on the new PC after every step/run.
+    asm_scroll_ = 0;
     if (session_.at_breakpoint()) {
         status_ = "breakpoint at " + hex(session_.machine().pc(), 8);
         return;
@@ -856,6 +860,7 @@ void DebuggerUI::ensure_source_for_current() {
     source_view_path_ = source_path_for(source_id);
     source_lines_ = cached->second;
     source_scroll_ = 0;
+    asm_scroll_ = 0;
     source_follow_ = true;
 }
 
@@ -1048,14 +1053,13 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     const int rows = std::max(1, (rect.height - 28) / line_height);
     std::uint32_t before = static_cast<std::uint32_t>((rows / 2) * 4);
     std::uint32_t start = pc >= before ? pc - before : 0;
-    start = std::max(start, session_.machine().ram_base());
+    start &= ~3U;
     const std::int64_t scrolled =
         static_cast<std::int64_t>(start / 4U) + asm_scroll_;
-    const std::uint32_t max_row = session_.machine().ram_size() / 4U;
-    const std::uint32_t start_row = static_cast<std::uint32_t>(
-        std::clamp<std::int64_t>(scrolled, session_.machine().ram_base() / 4U,
-                                 static_cast<std::int64_t>(max_row)));
-    start = start_row * 4U;
+    constexpr std::int64_t kAddressRows = 0x1'0000'0000LL / 4;
+    const std::int64_t start_row =
+        std::clamp<std::int64_t>(scrolled, 0, kAddressRows - 1);
+    start = static_cast<std::uint32_t>(start_row * 4);
     const int address_width = Canvas::text_width("00000000", FontRole::Mono);
     const int bytes_width = std::clamp(rect.width - kAsmGutter - 160, 100, 125);
     const int bytes_x = rect.x + kAsmGutter + 6;
@@ -1175,8 +1179,8 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
                     address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);
     }
     draw_scrollbar(canvas, rect,
-                   static_cast<int>(start_row - session_.machine().ram_base() / 4U),
-                   static_cast<int>(max_row), rows, asm_scroll_track_,
+                   static_cast<int>(start_row),
+                   static_cast<int>(kAddressRows), rows, asm_scroll_track_,
                    asm_scroll_thumb_);
 }
 
@@ -1571,6 +1575,8 @@ void DebuggerUI::finish_register_edit(bool commit) {
             core::Machine& machine = session_.core(selected_core_);
             if (editing_register_ == 16) {
                 machine.set_pc(value & ~0x3U);
+                source_follow_ = true;
+                asm_scroll_ = 0;
             } else if (editing_register_ == 17) {
                 machine.set_sp(value & ~0x3U);
             } else {
