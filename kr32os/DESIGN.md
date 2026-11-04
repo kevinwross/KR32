@@ -27,6 +27,28 @@ The current reference BIOS enters the kernel at `0x0002_0000` with:
 - kernel mode, interrupt-enable state as supplied by the BIOS;
 - console output at MMIO `0xFFF0_2000`.
 
+Initial low-memory layout:
+
+```text
+0x0002_0000  kernel image
+0x0003_F000  BootInfo page
+0x0004_0000  page directory and page tables
+0x0005_0000  vector table
+0x0006_0000  stack guard page (not present)
+0x0006_1000  usable stack
+0x0010_0000  SP / KSP, stack grows down
+```
+
+The low 4 MiB is identity-mapped, so the kernel's linked addresses are valid
+both before and after paging is enabled. The guard page protects the vector
+table and page tables from ordinary stack growth.
+
+For M1-M3 there is one kernel address space. When user processes arrive, the
+kernel low-memory identity window must either be replicated in every process
+page table with supervisor-only permissions, or the trap path must switch to a
+separate kernel `PTBR`. Replicating the supervisor mappings is the simpler first
+option.
+
 The kernel installs its own vector table entries before relying on faults or
 interrupts. The first milestone keeps the BIOS identity map; a later milestone
 owns page-table construction.
