@@ -61,6 +61,10 @@ Status: draft for the interactive design session.
 - Process table full: return `-EAGAIN`; do not disturb existing processes.
 - `run` ABI: `argc`/`argv` on the user stack; fds 0/1/2 connected to serial.
 - Process creation: spawn now; POSIX-like `fork`/`exec` later.
+- First fd table: only stdin/stdout/stderr (0/1/2); file descriptors follow the VFS.
+- Shell quoting: double quotes, backslash escapes, and whitespace splitting.
+- Paths: flat initrd names first; a slash-separated tree with the block FS.
+- Block I/O: immediate through M4; IRQ completion in M5.
 
 
 ## Boot contract (initial assumption)
@@ -350,10 +354,9 @@ are deliberately deferred.
 
 The block device is extended with an LBA register at offset `0x18`, addressed in
 512-byte sectors. A filesystem 4 KiB block is eight consecutive sectors. The
-existing DMA address/count interface remains. Requests complete immediately for
-the first filesystem milestone, but the IRQ-enable and status path stays defined
-so the driver can move to asynchronous completion when the scheduler supports
-waiting drivers.
+existing DMA address/count interface remains. Requests complete immediately
+through M4; IRQ completion arrives in M5 once the scheduler supports blocking
+and waking drivers.
 
 A user-mode fault terminates only the faulting process and stores a fault status
 for reaping. Kernel-mode faults print the vector, PC, FAR, and error code to the
@@ -409,6 +412,16 @@ run      load and start a user program from the initrd
 file descriptors 0, 1, and 2 onto the serial console. M4 starts programs
 directly; POSIX-like `fork` and `exec` are added after address-space copying and
 program loading are stable.
+
+The shell splits arguments on whitespace, supports double quotes, and treats a
+backslash as an escape. There is no globbing, variable expansion, or pipeline
+syntax initially. Single quotes can be added later if needed.
+
+The initial per-process file-descriptor table holds only 0, 1, and 2, all
+connected to the serial console. Initrd files are accessed through the kernel
+shell's `ls`/`cat` commands until the VFS and a real descriptor table exist.
+The block filesystem introduces a slash-separated path tree; the initrd namespace
+stays flat until then.
 
 ## Timer and scheduling quantum
 
@@ -506,9 +519,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- When should block I/O move from immediate completion to IRQ completion?
-- What argument-splitting/quoting rules should the shell use for `run`?
-- Should the first fd table contain only 0/1/2, or open slots for initrd files?
 - What are the eventual `fork`/`exec` copy and loading semantics?
-- What are the filesystem root and path-resolution rules?
-- What are the eventual `fork`/`exec` semantics?
+- What are the filesystem inode and directory-entry field layouts?
+- What should the init process do in M4, and does it ever become the user shell?
+- Should user processes ever map the framebuffer directly?
+- What user address-space permissions should code, data, heap, and stack have?
