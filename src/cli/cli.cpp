@@ -344,7 +344,7 @@ void print_help() {
 #endif
         "\n"
         "Options for as:  -o <path> --object --base <addr> --listing <path>\n"
-        "Options for ld:  -o <image.k32> --map <path> --base <addr> --strip\n"
+        "Options for ld:  -o <image.k32> --map <path> --base <addr> --flat --strip\n"
         "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value>\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
@@ -542,7 +542,8 @@ int command_dis(int argc, char** argv) {
 }
 
 void print_ld_usage() {
-    std::printf("Usage: kr32 ld <objects...> [-o <image.k32>] [--map <path>] [--base <addr>] [--strip]\n");
+    std::printf("Usage: kr32 ld <objects...> [-o <image.k32>] [--map <path>] [--base <addr>] "
+                "[--flat] [--strip]\n");
 }
 
 void print_build_usage() {
@@ -556,6 +557,8 @@ int command_ld(int argc, char** argv) {
     std::string map_path;
     linker::Options options;
     bool strip = false;
+    bool flat = false;
+    bool output_set = false;
     std::vector<std::string> inputs;
 
     for (int index = 2; index < argc; ++index) {
@@ -570,6 +573,7 @@ int command_ld(int argc, char** argv) {
                 return 2;
             }
             output = argv[++index];
+            output_set = true;
             continue;
         }
         if (argument == "--map") {
@@ -582,6 +586,10 @@ int command_ld(int argc, char** argv) {
         }
         if (argument == "--strip") {
             strip = true;
+            continue;
+        }
+        if (argument == "--flat") {
+            flat = true;
             continue;
         }
         if (argument == "--base" || argument == "--stack-top" || argument == "--stack-limit") {
@@ -606,6 +614,9 @@ int command_ld(int argc, char** argv) {
     if (inputs.empty()) {
         print_ld_usage();
         return 2;
+    }
+    if (flat && !output_set) {
+        output = "a.bin";
     }
     options.strip = strip;
 
@@ -633,10 +644,18 @@ int command_ld(int argc, char** argv) {
     }
 
     std::vector<std::uint8_t> bytes;
-    container::Error container_error;
-    if (!container::write(image, bytes, container_error)) {
-        std::fprintf(stderr, "kr32 ld: %s\n", container_error.message.c_str());
-        return 1;
+    if (flat) {
+        linker::Error flat_error;
+        if (!linker::flatten(image, options.base, bytes, flat_error)) {
+            std::fprintf(stderr, "kr32 ld: %s\n", flat_error.message.c_str());
+            return 1;
+        }
+    } else {
+        container::Error container_error;
+        if (!container::write(image, bytes, container_error)) {
+            std::fprintf(stderr, "kr32 ld: %s\n", container_error.message.c_str());
+            return 1;
+        }
     }
     if (!write_file(output, bytes, error)) {
         std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
@@ -650,8 +669,8 @@ int command_ld(int argc, char** argv) {
             return 1;
         }
     }
-    std::printf("linked %zu objects to %s (entry 0x%08X)\n", objects.size(),
-                output.c_str(), image.entry);
+    std::printf("linked %zu objects to %s (entry 0x%08X%s)\n", objects.size(),
+                output.c_str(), image.entry, flat ? ", flat" : "");
     return 0;
 }
 

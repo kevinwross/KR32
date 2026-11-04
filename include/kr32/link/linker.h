@@ -40,4 +40,11 @@ struct Error {
                         Map& map,
                         Error& error);
 
+// Emits a headerless image whose byte zero corresponds to `base`. Allocatable
+// sections must be at or above `base`; gaps and BSS are zero-filled.
+[[nodiscard]] bool flatten(const container::Image& image,
+                           std::uint32_t base,
+                           std::vector<std::uint8_t>& bytes,
+                           Error& error);
+
 } // namespace kr32::linker

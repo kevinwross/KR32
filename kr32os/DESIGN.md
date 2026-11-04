@@ -14,6 +14,8 @@ Status: draft for the interactive design session.
 - Initial shell: kernel built-ins first; user mode follows once boot is stable.
 - Build coverage: Windows PowerShell and WSL Bash wrappers around the same
   orchestration.
+- Flat image: `kr32 ld --flat --base 0x00020000` emits the raw kernel image.
+- BIOS: track `kr32os/bios.S` as the development BIOS source.
 
 ## Boot contract (initial assumption)
 
@@ -73,16 +75,13 @@ kr32os/kernel/*.c         compiled with kr32 cc -S
 The orchestrator:
 
 1. Compiles C sources to KR32 assembly with `kr32 cc -S`.
-2. Concatenates `entry.S` + generated assembly (or invokes a flat linker).
-3. Assembles with `kr32 as --base 0x00020000`.
-4. Runs with `kr32 vm kernel.bin --base 0x00020000 --bios bios.bin`.
+2. Assembles each generated `.s` and `entry.S` with `kr32 as --object`.
+3. Links the objects with `kr32 ld --flat --base 0x00020000`.
+4. Assembles `bios.S` at `0xFFFF0000`.
+5. Runs with `kr32 vm kernel.bin --base 0x00020000 --bios bios.bin`.
 
 ## Open design questions
 
-- Flat link strategy: concatenate `entry.S` and generated C assembly for M1, or
-  add a raw/flat output mode to the KR32 linker first?
 - Kernel heap: bump allocator first, then free-list?
 - Kernel/user ABI: syscall numbers and pointer validation rules.
 - Single core for M0–M2; when should multicore enter?
-- BIOS source of truth: track a reference BIOS under `kr32os/` or consume the
-  one produced by the root tests?

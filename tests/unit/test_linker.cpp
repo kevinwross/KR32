@@ -4,6 +4,7 @@
 #include "kr32/container/container.h"
 #include "kr32/link/linker.h"
 
+#include <algorithm>
 #include <cstdint>
 #include <string_view>
 #include <vector>
@@ -206,6 +207,73 @@ TEST_CASE("comdat sections keep one copy across objects") {
     REQUIRE(shared != nullptr);
     CHECK(shared->size == 8);
     CHECK((shared->flags & container::Comdat) != 0);
+}
+
+TEST_CASE("flat output starts at the requested base and zero-fills BSS") {
+    const container::Image object = assemble(
+        ".text\n"
+        ".global _start\n"
+        "_start:\n"
+        "    MOV R0, #7\n"
+        "    HALT\n"
+        ".data\n"
+        ".global value\n"
+        "value:\n"
+        "    .word 0x55667788\n"
+        ".bss\n"
+        ".global scratch\n"
+        "scratch:\n"
+        "    .space 8\n");
+    container::Image executable;
+    linker::Map map;
+    linker::Error link_error;
+    linker::Options options;
+    options.base = 0x0002'0000;
+    REQUIRE_MESSAGE(linker::link({object}, options, executable, map, link_error),
+                    link_error.message);
+
+    const container::Section* text = find_section(executable, ".text");
+    const container::Section* data = find_section(executable, ".data");
+    const container::Section* bss = find_section(executable, ".bss");
+    REQUIRE(text != nullptr);
+    REQUIRE(data != nullptr);
+    REQUIRE(bss != nullptr);
+
+    std::vector<std::uint8_t> flat;
+    linker::Error flat_error;
+    REQUIRE_MESSAGE(linker::flatten(executable, options.base, flat, flat_error),
+                    flat_error.message);
+    CHECK(text->address == 0x0002'0000U);
+    CHECK(flat.size() == bss->address + bss->size - options.base);
+    CHECK(std::equal(text->data.begin(), text->data.end(), flat.begin()));
+    CHECK(std::equal(data->data.begin(), data->data.end(),
+                     flat.begin() + (data->address - options.base)));
+    for (std::uint32_t offset = 0; offset < bss->size; ++offset) {
+        CHECK(flat[bss->address - options.base + offset] == 0);
+    }
+
+    std::vector<std::uint8_t> rejected;
+    linker::Error reject_error;
+    CHECK_FALSE(linker::flatten(executable, options.base + 4, rejected, reject_error));
+    CHECK(reject_error.message.find("below the flat base") != std::string::npos);
+}
+
+TEST_CASE("flat output rejects an entry point outside the image") {
+    container::Image executable;
+    executable.entry = 0x3000;
+    container::Section section;
+    section.name = ".text";
+    section.type = container::SectionType::Text;
+    section.flags = container::Alloc;
+    section.address = 0x2000;
+    section.size = 4;
+    section.data = {1, 2, 3, 4};
+    executable.sections.push_back(section);
+
+    std::vector<std::uint8_t> flat;
+    linker::Error error;
+    CHECK_FALSE(linker::flatten(executable, 0x2000, flat, error));
+    CHECK(error.message.find("entry point") != std::string::npos);
 }
 
 TEST_CASE("a linked executable round-trips through the container") {

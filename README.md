@@ -96,6 +96,7 @@ ctest --preset linux-asan
 kr32 as examples/demo.asm -o demo.bin --listing demo.lst
 kr32 as examples/hello.s --object -o hello.o
 kr32 ld hello.o -o hello.k32 --map hello.map
+kr32 ld kernel.o --flat --base 0x20000 -o kernel.bin
 kr32 size hello.k32
 kr32 build examples/hello.s -o hello.k32 --run
 kr32 cc examples/hello.c -S -o hello.s
@@ -130,10 +131,12 @@ kr32 vm build/fileio.k32 --fs-root sandbox --read-only
 
 `as` writes a raw image or, with `--object`, a relocatable `.k32` object. `ld`
 merges objects, resolves symbols and relocations, and writes an executable
-`.k32`; `--map` writes the section/symbol map. `cc` compiles C to assembly or an
-object. `build` runs compile/assemble, link, and optional `--run` in one
-command. `size` reports `.k32` sections and `debug` dumps the `.debug_info`
-records. `gui` opens the source/disassembly debugger or renders headless PPM
+`.k32`; `--flat` writes a headerless image beginning at `--base`, with gaps and
+BSS zero-filled; `--map` writes the section/symbol map. `cc` compiles C to
+assembly or an object. `build` runs compile/assemble, link, and optional
+`--run` in one command. `size` reports `.k32` sections and `debug` dumps the
+`.debug_info` records. `gui` opens the source/disassembly debugger or renders
+headless PPM
 screenshots. `shell` runs tool commands interactively or from piped input, and
 `dap` exposes the debugger to DAP clients. `cxx` compiles a C++ source to
 assembly or an object, and `build file.cpp` compiles, links the shared

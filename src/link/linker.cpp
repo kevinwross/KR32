@@ -363,4 +363,53 @@ bool link(const std::vector<container::Image>& objects,
     return true;
 }
 
+bool flatten(const container::Image& image,
+             std::uint32_t base,
+             std::vector<std::uint8_t>& bytes,
+             Error& error) {
+    error = {};
+    bytes.clear();
+
+    std::uint64_t end = base;
+    bool have_alloc = false;
+    for (const container::Section& section : image.sections) {
+        if ((section.flags & container::Alloc) == 0) {
+            continue;
+        }
+        if (section.address < base) {
+            error = {"section " + section.name + " is below the flat base"};
+            return false;
+        }
+        const std::uint64_t section_end =
+            static_cast<std::uint64_t>(section.address) + section.size;
+        end = std::max(end, section_end);
+        have_alloc = true;
+    }
+    if (!have_alloc) {
+        error = {"no allocatable sections"};
+        return false;
+    }
+    if (end > 0x1'0000'0000ULL) {
+        error = {"flat image exceeds the 32-bit address range"};
+        return false;
+    }
+    if (image.entry < base || image.entry >= end) {
+        error = {"entry point is outside the flat image"};
+        return false;
+    }
+
+    bytes.assign(static_cast<std::size_t>(end - base), 0);
+    for (const container::Section& section : image.sections) {
+        if ((section.flags & container::Alloc) == 0 || section.data.empty()) {
+            continue;
+        }
+        const std::size_t offset =
+            static_cast<std::size_t>(section.address - base);
+        const std::size_t count =
+            std::min(section.data.size(), bytes.size() - offset);
+        std::copy_n(section.data.begin(), count, bytes.begin() + offset);
+    }
+    return true;
+}
+
 } // namespace kr32::linker
