@@ -1,6 +1,6 @@
 # KR32OS M0-M4 Implementation Plan
 
-Status: **proposed for review; not started.**
+Status: **ready for implementation; M0 may start.**
 
 Baseline: `9ec94bb` (`kr32os: decide directory shell and display details`).
 
@@ -13,14 +13,16 @@ This plan implements KR32OS milestones M0 through M4 only. M5 and later
 - **M2:** design is ready, but requires host-side serial-device and UI-input
   work first.
 - **M3:** ready after M1; requires the OS boot path to attach a DeviceBus.
-- **M4:** implementable, but has two integration prerequisites that this plan
+- **M4:** implementable, with two integration prerequisites that this plan
   resolves explicitly:
-  1. the loader must discover the embedded initrd location from build metadata;
-  2. the kernel needs a minimal synchronous user-return trampoline because the
-     scheduler does not exist until M5.
+  1. the loader discovers the embedded initrd location from a verified
+     `kernel.meta` sidecar;
+  2. the kernel uses a saved-kernel-context trampoline to return from the init
+     process because the scheduler does not exist until M5.
 
-No remaining architecture decision blocks M0-M4. The review questions at the end
-are implementation choices, not new ABI changes.
+No remaining architecture decision blocks M0-M4. The five review points have
+been decided: sidecar metadata, form-feed clear, assembly trampoline, M0-first
+ordering, and a 10,000-instruction virtual timer tick.
 
 ## 1. Authority and guardrails
 
@@ -136,12 +138,18 @@ These are shared by M1-M4 and must be implemented in order.
   entry
   initrd_offset
   initrd_size
+  checksum     CRC32 over the kernel image
   ```
 
-  The loader reads it when present and fills the BootInfo initrd fields. If it
-  is absent, initrd size is zero. This keeps the kernel flat image header-free.
+  The loader reads it when present and fills the BootInfo initrd fields. When an
+  initrd is embedded, a missing or invalid sidecar is an error rather than a
+  silent no-initrd boot. A checksum catches a stale sidecar paired with a newer
+  kernel. `--meta <path>` can override the sibling path for development. This
+  keeps the flat kernel header-free for M0-M4; self-contained packaging is
+  revisited later.
 - The GUI `load_os` path must create the same BootInfo page.
-- Tests: valid/invalid magic, version, size, and out-of-range fields.
+- Tests: valid/invalid magic, version, size, checksum mismatch, and
+  out-of-range fields.
 
 ### H2 — DeviceBus for OS boots
 
@@ -173,7 +181,8 @@ These are shared by M1-M4 and must be implemented in order.
 - Add a test input path (CLI `--serial-input` or equivalent) so CTest can drive
   the OS shell deterministically.
 - `clear` emits form feed (`0x0C`) in M2; the UI serial console clears its
-  displayed text on form feed. ANSI terminal parsing is deferred.
+  displayed text on form feed. ANSI terminal parsing is deferred until a later
+  console milestone.
 
 ### H4 — User build and initrd
 
@@ -276,8 +285,8 @@ Tasks:
 - [ ] Implement exception report for `#UD`, `#DIV0`, `#BRK`, `#PF`, `#GP`,
       `#ALIGN`, and `#DF`.
 - [ ] Route timer IRQ line through the IRQ router.
-- [ ] Program a virtual 100 Hz timer using a fixed instruction-count reload;
-      document that this is not wall-clock time.
+- [ ] Program a virtual 100 Hz timer with a fixed reload of 10,000 VM
+      instructions; document that this is not wall-clock time.
 - [ ] Include tick count in `mem` output.
 - [ ] Add kernel fault tests and timer IRQ test.
 - [ ] Run gates, log, and commit M3.
@@ -304,7 +313,11 @@ Tasks:
 - [ ] Implement process table (256 entries), PID allocation, zombie exit.
 - [ ] Implement syscalls: exit, write, read, yield, getpid, brk.
 - [ ] Implement fds 0/1/2 connected to serial.
-- [ ] Implement the minimal synchronous user-return trampoline.
+- [ ] Implement the minimal synchronous user-return trampoline:
+      - assembly saves the shell's kernel SP/PC and callee-saved state;
+      - `IRET` enters user mode;
+      - the exit syscall restores the saved kernel context;
+      - no timer preemption or scheduler is involved.
 - [ ] Boot: spawn init, wait for exit, reap, continue to kernel shell.
 - [ ] Implement shell `ls`, `cat`, `run`.
 - [ ] Add user-mode tests: banner output, exit status, fault kills process,
@@ -399,15 +412,15 @@ Also run `kr32 --smoke-ui` after UI input changes.
   - known bugs and deferred work;
   - next steps and open questions.
 
-## 8. Review questions before implementation
+## 8. Approved starting decisions
 
-1. Approve the `kernel.meta` sidecar for initrd location, rather than adding a
-   header to the flat kernel image.
-2. Approve form-feed (`0x0C`) as the M2 `clear` mechanism, with ANSI handling
-   deferred.
-3. Approve the minimal synchronous user-return trampoline for M4, since the
-   scheduler arrives in M5.
-4. Approve starting M0 immediately after review, with host prerequisites H1-H4
-   implemented in milestone order.
-5. Treat "100 Hz" as a virtual instruction-count timer, not wall-clock time;
-   KR32's timer device counts VM ticks and has no real-time calibration.
+The five review points are approved:
+
+1. `kernel.meta` sidecar with CRC32, required when an initrd is embedded.
+2. Form-feed (`0x0C`) clear in M2; ANSI handling deferred.
+3. Saved-kernel-context trampoline for M4; no scheduler until M5.
+4. Start M0 now; implement H1-H4 in dependency order.
+5. Virtual timer with a 10,000-instruction reload; not wall-clock time.
+
+Implementation begins with M0. Any newly discovered ABI conflict pauses the
+milestone and is recorded in `implementation.md` before proceeding.
