@@ -1759,6 +1759,19 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("twelve-byte floating aggregates use a partial second FPR") {
+    const ProgramResult program = compile_and_run(
+        "struct Three { float a; float b; float c; };\n"
+        "Three make() {\n"
+        "    Three value; value.a = 1.0f; value.b = 2.0f; value.c = 3.0f;\n"
+        "    return value;\n"
+        "}\n"
+        "float sum(Three value) { return value.a + value.b + value.c; }\n"
+        "int main() { Three value = make(); return (int)sum(value); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 6);
+}
+
 TEST_CASE("sixteen-byte floating aggregates use two FP registers") {
     const ProgramResult program = compile_and_run(
         "struct Four { float a; float b; float c; float d; };\n"

@@ -5241,7 +5241,7 @@ private:
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
                 if (aggregate_abi(parameter_class) == AggregateAbi::Floating) {
                     gen_expr(*expression.arguments[index]);
-                    const int argument_object = allocate_local(parameter);
+                    const int argument_object = allocate_local_bytes(16);
                     emit("    MOV R1, R0");
                     emit("    MOV R2, #" + std::to_string(parameter_class->size));
                     emit("    LEA R0, [R7 + " +
@@ -5371,8 +5371,11 @@ private:
                 emit("    FLOAD.D F" + std::to_string(fp_register) + ", [R7 + " +
                      std::to_string(slot.offset) + "]");
                 if (aggregate->size > 8) {
-                    emit("    FLOAD.D F" + std::to_string(fp_register + 1) +
-                         ", [R7 + " + std::to_string(slot.offset + 8) + "]");
+                    const bool word =
+                        aggregate->size - 8 <= 4;
+                    emit(std::string("    FLOAD.") + (word ? "W" : "D") + " F" +
+                         std::to_string(fp_register + 1) + ", [R7 + " +
+                         std::to_string(slot.offset + 8) + "]");
                     fp_register += 2;
                 } else {
                     ++fp_register;
@@ -5436,12 +5439,17 @@ private:
         emit(call_continue + ":");
         record_call_site(call_start, call_end, call_landing);
         if (register_result) {
-            const int result_object = allocate_local(call_result);
+            const int result_object =
+                aggregate_abi(call_result_class) == AggregateAbi::Floating
+                    ? allocate_local_bytes(16)
+                    : allocate_local(call_result);
             if (aggregate_abi(call_result_class) == AggregateAbi::Floating) {
                 emit("    LEA R1, [R7 + " + std::to_string(result_object) + "]");
                 emit("    FSTORE.D F0, [R1]");
                 if (call_result_class->size > 8) {
-                    emit("    FSTORE.D F1, [R1 + 8]");
+                    const bool word = call_result_class->size - 8 <= 4;
+                    emit(std::string("    FSTORE.") + (word ? "W" : "D") +
+                         " F1, [R1 + 8]");
                 }
                 emit("    LEA R0, [R7 + " + std::to_string(result_object) + "]");
             } else {
@@ -5661,7 +5669,9 @@ private:
                         emit("    LOAD R1, [R7 + " + std::to_string(source_temp) + "]");
                         emit("    FLOAD.D F0, [R1]");
                         if (result_class->size > 8) {
-                            emit("    FLOAD.D F1, [R1 + 8]");
+                            const bool word = result_class->size - 8 <= 4;
+                            emit(std::string("    FLOAD.") + (word ? "W" : "D") +
+                                 " F1, [R1 + 8]");
                         }
                         emit("    JMP " + return_label_);
                         return;
@@ -6887,7 +6897,12 @@ private:
             if (local.type && local.type->kind == TypeKind::Array) {
                 local.type = decay(local.type);
             }
-            local.offset = allocate_local(local.type);
+            if (!local.is_reference &&
+                aggregate_abi(class_of(local.type)) == AggregateAbi::Floating) {
+                local.offset = allocate_local_bytes(16);
+            } else {
+                local.offset = allocate_local(local.type);
+            }
             local.is_parameter = true;
             if (!parameter.name.parts.empty()) {
                 local_scopes_.back()[parameter.name.parts.back()] = local;
@@ -6912,8 +6927,10 @@ private:
                     emit("    FSTORE.D F" + std::to_string(fp_argument) +
                          ", [R7 + " + std::to_string(local.offset) + "]");
                     if (registers == 2) {
-                        emit("    FSTORE.D F" + std::to_string(fp_argument + 1) +
-                             ", [R7 + " + std::to_string(local.offset + 8) + "]");
+                        const bool word = aggregate->size - 8 <= 4;
+                        emit(std::string("    FSTORE.") + (word ? "W" : "D") +
+                             " F" + std::to_string(fp_argument + 1) + ", [R7 + " +
+                             std::to_string(local.offset + 8) + "]");
                     }
                     fp_argument += registers;
                 } else {
