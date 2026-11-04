@@ -49,6 +49,7 @@ TEST_CASE("invalid instructions are shown as data") {
     const std::string text = kr32::disassembler::disassemble(
         bytes, kr32::disassembler::Options{});
     CHECK(text.find(".word") != std::string::npos);
+    CHECK(text.find("0xffffffff") != std::string::npos);
 }
 
 TEST_CASE("the disassembler can use symbols for branch targets") {

@@ -82,6 +82,7 @@ TEST_CASE("instruction and addressing help describe KR32 operands") {
     CHECK(ui::instruction_help("PUSH").find("SP") != std::string::npos);
     CHECK(ui::instruction_help("LOAD8S").find("sign") != std::string::npos);
     CHECK(ui::instruction_help("FADD.S").find("Floating") != std::string::npos);
+    CHECK(ui::instruction_help(".word").find("data word") != std::string::npos);
     CHECK(ui::addressing_help("LOAD R4, [R5 + 8]", "LOAD").find("base register") !=
           std::string::npos);
     CHECK(ui::addressing_help("MOV R1, #42", "MOV").find("immediate") !=

@@ -520,9 +520,23 @@ std::string disassemble(const std::vector<std::uint8_t>& bytes, const Options& o
         line << "  ";
 
         if (decoded && count == 2 && instruction.extension) {
-            line << format_instruction(instruction, address, options.symbols);
+            std::string rendered = format_instruction(instruction, address, options.symbols);
+            if (rendered == ".word") {
+                std::ostringstream value;
+                value << ".word 0x" << std::hex << std::setw(8) << std::setfill('0')
+                      << first;
+                rendered = value.str();
+            }
+            line << rendered;
         } else if (decoded && !instruction.extension) {
-            line << format_instruction(instruction, address, options.symbols);
+            std::string rendered = format_instruction(instruction, address, options.symbols);
+            if (rendered == ".word") {
+                std::ostringstream value;
+                value << ".word 0x" << std::hex << std::setw(8) << std::setfill('0')
+                      << first;
+                rendered = value.str();
+            }
+            line << rendered;
         } else {
             line << ".word 0x" << std::setw(8) << first;
         }

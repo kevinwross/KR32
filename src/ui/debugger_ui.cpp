@@ -1069,8 +1069,8 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     canvas.fill(Rect{rect.x + kAsmGutter, rect.y + 24, 1, rect.height - 26}, kBorder);
     canvas.fill(Rect{instruction_x - 4, rect.y + 24, 1, rect.height - 26}, kBorder);
     canvas.text(bytes_x, rect.y + 7, "HEX", kDim, FontRole::MonoSmall);
+    std::uint32_t address = start;
     for (int row = 0; row < rows; ++row) {
-        const std::uint32_t address = start + static_cast<std::uint32_t>(row * 4);
         const int y = rect.y + 24 + row * line_height;
         if (!hover_source_ && hover_row_ == row) {
             canvas.fill(Rect{rect.x + 1, y - 1, kAsmGutter - 1, line_height},
@@ -1091,6 +1091,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
             read_ok = read_ok && session_.machine().read8(address + index, bytes[index]);
         }
         std::string text;
+        bool extended = false;
         if (read_ok) {
             std::vector<std::uint8_t> data(bytes, bytes + 8);
             disassembler::Options options;
@@ -1128,7 +1129,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         }
         std::string encoded;
         if (read_ok) {
-            const bool extended = (bytes[1] & 0x10U) != 0;
+            extended = (bytes[1] & 0x10U) != 0;
             const auto word_at = [&](int offset) {
                 return static_cast<std::uint32_t>(bytes[offset]) |
                        (static_cast<std::uint32_t>(bytes[offset + 1]) << 8) |
@@ -1177,6 +1178,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         canvas.text(instruction_x, y,
                     trim_to(text, static_cast<std::size_t>((rect.x + rect.width - instruction_x) / 8)),
                     address == pc ? kText : Color{180, 194, 206, 255}, FontRole::Mono);
+        address += extended ? 8U : 4U;
     }
     draw_scrollbar(canvas, rect,
                    static_cast<int>(start_row),
@@ -2463,9 +2465,14 @@ void DebuggerUI::draw_asm_tooltip(Canvas& canvas) {
     const std::string mnemonic =
         split == std::string::npos ? row.text : row.text.substr(0, split);
     const std::string title = hover_asm_operand_ ? "Addressing mode" : mnemonic;
-    const std::string body =
+    std::string body =
         hover_asm_operand_ ? addressing_help(row.text, mnemonic)
                            : instruction_help(mnemonic);
+    if (!hover_asm_operand_ && row.address == core::kRomBase && mnemonic == ".word") {
+        body = "BIOS reset-vector word. The CPU reads this word from the ROM base "
+               "at reset and starts at the address it contains; it is data, not an "
+               "instruction.";
+    }
 
     std::vector<std::string> lines;
     lines.push_back(title);

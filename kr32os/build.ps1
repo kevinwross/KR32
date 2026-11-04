@@ -94,7 +94,7 @@ Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '-S', '-o', $
 Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '-S', '-o', $trapsAssembly)
 Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps.S'), '--object', '-o', $trapStubsObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps-asm.S'), '--object', '-o', $trapStubsObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '-S', '-o', $userAssembly)
 Invoke-Kr32 -Arguments @('as', $userAssembly, '--object', '-o', $userObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '-S', '-o', $memoryAssembly)
@@ -103,7 +103,7 @@ Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '-S', '-o',
 Invoke-Kr32 -Arguments @('as', $processAssembly, '--object', '-o', $processObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '-S', '-o', $syscallAssembly)
 Invoke-Kr32 -Arguments @('as', $syscallAssembly, '--object', '-o', $syscallObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user.S'), '--object', '-o', $userBridgeObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user-asm.S'), '--object', '-o', $userBridgeObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
 
 # Build the first user program.

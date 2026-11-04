@@ -104,6 +104,7 @@ const char* description_for(const std::string& mnemonic) {
         const char* text;
     };
     static const Entry entries[] = {
+        {".word", "Raw 32-bit data word; this is not an executable instruction."},
         {"MOV", "Copy a register or immediate into the destination register."},
         {"LOAD", "Load a 32-bit word from memory into a register."},
         {"STORE", "Store a 32-bit register value to memory."},
