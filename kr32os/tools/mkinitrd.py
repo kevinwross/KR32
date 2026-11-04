@@ -1,12 +1,21 @@
 import struct
 import sys
 
-user_path, archive_path, assembly_path = sys.argv[1:4]
-user = open(user_path, "rb").read()
-header = struct.pack("<III", 0x4932334B, 1, 1)
-name = b"init" + b"\0" * 28
-entry = struct.pack("<III", 56, len(user), 0x00400000)
-archive = header + name + entry + user
+user_path, fault_path, wx_path, archive_path, assembly_path = sys.argv[1:6]
+programs = [
+    ("init", open(user_path, "rb").read()),
+    ("fault", open(fault_path, "rb").read()),
+    ("wx", open(wx_path, "rb").read()),
+]
+header = struct.pack("<III", 0x4932334B, 1, len(programs))
+payload_offset = 12 + len(programs) * 44
+table = b""
+payload = b""
+for name, data in programs:
+    table += name.encode("ascii").ljust(32, b"\0")
+    table += struct.pack("<III", payload_offset + len(payload), len(data), 0x00400000)
+    payload += data
+archive = header + table + payload
 with open(archive_path, "wb") as handle:
     handle.write(archive)
 

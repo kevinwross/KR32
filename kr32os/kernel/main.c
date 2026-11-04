@@ -1,4 +1,5 @@
 #include "console.h"
+#include "memory.h"
 #include "timer.h"
 
 void shell_run(void);
@@ -12,6 +13,7 @@ void kmain(void) {
     console_write("KR32OS M4\n");
     traps_install();
     user_install_syscalls();
+    memory_init();
     process_init();
     timer_init();
     kernel_enable_interrupts();

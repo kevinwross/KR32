@@ -24,6 +24,7 @@
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
 #include "kr32/os/bootinfo.h"
+#include "kr32/os/kernel_meta.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/help.h"
 
@@ -655,6 +656,13 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     boot.framebuffer_size = core::kFramebufferSize;
     boot.framebuffer_stride = core::kFramebufferStride;
     boot.framebuffer_format = 1;
+    os::KernelMeta meta{};
+    if (os::load_kernel_meta(kernel_path, meta, error)) {
+        boot.initrd_base = 0x0002'0000U + meta.initrd_offset;
+        boot.initrd_size = meta.initrd_size;
+    } else if (!error.empty()) {
+        return false;
+    }
     if (!os::write_boot_info(session_.machine(), boot, error)) {
         return false;
     }

@@ -59,6 +59,19 @@ int process_exit(int pid, int status) {
     return -3; // ESRCH
 }
 
+int process_reap(int pid) {
+    int index = 0;
+    while (index < 256) {
+        if (table[index].used != 0 && table[index].pid == pid) {
+            table[index].state = 3;
+            table[index].used = 0;
+            return 0;
+        }
+        ++index;
+    }
+    return -3;
+}
+
 void process_list(void) {
     console_write("PID STATE NAME\n");
     int index = 0;

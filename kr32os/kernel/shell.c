@@ -1,4 +1,5 @@
 #include "console.h"
+#include "memory.h"
 #include "process.h"
 #include "timer.h"
 
@@ -69,7 +70,11 @@ static void run_command(const char *line) {
     } else if (string_equal(line, "clear")) {
         console_clear();
     } else if (string_equal(line, "mem")) {
-        console_write("ram=128MiB pages=32768 used=0 heap=0 ticks=");
+        console_write("ram=128MiB pages=32768 used=");
+        console_write_uint(memory_used_pages());
+        console_write(" heap=");
+        console_write_uint(heap_used());
+        console_write(" ticks=");
         console_write_uint(timer_ticks());
         console_putc('\n');
     } else if (string_equal(line, "ps")) {

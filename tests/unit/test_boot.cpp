@@ -4,8 +4,11 @@
 #include "kr32/core/devices.h"
 #include "kr32/core/machine.h"
 #include "kr32/os/bootinfo.h"
+#include "kr32/os/kernel_meta.h"
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string_view>
 #include <vector>
 
@@ -151,4 +154,50 @@ TEST_CASE("BIOS boots through paging into user code and a syscall") {
     CHECK(halted);
     CHECK(machine.reg(0) == 7);
     CHECK(machine.paging_enabled());
+}
+
+TEST_CASE("kernel.meta validates checksum and initrd range") {
+    const auto directory =
+        std::filesystem::current_path() / "kr32-kernel-meta-test";
+    std::filesystem::create_directories(directory);
+    const auto kernel_path = directory / "kernel.bin";
+    const auto meta_path = directory / "kernel.meta";
+    const std::vector<std::uint8_t> image = {1, 2, 3, 4, 5, 6, 7, 8};
+    {
+        std::ofstream output(kernel_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(image.data()),
+                     static_cast<std::streamsize>(image.size()));
+    }
+
+    auto write_meta = [&](std::uint32_t magic, std::uint32_t checksum,
+                          std::uint32_t offset, std::uint32_t size) {
+        const std::uint32_t words[6] = {
+            magic, 1, 0x0002'0000, offset, size, checksum};
+        std::ofstream output(meta_path, std::ios::binary);
+        for (std::uint32_t word : words) {
+            const std::uint8_t bytes[4] = {
+                static_cast<std::uint8_t>(word),
+                static_cast<std::uint8_t>(word >> 8U),
+                static_cast<std::uint8_t>(word >> 16U),
+                static_cast<std::uint8_t>(word >> 24U)};
+            output.write(reinterpret_cast<const char*>(bytes), 4);
+        }
+    };
+
+    const std::uint32_t checksum = kr32::os::crc32(image.data(), image.size());
+    write_meta(kr32::os::kKernelMetaMagic, checksum, 2, 4);
+    kr32::os::KernelMeta meta;
+    std::string error;
+    CHECK(kr32::os::load_kernel_meta(kernel_path.string(), meta, error));
+    CHECK(meta.initrd_offset == 2);
+    CHECK(meta.initrd_size == 4);
+
+    write_meta(kr32::os::kKernelMetaMagic, checksum ^ 1U, 2, 4);
+    CHECK_FALSE(kr32::os::load_kernel_meta(kernel_path.string(), meta, error));
+    CHECK(error == "kernel.meta checksum mismatch");
+
+    write_meta(kr32::os::kKernelMetaMagic, checksum, 4, 8);
+    CHECK_FALSE(kr32::os::load_kernel_meta(kernel_path.string(), meta, error));
+    CHECK(error == "kernel.meta initrd range is invalid");
+    std::filesystem::remove_all(directory);
 }

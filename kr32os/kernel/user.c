@@ -138,5 +138,6 @@ int run_named(const char *name) {
     kernel_enter_user(entry_address, USER_STACK_TOP);
     int status = (int)*exit_status;
     (void)process_exit(pid, status);
+    (void)process_reap(pid);
     return status;
 }

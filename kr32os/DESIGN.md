@@ -7,14 +7,14 @@ Status: draft for the interactive design session.
 M0-M4 are implemented through the first user process. Current implementation
 notes:
 
-- BootInfo is written by the host loader; the kernel locates the initrd through
-  linker symbols until `kernel.meta` lands.
-- User page tables are static at `0x70000`/`0x71000`; the bitmap allocator and
-  kernel heap remain deferred.
+- BootInfo is written by the host loader and carries the initrd range read from
+  `kernel.meta`.
+- User page tables use static M4 windows at `0x70000`/`0x71000`; a bitmap
+  allocator and bump heap exist for later dynamic mappings.
 - The process table is a fixed 256-entry array.
-- Syscall vectors 64 (exit) and 65 (write) are installed; the other wrapper
-  entry points are present but not yet wired into the vector table.
-- User faults currently follow the kernel panic path.
+- Syscall vectors 64-69 are installed (exit, write, read, yield, getpid, brk).
+- User faults terminate the process with status 139 instead of panicking the
+  kernel.
 
 
 ## Confirmed decisions

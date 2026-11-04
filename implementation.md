@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 12:00 -08:00
+> **Last updated:** 2026-11-04 12:13 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1746,6 +1746,11 @@ Newest entries at the bottom. Use the local time zone.
       trampoline, syscall write/exit, and shell `ls`/`cat`/`run`. Deferred:
       bitmap/heap, kernel.meta, remaining syscall vectors, user-fault kill.
       Windows 40/40 and WSL 37/37 gates pass.
+- **2026-11-04 12:13 -08:00** — KR32OS M4 infrastructure completed:
+      `kernel.meta` CRC sidecar and BootInfo initrd range, bitmap page
+      allocator and bump heap with `mem` statistics, all six syscall vectors,
+      initrd fault/W^X test programs, user-fault containment (exit 139), and
+      immediate reaping. Windows unit suite 353/353.
 
 ## 10. Updating this file
 

@@ -18,6 +18,14 @@ user_install_syscalls:    MOV R1, #0x00050000
     STORE R2, [R1 + 256]         ; vector 64
     LEA R2, [syscall_write_stub]
     STORE R2, [R1 + 260]         ; vector 65
+    LEA R2, [syscall_read_stub]
+    STORE R2, [R1 + 264]         ; vector 66
+    LEA R2, [syscall_yield_stub]
+    STORE R2, [R1 + 268]         ; vector 67
+    LEA R2, [syscall_getpid_stub]
+    STORE R2, [R1 + 272]         ; vector 68
+    LEA R2, [syscall_brk_stub]
+    STORE R2, [R1 + 276]         ; vector 69
     RET
 
     .global kernel_enter_user
@@ -125,3 +133,57 @@ syscall_exit_stub:
     MOV R2, #0x0006F000
     STORE R0, [R2]
     JMP kernel_leave_user
+
+syscall_read_stub:
+    MOV R12, #66
+    STORE R12, [0x0006F004]
+    JMP syscall_common
+
+syscall_yield_stub:
+    MOV R12, #67
+    STORE R12, [0x0006F004]
+    JMP syscall_common
+
+syscall_getpid_stub:
+    MOV R12, #68
+    STORE R12, [0x0006F004]
+    JMP syscall_common
+
+syscall_brk_stub:
+    MOV R12, #69
+    STORE R12, [0x0006F004]
+    JMP syscall_common
+
+syscall_common:
+    PUSH R1
+    PUSH R2
+    PUSH R3
+    PUSH R4
+    PUSH R5
+    PUSH R6
+    PUSH R7
+    PUSH R8
+    PUSH R9
+    PUSH R10
+    PUSH R11
+    PUSH R12
+    PUSH R13
+    PUSH R14
+    PUSH R15
+    CALL sys_dispatch
+    POP R15
+    POP R14
+    POP R13
+    POP R12
+    POP R11
+    POP R10
+    POP R9
+    POP R8
+    POP R7
+    POP R6
+    POP R5
+    POP R4
+    POP R3
+    POP R2
+    POP R1
+    IRET

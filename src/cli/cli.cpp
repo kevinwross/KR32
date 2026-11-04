@@ -12,6 +12,7 @@
 #include "kr32/dis/disassembler.h"
 #include "kr32/link/linker.h"
 #include "kr32/os/bootinfo.h"
+#include "kr32/os/kernel_meta.h"
 #include "kr32/os/defaults.h"
 #include "kr32/version.h"
 #include "kr32/vm/host.h"
@@ -1270,6 +1271,15 @@ int command_vm(int argc, char** argv) {
         boot.framebuffer_size = core::kFramebufferSize;
         boot.framebuffer_stride = core::kFramebufferStride;
         boot.framebuffer_format = 1;
+        os::KernelMeta meta{};
+        std::string meta_error;
+        if (os::load_kernel_meta(paths.kernel, meta, meta_error)) {
+            boot.initrd_base = 0x0002'0000U + meta.initrd_offset;
+            boot.initrd_size = meta.initrd_size;
+        } else if (!meta_error.empty()) {
+            std::fprintf(stderr, "kr32 os: %s\n", meta_error.c_str());
+            return 1;
+        }
         std::string boot_error;
         if (!os::write_boot_info(machine, boot, boot_error)) {
             std::fprintf(stderr, "kr32 os: %s\n", boot_error.c_str());

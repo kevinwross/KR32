@@ -43,3 +43,20 @@ int sys_brk(unsigned int address) {
     (void)address;
     return 0;
 }
+
+int sys_dispatch(int argument0, int argument1, int argument2) {
+    unsigned int *vector = (unsigned int *)0x0006F004;
+    if (*vector == 66) {
+        return sys_read(argument0, (char *)argument1, argument2);
+    }
+    if (*vector == 67) {
+        return sys_yield();
+    }
+    if (*vector == 68) {
+        return sys_getpid();
+    }
+    if (*vector == 69) {
+        return sys_brk((unsigned int)argument0);
+    }
+    return -38; // ENOSYS
+}

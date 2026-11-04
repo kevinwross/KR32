@@ -39,6 +39,8 @@ mkdir -p "$build"
 "$KR32" as "$here/kernel/traps.S" --object -o "$build/trap_stubs.o"
 "$KR32" cc "$here/kernel/user.c" -S -o "$build/user.s"
 "$KR32" as "$build/user.s" --object -o "$build/user.o"
+"$KR32" cc "$here/kernel/memory.c" -S -o "$build/memory.s"
+"$KR32" as "$build/memory.s" --object -o "$build/memory.o"
 "$KR32" cc "$here/kernel/process.c" -S -o "$build/process.s"
 "$KR32" as "$build/process.s" --object -o "$build/process.o"
 "$KR32" cc "$here/kernel/syscall.c" -S -o "$build/syscall.s"
@@ -50,15 +52,24 @@ mkdir -p "$build"
 "$KR32" as "$build/user_init.s" --object -o "$build/user_init.o"
 "$KR32" as "$here/libc/crt0.S" --object -o "$build/crt0.o"
 "$KR32" as "$here/libc/syscall.S" --object -o "$build/user_syscall.o"
+"$KR32" cc "$here/user/fault.c" -S -o "$build/user_fault.s"
+"$KR32" as "$build/user_fault.s" --object -o "$build/user_fault.o"
+"$KR32" cc "$here/user/wx.c" -S -o "$build/user_wx.s"
+"$KR32" as "$build/user_wx.s" --object -o "$build/user_wx.o"
 "$KR32" ld "$build/crt0.o" "$build/user_init.o" "$build/user_syscall.o" \
     --flat --base 0x00400000 -o "$build/init.bin"
-python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/initrd.bin" "$build/initrd.s"
+"$KR32" ld "$build/crt0.o" "$build/user_fault.o" "$build/user_syscall.o" \
+    --flat --base 0x00400000 -o "$build/fault.bin"
+"$KR32" ld "$build/crt0.o" "$build/user_wx.o" "$build/user_syscall.o" \
+    --flat --base 0x00400000 -o "$build/wx.bin"
+python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/wx.bin" "$build/initrd.bin" "$build/initrd.s"
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
-    "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/user_bridge.o" "$build/initrd.o" \
-    --flat --base 0x00020000 -o "$build/kernel.bin"
+    "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
+    --flat --base 0x00020000 --map "$build/kernel.map" -o "$build/kernel.bin"
+python3 "$here/tools/mkmeta.py" "$build/kernel.bin" "$build/kernel.map" "$build/kernel.meta"
 
 echo "KR32OS M4 built:"
 echo "  $build/bios.bin"

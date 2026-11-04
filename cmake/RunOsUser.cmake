@@ -17,7 +17,7 @@ if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR "KR32OS M4 build failed")
 endif()
 
-set(_input "ls\nrun init\nexit\n")
+set(_input "ls\nrun init\nrun wx\nrun fault\nexit\n")
 execute_process(
     COMMAND "${KR32}" os "${SOURCE_DIR}/kr32os/build/kernel.bin"
             --bios "${SOURCE_DIR}/kr32os/build/bios.bin"
@@ -29,6 +29,9 @@ if(NOT _result EQUAL 0)
 endif()
 if(NOT _output MATCHES "init: hello from user mode")
     message(FATAL_ERROR "KR32OS M4 user program output missing: ${_output}")
+endif()
+if(NOT _output MATCHES "exit status 139")
+    message(FATAL_ERROR "KR32OS M4 user fault was not contained: ${_output}")
 endif()
 if(NOT _output MATCHES "exit status 0")
     message(FATAL_ERROR "KR32OS M4 user exit status missing: ${_output}")
