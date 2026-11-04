@@ -40,6 +40,11 @@ Status: draft for the interactive design session.
 - User image limit: 16 MiB; heap grows up to the stack guard.
 - Filesystem: read-only initrd filesystem first; writable block filesystem later.
 - Initial syscalls: exit, write, read, yield, getpid, brk.
+- Block device: add an LBA register at offset `0x18`; 512-byte sectors.
+- Free-list allocator: introduced when process teardown or fork first needs to
+  reclaim kernel memory, not before.
+- Secondary cores: parked by the BIOS and released by the boot core via IPI.
+- Process exit: zombie state until reaped; the kernel reaps init.
 
 
 ## Boot contract (initial assumption)
@@ -173,9 +178,10 @@ heap_end   = RAM end minus the kernel stack guard region
 ```
 
 `kmalloc` aligns the cursor and returns `null` when the region is exhausted.
-`kfree` is a no-op initially. A free-list allocator with boundary tags and
-coalescing replaces the implementation behind the same API once the kernel has
-real allocation workloads.
+`kfree` is a no-op initially. The free-list allocator with boundary tags and
+coalescing is introduced when process teardown or fork first needs to reclaim
+kernel memory, not during the initial boot/shell milestones. The allocator
+replacement stays behind the same `kmalloc`/`kfree` API.
 
 ## Syscall ABI
 
@@ -301,9 +307,21 @@ The filesystem remains separate from the initrd lookup layer so user programs
 can move from read-only initrd files to persistent storage without changing the
 VFS API.
 
+The block device is extended with an LBA register at offset `0x18`, addressed in
+512-byte sectors. A filesystem 4 KiB block is eight consecutive sectors. The
+existing DMA address/count interface remains; the device currently completes
+requests immediately, and asynchronous completion/IRQ behavior is deferred until
+the driver needs it.
+
 Early exceptions print the vector, PC, FAR, and error code to the serial console
 and halt. Process termination and recovery are deferred until process state is
 well-defined.
+
+`exit` marks a process as a zombie and stores its exit status. A parent reaps it;
+init is reaped by the kernel. Zombies hold their process-table entry and exit
+status but release their address space and physical pages immediately. This
+leaves room for a future `wait`/`waitpid` syscall without changing the exit
+path.
 
 ## Timer and scheduling quantum
 
@@ -315,8 +333,10 @@ M5; M3 only establishes the vector and timer device path.
 ## Multicore policy
 
 M0–M4 run on the boot core only. Secondary cores remain parked until the
-scheduler, trap path, and one user process are stable. Multicore bring-up then
-adds:
+scheduler, trap path, and one user process are stable. During M5 bring-up the
+BIOS/loader places each secondary core in a parked spin loop with a per-core
+boot slot. The boot core finishes initialization, writes the startup entry
+point, and releases each core with an IPI. Multicore bring-up then adds:
 
 - per-core stacks and kernel state;
 - a parked-core startup path;
@@ -385,7 +405,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- What is the exact block-device register/DMA model?
 - What are the superblock and inode field layouts for the writable filesystem?
-- When should the free-list allocator replace the bump allocator?
-- How should secondary cores be parked and started in M5?
+- Should block I/O stay immediate, or become asynchronous with IRQ completion?
+- What is the initial kernel shell command set?
+- What are the initrd and filesystem magic/version constants?
+- What does a future `wait`/`waitpid` ABI look like for zombie reaping?
