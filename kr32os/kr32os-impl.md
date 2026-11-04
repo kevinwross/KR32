@@ -253,16 +253,16 @@ HALTED exit=0
 
 Tasks:
 
-- [ ] Implement host SerialDevice and MMIO routing.
-- [ ] Attach DeviceBus in OS CLI and GUI paths.
-- [ ] Implement UI console input, clipboard paste, and serial display.
-- [ ] Add deterministic serial input for CTest.
-- [ ] Implement kernel serial polling driver.
-- [ ] Implement line editing and echo in the shell.
-- [ ] Implement commands: `help`, `echo`, `clear`, `mem`, `ps`.
-- [ ] Implement form-feed clear behavior in the UI console.
-- [ ] Add serial device unit tests and UI input tests.
-- [ ] Add shell CTest that types `help`, `echo hello`, and `mem`.
+- [x] Implement host SerialDevice and MMIO routing.
+- [x] Attach DeviceBus in OS CLI and GUI paths.
+- [x] Implement UI console input, clipboard paste, and serial display.
+- [x] Add deterministic serial input for CTest.
+- [x] Implement kernel serial polling driver.
+- [x] Implement line editing and echo in the shell.
+- [x] Implement commands: `help`, `echo`, `clear`, `mem`, `ps`.
+- [x] Implement form-feed clear behavior in the UI console.
+- [x] Add serial device unit tests and UI input tests.
+- [x] Add shell CTest that types `help`, `echo hello`, and `mem`.
 - [ ] Run gates, log, and commit M2.
 
 Acceptance:
@@ -281,15 +281,15 @@ hello
 
 Tasks:
 
-- [ ] Kernel installs/repairs vector handlers after BIOS handoff.
-- [ ] Add default `ENOSYS`/panic handler for unused vectors.
-- [ ] Implement exception report for `#UD`, `#DIV0`, `#BRK`, `#PF`, `#GP`,
+- [x] Kernel installs/repairs vector handlers after BIOS handoff.
+- [x] Add default `ENOSYS`/panic handler for unused vectors.
+- [x] Implement exception report for `#UD`, `#DIV0`, `#BRK`, `#PF`, `#GP`,
       `#ALIGN`, and `#DF`.
-- [ ] Route timer IRQ line through the IRQ router.
-- [ ] Program a virtual 100 Hz timer with a fixed reload of 10,000 VM
+- [x] Route timer IRQ line through the IRQ router.
+- [x] Program a virtual 100 Hz timer with a fixed reload of 10,000 VM
       instructions; document that this is not wall-clock time.
-- [ ] Include tick count in `mem` output.
-- [ ] Add kernel fault tests and timer IRQ test.
+- [x] Include tick count in `mem` output.
+- [x] Add kernel fault tests and timer IRQ test.
 - [ ] Run gates, log, and commit M3.
 
 Acceptance:

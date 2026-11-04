@@ -12,3 +12,12 @@ _start:
 putchar:
     SYSCALL #33
     RET
+
+    .global kernel_halt
+kernel_halt:
+    HALT
+
+    .global kernel_break
+kernel_break:
+    BRK
+    RET

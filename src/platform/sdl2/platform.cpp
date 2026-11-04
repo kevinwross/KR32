@@ -201,6 +201,16 @@ bool smoke_test() {
     return version.major == 2;
 }
 
+std::string clipboard_text() {
+    char* text = SDL_GetClipboardText();
+    if (text == nullptr) {
+        return {};
+    }
+    std::string result(text);
+    SDL_free(text);
+    return result;
+}
+
 bool open_file_dialog(std::string& path) {
 #ifdef _WIN32
     wchar_t file[32768] = L"";

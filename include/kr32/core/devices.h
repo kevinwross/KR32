@@ -2,8 +2,10 @@
 
 #include <array>
 #include <cstdint>
+#include <deque>
 #include <functional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 namespace kr32::core {
@@ -18,6 +20,7 @@ inline constexpr std::uint32_t kBlockBase = kDeviceBase + 0x1000;
 inline constexpr std::uint32_t kConsoleBase = kDeviceBase + 0x2000;
 inline constexpr std::uint32_t kIrqRouterBase = kDeviceBase + 0x3000;
 inline constexpr std::uint32_t kFramebufferControlBase = kDeviceBase + 0x4000;
+inline constexpr std::uint32_t kSerialBase = kDeviceBase + 0x5000;
 
 // Dedicated 32 MiB display aperture below the MMIO window.
 inline constexpr std::uint32_t kFramebufferBase = 0xFC00'0000;
@@ -118,6 +121,34 @@ private:
     std::string output_;
 };
 
+class SerialDevice final : public Device {
+public:
+    static constexpr std::uint32_t Data = 0x00;
+    static constexpr std::uint32_t Status = 0x04;
+    static constexpr std::uint32_t Peek = 0x08;
+    static constexpr std::uint32_t RxReady = 1U << 0;
+    static constexpr std::uint32_t TxReady = 1U << 1;
+    static constexpr std::uint32_t Overrun = 1U << 2;
+    static constexpr std::size_t Capacity = 4096;
+
+    [[nodiscard]] bool read(std::uint32_t offset, std::uint32_t& value) override;
+    [[nodiscard]] bool write(std::uint32_t offset, std::uint32_t value) override;
+    void reset() override;
+
+    [[nodiscard]] bool push_input(std::uint8_t byte);
+    void push_input(std::string_view text);
+    [[nodiscard]] std::size_t available() const { return rx_.size(); }
+    [[nodiscard]] bool peek(std::uint8_t& byte) const;
+    [[nodiscard]] std::string take_output();
+    [[nodiscard]] const std::string& output() const { return output_; }
+    [[nodiscard]] bool overrun() const { return overrun_; }
+
+private:
+    std::deque<std::uint8_t> rx_;
+    std::string output_;
+    bool overrun_ = false;
+};
+
 class FramebufferDevice {
 public:
     static constexpr std::uint32_t Control = 0x00;
@@ -184,6 +215,8 @@ public:
     [[nodiscard]] TimerDevice& timer() { return timer_; }
     [[nodiscard]] BlockDevice& block() { return block_; }
     [[nodiscard]] ConsoleDevice& console() { return console_; }
+    [[nodiscard]] SerialDevice& serial() { return serial_; }
+    [[nodiscard]] const SerialDevice& serial() const { return serial_; }
     [[nodiscard]] FramebufferDevice& framebuffer() { return framebuffer_; }
     [[nodiscard]] const FramebufferDevice& framebuffer() const { return framebuffer_; }
     [[nodiscard]] IrqRouter& irq_router() { return irq_router_; }
@@ -196,6 +229,7 @@ private:
     TimerDevice timer_;
     BlockDevice block_;
     ConsoleDevice console_;
+    SerialDevice serial_;
     FramebufferDevice framebuffer_;
     IrqRouter irq_router_;
     std::function<void(std::uint32_t)> irq_handler_;

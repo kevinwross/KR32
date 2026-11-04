@@ -658,6 +658,10 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     if (!os::write_boot_info(session_.machine(), boot, error)) {
         return false;
     }
+    devices_.reset();
+    devices_.attach_machine(session_.machine());
+    session_.machine().attach_devices(&devices_);
+    serial_text_.clear();
     path_ = kernel_path;
     bios_path_ = bios_path;
     os_mode_ = true;
@@ -2237,7 +2241,7 @@ void DebuggerUI::finish_memory_address_edit(bool commit) {
 void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "CONSOLE");
     std::vector<std::string> lines;
-    std::istringstream stream(session_.console());
+    std::istringstream stream(os_mode_ ? serial_text_ : session_.console());
     std::string line;
     while (std::getline(stream, line)) {
         lines.push_back(line);
@@ -2587,6 +2591,7 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     }
     const Layout areas = layout(width, height);
     hover_settings_control_ = -1;
+    console_hover_ = areas.console.contains(x, y);
     if (settings_rect_.contains(x, y)) {
         hover_settings_control_ = 100;
     }
@@ -2706,6 +2711,16 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_memory(canvas, areas.memory);
     draw_variables(canvas, areas.variables);
     draw_call_stack(canvas, areas.call_stack);
+    if (os_mode_) {
+        std::string output = devices_.serial().take_output();
+        for (char character : output) {
+            if (character == '\f') {
+                serial_text_.clear();
+            } else {
+                serial_text_.push_back(character);
+            }
+        }
+    }
     draw_console(canvas, areas.console);
     draw_error(canvas);
     draw_memory_tooltip(canvas);
@@ -3008,7 +3023,7 @@ bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
     return false;
 }
 
-bool DebuggerUI::key(int key_value, bool shift) {
+bool DebuggerUI::key(int key_value, bool shift, bool control) {
     if (settings_open_) {
         if (key_value == kr32::platform::key::Escape) {
             close_settings(false);
@@ -3033,6 +3048,49 @@ bool DebuggerUI::key(int key_value, bool shift) {
             }
         }
         return true;
+    }
+    if (console_hover_ && os_mode_ && !menu_.open && editing_tile_ < 0 &&
+        editing_fpr_ < 0 && editing_register_ < 0 && !memory_address_editing_) {
+        bool pushed = false;
+        if (control && (key_value == 'v' || key_value == 'V')) {
+            std::string text = kr32::platform::clipboard_text();
+            std::string normalized;
+            for (std::size_t index = 0; index < text.size(); ++index) {
+                if (text[index] == '\r') {
+                    if (index + 1 < text.size() && text[index + 1] == '\n') {
+                        ++index;
+                    }
+                    normalized.push_back('\n');
+                } else {
+                    normalized.push_back(text[index]);
+                }
+            }
+            (void)devices_.serial().push_input(normalized);
+            pushed = !normalized.empty();
+        } else if (control && key_value >= 'a' && key_value <= 'z') {
+            (void)devices_.serial().push_input(
+                static_cast<std::uint8_t>(key_value - 'a' + 1));
+            pushed = true;
+        } else if (key_value == kr32::platform::key::Enter) {
+            (void)devices_.serial().push_input(static_cast<std::uint8_t>('\n'));
+            pushed = true;
+        } else if (key_value == kr32::platform::key::Backspace) {
+            (void)devices_.serial().push_input(static_cast<std::uint8_t>(0x7F));
+            pushed = true;
+        } else if (key_value >= 32 && key_value <= 126) {
+            char character = static_cast<char>(key_value);
+            if (shift && character >= 'a' && character <= 'z') {
+                character = static_cast<char>(character - 'a' + 'A');
+            }
+            (void)devices_.serial().push_input(static_cast<std::uint8_t>(character));
+            pushed = true;
+        }
+        if (pushed) {
+            run();
+        }
+        if (pushed) {
+            return true;
+        }
     }
     if (editing_tile_ >= 0) {
         if (key_value == kr32::platform::key::Escape) {

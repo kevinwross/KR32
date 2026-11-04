@@ -232,7 +232,8 @@ int run_machine(core::Machine& machine,
                 bool trace,
                 bool stats,
                 const vm::HostOptions& host_options = {},
-                bool setup_arguments = true) {
+                bool setup_arguments = true,
+                core::DeviceBus* devices = nullptr) {
     if (setup_arguments) {
         std::string argument_error;
         if (!machine.setup_arguments(host_options.args, "program", argument_error)) {
@@ -252,6 +253,13 @@ int run_machine(core::Machine& machine,
             }
         }
         const core::StepResult result = machine.step();
+        if (devices != nullptr) {
+            const std::string serial_output = devices->serial().take_output();
+            if (!serial_output.empty()) {
+                std::fwrite(serial_output.data(), 1, serial_output.size(), stdout);
+                std::fflush(stdout);
+            }
+        }
         if (result.kind == core::StepResult::Kind::Retired ||
             result.kind == core::StepResult::Kind::FaultDelivered) {
             continue;
@@ -1130,6 +1138,7 @@ int command_vm(int argc, char** argv) {
     bool trace = false;
     bool stats = false;
     bool os_mode = false;
+    std::string serial_input;
     vm::HostOptions host_options;
 
     for (int index = 2; index < argc; ++index) {
@@ -1158,7 +1167,7 @@ int command_vm(int argc, char** argv) {
             continue;
         }
         if (argument == "--fs-root" || argument == "--quota" || argument == "--arg" ||
-            argument == "--input") {
+            argument == "--input" || argument == "--serial-input") {
             if (index + 1 >= argc) {
                 std::fprintf(stderr, "kr32 vm: %.*s needs a value\n",
                              static_cast<int>(argument.size()), argument.data());
@@ -1167,6 +1176,7 @@ int command_vm(int argc, char** argv) {
             const std::string value = argv[++index];
             if (argument == "--fs-root") host_options.fs_root = value;
             if (argument == "--input") host_options.input = value;
+            if (argument == "--serial-input") serial_input = value;
             if (argument == "--arg") host_options.args.push_back(value);
             if (argument == "--quota") {
                 std::uint32_t quota = 0;
@@ -1265,8 +1275,13 @@ int command_vm(int argc, char** argv) {
             std::fprintf(stderr, "kr32 os: %s\n", boot_error.c_str());
             return 1;
         }
+        core::DeviceBus devices;
+        devices.attach_machine(machine);
+        machine.attach_devices(&devices);
+        devices.serial().push_input(serial_input);
         std::printf("os: %s\nbios: %s\n", paths.kernel.c_str(), paths.bios.c_str());
-        return run_machine(machine, max_steps, trace, stats, host_options, true);
+        return run_machine(machine, max_steps, trace, stats, host_options, true,
+                           &devices);
     }
 
     if (program.empty()) {

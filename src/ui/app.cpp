@@ -131,7 +131,7 @@ int run(int argc, char** argv) {
                 }
                 break;
             case kr32::platform::Event::Kind::KeyDown:
-                (void)debugger.key(event.key, event.shift);
+                (void)debugger.key(event.key, event.shift, event.control);
                 break;
             case kr32::platform::Event::Kind::MouseDown:
                 if (event.button == 3) {

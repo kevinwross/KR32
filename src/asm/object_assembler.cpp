@@ -202,6 +202,27 @@ bool parse_register(std::string_view text, int& reg) {
     return true;
 }
 
+bool parse_control_register(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 3 || (value[0] != 'c' && value[0] != 'C') ||
+        (value[1] != 'r' && value[1] != 'R')) {
+        return false;
+    }
+    std::size_t index = 2;
+    while (index < value.size() && std::isdigit(static_cast<unsigned char>(value[index])) != 0) {
+        ++index;
+    }
+    if (index != value.size() || index == 2) {
+        return false;
+    }
+    const int number = std::atoi(value.c_str() + 2);
+    if (number < 0 || number >= 16) {
+        return false;
+    }
+    reg = number;
+    return true;
+}
+
 bool parse_fpr(std::string_view text, int& reg) {
     const std::string value = trim(text);
     if (value.size() < 2 || (value[0] != 'f' && value[0] != 'F')) {
@@ -1106,13 +1127,39 @@ private:
             return true;
         }
 
-        if (mnemonic == "nop" || mnemonic == "ret" || mnemonic == "halt" ||
-            mnemonic == "brk" || mnemonic == "fence") {
+        if (mnemonic == "rdcr" || mnemonic == "wrcr") {
+            if (operands.size() != 2) {
+                return fail_operands("Rd, CRn or CRn, Rs");
+            }
+            int control = 0;
+            int reg = 0;
+            if (mnemonic == "rdcr") {
+                if (!parse_register(operands[0], reg) ||
+                    !parse_control_register(operands[1], control)) {
+                    return fail(statement.line, "expected Rd, CRn");
+                }
+                set_destination(reg);
+                instruction.opcode = 0x49;
+            } else {
+                if (!parse_control_register(operands[0], control) ||
+                    !parse_register(operands[1], reg)) {
+                    return fail(statement.line, "expected CRn, Rs");
+                }
+                set_destination(reg);
+                instruction.opcode = 0x4A;
+            }
+            instruction.field = static_cast<std::uint8_t>(control);
+            return true;
+        }
+
+        if (mnemonic == "nop" || mnemonic == "ret" || mnemonic == "iret" ||
+            mnemonic == "halt" || mnemonic == "brk" || mnemonic == "fence") {
             if (!operands.empty()) {
                 return fail_operands("no operands");
             }
             if (mnemonic == "nop") instruction.opcode = 0x45;
             if (mnemonic == "ret") instruction.opcode = 0x3B;
+            if (mnemonic == "iret") instruction.opcode = 0x42;
             if (mnemonic == "halt") instruction.opcode = 0x43;
             if (mnemonic == "brk") instruction.opcode = 0x44;
             if (mnemonic == "fence") instruction.opcode = 0x48;

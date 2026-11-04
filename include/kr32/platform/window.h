@@ -60,4 +60,7 @@ private:
 // Shows the platform file picker. Returns false when canceled or unavailable.
 [[nodiscard]] bool open_file_dialog(std::string& path);
 
+// Returns the host clipboard as UTF-8 text, or an empty string.
+[[nodiscard]] std::string clipboard_text();
+
 } // namespace kr32::platform

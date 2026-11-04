@@ -53,8 +53,9 @@ bios_entry:
     MOV R1, #0x00041001
     STORE R1, [0x00040000]
 
-    ; MMIO page table at 0x42000: 0xFFF0_0000..0xFFF3_FFFF.
-    MOV R1, #0x00042000
+    ; High page table at 0x42000 for PDE 0x3FF
+    ; (0xFFC0_0000..0xFFFF_FFFF): MMIO and ROM.
+    MOV R1, #0x00042C00          ; leaf 0x300: 0xFFF0_0000
     MOV R2, #0
     MOV R3, #0xFFF00000
 .Lmmio_pages:
@@ -63,13 +64,11 @@ bios_entry:
     ADD R1, R1, #4
     ADD R3, R3, #0x1000
     ADD R2, R2, #1
-    CMP R2, #1024
+    CMP R2, #6                   ; timer, block, console, IRQ, fb control, serial
     JLT .Lmmio_pages
-    MOV R1, #0x00042001
-    STORE R1, [0x00040FF0]       ; PDE 0x3FC
 
-    ; ROM page table at 0x43000: map the 16 ROM pages at 0xFFFF_0000.
-    MOV R1, #0x00043FC0
+    ; ROM pages at leaf index 0x3F0.
+    MOV R1, #0x00042FC0
     MOV R2, #0
     MOV R3, #0xFFFF0000
 .Lrom_pages:
@@ -80,11 +79,11 @@ bios_entry:
     ADD R2, R2, #1
     CMP R2, #16
     JLT .Lrom_pages
-    MOV R1, #0x00043001
+    MOV R1, #0x00042001
     STORE R1, [0x00040FFC]       ; PDE 0x3FF
 
-    ; Framebuffer page tables at 0x44000..0x4B000 for 0xFC00_0000..0xFDFF_FFFF.
-    MOV R8, #0x00044000
+    ; Framebuffer page tables at 0x43000..0x4A000 for 0xFC00_0000..0xFDFF_FFFF.
+    MOV R8, #0x00043000
     MOV R9, #0x00040FC0
     MOV R6, #8
     MOV R3, #0xFC000000

@@ -5,6 +5,7 @@
 #include <vector>
 
 #include "kr32/container/container.h"
+#include "kr32/core/devices.h"
 #include "kr32/debug/debug.h"
 #include "kr32/ui/canvas.h"
 
@@ -34,7 +35,7 @@ public:
     void hover(int x, int y, int width, int height);
     void mouse_up();
     [[nodiscard]] bool wheel(int x, int y, int width, int height, int delta);
-    [[nodiscard]] bool key(int key, bool shift);
+    [[nodiscard]] bool key(int key, bool shift, bool control = false);
     [[nodiscard]] bool quit_requested() const { return quit_; }
     [[nodiscard]] const std::string& status() const { return status_; }
     [[nodiscard]] const std::string& error() const { return error_; }
@@ -222,6 +223,9 @@ private:
     int hover_settings_control_ = -1;
     bool os_mode_ = false;
     std::string bios_path_;
+    core::DeviceBus devices_;
+    std::string serial_text_;
+    bool console_hover_ = false;
 
     struct VarHoverRow {
         Rect row{};

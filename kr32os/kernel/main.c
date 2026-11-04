@@ -1,9 +1,14 @@
-int putchar(int character);
+#include "console.h"
+#include "timer.h"
+
+void shell_run(void);
+void traps_install(void);
+void kernel_enable_interrupts(void);
 
 void kmain(void) {
-    const char *message = "KR32OS M1\n";
-    while (*message != '\0') {
-        putchar(*message);
-        ++message;
-    }
+    console_write("KR32OS M3\n");
+    traps_install();
+    timer_init();
+    kernel_enable_interrupts();
+    shell_run();
 }

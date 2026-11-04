@@ -452,6 +452,9 @@ bool Machine::translate(std::uint32_t virtual_address,
         }
         return true;
     }
+    if (devices_ != nullptr && devices_->contains(physical_address)) {
+        return true;
+    }
 
     return page_fault(code | 1U);
 }

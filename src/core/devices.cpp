@@ -177,6 +177,76 @@ void ConsoleDevice::reset() {
     output_.clear();
 }
 
+bool SerialDevice::read(std::uint32_t offset, std::uint32_t& value) {
+    switch (offset) {
+    case Data:
+        if (rx_.empty()) {
+            value = 0;
+            return true;
+        }
+        value = rx_.front();
+        rx_.pop_front();
+        return true;
+    case Status:
+        value = (rx_.empty() ? 0U : RxReady) | TxReady |
+                (overrun_ ? Overrun : 0U);
+        return true;
+    case Peek:
+        value = rx_.empty() ? 0xFFFF'FFFFU : rx_.front();
+        return true;
+    default:
+        return false;
+    }
+}
+
+bool SerialDevice::write(std::uint32_t offset, std::uint32_t value) {
+    switch (offset) {
+    case Data:
+        output_.push_back(static_cast<char>(value & 0xFFU));
+        return true;
+    case Status:
+        if ((value & Overrun) != 0) {
+            overrun_ = false;
+        }
+        return true;
+    default:
+        return false;
+    }
+}
+
+void SerialDevice::reset() {
+    rx_.clear();
+    output_.clear();
+    overrun_ = false;
+}
+
+bool SerialDevice::push_input(std::uint8_t byte) {
+    if (rx_.size() >= Capacity) {
+        overrun_ = true;
+        return false;
+    }
+    rx_.push_back(byte);
+    return true;
+}
+
+void SerialDevice::push_input(std::string_view text) {
+    for (char ch : text) {
+        (void)push_input(static_cast<std::uint8_t>(ch));
+    }
+}
+
+bool SerialDevice::peek(std::uint8_t& byte) const {
+    if (rx_.empty()) return false;
+    byte = rx_.front();
+    return true;
+}
+
+std::string SerialDevice::take_output() {
+    std::string result;
+    result.swap(output_);
+    return result;
+}
+
 FramebufferDevice::FramebufferDevice()
     : pixels_(kFramebufferSize, std::uint8_t{0}) {}
 
@@ -344,6 +414,9 @@ bool DeviceBus::read32(std::uint32_t address, std::uint32_t& value) {
     if (address >= kIrqRouterBase && address < kIrqRouterBase + 0x1000) {
         return irq_router_.read(address - kIrqRouterBase, value);
     }
+    if (address >= kSerialBase && address < kSerialBase + 0x1000) {
+        return serial_.read(address - kSerialBase, value);
+    }
     if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
         return framebuffer_.read_control(address - kFramebufferControlBase, value);
     }
@@ -367,6 +440,9 @@ bool DeviceBus::write32(std::uint32_t address, std::uint32_t value) {
     if (address >= kIrqRouterBase && address < kIrqRouterBase + 0x1000) {
         return irq_router_.write(address - kIrqRouterBase, value);
     }
+    if (address >= kSerialBase && address < kSerialBase + 0x1000) {
+        return serial_.write(address - kSerialBase, value);
+    }
     if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
         return framebuffer_.write_control(address - kFramebufferControlBase, value);
     }
@@ -381,6 +457,7 @@ void DeviceBus::reset() {
     timer_.reset();
     block_.reset();
     console_.reset();
+    serial_.reset();
     framebuffer_.reset();
     irq_router_.reset();
     raise_count_ = 0;

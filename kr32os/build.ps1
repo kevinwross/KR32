@@ -52,15 +52,35 @@ function Invoke-Kr32 {
 $bios = Join-Path $build 'bios.bin'
 $kernelAssembly = Join-Path $build 'kernel.s'
 $kernelObject = Join-Path $build 'kernel.o'
+$consoleAssembly = Join-Path $build 'console.s'
+$consoleObject = Join-Path $build 'console.o'
+$shellAssembly = Join-Path $build 'shell.s'
+$shellObject = Join-Path $build 'shell.o'
+$timerAssembly = Join-Path $build 'timer.s'
+$timerObject = Join-Path $build 'timer.o'
+$trapsAssembly = Join-Path $build 'traps.s'
+$trapsObject = Join-Path $build 'traps.o'
+$trapStubsObject = Join-Path $build 'trap_stubs.o'
 $entryObject = Join-Path $build 'entry.o'
 $kernel = Join-Path $build 'kernel.bin'
 
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'bios\entry.S'), '--base', '0xFFFF0000', '-o', $bios)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '-S', '-o', $kernelAssembly)
 Invoke-Kr32 -Arguments @('as', $kernelAssembly, '--object', '-o', $kernelObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '-S', '-o', $consoleAssembly)
+Invoke-Kr32 -Arguments @('as', $consoleAssembly, '--object', '-o', $consoleObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '-S', '-o', $shellAssembly)
+Invoke-Kr32 -Arguments @('as', $shellAssembly, '--object', '-o', $shellObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '-S', '-o', $timerAssembly)
+Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '-S', '-o', $trapsAssembly)
+Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps.S'), '--object', '-o', $trapStubsObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
-Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, '--flat', '--base', '0x00020000', '-o', $kernel)
+Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
+                        $timerObject, $trapsObject, $trapStubsObject,
+                        '--flat', '--base', '0x00020000', '-o', $kernel)
 
-Write-Host "KR32OS M0 built:"
+Write-Host "KR32OS M2 built:"
 Write-Host "  $bios"
 Write-Host "  $kernel"

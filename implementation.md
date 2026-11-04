@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 11:32 -08:00
+> **Last updated:** 2026-11-04 11:43 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1737,6 +1737,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-04 11:32 -08:00** — KR32OS M1 complete: BootInfo loader/ABI,
       BIOS page tables and guard page, vector table, paging enable, kernel
       banner, and boot regression. Windows build/test pass.
+- **2026-11-04 11:43 -08:00** — KR32OS M2/M3 complete: serial tty device and
+      UI input path, polled kernel shell, vector/exception reporting, virtual
+      timer IRQ, and fault/timer regressions. MMIO is now reachable through
+      paging.
 
 ## 10. Updating this file
 

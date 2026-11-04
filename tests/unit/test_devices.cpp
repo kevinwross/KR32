@@ -43,6 +43,29 @@ TEST_CASE("framebuffer aperture stores pixels and exposes control registers") {
     CHECK(value == 3200U);
 }
 
+TEST_CASE("serial device exposes RX, TX, status, and peek") {
+    core::Machine machine(core::Machine::Options{1U * 1024U * 1024U, 0, true});
+    core::DeviceBus devices;
+    devices.attach_machine(machine);
+    machine.attach_devices(&devices);
+
+    devices.serial().push_input("hi");
+    std::uint32_t value = 0;
+    REQUIRE(machine.read_physical32(core::kSerialBase + core::SerialDevice::Status, value));
+    CHECK((value & core::SerialDevice::RxReady) != 0);
+    CHECK((value & core::SerialDevice::Overrun) == 0);
+    REQUIRE(machine.read_physical32(core::kSerialBase + core::SerialDevice::Peek, value));
+    CHECK(value == 'h');
+    REQUIRE(machine.read_physical32(core::kSerialBase + core::SerialDevice::Data, value));
+    CHECK(value == 'h');
+    REQUIRE(machine.read_physical32(core::kSerialBase + core::SerialDevice::Peek, value));
+    CHECK(value == 'i');
+
+    REQUIRE(machine.write_physical32(core::kSerialBase + core::SerialDevice::Data, 'O'));
+    REQUIRE(machine.write_physical32(core::kSerialBase + core::SerialDevice::Data, 'K'));
+    CHECK(devices.serial().take_output() == "OK");
+}
+
 TEST_CASE("timer and console MMIO are accessible through the machine") {
     core::Machine machine(core::Machine::Options{1U * 1024U * 1024U, 0, true});
     core::DeviceBus devices;
