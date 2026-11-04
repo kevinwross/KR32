@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 20:22 -08:00
+> **Last updated:** 2026-11-04 08:17 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1671,6 +1671,12 @@ Newest entries at the bottom. Use the local time zone.
       floating-point edit popups, widened cell spacing, and hover tooltips for
       tile cells, TSP, CR3/CR6/CR10, and PTBR. Control rows have more vertical
       spacing.
+- **2026-11-04 08:14 -08:00** — Added the KR32 settings gear and dialog with
+      guest command-line arguments (`sys_argc`/`sys_arg`), stop-at-main and
+      assembler-listing controls, persisted settings, plus tests for argument
+      delivery and settings-dialog rendering.
+- **2026-11-04 08:17 -08:00** — Added settings-dialog regression coverage and
+      fixed the minimum-width layout clamp that could assert at 800px wide.
 
 ## 10. Updating this file
 

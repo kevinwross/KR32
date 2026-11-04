@@ -60,6 +60,24 @@ TEST_CASE("error popup is opaque and white-on-dark") {
     CHECK(white > 0);
 }
 
+TEST_CASE("the settings dialog renders and closes without a loaded image") {
+    ui::DebuggerUI debugger;
+    ui::Canvas baseline(800, 600);
+    debugger.render(baseline);
+    const std::uint64_t baseline_hash = baseline.hash();
+
+    CHECK(debugger.click(800 - 19, 15, 800, 600));
+    ui::Canvas settings(800, 600);
+    debugger.render(settings);
+    CHECK(settings.hash() != baseline_hash);
+
+    // The modal is centered in 800x600 with a 560x360 body; click its X.
+    CHECK(debugger.click(120 + 560 - 20, 120 + 18, 800, 600));
+    ui::Canvas closed(800, 600);
+    debugger.render(closed);
+    CHECK(closed.hash() == baseline_hash);
+}
+
 TEST_CASE("instruction and addressing help describe KR32 operands") {
     CHECK(ui::instruction_help("PUSH").find("SP") != std::string::npos);
     CHECK(ui::instruction_help("LOAD8S").find("sign") != std::string::npos);

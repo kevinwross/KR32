@@ -7,11 +7,13 @@
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <filesystem>
 #include <fstream>
 #include <iomanip>
 #include <iterator>
 #include <sstream>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "kr32/asm/object_assembler.h"
@@ -34,6 +36,14 @@ constexpr Color kText{220, 228, 236, 255};
 constexpr Color kDim{132, 146, 158, 255};
 constexpr Color kAccent{76, 170, 255, 255};
 constexpr Color kBad{255, 104, 104, 255};
+
+// 24x24 monochrome mask derived from the KR16 settings gear icon.
+constexpr std::uint32_t kGearIcon[24] = {
+    0x003C00, 0x006600, 0x0E4660, 0x0FC7F0, 0x310098, 0x30000C,
+    0x300018, 0x187E10, 0x10C308, 0x71818E, 0xC10083, 0x810081,
+    0x810081, 0xF1018F, 0x71830E, 0x10C718, 0x187C10, 0x300008,
+    0x30000C, 0x1B0198, 0x0EC770, 0x044620, 0x006600, 0x003C00,
+};
 
 constexpr int kToolbarHeight = 30;
 constexpr int kSourceGutter = 58;
@@ -70,7 +80,135 @@ std::string trim_to(std::string value, std::size_t limit) {
     return value;
 }
 
-bool compile_c_source(const std::string& path, container::Image& image, std::string& error) {
+struct ParsedArguments {
+    bool ok = true;
+    std::string error;
+    std::vector<std::string> arguments;
+};
+
+bool argument_space(char ch) {
+    return std::isspace(static_cast<unsigned char>(ch)) != 0;
+}
+
+ParsedArguments parse_arguments(std::string_view text) {
+    ParsedArguments result;
+    std::size_t index = 0;
+    while (index < text.size()) {
+        while (index < text.size() && argument_space(text[index])) {
+            ++index;
+        }
+        if (index >= text.size()) {
+            break;
+        }
+        std::string argument;
+        bool quoted = false;
+        bool started = false;
+        while (index < text.size()) {
+            const char ch = text[index];
+            if (!quoted && argument_space(ch)) {
+                break;
+            }
+            if (ch == '\\') {
+                std::size_t count = 0;
+                while (index + count < text.size() && text[index + count] == '\\') {
+                    ++count;
+                }
+                const bool before_quote =
+                    index + count < text.size() && text[index + count] == '"';
+                if (!before_quote) {
+                    argument.append(count, '\\');
+                    index += count;
+                    started = true;
+                    continue;
+                }
+                argument.append(count / 2, '\\');
+                if (count % 2 != 0) {
+                    argument.push_back('"');
+                    index += count + 1;
+                    started = true;
+                } else {
+                    index += count;
+                }
+                continue;
+            }
+            if (ch == '"') {
+                if (quoted && index + 1 < text.size() && text[index + 1] == '"') {
+                    argument.push_back('"');
+                    index += 2;
+                    started = true;
+                    continue;
+                }
+                quoted = !quoted;
+                started = true;
+                ++index;
+                continue;
+            }
+            argument.push_back(ch);
+            started = true;
+            ++index;
+        }
+        if (quoted) {
+            result.ok = false;
+            result.error = "unterminated double quote";
+            result.arguments.clear();
+            return result;
+        }
+        if (started) {
+            result.arguments.push_back(std::move(argument));
+        }
+    }
+    return result;
+}
+
+std::filesystem::path settings_path() {
+#ifdef _MSC_VER
+    char* appdata = nullptr;
+    std::size_t appdata_size = 0;
+    if (_dupenv_s(&appdata, &appdata_size, "APPDATA") == 0 && appdata != nullptr) {
+        const std::filesystem::path path =
+            std::filesystem::path(appdata) / "KR32" / "settings.ini";
+        std::free(appdata);
+        return path;
+    }
+    char* xdg = nullptr;
+    std::size_t xdg_size = 0;
+    if (_dupenv_s(&xdg, &xdg_size, "XDG_CONFIG_HOME") == 0 && xdg != nullptr) {
+        const std::filesystem::path path =
+            std::filesystem::path(xdg) / "kr32" / "settings.ini";
+        std::free(xdg);
+        return path;
+    }
+#else
+    const char* appdata = std::getenv("APPDATA");
+    if (appdata != nullptr && *appdata != 0) {
+        return std::filesystem::path(appdata) / "KR32" / "settings.ini";
+    }
+    const char* xdg = std::getenv("XDG_CONFIG_HOME");
+    if (xdg != nullptr && *xdg != 0) {
+        return std::filesystem::path(xdg) / "kr32" / "settings.ini";
+    }
+#endif
+    return std::filesystem::current_path() / "kr32-settings.ini";
+}
+
+bool write_listing(const std::string& path, const std::string& assembly,
+                   std::string& error) {
+    const std::string listing_path = path + ".lst";
+    std::ofstream output(listing_path, std::ios::binary);
+    if (!output) {
+        error = "cannot write listing " + listing_path;
+        return false;
+    }
+    output << assembly;
+    if (!output) {
+        error = "cannot write listing " + listing_path;
+        return false;
+    }
+    return true;
+}
+
+bool compile_c_source(const std::string& path, container::Image& image,
+                      std::string& error, bool listing) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         error = "cannot open " + path;
@@ -106,10 +244,14 @@ bool compile_c_source(const std::string& path, container::Image& image, std::str
         error = path + ": " + link_error.message;
         return false;
     }
+    if (listing && !write_listing(path, compiled.assembly, error)) {
+        return false;
+    }
     return true;
 }
 
-bool compile_cxx_source(const std::string& path, container::Image& image, std::string& error) {
+bool compile_cxx_source(const std::string& path, container::Image& image,
+                        std::string& error, bool listing) {
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         error = "cannot open " + path;
@@ -145,6 +287,9 @@ bool compile_cxx_source(const std::string& path, container::Image& image, std::s
     linker::Error link_error;
     if (!linker::link({user, runtime}, linker::Options{}, image, map, link_error)) {
         error = path + ": " + link_error.message;
+        return false;
+    }
+    if (listing && !write_listing(path, compiled.assembly, error)) {
         return false;
     }
     return true;
@@ -202,15 +347,183 @@ std::string DebuggerUI::format_fpr_float(std::uint32_t value, bool scientific) c
     return out.str();
 }
 
+DebuggerUI::DebuggerUI() {
+    load_settings();
+}
+
+void DebuggerUI::load_settings() {
+    std::ifstream input(settings_path());
+    if (!input) {
+        return;
+    }
+    std::string line;
+    while (std::getline(input, line)) {
+        const std::size_t equals = line.find('=');
+        if (equals == std::string::npos) {
+            continue;
+        }
+        const std::string key = line.substr(0, equals);
+        const std::string value = line.substr(equals + 1);
+        if (key == "arguments") {
+            settings_arguments_ = value;
+        } else if (key == "stop_at_main") {
+            settings_stop_at_main_ = value != "0";
+        } else if (key == "listing") {
+            settings_write_listing_ = value != "0";
+        }
+    }
+}
+
+void DebuggerUI::save_settings() {
+    const std::filesystem::path path = settings_path();
+    std::error_code error;
+    std::filesystem::create_directories(path.parent_path(), error);
+    std::ofstream output(path, std::ios::binary);
+    if (!output) {
+        return;
+    }
+    output << "arguments=" << settings_arguments_ << '\n';
+    output << "stop_at_main=" << (settings_stop_at_main_ ? 1 : 0) << '\n';
+    output << "listing=" << (settings_write_listing_ ? 1 : 0) << '\n';
+}
+
+void DebuggerUI::open_settings() {
+    settings_open_ = true;
+    settings_args_focused_ = false;
+    settings_error_.clear();
+    hover_settings_control_ = -1;
+}
+
+void DebuggerUI::close_settings(bool save) {
+    if (save) {
+        save_settings();
+    }
+    settings_open_ = false;
+    settings_args_focused_ = false;
+    settings_error_.clear();
+    hover_settings_control_ = -1;
+}
+
+void DebuggerUI::apply_settings() {
+    const ParsedArguments parsed = parse_arguments(settings_arguments_);
+    if (!parsed.ok) {
+        settings_error_ = parsed.error;
+        return;
+    }
+    settings_error_.clear();
+    save_settings();
+    if (!loaded_ || path_.empty()) {
+        status_ = "settings saved";
+        settings_open_ = false;
+        return;
+    }
+    std::string error;
+    if (!load(path_, error)) {
+        settings_error_ = error;
+        error_ = error;
+        return;
+    }
+    status_ = "settings applied; rebuilt " + path_;
+    settings_open_ = false;
+}
+
+void DebuggerUI::draw_settings(Canvas& canvas) {
+    const int width = 560;
+    const int height = 360;
+    const int x = (canvas.width() - width) / 2;
+    const int y = (canvas.height() - height) / 2;
+    settings_modal_ = Rect{x, y, width, height};
+    settings_close_ = Rect{x + width - 32, y + 8, 24, 22};
+    settings_args_rect_ = Rect{x + 18, y + 92, width - 36, 26};
+    settings_stop_box_ = Rect{x + 18, y + 142, 16, 16};
+    settings_listing_box_ = Rect{x + 18, y + 174, 16, 16};
+    settings_apply_rect_ = Rect{x + width - 200, y + height - 42, 112, 26};
+    settings_cancel_rect_ = Rect{x + width - 80, y + height - 42, 62, 26};
+
+    canvas.fill(Rect{0, 0, canvas.width(), canvas.height()}, Color{0, 0, 0, 120});
+    canvas.fill(settings_modal_, Color{18, 26, 34, 255});
+    canvas.frame(settings_modal_, kAccent, 2);
+    canvas.text(x + 18, y + 12, "Settings", kAccent, FontRole::UiBold);
+
+    canvas.fill(settings_close_, hover_settings_control_ == 5 ? kPanelAlt : kPanel);
+    canvas.frame(settings_close_, hover_settings_control_ == 5 ? kAccent : kBorder);
+    canvas.text(settings_close_.x + 8, settings_close_.y + 2, "x", kText, FontRole::UiBold);
+
+    canvas.text(x + 18, y + 46, "Command line arguments", kText, FontRole::MonoSmall);
+    canvas.text(x + 18, y + 64,
+                "Passed to sys_argc/sys_arg; quote arguments with spaces.",
+                kDim, FontRole::MonoSmall);
+    canvas.fill(settings_args_rect_,
+                settings_args_focused_ ? Color{34, 46, 58, 255} : kPanelAlt);
+    canvas.frame(settings_args_rect_, settings_args_focused_ ? kAccent : kBorder);
+    const std::string arguments_text =
+        trim_to(settings_arguments_ + (settings_args_focused_ ? "_" : ""),
+                static_cast<std::size_t>((width - 48) / 7));
+    canvas.text(settings_args_rect_.x + 6, settings_args_rect_.y + 5,
+                arguments_text, kText, FontRole::MonoSmall);
+    canvas.text(x + 18, y + 122,
+                "Arguments are stored as --arg values for the next Load/Restart.",
+                kDim, FontRole::MonoSmall);
+
+    const auto checkbox = [&](Rect box, bool enabled, int id, const char* label,
+                              int label_y) {
+        canvas.fill(box, enabled ? kAccent : kPanelAlt);
+        canvas.frame(box, hover_settings_control_ == id ? kAccent : kBorder);
+        if (enabled) {
+            canvas.fill(Rect{box.x + 4, box.y + 4, box.width - 8, box.height - 8},
+                        kPanel);
+        }
+        canvas.text(box.x + 24, label_y, label, kText, FontRole::MonoSmall);
+    };
+    checkbox(settings_stop_box_, settings_stop_at_main_, 1,
+             "Stop at main after load", y + 140);
+    checkbox(settings_listing_box_, settings_write_listing_, 2,
+             "Write assembler listing (.lst) beside the source", y + 172);
+
+    if (!settings_error_.empty()) {
+        canvas.text(x + 18, y + 212, settings_error_, kBad, FontRole::MonoSmall);
+    } else {
+        canvas.text(x + 18, y + 212,
+                    "Settings are saved in the user configuration directory.",
+                    kDim, FontRole::MonoSmall);
+    }
+    canvas.text(x + 18, y + 236,
+                "Apply rebuilds the current source and applies arguments.",
+                kDim, FontRole::MonoSmall);
+    canvas.text(x + 18, y + 258,
+                "Other useful future controls: run-step budget, guest filesystem",
+                kDim, FontRole::MonoSmall);
+    canvas.text(x + 18, y + 274,
+                "root/quota, read-only mode, and console echo.", kDim,
+                FontRole::MonoSmall);
+
+    canvas.fill(settings_apply_rect_,
+                hover_settings_control_ == 3 ? Color{52, 70, 88, 255} : kPanelAlt);
+    canvas.frame(settings_apply_rect_, hover_settings_control_ == 3 ? kAccent : kBorder);
+    canvas.text(settings_apply_rect_.x + 8, settings_apply_rect_.y + 5,
+                "APPLY & RESTART", kText, FontRole::MonoSmall);
+    canvas.fill(settings_cancel_rect_,
+                hover_settings_control_ == 4 ? Color{52, 70, 88, 255} : kPanelAlt);
+    canvas.frame(settings_cancel_rect_, hover_settings_control_ == 4 ? kAccent : kBorder);
+    canvas.text(settings_cancel_rect_.x + 6, settings_cancel_rect_.y + 5,
+                "CANCEL", kText, FontRole::MonoSmall);
+}
+
 bool DebuggerUI::load(const std::string& path, std::string& error) {
+    const ParsedArguments parsed = parse_arguments(settings_arguments_);
+    if (!parsed.ok) {
+        error = "command line arguments: " + parsed.error;
+        return false;
+    }
+    session_.set_arguments(parsed.arguments);
     std::string source_path;
     if (has_c_extension(path)) {
-        if (!compile_c_source(path, image_, error)) {
+        if (!compile_c_source(path, image_, error, settings_write_listing_)) {
             return false;
         }
         source_path = path;
     } else if (has_cxx_extension(path)) {
-        if (!compile_cxx_source(path, image_, error)) {
+        if (!compile_cxx_source(path, image_, error, settings_write_listing_)) {
             return false;
         }
         source_path = path;
@@ -280,7 +593,9 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     loaded_ = true;
     source_scroll_ = 0;
     error_.clear();
-    prepare_initial_stop();
+    if (settings_stop_at_main_) {
+        prepare_initial_stop();
+    }
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
     status_ = "paused at " + hex(session_.machine().pc(), 8);
@@ -531,8 +846,25 @@ void DebuggerUI::draw_toolbar(Canvas& canvas) {
         canvas.frame(Rect{button_entry.x, 4, button_entry.width, 22}, kBorder);
         canvas.text(button_entry.x + 6, 7, button_entry.label, kText, FontRole::Ui);
     }
-    canvas.text(452, 7, trim_to(status_, static_cast<std::size_t>((canvas.width() - 460) / 7)),
+    canvas.text(452, 7, trim_to(status_, static_cast<std::size_t>((canvas.width() - 500) / 7)),
                 kDim, FontRole::MonoSmall);
+    settings_rect_ = Rect{canvas.width() - 32, 4, 26, 22};
+    draw_gear(canvas, settings_rect_, hover_settings_control_ == 100);
+}
+
+void DebuggerUI::draw_gear(Canvas& canvas, Rect rect, bool hover) {
+    canvas.fill(rect, hover ? Color{52, 70, 88, 255} : Color{42, 54, 66, 255});
+    canvas.frame(rect, hover ? kAccent : kBorder);
+    const int left = rect.x + (rect.width - 24) / 2;
+    const int top = rect.y + (rect.height - 24) / 2;
+    const Color color = hover ? kAccent : kText;
+    for (int row = 0; row < 24; ++row) {
+        for (int column = 0; column < 24; ++column) {
+            if ((kGearIcon[row] & (1u << (23 - column))) != 0) {
+                canvas.fill(Rect{left + column, top + row, 1, 1}, color);
+            }
+        }
+    }
 }
 
 void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
@@ -1860,7 +2192,8 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
 
 DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
     const int right_width = std::clamp(width * 28 / 100, 270, 420);
-    int source_width = std::clamp(width * 42 / 100, 240, width - right_width - 300);
+    int source_width = std::clamp(width * 42 / 100, 160,
+                                  std::max(160, width - right_width - 300));
     int disassembly_width = width - source_width - right_width;
     if (disassembly_width < 300) {
         disassembly_width = 300;
@@ -2168,7 +2501,21 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
         menu_.hover = hover;
         return;
     }
+    if (settings_open_) {
+        hover_settings_control_ = -1;
+        if (settings_close_.contains(x, y)) hover_settings_control_ = 5;
+        else if (settings_args_rect_.contains(x, y)) hover_settings_control_ = 0;
+        else if (settings_stop_box_.contains(x, y)) hover_settings_control_ = 1;
+        else if (settings_listing_box_.contains(x, y)) hover_settings_control_ = 2;
+        else if (settings_apply_rect_.contains(x, y)) hover_settings_control_ = 3;
+        else if (settings_cancel_rect_.contains(x, y)) hover_settings_control_ = 4;
+        return;
+    }
     const Layout areas = layout(width, height);
+    hover_settings_control_ = -1;
+    if (settings_rect_.contains(x, y)) {
+        hover_settings_control_ = 100;
+    }
     hover_row_ = -1;
     hover_source_ = false;
     hover_asm_index_ = -1;
@@ -2273,6 +2620,9 @@ void DebuggerUI::render(Canvas& canvas) {
         canvas.text(40, 160, "F5 run  F10 over  F11 step  shift+F11 out  F9 breakpoint",
                     kDim, FontRole::MonoSmall);
         draw_error(canvas);
+        if (settings_open_) {
+            draw_settings(canvas);
+        }
         return;
     }
     const Layout areas = layout(canvas.width(), canvas.height());
@@ -2295,9 +2645,39 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_context_menu(canvas);
     draw_fpr_popup(canvas);
     draw_tile_popup(canvas);
+    if (settings_open_) {
+        draw_settings(canvas);
+    }
 }
 
 bool DebuggerUI::click(int x, int y, int width, int height) {
+    if (settings_open_) {
+        if (settings_close_.contains(x, y) || settings_cancel_rect_.contains(x, y) ||
+            !settings_modal_.contains(x, y)) {
+            close_settings(false);
+            return true;
+        }
+        if (settings_args_rect_.contains(x, y)) {
+            settings_args_focused_ = true;
+            return true;
+        }
+        settings_args_focused_ = false;
+        if (settings_stop_box_.contains(x, y)) {
+            settings_stop_at_main_ = !settings_stop_at_main_;
+            save_settings();
+            return true;
+        }
+        if (settings_listing_box_.contains(x, y)) {
+            settings_write_listing_ = !settings_write_listing_;
+            save_settings();
+            return true;
+        }
+        if (settings_apply_rect_.contains(x, y)) {
+            apply_settings();
+            return true;
+        }
+        return true;
+    }
     if (!error_.empty()) {
         error_.clear();
         return true;
@@ -2403,6 +2783,10 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         return true;
     }
     if (y < kToolbarHeight) {
+        if (settings_rect_.contains(x, y)) {
+            open_settings();
+            return true;
+        }
         if (x >= 82 && x < 122) {
             run();
         } else if (x >= 126 && x < 170) {
@@ -2551,6 +2935,31 @@ bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
 }
 
 bool DebuggerUI::key(int key_value, bool shift) {
+    if (settings_open_) {
+        if (key_value == kr32::platform::key::Escape) {
+            close_settings(false);
+            return true;
+        }
+        if (key_value == kr32::platform::key::Enter) {
+            apply_settings();
+            return true;
+        }
+        if (settings_args_focused_) {
+            if (key_value == kr32::platform::key::Backspace) {
+                if (!settings_arguments_.empty()) {
+                    settings_arguments_.pop_back();
+                }
+                settings_error_.clear();
+                return true;
+            }
+            if (key_value >= 32 && key_value <= 126) {
+                settings_arguments_.push_back(static_cast<char>(key_value));
+                settings_error_.clear();
+                return true;
+            }
+        }
+        return true;
+    }
     if (editing_tile_ >= 0) {
         if (key_value == kr32::platform::key::Escape) {
             finish_tile_edit(false);

@@ -12,6 +12,7 @@ namespace kr32::ui {
 
 class DebuggerUI {
 public:
+    DebuggerUI();
     [[nodiscard]] bool load(const std::string& path, std::string& error);
     void show_error(std::string message);
     void restart();
@@ -36,6 +37,7 @@ public:
     [[nodiscard]] const std::string& error() const { return error_; }
 
     [[nodiscard]] bool headless(const std::string& ppm_path);
+    void open_settings();
 
 private:
     struct Layout {
@@ -95,6 +97,12 @@ private:
     void draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total, int visible,
                         Rect& track, Rect& thumb);
     void draw_asm_tooltip(Canvas& canvas);
+    void draw_settings(Canvas& canvas);
+    void draw_gear(Canvas& canvas, Rect rect, bool hover);
+    void close_settings(bool save);
+    void apply_settings();
+    void load_settings();
+    void save_settings();
     void draw_error(Canvas& canvas);
     [[nodiscard]] std::string format_hex(std::uint32_t value, int digits = 8) const;
     [[nodiscard]] std::string source_line(int line) const;
@@ -193,6 +201,22 @@ private:
     };
     std::vector<ControlHoverRow> control_hover_rows_;
     int hover_control_ = -1;
+
+    Rect settings_rect_{};
+    Rect settings_modal_{};
+    Rect settings_close_{};
+    Rect settings_args_rect_{};
+    Rect settings_stop_box_{};
+    Rect settings_listing_box_{};
+    Rect settings_apply_rect_{};
+    Rect settings_cancel_rect_{};
+    bool settings_open_ = false;
+    bool settings_args_focused_ = false;
+    bool settings_stop_at_main_ = true;
+    bool settings_write_listing_ = false;
+    std::string settings_arguments_;
+    std::string settings_error_;
+    int hover_settings_control_ = -1;
 
     struct VarHoverRow {
         Rect row{};

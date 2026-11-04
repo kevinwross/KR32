@@ -67,6 +67,25 @@ const debug::Line* find_line(const debug::Info& info, int line) {
 
 } // namespace
 
+TEST_CASE("debug sessions expose guest command-line arguments") {
+    const container::Image image = compile_debug_image(
+        "int sys_argc(void);\n"
+        "int sys_arg(int index, char *buffer, int size);\n"
+        "int main(void) {\n"
+        "    char buffer[16];\n"
+        "    if (sys_argc() != 2) return 1;\n"
+        "    if (sys_arg(1, buffer, 16) != 5) return 2;\n"
+        "    return buffer[0] == 'h' ? 0 : 3;\n"
+        "}\n");
+    debug::Session session;
+    session.set_arguments({"first", "hello"});
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const core::StepResult result = session.run(100000);
+    CHECK(result.kind == core::StepResult::Kind::Halted);
+    CHECK(session.machine().exit_code() == 0);
+}
+
 TEST_CASE("C++ debug info covers templates and lambdas") {
     const container::Image image = compile_cxx_debug_image(
         "template <typename T> T twice(T value) { return value + value; }\n"

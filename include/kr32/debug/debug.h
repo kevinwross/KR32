@@ -118,6 +118,13 @@ public:
     void select_thread(std::uint32_t id);
     [[nodiscard]] std::uint32_t selected_thread() const { return selected_thread_; }
 
+    void set_arguments(std::vector<std::string> arguments) {
+        arguments_ = std::move(arguments);
+    }
+    [[nodiscard]] const std::vector<std::string>& arguments() const {
+        return arguments_;
+    }
+
     void set_breakpoint(std::uint32_t address);
     void clear_breakpoint(std::uint32_t address);
     void clear_breakpoints();
@@ -163,6 +170,7 @@ private:
     std::vector<ThreadInfo> threads_;
     std::function<std::vector<ThreadInfo>()> thread_provider_;
     std::uint32_t selected_thread_ = 0;
+    std::vector<std::string> arguments_;
     std::string console_;
 };
 

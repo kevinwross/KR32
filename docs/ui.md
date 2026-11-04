@@ -77,6 +77,21 @@ label, type up to eight hex digits, then press Enter; Escape cancels. **PTR**
 follows the current SP, and the **^** / **v** buttons move the dump up or down
 one 16-byte row.
 
+## Settings
+
+The toolbar gear at the upper right opens the settings dialog. It provides:
+
+- **Command line arguments** passed to the guest through `sys_argc`/`sys_arg`.
+  Arguments use Windows-style quoting; backslashes are literal unless they
+  precede a double quote.
+- **Stop at main after load**; disable it to pause at the image entry instead.
+- **Write assembler listing (.lst)** beside the compiled C/C++ source.
+
+**APPLY & RESTART** saves the settings, rebuilds the current source, and applies
+the argument list. Settings are stored in `%APPDATA%\KR32\settings.ini` on
+Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
+`kr32-settings.ini` in the current directory.
+
 ## Panel scrolling and editing
 
 - Source, disassembly, cores, variables, call stack, and console panels have

@@ -165,6 +165,30 @@ bool Session::load(const container::Image& image, std::string& error) {
             current.halt(current.reg(0));
             return true;
         }
+        if (vector == 42) {
+            current.set_reg(0, static_cast<std::uint32_t>(arguments_.size()));
+            return true;
+        }
+        if (vector == 43) {
+            const std::uint32_t index = current.reg(0);
+            const std::uint32_t address = current.reg(1);
+            const std::uint32_t size = current.reg(2);
+            if (index >= arguments_.size() || size == 0) {
+                current.set_reg(0, 0xFFFF'FFFCU);
+                return true;
+            }
+            const std::string& argument = arguments_[index];
+            const std::uint32_t count = std::min<std::uint32_t>(
+                size - 1U, static_cast<std::uint32_t>(argument.size()));
+            for (std::uint32_t offset = 0; offset < count; ++offset) {
+                (void)current.write8(
+                    address + offset,
+                    static_cast<std::uint8_t>(argument[offset]));
+            }
+            (void)current.write8(address + count, 0);
+            current.set_reg(0, count);
+            return true;
+        }
         return false;
     });
     console_.clear();
