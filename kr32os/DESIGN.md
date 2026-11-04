@@ -31,6 +31,15 @@ Status: draft for the interactive design session.
   guard page at `0x07E00000`; the first program is an embedded initrd blob.
 - Physical memory: bitmap page allocator, one bit per 4 KiB page.
 - Early exceptions: panic with vector/PC/FAR/error diagnostics, then halt.
+- User runtime: OS-specific `crt0` and syscall wrappers on vectors `64+`; no
+  host ABI dependency.
+- Syscall errors: negative errno in `R0`.
+- Process model: kernel shell plus one init user test in M4; fork/exec later.
+- Initrd: simple header-table archive embedded in the kernel image.
+- Timer: 100 Hz tick with a 10 ms scheduling quantum.
+- User image limit: 16 MiB; heap grows up to the stack guard.
+- Filesystem: read-only initrd filesystem first; writable block filesystem later.
+- Initial syscalls: exit, write, read, yield, getpid, brk.
 
 
 ## Boot contract (initial assumption)
@@ -164,8 +173,19 @@ R0              return value / negative error
 ```
 
 The exact syscall numbers are assigned in a table and remain stable after the
-first user program depends on them. Initial candidates are exit, console write,
-console read, yield, and process identity.
+first user program depends on them. The initial table is:
+
+| Vector | Call | Arguments | Returns |
+| --- | --- | --- | --- |
+| 64 | `exit` | status | does not return |
+| 65 | `write` | fd, buffer, length | bytes written |
+| 66 | `read` | fd, buffer, length | bytes read |
+| 67 | `yield` | none | 0 |
+| 68 | `getpid` | none | process id |
+| 69 | `brk` | new break | resulting break or `-ENOMEM` |
+
+Errors are returned as negative errno values in `R0`; success is non-negative.
+The initial error set is `EINVAL`, `ENOMEM`, `EBADF`, and `EFAULT`.
 
 Every user pointer is range-checked against the current user address space
 before use. Kernel copy-in/copy-out helpers validate the entire range, handle
@@ -209,15 +229,45 @@ the guest; F-keys remain debugger shortcuts.
 
 The first user image is a flat binary copied from an embedded initrd blob in the
 kernel image. It contains no relocations or dynamic loader. The user heap starts
-after the image and must stop before the stack guard.
+after the image and must stop before the stack guard. The image is capped at
+16 MiB.
 
 The physical page allocator is a bitmap with one bit per 4 KiB page. Kernel,
 page-table, BootInfo, framebuffer, MMIO, ROM, and stack-guard pages are reserved
 before any user page is allocated.
 
+The user runtime is OS-specific: a small `crt0` calls `main`, and syscall
+wrappers use vectors `64+`. Host vectors `32..50` are not part of this runtime.
+The first `crt0` only needs `exit`, `write`, `read`, `yield`, `getpid`, and
+`brk`.
+
+The initrd uses a simple header table:
+
+```c
+uint32_t magic;
+uint32_t version;
+uint32_t count;
+struct {
+    char name[32];
+    uint32_t offset;
+    uint32_t size;
+    uint32_t entry;
+} entries[];
+```
+
+The initial filesystem is a read-only initrd lookup layer over this archive.
+A writable block filesystem follows after the block driver is stable.
+
 Early exceptions print the vector, PC, FAR, and error code to the serial console
 and halt. Process termination and recovery are deferred until process state is
 well-defined.
+
+## Timer and scheduling quantum
+
+The timer runs at 100 Hz. Each tick decrements the current quantum; when it
+reaches zero the kernel schedules the next runnable thread. The initial quantum
+is 10 ms, or one timer tick. Timer IRQ handling and context switching arrive in
+M5; M3 only establishes the vector and timer device path.
 
 ## Multicore policy
 
@@ -292,8 +342,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- What are the exact syscall numbers and initial call signatures?
-- How large may the user image/heap grow before the stack guard?
-- What block-device and filesystem model should follow the embedded initrd?
-- What is the first scheduler quantum and preemption policy?
+- What are the concrete numeric errno values and their ABI?
+- What is the final BootInfo magic/version and field layout?
+- How is the initrd image embedded into the kernel build?
+- What block-device and writable-filesystem format should follow the initrd?
 - When should the free-list allocator replace the bump allocator?
