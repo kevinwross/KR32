@@ -65,6 +65,11 @@ Status: draft for the interactive design session.
 - Shell quoting: double quotes, backslash escapes, and whitespace splitting.
 - Paths: flat initrd names first; a slash-separated tree with the block FS.
 - Block I/O: immediate through M4; IRQ completion in M5.
+- User pages: W^X segments; code RX, read-only data R, data/heap/stack RW and
+  non-executable.
+- Init: M4 init test exits; the kernel shell remains.
+- Framebuffer: kernel-only initially; no direct user mapping.
+- Fork/exec: eager page copy plus initrd `exec`; copy-on-write later.
 
 
 ## Boot contract (initial assumption)
@@ -111,7 +116,9 @@ read-only and executable, while MMIO is writable and non-executable.
 The framebuffer aperture needs eight page tables (`PDE 0x3F0..0x3F7`) in the
 low page-table region. Those mappings are identical for every process and can
 share the same page tables. Framebuffer PTEs are writable, non-executable, and
-supervisor-only initially.
+supervisor-only initially. User processes do not map the framebuffer; the kernel
+draws directly or exposes a narrow drawing API. A trusted user-mode GUI process
+can receive a mapping later.
 
 The loader writes BootInfo at the fixed physical page `0x0003_F000` and passes
 its address in `R2`. The BIOS validates the magic, version, struct size, and
@@ -286,6 +293,18 @@ kernel image. It contains no relocations or dynamic loader. The user heap starts
 after the image and must stop before the stack guard. The image is capped at
 16 MiB.
 
+User mappings follow W^X:
+
+```text
+code             RX
+read-only data   R
+data, heap       RW, NX
+stack            RW, NX
+```
+
+The kernel low-memory window stays supervisor-only. User code cannot execute
+from the heap or stack.
+
 The physical page allocator is a bitmap with one bit per 4 KiB page. Kernel,
 page-table, BootInfo, framebuffer, MMIO, ROM, and stack-guard pages are reserved
 before any user page is allocated.
@@ -389,6 +408,14 @@ increase monotonically and are reused only after a slot is reaped. A fixed table
 keeps lookup and memory bounded while the scheduler is simple. When the table is
 full, creation returns `-EAGAIN`; the shell reports the condition and no existing
 process is disturbed.
+
+The M4 init process is a test program: it runs in user mode, prints a result, and
+exits. The kernel reaps it and the kernel shell continues. A user-mode shell can
+replace this later, but the kernel shell remains the recovery path.
+
+When `fork` arrives, it eagerly copies user pages into a new address space.
+`exec` loads a new flat image from the initrd into that address space. COW is a
+later optimization behind the same process API.
 
 The first kernel shell commands are:
 
@@ -519,8 +546,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- What are the eventual `fork`/`exec` copy and loading semantics?
 - What are the filesystem inode and directory-entry field layouts?
-- What should the init process do in M4, and does it ever become the user shell?
-- Should user processes ever map the framebuffer directly?
-- What user address-space permissions should code, data, heap, and stack have?
+- When should a user-mode shell replace the kernel shell?
+- What drawing API should the kernel expose for the framebuffer?
+- When should eager fork copying become copy-on-write?
+- How should `exec` pass arguments and environment to the new image?
