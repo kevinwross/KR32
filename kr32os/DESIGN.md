@@ -45,6 +45,10 @@ Status: draft for the interactive design session.
   reclaim kernel memory, not before.
 - Secondary cores: parked by the BIOS and released by the boot core via IPI.
 - Process exit: zombie state until reaped; the kernel reaps init.
+- Block I/O: immediate completion first, with the IRQ/status path reserved.
+- Shell commands: `help`, `echo`, `clear`, `mem`, `ps`.
+- Reaping: `waitpid(pid, status_ptr, options)`.
+- Context switch: all GPRs, FPRs, TSP, PC, FLAGS, and SP.
 
 
 ## Boot contract (initial assumption)
@@ -309,9 +313,10 @@ VFS API.
 
 The block device is extended with an LBA register at offset `0x18`, addressed in
 512-byte sectors. A filesystem 4 KiB block is eight consecutive sectors. The
-existing DMA address/count interface remains; the device currently completes
-requests immediately, and asynchronous completion/IRQ behavior is deferred until
-the driver needs it.
+existing DMA address/count interface remains. Requests complete immediately for
+the first filesystem milestone, but the IRQ-enable and status path stays defined
+so the driver can move to asynchronous completion when the scheduler supports
+waiting drivers.
 
 Early exceptions print the vector, PC, FAR, and error code to the serial console
 and halt. Process termination and recovery are deferred until process state is
@@ -323,12 +328,36 @@ status but release their address space and physical pages immediately. This
 leaves room for a future `wait`/`waitpid` syscall without changing the exit
 path.
 
+The reaping ABI is `waitpid(pid, status_ptr, options)`. `pid` selects a child or
+uses a reserved "any child" value; `status_ptr` receives the exit status; and
+`options` is reserved zero for now. The kernel reaps init when no parent exists.
+
+The first kernel shell commands are:
+
+```text
+help     list commands
+echo     print its arguments
+clear    clear the serial console
+mem      physical page and heap statistics
+ps       process table
+```
+
 ## Timer and scheduling quantum
 
 The timer runs at 100 Hz. Each tick decrements the current quantum; when it
 reaches zero the kernel schedules the next runnable thread. The initial quantum
 is 10 ms, or one timer tick. Timer IRQ handling and context switching arrive in
 M5; M3 only establishes the vector and timer device path.
+
+A context switch saves and restores:
+
+- all 16 general-purpose registers;
+- all 16 floating-point registers;
+- `TSP`;
+- `PC`, `FLAGS`, and `SP`.
+
+Lazy floating-point state is not attempted in the first scheduler. This keeps
+user FP and transform-stack state correct even though switches are slower.
 
 ## Multicore policy
 
@@ -406,7 +435,7 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 ## Follow-up design questions
 
 - What are the superblock and inode field layouts for the writable filesystem?
-- Should block I/O stay immediate, or become asynchronous with IRQ completion?
-- What is the initial kernel shell command set?
 - What are the initrd and filesystem magic/version constants?
-- What does a future `wait`/`waitpid` ABI look like for zombie reaping?
+- What run-queue structure should the round-robin scheduler use?
+- When should block I/O move from immediate completion to IRQ completion?
+- Which shell file commands (`ls`, `cat`, `run`) follow the first five built-ins?
