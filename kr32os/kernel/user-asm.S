@@ -1,3 +1,4 @@
+.file "kr32os/kernel/user-asm.S"
 ; Kernel/user context bridge and syscall entry stubs.
     .section .bss
     .align 4

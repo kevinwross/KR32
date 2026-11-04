@@ -17,6 +17,7 @@
 #include "kr32/version.h"
 #include "kr32/vm/host.h"
 
+#include <algorithm>
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
@@ -357,7 +358,7 @@ void print_help() {
 #endif
         "\n"
         "Options for as:  -o <path> --object --base <addr> --listing <path>\n"
-        "Options for ld:  -o <image.k32> --map <path> --base <addr> --flat --strip\n"
+        "Options for ld:  -o <image.k32> --map <path> --sym <path> --base <addr> --flat --strip\n"
         "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value>\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
@@ -558,8 +559,8 @@ int command_dis(int argc, char** argv) {
 }
 
 void print_ld_usage() {
-    std::printf("Usage: kr32 ld <objects...> [-o <image.k32>] [--map <path>] [--base <addr>] "
-                "[--flat] [--strip]\n");
+    std::printf("Usage: kr32 ld <objects...> [-o <image.k32>] [--map <path>] "
+                "[--sym <path>] [--base <addr>] [--flat] [--strip]\n");
 }
 
 void print_build_usage() {
@@ -571,6 +572,7 @@ void print_build_usage() {
 int command_ld(int argc, char** argv) {
     std::string output = "a.k32";
     std::string map_path;
+    std::string sym_path;
     linker::Options options;
     bool strip = false;
     bool flat = false;
@@ -598,6 +600,14 @@ int command_ld(int argc, char** argv) {
                 return 2;
             }
             map_path = argv[++index];
+            continue;
+        }
+        if (argument == "--sym") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 ld: --sym needs a path\n");
+                return 2;
+            }
+            sym_path = argv[++index];
             continue;
         }
         if (argument == "--strip") {
@@ -670,6 +680,41 @@ int command_ld(int argc, char** argv) {
         container::Error container_error;
         if (!container::write(image, bytes, container_error)) {
             std::fprintf(stderr, "kr32 ld: %s\n", container_error.message.c_str());
+            return 1;
+        }
+    }
+    if (!sym_path.empty()) {
+        if (!flat) {
+            std::fprintf(stderr, "kr32 ld: --sym requires --flat\n");
+            return 2;
+        }
+        container::Image debug_image;
+        debug_image.type = container::ImageType::Executable;
+        debug_image.entry = image.entry;
+        debug_image.base = image.base;
+        debug_image.symbols = image.symbols;
+        for (const container::Section& section : image.sections) {
+            debug_image.sections.push_back(section);
+        }
+        container::Section checksum;
+        checksum.name = "__sym_crc";
+        checksum.type = container::SectionType::Other;
+        const std::uint32_t crc = container::crc32(bytes.data(), bytes.size());
+        checksum.data = {
+            static_cast<std::uint8_t>(crc),
+            static_cast<std::uint8_t>(crc >> 8U),
+            static_cast<std::uint8_t>(crc >> 16U),
+            static_cast<std::uint8_t>(crc >> 24U)};
+        checksum.size = 4;
+        debug_image.sections.push_back(std::move(checksum));
+        std::vector<std::uint8_t> sym_bytes;
+        container::Error sym_error;
+        if (!container::write(debug_image, sym_bytes, sym_error)) {
+            std::fprintf(stderr, "kr32 ld: %s\n", sym_error.message.c_str());
+            return 1;
+        }
+        if (!write_file(sym_path, sym_bytes, error)) {
+            std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
             return 1;
         }
     }
@@ -897,13 +942,14 @@ int command_build(int argc, char** argv) {
 }
 
 void print_cc_usage() {
-    std::printf("Usage: kr32 cc <file.c> [-S] [-o <path>]\n");
+    std::printf("Usage: kr32 cc <file.c> [-S] [-o <path>] [--source-id <n>]\n");
 }
 
 int command_cc(int argc, char** argv) {
     std::string source;
     std::string output;
     bool assembly_only = false;
+    int source_id = 0;
 
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -913,6 +959,14 @@ int command_cc(int argc, char** argv) {
         }
         if (argument == "-S") {
             assembly_only = true;
+            continue;
+        }
+        if (argument == "--source-id") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 cc: --source-id needs a number\n");
+                return 2;
+            }
+            source_id = std::atoi(argv[++index]);
             continue;
         }
         if (argument == "-o") {
@@ -945,7 +999,7 @@ int command_cc(int argc, char** argv) {
         return 1;
     }
     const std::string text(bytes.begin(), bytes.end());
-    const cc::Result compiled = cc::compile(text, source);
+    const cc::Result compiled = cc::compile(text, source, source_id);
     if (!compiled.ok) {
         for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
             std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
@@ -1249,13 +1303,63 @@ int command_vm(int argc, char** argv) {
             return 1;
         }
         core::Machine machine(core::Machine::Options{ram_size});
-        if (!machine.load_image(0x0002'0000, kernel)) {
-            std::fprintf(stderr, "kr32 os: kernel does not fit at 0x00020000\n");
-            return 1;
-        }
-        if (!machine.load_image(core::kRomBase, rom)) {
-            std::fprintf(stderr, "kr32 os: BIOS does not fit in ROM\n");
-            return 1;
+        const auto is_container = [](const std::vector<std::uint8_t>& bytes) {
+            return bytes.size() >= 4 && bytes[0] == 'K' && bytes[1] == '3' &&
+                   bytes[2] == '2' && bytes[3] == 0;
+        };
+        const bool kernel_container = is_container(kernel);
+        const bool bios_container = is_container(rom);
+        std::uint32_t kernel_size = static_cast<std::uint32_t>(kernel.size());
+        if (kernel_container || bios_container) {
+            if (!kernel_container || !bios_container) {
+                std::fprintf(stderr, "kr32 os: kernel and BIOS must both be .k32 "
+                                     "or both be raw .bin\n");
+                return 1;
+            }
+            container::Image kernel_image;
+            container::Image bios_image;
+            container::Error container_error;
+            if (!container::read(kernel, kernel_image, container_error) ||
+                !container::read(rom, bios_image, container_error)) {
+                std::fprintf(stderr, "kr32 os: %s\n", container_error.message.c_str());
+                return 1;
+            }
+            const auto load_sections = [&](const container::Image& image) {
+                for (const container::Section& section : image.sections) {
+                    if ((section.flags & container::Alloc) == 0) continue;
+                    if (section.type == container::SectionType::Bss) {
+                        for (std::uint32_t offset = 0; offset < section.size; ++offset) {
+                            if (!machine.write8(section.address + offset, 0)) {
+                                return false;
+                            }
+                        }
+                    } else if (!section.data.empty() &&
+                               !machine.load_image(section.address, section.data)) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            if (!load_sections(kernel_image) || !load_sections(bios_image)) {
+                std::fprintf(stderr, "kr32 os: .k32 sections do not fit\n");
+                return 1;
+            }
+            kernel_size = 0;
+            for (const container::Section& section : kernel_image.sections) {
+                if ((section.flags & container::Alloc) != 0) {
+                    kernel_size = std::max(kernel_size, section.address + section.size -
+                                                        0x0002'0000U);
+                }
+            }
+        } else {
+            if (!machine.load_image(0x0002'0000, kernel)) {
+                std::fprintf(stderr, "kr32 os: kernel does not fit at 0x00020000\n");
+                return 1;
+            }
+            if (!machine.load_image(core::kRomBase, rom)) {
+                std::fprintf(stderr, "kr32 os: BIOS does not fit in ROM\n");
+                return 1;
+            }
         }
         machine.reset();
         os::BootInfo boot{};
@@ -1265,7 +1369,7 @@ int command_vm(int argc, char** argv) {
         boot.ram_base = core::kRamBase;
         boot.ram_size = ram_size;
         boot.kernel_base = 0x0002'0000;
-        boot.kernel_size = static_cast<std::uint32_t>(kernel.size());
+        boot.kernel_size = kernel_size;
         boot.kernel_entry = 0x0002'0000;
         boot.framebuffer_base = core::kFramebufferBase;
         boot.framebuffer_size = core::kFramebufferSize;
@@ -1273,10 +1377,10 @@ int command_vm(int argc, char** argv) {
         boot.framebuffer_format = 1;
         os::KernelMeta meta{};
         std::string meta_error;
-        if (os::load_kernel_meta(paths.kernel, meta, meta_error)) {
+        if (!kernel_container && os::load_kernel_meta(paths.kernel, meta, meta_error)) {
             boot.initrd_base = 0x0002'0000U + meta.initrd_offset;
             boot.initrd_size = meta.initrd_size;
-        } else if (!meta_error.empty()) {
+        } else if (!kernel_container && !meta_error.empty()) {
             std::fprintf(stderr, "kr32 os: %s\n", meta_error.c_str());
             return 1;
         }

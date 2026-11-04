@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 12:13 -08:00
+> **Last updated:** 2026-11-04 13:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1751,6 +1751,11 @@ Newest entries at the bottom. Use the local time zone.
       allocator and bump heap with `mem` statistics, all six syscall vectors,
       initrd fault/W^X test programs, user-fault containment (exit 139), and
       immediate reaping. Windows unit suite 353/353.
+- **2026-11-04 13:33 -08:00** — OS source debugging: link `.sym` sidecars
+      (CRC-checked), `.k32` OS images, source-id assignment for C objects,
+      assembly `.file` line records for BIOS/boot/stubs, and automatic source
+      following for assembly and C. `gui --os` now loads `.bin` plus its
+      sibling `.sym`; both raw and container OS images are supported.
 
 ## 10. Updating this file
 

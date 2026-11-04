@@ -25,25 +25,27 @@ if [[ -z "${KR32:-}" || ! -x "$KR32" ]]; then
 fi
 
 mkdir -p "$build"
-"$KR32" as "$here/bios/entry.S" --base 0xFFFF0000 -o "$build/bios.bin"
-"$KR32" cc "$here/kernel/main.c" -S -o "$build/kernel.s"
+"$KR32" as "$here/bios/entry.S" --object -o "$build/bios.o"
+"$KR32" ld "$build/bios.o" --flat --base 0xFFFF0000 --sym "$build/bios.sym" -o "$build/bios.bin"
+"$KR32" ld "$build/bios.o" --base 0xFFFF0000 -o "$build/bios.k32"
+"$KR32" cc "$here/kernel/main.c" --source-id 1 -S -o "$build/kernel.s"
 "$KR32" as "$build/kernel.s" --object -o "$build/kernel.o"
-"$KR32" cc "$here/kernel/console.c" -S -o "$build/console.s"
+"$KR32" cc "$here/kernel/console.c" --source-id 2 -S -o "$build/console.s"
 "$KR32" as "$build/console.s" --object -o "$build/console.o"
-"$KR32" cc "$here/kernel/shell.c" -S -o "$build/shell.s"
+"$KR32" cc "$here/kernel/shell.c" --source-id 3 -S -o "$build/shell.s"
 "$KR32" as "$build/shell.s" --object -o "$build/shell.o"
-"$KR32" cc "$here/kernel/timer.c" -S -o "$build/timer.s"
+"$KR32" cc "$here/kernel/timer.c" --source-id 4 -S -o "$build/timer.s"
 "$KR32" as "$build/timer.s" --object -o "$build/timer.o"
-"$KR32" cc "$here/kernel/traps.c" -S -o "$build/traps.s"
+"$KR32" cc "$here/kernel/traps.c" --source-id 5 -S -o "$build/traps.s"
 "$KR32" as "$build/traps.s" --object -o "$build/traps.o"
 "$KR32" as "$here/kernel/traps-asm.S" --object -o "$build/trap_stubs.o"
-"$KR32" cc "$here/kernel/user.c" -S -o "$build/user.s"
+"$KR32" cc "$here/kernel/user.c" --source-id 6 -S -o "$build/user.s"
 "$KR32" as "$build/user.s" --object -o "$build/user.o"
-"$KR32" cc "$here/kernel/memory.c" -S -o "$build/memory.s"
+"$KR32" cc "$here/kernel/memory.c" --source-id 9 -S -o "$build/memory.s"
 "$KR32" as "$build/memory.s" --object -o "$build/memory.o"
-"$KR32" cc "$here/kernel/process.c" -S -o "$build/process.s"
+"$KR32" cc "$here/kernel/process.c" --source-id 8 -S -o "$build/process.s"
 "$KR32" as "$build/process.s" --object -o "$build/process.o"
-"$KR32" cc "$here/kernel/syscall.c" -S -o "$build/syscall.s"
+"$KR32" cc "$here/kernel/syscall.c" --source-id 7 -S -o "$build/syscall.s"
 "$KR32" as "$build/syscall.s" --object -o "$build/syscall.o"
 "$KR32" as "$here/kernel/user-asm.S" --object -o "$build/user_bridge.o"
 "$KR32" as "$here/boot/entry.S" --object -o "$build/entry.o"
@@ -68,7 +70,11 @@ python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/w
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
-    --flat --base 0x00020000 --map "$build/kernel.map" -o "$build/kernel.bin"
+    --flat --base 0x00020000 --map "$build/kernel.map" --sym "$build/kernel.sym" -o "$build/kernel.bin"
+"$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/shell.o" \
+    "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
+    "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
+    --base 0x00020000 -o "$build/kernel.k32"
 python3 "$here/tools/mkmeta.py" "$build/kernel.bin" "$build/kernel.map" "$build/kernel.meta"
 
 echo "KR32OS M4 built:"

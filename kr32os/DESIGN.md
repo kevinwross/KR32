@@ -15,6 +15,10 @@ notes:
 - Syscall vectors 64-69 are installed (exit, write, read, yield, getpid, brk).
 - User faults terminate the process with status 139 instead of panicking the
   kernel.
+- The OS build emits `.sym` sidecars for the raw `.bin` images and optional
+  `.k32` containers. `gui --os` loads the sidecar for source-line debugging;
+  assembly line records are emitted by `.file` directives in the assembly
+  sources.
 
 
 ## Confirmed decisions

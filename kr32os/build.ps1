@@ -50,6 +50,9 @@ function Invoke-Kr32 {
 }
 
 $bios = Join-Path $build 'bios.bin'
+$biosObject = Join-Path $build 'bios.o'
+$biosK32 = Join-Path $build 'bios.k32'
+$biosSym = Join-Path $build 'bios.sym'
 $kernelAssembly = Join-Path $build 'kernel.s'
 $kernelObject = Join-Path $build 'kernel.o'
 $consoleAssembly = Join-Path $build 'console.s'
@@ -80,28 +83,32 @@ $initrdAssembly = Join-Path $build 'initrd.s'
 $initrdObject = Join-Path $build 'initrd.o'
 $entryObject = Join-Path $build 'entry.o'
 $kernel = Join-Path $build 'kernel.bin'
+$kernelK32 = Join-Path $build 'kernel.k32'
 $kernelMap = Join-Path $build 'kernel.map'
+$kernelSym = Join-Path $build 'kernel.sym'
 $kernelMeta = Join-Path $build 'kernel.meta'
 
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'bios\entry.S'), '--base', '0xFFFF0000', '-o', $bios)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '-S', '-o', $kernelAssembly)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'bios\entry.S'), '--object', '-o', $biosObject)
+Invoke-Kr32 -Arguments @('ld', $biosObject, '--flat', '--base', '0xFFFF0000', '--sym', $biosSym, '-o', $bios)
+Invoke-Kr32 -Arguments @('ld', $biosObject, '--base', '0xFFFF0000', '-o', $biosK32)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '--source-id', '1', '-S', '-o', $kernelAssembly)
 Invoke-Kr32 -Arguments @('as', $kernelAssembly, '--object', '-o', $kernelObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '-S', '-o', $consoleAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '--source-id', '2', '-S', '-o', $consoleAssembly)
 Invoke-Kr32 -Arguments @('as', $consoleAssembly, '--object', '-o', $consoleObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '-S', '-o', $shellAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '--source-id', '3', '-S', '-o', $shellAssembly)
 Invoke-Kr32 -Arguments @('as', $shellAssembly, '--object', '-o', $shellObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '-S', '-o', $timerAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '--source-id', '4', '-S', '-o', $timerAssembly)
 Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '-S', '-o', $trapsAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '--source-id', '5', '-S', '-o', $trapsAssembly)
 Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps-asm.S'), '--object', '-o', $trapStubsObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '-S', '-o', $userAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '--source-id', '6', '-S', '-o', $userAssembly)
 Invoke-Kr32 -Arguments @('as', $userAssembly, '--object', '-o', $userObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '-S', '-o', $memoryAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '--source-id', '9', '-S', '-o', $memoryAssembly)
 Invoke-Kr32 -Arguments @('as', $memoryAssembly, '--object', '-o', $memoryObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '-S', '-o', $processAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '--source-id', '8', '-S', '-o', $processAssembly)
 Invoke-Kr32 -Arguments @('as', $processAssembly, '--object', '-o', $processObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '-S', '-o', $syscallAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '--source-id', '7', '-S', '-o', $syscallAssembly)
 Invoke-Kr32 -Arguments @('as', $syscallAssembly, '--object', '-o', $syscallObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user-asm.S'), '--object', '-o', $userBridgeObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
@@ -173,7 +180,12 @@ Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
-                        '--flat', '--base', '0x00020000', '--map', $kernelMap, '-o', $kernel)
+                        '--flat', '--base', '0x00020000', '--map', $kernelMap,
+                        '--sym', $kernelSym, '-o', $kernel)
+Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
+                        $timerObject, $trapsObject, $trapStubsObject,
+                        $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
+                        '--base', '0x00020000', '-o', $kernelK32)
 
 # Generate kernel.meta from the linker map and kernel image.
 $mapLines = Get-Content -LiteralPath $kernelMap

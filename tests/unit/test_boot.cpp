@@ -5,6 +5,7 @@
 #include "kr32/core/machine.h"
 #include "kr32/os/bootinfo.h"
 #include "kr32/os/kernel_meta.h"
+#include "kr32/os/symbols.h"
 
 #include <cstdint>
 #include <filesystem>
@@ -199,5 +200,55 @@ TEST_CASE("kernel.meta validates checksum and initrd range") {
     write_meta(kr32::os::kKernelMetaMagic, checksum, 4, 8);
     CHECK_FALSE(kr32::os::load_kernel_meta(kernel_path.string(), meta, error));
     CHECK(error == "kernel.meta initrd range is invalid");
+    std::filesystem::remove_all(directory);
+}
+
+TEST_CASE("symbol sidecars validate the matching kernel image") {
+    const auto directory = std::filesystem::current_path() / "kr32-symbol-test";
+    std::filesystem::create_directories(directory);
+    const auto kernel_path = directory / "kernel.bin";
+    const std::vector<std::uint8_t> image = {1, 2, 3, 4};
+    {
+        std::ofstream output(kernel_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(image.data()),
+                     static_cast<std::streamsize>(image.size()));
+    }
+
+    kr32::container::Image debug;
+    debug.type = kr32::container::ImageType::Executable;
+    kr32::container::Section checksum;
+    checksum.name = "__sym_crc";
+    const std::uint32_t crc = kr32::container::crc32(image.data(), image.size());
+    checksum.data = {
+        static_cast<std::uint8_t>(crc),
+        static_cast<std::uint8_t>(crc >> 8U),
+        static_cast<std::uint8_t>(crc >> 16U),
+        static_cast<std::uint8_t>(crc >> 24U)};
+    checksum.size = 4;
+    debug.sections.push_back(checksum);
+    std::vector<std::uint8_t> sidecar;
+    kr32::container::Error container_error;
+    REQUIRE(kr32::container::write(debug, sidecar, container_error));
+    const auto sym_path = directory / "kernel.sym";
+    {
+        std::ofstream output(sym_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(sidecar.data()),
+                     static_cast<std::streamsize>(sidecar.size()));
+    }
+
+    kr32::container::Image loaded;
+    std::string error;
+    CHECK(kr32::os::load_symbol_file(kernel_path.string(), image, loaded, error));
+
+    checksum.data[0] ^= 1U;
+    debug.sections[0] = checksum;
+    REQUIRE(kr32::container::write(debug, sidecar, container_error));
+    {
+        std::ofstream output(sym_path, std::ios::binary);
+        output.write(reinterpret_cast<const char*>(sidecar.data()),
+                     static_cast<std::streamsize>(sidecar.size()));
+    }
+    CHECK_FALSE(kr32::os::load_symbol_file(kernel_path.string(), image, loaded, error));
+    CHECK(error == "symbol sidecar does not match the kernel image");
     std::filesystem::remove_all(directory);
 }

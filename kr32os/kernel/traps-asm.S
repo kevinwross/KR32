@@ -1,3 +1,4 @@
+.file "kr32os/kernel/traps-asm.S"
 ; KR32OS M3 trap entry stubs and vector installation.
     .text
 

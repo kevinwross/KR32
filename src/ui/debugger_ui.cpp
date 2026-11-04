@@ -25,6 +25,7 @@
 #include "kr32/link/linker.h"
 #include "kr32/os/bootinfo.h"
 #include "kr32/os/kernel_meta.h"
+#include "kr32/os/symbols.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/help.h"
 
@@ -641,8 +642,59 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     session_.set_arguments(parsed.arguments);
     session_.set_program_name(
         std::filesystem::path(kernel_path).filename().string());
-    if (!session_.load_raw(kernel, 0x0002'0000, bios, error)) {
+    const auto is_container = [](const std::vector<std::uint8_t>& bytes) {
+        return bytes.size() >= 4 && bytes[0] == 'K' && bytes[1] == '3' &&
+               bytes[2] == '2' && bytes[3] == 0;
+    };
+    const bool kernel_container = is_container(kernel);
+    const bool bios_container = is_container(bios);
+    std::uint32_t kernel_size = static_cast<std::uint32_t>(kernel.size());
+    if (kernel_container || bios_container) {
+        if (!kernel_container || !bios_container) {
+            error = "kernel and BIOS must both be .k32 or both be raw .bin";
+            return false;
+        }
+        container::Image kernel_image;
+        container::Image bios_image;
+        container::Error container_error;
+        if (!container::read(kernel, kernel_image, container_error) ||
+            !container::read(bios, bios_image, container_error)) {
+            error = container_error.message;
+            return false;
+        }
+        if (!session_.load_os(kernel_image, bios_image, error)) {
+            return false;
+        }
+        kernel_size = 0;
+        for (const container::Section& section : kernel_image.sections) {
+            if ((section.flags & container::Alloc) != 0) {
+                kernel_size = std::max(kernel_size, section.address + section.size -
+                                                      0x0002'0000U);
+            }
+        }
+    } else if (!session_.load_raw(kernel, 0x0002'0000, bios, error)) {
         return false;
+    } else {
+        container::Image debug_image;
+        std::string sym_error;
+        if (os::load_symbol_file(kernel_path, kernel, debug_image, sym_error)) {
+            if (!session_.set_debug_info(debug_image, error)) {
+                return false;
+            }
+        } else if (!sym_error.empty()) {
+            error = sym_error;
+            return false;
+        }
+        container::Image bios_debug_image;
+        sym_error.clear();
+        if (os::load_symbol_file(bios_path, bios, bios_debug_image, sym_error)) {
+            if (!session_.set_debug_info(bios_debug_image, error)) {
+                return false;
+            }
+        } else if (!sym_error.empty()) {
+            error = sym_error;
+            return false;
+        }
     }
     os::BootInfo boot{};
     boot.magic = os::kBootInfoMagic;
@@ -651,17 +703,17 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     boot.ram_base = session_.machine().ram_base();
     boot.ram_size = session_.machine().ram_size();
     boot.kernel_base = 0x0002'0000;
-    boot.kernel_size = static_cast<std::uint32_t>(kernel.size());
+    boot.kernel_size = kernel_size;
     boot.kernel_entry = 0x0002'0000;
     boot.framebuffer_base = core::kFramebufferBase;
     boot.framebuffer_size = core::kFramebufferSize;
     boot.framebuffer_stride = core::kFramebufferStride;
     boot.framebuffer_format = 1;
     os::KernelMeta meta{};
-    if (os::load_kernel_meta(kernel_path, meta, error)) {
+    if (!kernel_container && os::load_kernel_meta(kernel_path, meta, error)) {
         boot.initrd_base = 0x0002'0000U + meta.initrd_offset;
         boot.initrd_size = meta.initrd_size;
-    } else if (!error.empty()) {
+    } else if (!kernel_container && !error.empty()) {
         return false;
     }
     if (!os::write_boot_info(session_.machine(), boot, error)) {
@@ -678,6 +730,17 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     source_cache_.clear();
     source_view_id_ = -1;
     source_view_path_.clear();
+    load_source_files();
+    if (!session_.info().sources.empty()) {
+        const int initial_source = session_.info().sources.front().id;
+        const auto cached = source_cache_.find(initial_source);
+        if (cached != source_cache_.end()) {
+            source_lines_ = cached->second;
+            source_view_id_ = initial_source;
+            source_view_path_ = source_path_for(initial_source);
+        }
+    }
+    ensure_source_for_current();
     loaded_ = true;
     source_scroll_ = 0;
     asm_scroll_ = 0;

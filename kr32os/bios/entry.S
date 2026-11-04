@@ -1,3 +1,4 @@
+.file "kr32os/bios/entry.S"
 ; KR32OS M1 BIOS: validate BootInfo, identity-map the low kernel window,
 ; install a default vector table, enable paging, and enter the kernel.
 .word bios_entry

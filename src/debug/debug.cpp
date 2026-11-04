@@ -168,6 +168,50 @@ bool Session::load(const container::Image& image, std::string& error) {
     return true;
 }
 
+bool Session::load_os(const container::Image& kernel,
+                      const container::Image& bios,
+                      std::string& error) {
+    error.clear();
+    const auto load_image = [&](const container::Image& image) {
+        for (const container::Section& section : image.sections) {
+            if ((section.flags & container::Alloc) == 0) {
+                continue;
+            }
+            if (section.type == container::SectionType::Bss) {
+                for (std::uint32_t offset = 0; offset < section.size; ++offset) {
+                    if (!machine_.write8(section.address + offset, 0)) {
+                        error = "failed to clear section " + section.name;
+                        return false;
+                    }
+                }
+                continue;
+            }
+            if (!section.data.empty() &&
+                !machine_.load_image(section.address, section.data)) {
+                error = "failed to load section " + section.name;
+                return false;
+            }
+        }
+        return true;
+    };
+    if (!load_image(kernel) || !load_image(bios)) {
+        return false;
+    }
+    machine_.reset();
+    if (!machine_.setup_arguments(arguments_, program_name_, error)) {
+        return false;
+    }
+    install_syscall_handler();
+    console_.clear();
+    info_ = {};
+    std::string info_error;
+    (void)set_debug_info(kernel, info_error);
+    info_error.clear();
+    (void)set_debug_info(bios, info_error);
+    breakpoints_.clear();
+    return true;
+}
+
 bool Session::load_raw(const std::vector<std::uint8_t>& kernel,
                        std::uint32_t kernel_base,
                        const std::vector<std::uint8_t>& bios,
@@ -189,6 +233,35 @@ bool Session::load_raw(const std::vector<std::uint8_t>& kernel,
     info_ = {};
     console_.clear();
     breakpoints_.clear();
+    return true;
+}
+
+bool Session::set_debug_info(const container::Image& image,
+                             std::string& error) {
+    Info parsed;
+    if (!parse_info(image, parsed, error)) {
+        return false;
+    }
+    info_.sources.insert(info_.sources.end(), parsed.sources.begin(),
+                         parsed.sources.end());
+    info_.lines.insert(info_.lines.end(), parsed.lines.begin(), parsed.lines.end());
+    info_.functions.insert(info_.functions.end(), parsed.functions.begin(),
+                           parsed.functions.end());
+    info_.variables.insert(info_.variables.end(), parsed.variables.begin(),
+                           parsed.variables.end());
+    info_.globals.insert(info_.globals.end(), parsed.globals.begin(),
+                         parsed.globals.end());
+    info_.types.insert(info_.types.end(), parsed.types.begin(), parsed.types.end());
+    info_.classes.insert(info_.classes.end(), parsed.classes.begin(),
+                         parsed.classes.end());
+    std::sort(info_.lines.begin(), info_.lines.end(),
+              [](const Line& left, const Line& right) {
+                  return left.address < right.address;
+              });
+    std::sort(info_.functions.begin(), info_.functions.end(),
+              [](const Function& left, const Function& right) {
+                  return left.start < right.start;
+              });
     return true;
 }
 
@@ -428,7 +501,18 @@ core::StepResult Session::step_out() {
 const Line* Session::line_at(std::uint32_t pc) const {
     const Function* function = function_at(pc);
     if (function == nullptr) {
-        return nullptr;
+        // Assembly objects carry line records without function records.
+        const auto next = std::upper_bound(
+            info_.lines.begin(), info_.lines.end(), pc,
+            [](std::uint32_t address, const Line& line) { return address < line.address; });
+        if (next == info_.lines.begin()) {
+            return nullptr;
+        }
+        const Line* candidate = &*(next - 1);
+        if (function_at(candidate->address) != nullptr) {
+            return nullptr;
+        }
+        return candidate;
     }
     const auto begin = std::lower_bound(
         info_.lines.begin(), info_.lines.end(), function->start,

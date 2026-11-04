@@ -611,8 +611,10 @@ private:
             name == ".debug_info") {
             return switch_section(name, statement.line);
         }
-        if (name == ".global" || name == ".globl" || name == ".weak") {
-            if (statement.operands.size() != 1) {
+        if (name == ".file") {
+            return true;
+        }
+        if (name == ".global" || name == ".globl" || name == ".weak") {            if (statement.operands.size() != 1) {
                 return fail(statement.line, ".global/.weak expects one name");
             }
             globals_.insert(statement.operands[0]);
@@ -1415,12 +1417,45 @@ private:
         return true;
     }
 
+    void append_debug_text(const std::string& text) {
+        for (container::Section& section : sections_) {
+            if (section.name == ".debug_info") {
+                section.data.insert(section.data.end(), text.begin(), text.end());
+                return;
+            }
+        }
+    }
+
+    bool set_debug_file(const Statement& statement) {
+        if (statement.operands.size() != 1) {
+            return fail(statement.line, ".file expects a path");
+        }
+        std::vector<std::uint8_t> bytes;
+        if (!parse_string(statement.operands[0], bytes, error_, statement.line)) {
+            return false;
+        }
+        if (!bytes.empty() && bytes.back() == 0) {
+            bytes.pop_back();
+        }
+        debug_file_.assign(bytes.begin(), bytes.end());
+        std::uint32_t hash = 2166136261U;
+        for (unsigned char character : debug_file_) {
+            hash ^= character;
+            hash *= 16777619U;
+        }
+        debug_source_id_ = 1000U + (hash % 10000U);
+        return true;
+    }
+
     bool pass2(container::Image& image) {
         for (container::Section& section : sections_) {
             section.data.clear();
             section.size = 0;
         }
         image_relocations_.clear();
+        debug_file_.clear();
+        debug_source_id_ = 0;
+        debug_lines_.clear();
         current_ = 0;
         for (const Statement& statement : statements_) {
             if (statement.mnemonic.empty()) {
@@ -1443,6 +1478,14 @@ private:
                 return fail(statement.line, "cannot encode instruction");
             }
             const std::uint32_t instruction_offset = offset();
+            if (!debug_file_.empty() &&
+                sections_[current_].type == container::SectionType::Text) {
+                const std::string label =
+                    ".Lsource_" + std::to_string(debug_lines_.size());
+                labels_[label] = {static_cast<std::uint32_t>(current_),
+                                  instruction_offset, false, false};
+                debug_lines_.push_back({label, statement.line});
+            }
             for (std::uint8_t index = 0; index < encoded.count; ++index) {
                 emit32(encoded.words[index]);
             }
@@ -1454,6 +1497,14 @@ private:
                     {static_cast<std::uint32_t>(current_), instruction_offset + 4U, relocation,
                      static_cast<std::uint32_t>(addend), container::RelocationType::Abs32});
             }
+        }
+
+        for (const auto& [label, line] : debug_lines_) {
+            std::string record = "L " + label + " " +
+                                 std::to_string(debug_source_id_) + " " +
+                                 std::to_string(line) + " 1";
+            record.push_back('\0');
+            append_debug_text(record);
         }
 
         image.type = container::ImageType::Object;
@@ -1511,6 +1562,16 @@ private:
             name == ".eh_frame_array" || name == ".data" || name == ".bss" ||
             name == ".debug_info") {
             return switch_section(name, statement.line);
+        }
+        if (name == ".file") {
+            if (!set_debug_file(statement)) {
+                return false;
+            }
+            std::string record = "S " + std::to_string(debug_source_id_) + " " +
+                                 debug_file_;
+            record.push_back('\0');
+            append_debug_text(record);
+            return true;
         }
         if (name == ".global" || name == ".globl" || name == ".weak" ||
             name == ".extern" || name == ".equ" || name == ".set") {
@@ -1615,6 +1676,9 @@ private:
     std::set<std::string> weak_symbols_;
     std::set<std::string> externs_;
     std::vector<container::Relocation> image_relocations_;
+    std::string debug_file_;
+    std::uint32_t debug_source_id_ = 0;
+    std::vector<std::pair<std::string, int>> debug_lines_;
 };
 
 } // namespace

@@ -1,3 +1,4 @@
+.file "kr32os/boot/entry.S"
 ; KR32OS kernel entry. The BIOS has already selected the kernel stack.
     .text
     .global _start

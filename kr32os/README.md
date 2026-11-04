@@ -33,10 +33,38 @@ bash kr32os/build.sh
 Both scripts accept `KR32` through the environment; `build.ps1` also accepts
 `-Kr32 <path>`. The default is the host Debug build.
 
+The build emits:
+
+- `bios.bin` / `kernel.bin` — boot images loaded at `0xFFFF_0000` and
+  `0x0002_0000`;
+- `bios.k32` / `kernel.k32` — container images with debug information;
+- `bios.sym` / `kernel.sym` — sibling symbol/debug sidecars for the `.bin`
+  images.
+
+## Source debugging
+
+`kr32 gui --os` automatically looks for `kernel.sym` next to `kernel.bin` and
+loads it after the raw image. The sidecar contains source lines and symbols and
+is CRC-checked against the image. BIOS and entry-assembly line records are
+included as well, so stepping through `bios/entry.S` and `boot/entry.S` shows
+the assembly source pane.
+
+The `.k32` images are also accepted:
+
+```text
+kr32 gui --os kr32os/build/kernel.k32 --bios kr32os/build/bios.k32
+```
+
 Run:
 
 ```text
 kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+```
+
+The `.k32` pair is accepted by `os` as well:
+
+```text
+kr32 os kr32os/build/kernel.k32 --bios kr32os/build/bios.k32
 ```
 
 For a scripted session:

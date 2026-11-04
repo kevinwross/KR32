@@ -97,10 +97,15 @@ public:
     Session();
 
     [[nodiscard]] bool load(const container::Image& image, std::string& error);
+    [[nodiscard]] bool load_os(const container::Image& kernel,
+                              const container::Image& bios,
+                              std::string& error);
     [[nodiscard]] bool load_raw(const std::vector<std::uint8_t>& kernel,
                                 std::uint32_t kernel_base,
                                 const std::vector<std::uint8_t>& bios,
                                 std::string& error);
+    [[nodiscard]] bool set_debug_info(const container::Image& image,
+                                      std::string& error);
 
     [[nodiscard]] core::Machine& machine() { return machine_; }
     [[nodiscard]] const core::Machine& machine() const { return machine_; }

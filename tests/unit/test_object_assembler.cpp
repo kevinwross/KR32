@@ -179,6 +179,22 @@ TEST_CASE("object assembler relocates data references") {
     CHECK(image.relocations[1].addend == 0);
 }
 
+TEST_CASE("object assembler emits source line records for assembly") {
+    const container::Image image = assemble(
+        ".file \"kr32os/bios/entry.S\"\n"
+        ".text\n"
+        ".global entry\n"
+        "entry:\n"
+        "    MOV R0, #1\n"
+        "    HALT\n");
+    const container::Section* debug = find_section(image, ".debug_info");
+    REQUIRE(debug != nullptr);
+    const std::string text(debug->data.begin(), debug->data.end());
+    CHECK(text.find("kr32os/bios/entry.S") != std::string::npos);
+    CHECK(text.find("L .Lsource_0 ") != std::string::npos);
+    CHECK(find_symbol(image, ".Lsource_0") != nullptr);
+}
+
 TEST_CASE("object assembler rejects duplicate labels and undefined directives") {
     container::Image image;
     assembler::Error error;

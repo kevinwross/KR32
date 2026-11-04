@@ -56,6 +56,9 @@ loaded source.
 The **SOURCE** panel follows the current PC across debug source files. Stepping
 into libc functions such as `printf` or `malloc` switches the title and text to
 `src/cc/libc.c`, and the **VARIABLES** panel shows the active libc locals.
+For OS boots, `gui --os` loads `kernel.sym` and `bios.sym` beside the raw
+images; those CRC-checked sidecars provide C and assembly source lines, so the
+panel follows BIOS, boot entry, and kernel code as the PC moves.
 
 The right-hand **CORES** panel lists one row per core and is expandable. The
 expanded row shows that core's PC/SP/FLAGS, GPRs, F0-F15, TSP and T0 tile,
