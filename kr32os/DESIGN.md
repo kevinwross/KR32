@@ -49,6 +49,10 @@ Status: draft for the interactive design session.
 - Shell commands: `help`, `echo`, `clear`, `mem`, `ps`.
 - Reaping: `waitpid(pid, status_ptr, options)`.
 - Context switch: all GPRs, FPRs, TSP, PC, FLAGS, and SP.
+- Filesystem inodes: fixed table with direct and single-indirect block pointers.
+- Scheduler: circular doubly linked run queue.
+- User faults: kill the faulting process; kernel faults still panic.
+- Process table: fixed size, PID 1 reserved for init, monotonic PID reuse.
 
 
 ## Boot contract (initial assumption)
@@ -311,6 +315,12 @@ The filesystem remains separate from the initrd lookup layer so user programs
 can move from read-only initrd files to persistent storage without changing the
 VFS API.
 
+Inodes use a fixed table with 64-byte entries. Each inode carries mode, link
+count, size, several direct block pointers, one single-indirect pointer, and
+timestamps. Direct pointers cover small files without an indirect block; the
+single-indirect block covers the next stage of growth. Double-indirect blocks
+are deliberately deferred.
+
 The block device is extended with an LBA register at offset `0x18`, addressed in
 512-byte sectors. A filesystem 4 KiB block is eight consecutive sectors. The
 existing DMA address/count interface remains. Requests complete immediately for
@@ -318,9 +328,10 @@ the first filesystem milestone, but the IRQ-enable and status path stays defined
 so the driver can move to asynchronous completion when the scheduler supports
 waiting drivers.
 
-Early exceptions print the vector, PC, FAR, and error code to the serial console
-and halt. Process termination and recovery are deferred until process state is
-well-defined.
+A user-mode fault terminates only the faulting process and stores a fault status
+for reaping. Kernel-mode faults print the vector, PC, FAR, and error code to the
+serial console and halt. The user fault path does not attempt to retry the
+faulting instruction except where demand paging explicitly requires it later.
 
 `exit` marks a process as a zombie and stores its exit status. A parent reaps it;
 init is reaped by the kernel. Zombies hold their process-table entry and exit
@@ -331,6 +342,10 @@ path.
 The reaping ABI is `waitpid(pid, status_ptr, options)`. `pid` selects a child or
 uses a reserved "any child" value; `status_ptr` receives the exit status; and
 `options` is reserved zero for now. The kernel reaps init when no parent exists.
+
+The process table is fixed-size. PID 1 is reserved for init; PIDs increase
+monotonically and are reused only after a slot is reaped. A fixed table keeps
+lookup and memory bounded while the scheduler is simple.
 
 The first kernel shell commands are:
 
@@ -358,6 +373,10 @@ A context switch saves and restores:
 
 Lazy floating-point state is not attempted in the first scheduler. This keeps
 user FP and transform-stack state correct even though switches are slower.
+
+The runnable queue is a circular doubly linked list. The scheduler takes the
+current thread off the head, runs it for one quantum, and appends it to the
+tail. There is one runnable thread per core in the first multicore milestone.
 
 ## Multicore policy
 
@@ -434,8 +453,8 @@ to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Follow-up design questions
 
-- What are the superblock and inode field layouts for the writable filesystem?
-- What are the initrd and filesystem magic/version constants?
-- What run-queue structure should the round-robin scheduler use?
+- What are the exact superblock fields and filesystem magic/version constants?
 - When should block I/O move from immediate completion to IRQ completion?
 - Which shell file commands (`ls`, `cat`, `run`) follow the first five built-ins?
+- What exit-status encoding should distinguish normal exit from fault termination?
+- How many entries should the fixed process table hold?
