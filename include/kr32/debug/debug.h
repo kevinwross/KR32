@@ -97,6 +97,10 @@ public:
     Session();
 
     [[nodiscard]] bool load(const container::Image& image, std::string& error);
+    [[nodiscard]] bool load_raw(const std::vector<std::uint8_t>& kernel,
+                                std::uint32_t kernel_base,
+                                const std::vector<std::uint8_t>& bios,
+                                std::string& error);
 
     [[nodiscard]] core::Machine& machine() { return machine_; }
     [[nodiscard]] const core::Machine& machine() const { return machine_; }
@@ -162,6 +166,7 @@ public:
     [[nodiscard]] std::string dump() const;
 
 private:
+    void install_syscall_handler();
     [[nodiscard]] bool read_value(std::uint32_t address,
                                   std::uint32_t size,
                                   std::uint32_t& value) const;

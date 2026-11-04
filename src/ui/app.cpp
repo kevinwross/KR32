@@ -1,5 +1,6 @@
 #include "kr32/ui/app.h"
 
+#include "kr32/os/defaults.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/debugger_ui.h"
 
@@ -22,11 +23,29 @@ bool smoke_test() {
 int run(int argc, char** argv) {
     std::string image_path;
     std::string ppm_path;
+    std::string os_path;
+    std::string bios_path;
+    bool os_mode = false;
     bool headless = false;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
         if (argument == "--headless") {
             headless = true;
+            continue;
+        }
+        if (argument == "--os") {
+            os_mode = true;
+            if (index + 1 < argc && argv[index + 1][0] != '-') {
+                os_path = argv[++index];
+            }
+            continue;
+        }
+        if (argument == "--bios") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 gui: --bios needs a path\n");
+                return 2;
+            }
+            bios_path = argv[++index];
             continue;
         }
         if (argument == "--screenshot") {
@@ -36,7 +55,9 @@ int run(int argc, char** argv) {
             continue;
         }
         if (argument == "--help" || argument == "-h") {
-            std::printf("Usage: kr32 gui <image.k32> [--headless] [--screenshot out.ppm]\n");
+            std::printf("Usage: kr32 gui <image.k32> [--headless] [--screenshot out.ppm]\n"
+                        "       kr32 gui --os [kernel.bin] [--bios bios.bin] "
+                        "[--headless] [--screenshot out.ppm]\n");
             return 0;
         }
         if (!argument.empty() && argument[0] == '-') {
@@ -45,15 +66,30 @@ int run(int argc, char** argv) {
         }
         image_path = argument;
     }
+    if (os_mode && !image_path.empty()) {
+        std::fprintf(stderr, "kr32 gui: use either --os or an image path\n");
+        return 2;
+    }
+    os::ImagePaths paths;
+    if (os_mode) {
+        std::string error;
+        if (!os::resolve(argv[0], os_path, bios_path, paths, error)) {
+            std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
+            return 1;
+        }
+    }
 
     if (headless) {
-        if (image_path.empty()) {
+        if (!os_mode && image_path.empty()) {
             std::fprintf(stderr, "kr32 gui: --headless needs an image path\n");
             return 2;
         }
         DebuggerUI debugger;
         std::string error;
-        if (!debugger.load(image_path, error)) {
+        const bool loaded =
+            os_mode ? debugger.load_os(paths.kernel, paths.bios, error)
+                    : debugger.load(image_path, error);
+        if (!loaded) {
             std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
             return 1;
         }
@@ -66,7 +102,13 @@ int run(int argc, char** argv) {
     }
 
     DebuggerUI debugger;
-    if (!image_path.empty()) {
+    if (os_mode) {
+        std::string error;
+        if (!debugger.load_os(paths.kernel, paths.bios, error)) {
+            std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
+            debugger.show_error(error);
+        }
+    } else if (!image_path.empty()) {
         std::string error;
         if (!debugger.load(image_path, error)) {
             std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());

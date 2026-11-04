@@ -159,6 +159,40 @@ bool Session::load(const container::Image& image, std::string& error) {
     if (!machine_.setup_arguments(arguments_, program_name_, error)) {
         return false;
     }
+    install_syscall_handler();
+    console_.clear();
+    if (!parse_info(image, info_, error)) {
+        return false;
+    }
+    breakpoints_.clear();
+    return true;
+}
+
+bool Session::load_raw(const std::vector<std::uint8_t>& kernel,
+                       std::uint32_t kernel_base,
+                       const std::vector<std::uint8_t>& bios,
+                       std::string& error) {
+    error.clear();
+    if (!machine_.load_image(kernel_base, kernel)) {
+        error = "kernel image does not fit at the requested base";
+        return false;
+    }
+    if (!machine_.load_image(core::kRomBase, bios)) {
+        error = "BIOS does not fit in ROM";
+        return false;
+    }
+    machine_.reset();
+    if (!machine_.setup_arguments(arguments_, program_name_, error)) {
+        return false;
+    }
+    install_syscall_handler();
+    info_ = {};
+    console_.clear();
+    breakpoints_.clear();
+    return true;
+}
+
+void Session::install_syscall_handler() {
     machine_.set_syscall_handler([this](core::Machine& current, std::uint32_t vector) {
         if (vector == 33) {
             console_.push_back(static_cast<char>(current.reg(0) & 0xFFU));
@@ -194,12 +228,6 @@ bool Session::load(const container::Image& image, std::string& error) {
         }
         return false;
     });
-    console_.clear();
-    if (!parse_info(image, info_, error)) {
-        return false;
-    }
-    breakpoints_.clear();
-    return true;
 }
 
 void Session::set_threads(std::vector<ThreadInfo> threads) {

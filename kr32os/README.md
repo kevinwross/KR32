@@ -17,7 +17,8 @@ services will be defined in the design session before implementation.
 
 ```text
 kr32os/
-  boot/       reset vector, BIOS handoff, early kernel entry
+  bios/       reset vector, ROM bootstrap, page tables, firmware stubs
+  boot/       kernel entry and BIOS handoff
   kernel/     traps, scheduler, memory, console, syscalls
   user/       shell and test programs
   include/    shared KR32OS headers

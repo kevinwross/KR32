@@ -14,6 +14,9 @@ class DebuggerUI {
 public:
     DebuggerUI();
     [[nodiscard]] bool load(const std::string& path, std::string& error);
+    [[nodiscard]] bool load_os(const std::string& kernel_path,
+                               const std::string& bios_path,
+                               std::string& error);
     void show_error(std::string message);
     void restart();
     void run();
@@ -217,6 +220,8 @@ private:
     std::string settings_arguments_;
     std::string settings_error_;
     int hover_settings_control_ = -1;
+    bool os_mode_ = false;
+    std::string bios_path_;
 
     struct VarHoverRow {
         Rect row{};

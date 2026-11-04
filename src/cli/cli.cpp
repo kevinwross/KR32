@@ -10,6 +10,7 @@
 #include "kr32/debug/debug.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/link/linker.h"
+#include "kr32/os/defaults.h"
 #include "kr32/version.h"
 #include "kr32/vm/host.h"
 
@@ -327,6 +328,7 @@ void print_help() {
         "  dis <image>          disassemble a raw image\n"
         "  vm <file>            assemble/load and run an image\n"
         "  run <file>           alias for vm\n"
+        "  os [kernel.bin]      boot KR32OS with the default BIOS\n"
         "  ld <files>           link .k32 objects into an executable\n"
         "  build <file>         assemble, link, and optionally run\n"
         "  cc <file>            compile C (M4)\n"
@@ -349,6 +351,8 @@ void print_help() {
         "--fs-root <dir> --read-only --quota <bytes> --arg <value>\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
         "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats "
+        "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n"
+        "Options for os:  --bios <rom> --max-steps <n> --ram-size <n> --trace --stats "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n");
 }
 
@@ -361,9 +365,10 @@ void print_dis_usage() {
 }
 
 void print_vm_usage() {
-    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--base <addr>] [--max-steps <n>] "
-                "[--ram-size <n>] [--trace] [--stats] [--fs-root <dir>] [--read-only] "
-                "[--quota <bytes>] [--arg <value>] [--input <text>]\n");
+    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--os [kernel.bin]] [--base <addr>] "
+                "[--max-steps <n>] [--ram-size <n>] [--trace] [--stats] "
+                "[--fs-root <dir>] [--read-only] [--quota <bytes>] [--arg <value>] "
+                "[--input <text>]\n");
 }
 
 int command_as(int argc, char** argv) {
@@ -1116,11 +1121,13 @@ int command_dap(int argc, char** argv) {
 int command_vm(int argc, char** argv) {
     std::string program;
     std::string bios;
+    std::string os_path;
     std::uint32_t base = kDefaultBase;
     std::uint32_t ram_size = core::kDefaultRamSize;
     std::uint64_t max_steps = kDefaultMaxSteps;
     bool trace = false;
     bool stats = false;
+    bool os_mode = false;
     vm::HostOptions host_options;
 
     for (int index = 2; index < argc; ++index) {
@@ -1128,6 +1135,13 @@ int command_vm(int argc, char** argv) {
         if (argument == "--help" || argument == "-h") {
             print_vm_usage();
             return 0;
+        }
+        if (argument == "--os") {
+            os_mode = true;
+            if (index + 1 < argc && argv[index + 1][0] != '-') {
+                os_path = argv[++index];
+            }
+            continue;
         }
         if (argument == "--trace") {
             trace = true;
@@ -1195,6 +1209,46 @@ int command_vm(int argc, char** argv) {
         program = std::string(argument);
     }
 
+    if (os_mode) {
+        if (os_path.empty() && !program.empty()) {
+            os_path = program;
+            program.clear();
+        }
+        if (!program.empty()) {
+            std::fprintf(stderr, "kr32 os: unexpected argument '%s'\n", program.c_str());
+            return 2;
+        }
+        os::ImagePaths paths;
+        std::string resolve_error;
+        if (!os::resolve(argv[0], os_path, bios, paths, resolve_error)) {
+            std::fprintf(stderr, "kr32 os: %s\n", resolve_error.c_str());
+            return 1;
+        }
+        std::vector<std::uint8_t> kernel;
+        std::vector<std::uint8_t> rom;
+        std::string error;
+        if (!read_file(paths.kernel, kernel, error)) {
+            std::fprintf(stderr, "kr32 os: %s\n", error.c_str());
+            return 1;
+        }
+        if (!read_file(paths.bios, rom, error)) {
+            std::fprintf(stderr, "kr32 os: %s\n", error.c_str());
+            return 1;
+        }
+        core::Machine machine(core::Machine::Options{ram_size});
+        if (!machine.load_image(0x0002'0000, kernel)) {
+            std::fprintf(stderr, "kr32 os: kernel does not fit at 0x00020000\n");
+            return 1;
+        }
+        if (!machine.load_image(core::kRomBase, rom)) {
+            std::fprintf(stderr, "kr32 os: BIOS does not fit in ROM\n");
+            return 1;
+        }
+        machine.reset();
+        std::printf("os: %s\nbios: %s\n", paths.kernel.c_str(), paths.bios.c_str());
+        return run_machine(machine, max_steps, trace, stats, host_options, true);
+    }
+
     if (program.empty()) {
         print_vm_usage();
         return 2;
@@ -1240,6 +1294,19 @@ int command_vm(int argc, char** argv) {
 
     return run_machine(machine, max_steps, trace, stats, host_options,
                        bios.empty());
+}
+
+int command_os(int argc, char** argv) {
+    std::vector<std::string> arguments{"kr32", "vm", "--os"};
+    for (int index = 2; index < argc; ++index) {
+        arguments.emplace_back(argv[index]);
+    }
+    std::vector<char*> raw;
+    raw.reserve(arguments.size());
+    for (std::string& argument : arguments) {
+        raw.push_back(argument.data());
+    }
+    return command_vm(static_cast<int>(raw.size()), raw.data());
 }
 
 std::vector<std::string> tokenize_shell(const std::string& line) {
@@ -1416,6 +1483,9 @@ int run(int argc, char** argv) {
     }
     if (command == "vm" || command == "run") {
         return command_vm(argc, argv);
+    }
+    if (command == "os") {
+        return command_os(argc, argv);
     }
     if (command == "ld") {
         return command_ld(argc, argv);

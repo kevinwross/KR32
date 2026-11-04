@@ -15,7 +15,8 @@ Status: draft for the interactive design session.
 - Build coverage: Windows PowerShell and WSL Bash wrappers around the same
   orchestration.
 - Flat image: `kr32 ld --flat --base 0x00020000` emits the raw kernel image.
-- BIOS: track `kr32os/bios.S` as the development BIOS source.
+- BIOS: lives in `kr32os/bios/`; assembly reset/privileged stubs with optional
+  freestanding C helpers for page tables, BootInfo, and diagnostics.
 
 ## Boot contract (initial assumption)
 
@@ -82,10 +83,36 @@ The kernel installs its own vector table entries before relying on faults or
 interrupts. The first milestone keeps the BIOS identity map; a later milestone
 owns page-table construction.
 
+## BIOS structure
+
+The BIOS is a separate ROM component, versioned with the OS because it defines
+the boot ABI:
+
+```text
+bios/entry.S    reset vector, privileged stubs (WRCR/IRET), low-stack setup
+bios/bios.c     optional freestanding helpers: BootInfo, page tables, diagnostics
+bios/README.md  build contract and ROM constraints
+```
+
+Assembly owns the reset path and anything that executes privileged instructions.
+C is introduced only where it reduces complexity, starting with page-table and
+BootInfo policy rather than the first boot stub.
+
+BIOS constraints:
+
+- The complete image must fit in the 64 KiB ROM at `0xFFFF_0000`.
+- No host libc or standard `_start`; only freestanding C is allowed.
+- Writable `.data`/`.bss` cannot live in ROM. BIOS state must be on the stack or
+  in an explicitly reserved RAM block.
+- `WRCR` and `IRET` remain assembly stubs even when the surrounding logic is C.
+- The BIOS must move to a low mapped stack before enabling paging.
+
 ## Proposed layers
 
 ```text
-boot/entry.S        reset-to-C handoff, stack, kernel entry
+bios/entry.S        reset vector, privileged stubs, final IRET
+bios/bios.c         optional freestanding BootInfo/page-table helpers
+boot/entry.S        kernel entry after the BIOS handoff
 kernel/main.c       banner, subsystem init, shell loop
 kernel/console.c    polled console output/input
 kernel/traps.c      vector table, exception reports
@@ -119,7 +146,9 @@ build/              generated artifacts (ignored)
 kr32os/build.ps1          Windows entry point
 kr32os/build.sh           WSL entry point
 kr32os/CMakeLists.txt     project(KR32OS NONE), custom commands
-kr32os/boot/entry.S       assembly
+kr32os/bios/entry.S       ROM reset path and privileged stubs
+kr32os/bios/bios.c        optional freestanding BIOS helpers
+kr32os/boot/entry.S       kernel entry
 kr32os/kernel/*.c         compiled with kr32 cc -S
 ```
 
@@ -127,9 +156,24 @@ The orchestrator:
 
 1. Compiles C sources to KR32 assembly with `kr32 cc -S`.
 2. Assembles each generated `.s` and `entry.S` with `kr32 as --object`.
-3. Links the objects with `kr32 ld --flat --base 0x00020000`.
-4. Assembles `bios.S` at `0xFFFF0000`.
-5. Runs with `kr32 vm kernel.bin --base 0x00020000 --bios bios.bin`.
+3. Links the kernel objects with `kr32 ld --flat --base 0x00020000`.
+4. Builds `bios.bin` from `bios/entry.S` plus any `bios/*.s` at `0xFFFF0000`.
+5. Runs with `kr32 os kernel.bin --bios bios.bin`.
+
+## Booting from the CLI
+
+`kr32 os` boots the default kernel and BIOS. Explicit images are also allowed:
+
+```text
+kr32 os
+kr32 os path/to/kernel.bin --bios path/to/bios.bin
+kr32 gui --os
+```
+
+The default kernel is resolved from `KR32OS_BIN`, then `kr32os.bin` next to the
+executable, then `kr32os/build/kernel.bin` or `kr32os/build/kr32os.bin` in the
+current directory, then an installed `share/kr32` directory. The BIOS defaults
+to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
 ## Open design questions
 

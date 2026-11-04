@@ -112,6 +112,9 @@ kr32 cxx examples/hello.cpp -S -o hello-cxx.s
 kr32 build examples/hello.cpp -o hello-cxx.k32 --run
 kr32 build examples/cxx_libc.cpp -o cxx-libc.k32 --run
 kr32 gui examples/libc-test.c
+kr32 os
+kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+kr32 gui --os
 kr32 dis demo.bin
 kr32 run examples/demo.asm
 kr32 run examples/fp-demo.asm
@@ -137,7 +140,10 @@ assembly or an object. `build` runs compile/assemble, link, and optional
 `--run` in one command. `size` reports `.k32` sections and `debug` dumps the
 `.debug_info` records. `gui` opens the source/disassembly debugger or renders
 headless PPM
-screenshots. `shell` runs tool commands interactively or from piped input, and
+screenshots. `os` boots a flat KR32OS kernel at `0x00020000` with a BIOS and
+resolves the default artifacts from `KR32OS_BIN`, `KR32OS_BIOS`, or the
+`kr32os/build` directory. `shell` runs tool commands interactively or from
+piped input, and
 `dap` exposes the debugger to DAP clients. `cxx` compiles a C++ source to
 assembly or an object, and `build file.cpp` compiles, links the shared
 C/C++ libc, and optionally runs the result.

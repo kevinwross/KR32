@@ -207,6 +207,18 @@ bool write_listing(const std::string& path, const std::string& assembly,
     return true;
 }
 
+bool read_binary(const std::string& path, std::vector<std::uint8_t>& bytes,
+                 std::string& error) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        error = "cannot open " + path;
+        return false;
+    }
+    bytes.assign(std::istreambuf_iterator<char>(input),
+                 std::istreambuf_iterator<char>());
+    return true;
+}
+
 bool compile_c_source(const std::string& path, container::Image& image,
                       std::string& error, bool listing) {
     std::ifstream input(path, std::ios::binary);
@@ -418,7 +430,9 @@ void DebuggerUI::apply_settings() {
         return;
     }
     std::string error;
-    if (!load(path_, error)) {
+    const bool reloaded = os_mode_ ? load_os(path_, bios_path_, error)
+                                   : load(path_, error);
+    if (!reloaded) {
         settings_error_ = error;
         error_ = error;
         return;
@@ -593,6 +607,8 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
         }
     }
     loaded_ = true;
+    os_mode_ = false;
+    bios_path_.clear();
     source_scroll_ = 0;
     error_.clear();
     if (settings_stop_at_main_) {
@@ -601,6 +617,42 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
     status_ = "paused at " + hex(session_.machine().pc(), 8);
+    return true;
+}
+
+bool DebuggerUI::load_os(const std::string& kernel_path,
+                         const std::string& bios_path,
+                         std::string& error) {
+    const ParsedArguments parsed = parse_arguments(settings_arguments_);
+    if (!parsed.ok) {
+        error = "command line arguments: " + parsed.error;
+        return false;
+    }
+    std::vector<std::uint8_t> kernel;
+    std::vector<std::uint8_t> bios;
+    if (!read_binary(kernel_path, kernel, error) ||
+        !read_binary(bios_path, bios, error)) {
+        return false;
+    }
+    session_.set_arguments(parsed.arguments);
+    session_.set_program_name(
+        std::filesystem::path(kernel_path).filename().string());
+    if (!session_.load_raw(kernel, 0x0002'0000, bios, error)) {
+        return false;
+    }
+    path_ = kernel_path;
+    bios_path_ = bios_path;
+    os_mode_ = true;
+    source_lines_.clear();
+    source_cache_.clear();
+    source_view_id_ = -1;
+    source_view_path_.clear();
+    loaded_ = true;
+    source_scroll_ = 0;
+    error_.clear();
+    memory_address_ = session_.machine().sp() & ~0xFU;
+    hover_memory_byte_ = -1;
+    status_ = "OS loaded: " + kernel_path;
     return true;
 }
 
@@ -642,7 +694,9 @@ void DebuggerUI::restart() {
         return;
     }
     std::string error;
-    if (!load(path_, error)) {
+    const bool reloaded = os_mode_ ? load_os(path_, bios_path_, error)
+                                   : load(path_, error);
+    if (!reloaded) {
         error_ = error;
         return;
     }

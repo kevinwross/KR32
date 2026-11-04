@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 09:55 -08:00
+> **Last updated:** 2026-11-04 10:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1690,6 +1690,11 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-04 09:55 -08:00** — Added the 32 MiB framebuffer aperture at
       `0xFC00_0000`, framebuffer MMIO control page, device-backed pixel storage,
       and updated the ISA/KR32OS memory maps.
+- **2026-11-04 10:11 -08:00** — Added `kr32 os` and `kr32 gui --os` with
+      default kernel/BIOS resolution, raw OS loading, and an OS boot smoke test.
+- **2026-11-04 10:15 -08:00** — Documented the BIOS as a separate
+      `kr32os/bios/` ROM component with an assembly reset/privileged path and
+      optional freestanding C helpers; updated the OS layout and build pipeline.
 
 ## 10. Updating this file
 
