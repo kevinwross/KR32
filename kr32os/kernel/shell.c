@@ -1,8 +1,12 @@
 #include "console.h"
+#include "process.h"
 #include "timer.h"
 
 void kernel_halt(int status);
 void kernel_break(void);
+void initrd_list(void);
+int initrd_cat(const char *name);
+int run_named(const char *name);
 
 static int string_equal(const char *left, const char *right) {
     while (*left != '\0' && *right != '\0') {
@@ -56,7 +60,7 @@ static void run_command(const char *line) {
         return;
     }
     if (string_equal(line, "help")) {
-        console_write("help echo clear mem ps exit\n");
+        console_write("help echo clear mem ps ls cat run exit\n");
     } else if (starts_with(line, "echo")) {
         const char *argument = line + 4;
         while (*argument == ' ') ++argument;
@@ -69,7 +73,26 @@ static void run_command(const char *line) {
         console_write_uint(timer_ticks());
         console_putc('\n');
     } else if (string_equal(line, "ps")) {
-        console_write("PID STATE NAME\n");
+        process_list();
+    } else if (string_equal(line, "ls")) {
+        initrd_list();
+    } else if (starts_with(line, "cat ")) {
+        const char *name = line + 4;
+        if (initrd_cat(name) != 0) {
+            console_write("cat: file not found\n");
+        }
+    } else if (starts_with(line, "run")) {
+        const char *name = line + 3;
+        while (*name == ' ') ++name;
+        if (*name == '\0') name = "init";
+        int status = run_named(name);
+        if (status < 0) {
+            console_write("run: program not found\n");
+        } else {
+            console_write("exit status ");
+            console_write_uint((unsigned int)status);
+            console_putc('\n');
+        }
     } else if (string_equal(line, "crash")) {
         kernel_break();
     } else if (string_equal(line, "exit")) {

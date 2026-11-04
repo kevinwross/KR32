@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 11:43 -08:00
+> **Last updated:** 2026-11-04 12:00 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1741,6 +1741,11 @@ Newest entries at the bottom. Use the local time zone.
       UI input path, polled kernel shell, vector/exception reporting, virtual
       timer IRQ, and fault/timer regressions. MMIO is now reachable through
       paging.
+- **2026-11-04 12:00 -08:00** — KR32OS M4 core complete: user runtime,
+      K32I initrd, W^X user mappings, 256-entry process table, user-return
+      trampoline, syscall write/exit, and shell `ls`/`cat`/`run`. Deferred:
+      bitmap/heap, kernel.meta, remaining syscall vectors, user-fault kill.
+      Windows 40/40 and WSL 37/37 gates pass.
 
 ## 10. Updating this file
 

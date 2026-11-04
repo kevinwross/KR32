@@ -10,9 +10,11 @@ KR32OS is a small operating system for the KR32 virtual machine.
 
 ## Status
 
-Scaffold only. Architecture is recorded in [DESIGN.md](DESIGN.md); the M0-M4
-implementation plan is in [kr32os-impl.md](kr32os-impl.md) and is pending review
-before coding starts.
+M0-M4 boot path is implemented: BIOS boot and paging, serial shell, exception
+reporting, timer IRQ, initrd loading, process table, and a first user-mode init
+process. Remaining M4 infrastructure work is listed in
+[kr32os-impl.md](kr32os-impl.md). Architecture is recorded in
+[DESIGN.md](DESIGN.md).
 
 ## Build
 
@@ -31,10 +33,20 @@ bash kr32os/build.sh
 Both scripts accept `KR32` through the environment; `build.ps1` also accepts
 `-Kr32 <path>`. The default is the host Debug build.
 
-Run M0:
+Run:
 
 ```text
 kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+```
+
+For a scripted session:
+
+```text
+kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin \
+    --serial-input "ls
+run init
+exit
+"
 ```
 
 ## Planned layout

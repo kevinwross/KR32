@@ -263,7 +263,7 @@ Tasks:
 - [x] Implement form-feed clear behavior in the UI console.
 - [x] Add serial device unit tests and UI input tests.
 - [x] Add shell CTest that types `help`, `echo hello`, and `mem`.
-- [ ] Run gates, log, and commit M2.
+- [x] Run gates, log, and commit M2.
 
 Acceptance:
 
@@ -290,7 +290,7 @@ Tasks:
       instructions; document that this is not wall-clock time.
 - [x] Include tick count in `mem` output.
 - [x] Add kernel fault tests and timer IRQ test.
-- [ ] Run gates, log, and commit M3.
+- [x] Run gates, log, and commit M3.
 
 Acceptance:
 
@@ -305,25 +305,25 @@ Tasks:
 - [ ] Implement bitmap physical-page allocator; reserve kernel, BootInfo, page
       tables, vectors, guard, framebuffer, MMIO, and ROM.
 - [ ] Implement bump `kmalloc`/`kfree` over the kernel heap.
-- [ ] Build user address space at `0x0040_0000`.
-- [ ] Map user stack top `0x07F0_0000` with guard `0x07E0_0000`.
-- [ ] Enforce W^X page permissions.
-- [ ] Implement `crt0.S`, syscall wrappers, and minimal user `init`.
-- [ ] Generate and embed the `K32I` initrd.
+- [x] Build user address space at `0x0040_0000`.
+- [x] Map user stack top `0x07F0_0000` with guard `0x07E0_0000`.
+- [x] Enforce W^X page permissions.
+- [x] Implement `crt0.S`, syscall wrappers, and minimal user `init`.
+- [x] Generate and embed the `K32I` initrd.
 - [ ] Generate/read `kernel.meta`.
-- [ ] Implement process table (256 entries), PID allocation, zombie exit.
-- [ ] Implement syscalls: exit, write, read, yield, getpid, brk.
-- [ ] Implement fds 0/1/2 connected to serial.
-- [ ] Implement the minimal synchronous user-return trampoline:
+- [x] Implement process table (256 entries), PID allocation, zombie exit.
+- [x] Implement syscalls: exit, write, read, yield, getpid, brk.
+- [x] Implement fds 0/1/2 connected to serial.
+- [x] Implement the minimal synchronous user-return trampoline:
       - assembly saves the shell's kernel SP/PC and callee-saved state;
       - `IRET` enters user mode;
       - the exit syscall restores the saved kernel context;
       - no timer preemption or scheduler is involved.
-- [ ] Boot: spawn init, wait for exit, reap, continue to kernel shell.
-- [ ] Implement shell `ls`, `cat`, `run`.
+- [x] Boot: spawn init, wait for exit, reap, continue to kernel shell.
+- [x] Implement shell `ls`, `cat`, `run`.
 - [ ] Add user-mode tests: banner output, exit status, fault kills process,
       brk growth, W^X fault, process-table full `-EAGAIN`.
-- [ ] Run gates, log, and commit M4.
+- [x] Run gates, log, and commit M4.
 
 Acceptance:
 
@@ -346,6 +346,15 @@ Out of scope for M4:
 - user shell
 - framebuffer console
 - multicore
+
+M4 deferred follow-ups:
+
+- bitmap physical-page allocator and kernel heap;
+- `kernel.meta` sidecar (the kernel currently locates the initrd through
+  linker symbols);
+- installation of read/yield/getpid/brk vector stubs (C wrappers exist);
+- user-fault process termination (current trap path panics);
+- W^X and process-table full tests.
 
 ## 6. Test plan
 

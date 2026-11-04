@@ -61,6 +61,21 @@ $timerObject = Join-Path $build 'timer.o'
 $trapsAssembly = Join-Path $build 'traps.s'
 $trapsObject = Join-Path $build 'traps.o'
 $trapStubsObject = Join-Path $build 'trap_stubs.o'
+$userAssembly = Join-Path $build 'user.s'
+$userObject = Join-Path $build 'user.o'
+$processAssembly = Join-Path $build 'process.s'
+$processObject = Join-Path $build 'process.o'
+$syscallAssembly = Join-Path $build 'syscall.s'
+$syscallObject = Join-Path $build 'syscall.o'
+$userBridgeObject = Join-Path $build 'user_bridge.o'
+$userCrtObject = Join-Path $build 'crt0.o'
+$userSyscallObject = Join-Path $build 'user_syscall.o'
+$userInitAssembly = Join-Path $build 'user_init.s'
+$userInitObject = Join-Path $build 'user_init.o'
+$userImage = Join-Path $build 'init.bin'
+$initrd = Join-Path $build 'initrd.bin'
+$initrdAssembly = Join-Path $build 'initrd.s'
+$initrdObject = Join-Path $build 'initrd.o'
 $entryObject = Join-Path $build 'entry.o'
 $kernel = Join-Path $build 'kernel.bin'
 
@@ -76,11 +91,58 @@ Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '-S', '-o', $trapsAssembly)
 Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps.S'), '--object', '-o', $trapStubsObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '-S', '-o', $userAssembly)
+Invoke-Kr32 -Arguments @('as', $userAssembly, '--object', '-o', $userObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '-S', '-o', $processAssembly)
+Invoke-Kr32 -Arguments @('as', $processAssembly, '--object', '-o', $processObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '-S', '-o', $syscallAssembly)
+Invoke-Kr32 -Arguments @('as', $syscallAssembly, '--object', '-o', $syscallObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user.S'), '--object', '-o', $userBridgeObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
+
+# Build the first user program.
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\init.c'), '-S', '-o', $userInitAssembly)
+Invoke-Kr32 -Arguments @('as', $userInitAssembly, '--object', '-o', $userInitObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\crt0.S'), '--object', '-o', $userCrtObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\syscall.S'), '--object', '-o', $userSyscallObject)
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userInitObject, $userSyscallObject,
+                        '--flat', '--base', '0x00400000', '-o', $userImage)
+
+# Build the K32I initrd with one entry.
+$userBytes = [System.IO.File]::ReadAllBytes($userImage)
+$initrdBytes = New-Object byte[] (56 + $userBytes.Length)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]0x4932334B), 0, $initrdBytes, 0, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]1), 0, $initrdBytes, 4, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]1), 0, $initrdBytes, 8, 4)
+$nameBytes = [System.Text.Encoding]::ASCII.GetBytes('init')
+[System.Array]::Copy($nameBytes, 0, $initrdBytes, 12, $nameBytes.Length)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]56), 0, $initrdBytes, 44, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$userBytes.Length), 0, $initrdBytes, 48, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]0x00400000), 0, $initrdBytes, 52, 4)
+[System.Array]::Copy($userBytes, 0, $initrdBytes, 56, $userBytes.Length)
+[System.IO.File]::WriteAllBytes($initrd, $initrdBytes)
+$initrdText = New-Object System.Text.StringBuilder
+[void]$initrdText.AppendLine('.section .rodata')
+[void]$initrdText.AppendLine('.global __initrd_start')
+[void]$initrdText.AppendLine('__initrd_start:')
+for ($index = 0; $index -lt $initrdBytes.Length; $index += 16) {
+    $count = [Math]::Min(16, $initrdBytes.Length - $index)
+    $parts = @()
+    for ($offset = 0; $offset -lt $count; ++$offset) {
+        $parts += ('0x{0:X2}' -f $initrdBytes[$index + $offset])
+    }
+    [void]$initrdText.AppendLine('.byte ' + ($parts -join ', '))
+}
+[void]$initrdText.AppendLine('.global __initrd_end')
+[void]$initrdText.AppendLine('__initrd_end:')
+Set-Content -LiteralPath $initrdAssembly -Value $initrdText.ToString() -NoNewline -Encoding ascii
+Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
+
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject,
+                        $userObject, $syscallObject, $processObject, $userBridgeObject, $initrdObject,
                         '--flat', '--base', '0x00020000', '-o', $kernel)
 
-Write-Host "KR32OS M2 built:"
+Write-Host "KR32OS M4 built:"
 Write-Host "  $bios"
 Write-Host "  $kernel"

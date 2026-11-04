@@ -159,6 +159,13 @@ add_test(NAME run_os_fault_timer
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsFault.cmake)
 
+add_test(NAME run_os_user
+    COMMAND ${CMAKE_COMMAND}
+        -DKR32=$<TARGET_FILE:kr32>
+        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsUser.cmake)
+
 add_test(NAME build_hello
     COMMAND $<TARGET_FILE:kr32> build
         ${CMAKE_SOURCE_DIR}/examples/hello.s

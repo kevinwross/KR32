@@ -2,6 +2,21 @@
 
 Status: draft for the interactive design session.
 
+## Implementation status
+
+M0-M4 are implemented through the first user process. Current implementation
+notes:
+
+- BootInfo is written by the host loader; the kernel locates the initrd through
+  linker symbols until `kernel.meta` lands.
+- User page tables are static at `0x70000`/`0x71000`; the bitmap allocator and
+  kernel heap remain deferred.
+- The process table is a fixed 256-entry array.
+- Syscall vectors 64 (exit) and 65 (write) are installed; the other wrapper
+  entry points are present but not yet wired into the vector table.
+- User faults currently follow the kernel panic path.
+
+
 ## Confirmed decisions
 
 - KR32OS targets KR32 only; host compilers never build its sources.

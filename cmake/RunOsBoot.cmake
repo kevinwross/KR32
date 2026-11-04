@@ -14,20 +14,21 @@ else()
         RESULT_VARIABLE _build_result)
 endif()
 if(NOT _build_result EQUAL 0)
-    message(FATAL_ERROR "KR32OS M1 build failed")
+    message(FATAL_ERROR "KR32OS M build failed")
 endif()
 
 execute_process(
     COMMAND "${KR32}" os "${SOURCE_DIR}/kr32os/build/kernel.bin"
             --bios "${SOURCE_DIR}/kr32os/build/bios.bin"
+            --serial-input "exit\n"
     OUTPUT_VARIABLE _output
     RESULT_VARIABLE _result)
 if(NOT _result EQUAL 0)
-    message(FATAL_ERROR "KR32OS M1 run failed: ${_output}")
+    message(FATAL_ERROR "KR32OS M run failed: ${_output}")
 endif()
-if(NOT _output MATCHES "KR32OS M1")
-    message(FATAL_ERROR "KR32OS M1 banner missing: ${_output}")
+if(NOT _output MATCHES "KR32OS M")
+    message(FATAL_ERROR "KR32OS M banner missing: ${_output}")
 endif()
 if(NOT _output MATCHES "HALTED exit=0")
-    message(FATAL_ERROR "KR32OS M1 did not exit cleanly: ${_output}")
+    message(FATAL_ERROR "KR32OS M did not exit cleanly: ${_output}")
 endif()

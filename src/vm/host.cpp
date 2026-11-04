@@ -362,9 +362,8 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         machine.set_reg(0, 1);
         return true;
     default:
-        last_error_ = "unsupported syscall";
-        machine.set_reg(0, kErrorInvalid);
-        return true;
+        // Let the guest's vector table handle OS-owned syscalls.
+        return false;
     }
 }
 

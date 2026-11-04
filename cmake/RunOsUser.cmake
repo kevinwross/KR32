@@ -14,20 +14,25 @@ else()
         RESULT_VARIABLE _build_result)
 endif()
 if(NOT _build_result EQUAL 0)
-    message(FATAL_ERROR "KR32OS M0 build failed")
+    message(FATAL_ERROR "KR32OS M4 build failed")
 endif()
 
+set(_input "ls\nrun init\nexit\n")
 execute_process(
     COMMAND "${KR32}" os "${SOURCE_DIR}/kr32os/build/kernel.bin"
             --bios "${SOURCE_DIR}/kr32os/build/bios.bin"
+            --serial-input "${_input}"
     OUTPUT_VARIABLE _output
     RESULT_VARIABLE _result)
 if(NOT _result EQUAL 0)
-    message(FATAL_ERROR "KR32OS M0 run failed: ${_output}")
+    message(FATAL_ERROR "KR32OS M4 run failed: ${_output}")
 endif()
-if(NOT _output MATCHES "KR32OS M0")
-    message(FATAL_ERROR "KR32OS M0 banner missing: ${_output}")
+if(NOT _output MATCHES "init: hello from user mode")
+    message(FATAL_ERROR "KR32OS M4 user program output missing: ${_output}")
+endif()
+if(NOT _output MATCHES "exit status 0")
+    message(FATAL_ERROR "KR32OS M4 user exit status missing: ${_output}")
 endif()
 if(NOT _output MATCHES "HALTED exit=0")
-    message(FATAL_ERROR "KR32OS M0 did not exit cleanly: ${_output}")
+    message(FATAL_ERROR "KR32OS M4 did not exit cleanly: ${_output}")
 endif()

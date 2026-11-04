@@ -37,11 +37,29 @@ mkdir -p "$build"
 "$KR32" cc "$here/kernel/traps.c" -S -o "$build/traps.s"
 "$KR32" as "$build/traps.s" --object -o "$build/traps.o"
 "$KR32" as "$here/kernel/traps.S" --object -o "$build/trap_stubs.o"
+"$KR32" cc "$here/kernel/user.c" -S -o "$build/user.s"
+"$KR32" as "$build/user.s" --object -o "$build/user.o"
+"$KR32" cc "$here/kernel/process.c" -S -o "$build/process.s"
+"$KR32" as "$build/process.s" --object -o "$build/process.o"
+"$KR32" cc "$here/kernel/syscall.c" -S -o "$build/syscall.s"
+"$KR32" as "$build/syscall.s" --object -o "$build/syscall.o"
+"$KR32" as "$here/kernel/user.S" --object -o "$build/user_bridge.o"
 "$KR32" as "$here/boot/entry.S" --object -o "$build/entry.o"
+
+"$KR32" cc "$here/user/init.c" -S -o "$build/user_init.s"
+"$KR32" as "$build/user_init.s" --object -o "$build/user_init.o"
+"$KR32" as "$here/libc/crt0.S" --object -o "$build/crt0.o"
+"$KR32" as "$here/libc/syscall.S" --object -o "$build/user_syscall.o"
+"$KR32" ld "$build/crt0.o" "$build/user_init.o" "$build/user_syscall.o" \
+    --flat --base 0x00400000 -o "$build/init.bin"
+python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/initrd.bin" "$build/initrd.s"
+"$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
+
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
+    "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/user_bridge.o" "$build/initrd.o" \
     --flat --base 0x00020000 -o "$build/kernel.bin"
 
-echo "KR32OS M3 built:"
+echo "KR32OS M4 built:"
 echo "  $build/bios.bin"
 echo "  $build/kernel.bin"

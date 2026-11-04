@@ -27,7 +27,7 @@ execute_process(
 if(NOT _result EQUAL 0)
     message(FATAL_ERROR "KR32OS M2 run failed: ${_output}")
 endif()
-if(NOT _output MATCHES "help echo clear mem ps exit")
+if(NOT _output MATCHES "help echo clear mem ps ls cat run exit")
     message(FATAL_ERROR "KR32OS M2 help output missing: ${_output}")
 endif()
 if(NOT _output MATCHES "hello")
