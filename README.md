@@ -18,16 +18,16 @@ assignment, `++`/`--`, conditional
 expressions, `do`-`while`, and switch statements. The C++ subset covers classes
 with type-aware constructor selection,
 inheritance, virtual dispatch/RTTI, function and class templates with explicit
-specializations (full and pointer-pattern partial), COMDAT section groups for template functions, integer non-type parameters and array bounds with constant multipliers/offsets, template static data and function-local statics merged across translation units, 64-bit `long long` locals/functions/globals/fields/static/arrays/references/thread-locals/arithmetic/compound-assignment/casts/float-conversion/wide-shifts/`printf`, matrices,
-exceptions/unwinding, `new`/`delete`, callable `std::thread` (function pointers, captureless and capturing lambdas, with cluster runtime coverage for all three, mutex synchronization, shared globals, detached workers, and handle transfer via release/adopt) /`std::thread::id`/`kr32::thread::id`/TLS/atomics, coarse timed `try_lock_for`/`sleep_for`/`sleep_until`/condition `wait_for`,
+specializations (full and pointer/array/nested-pattern partial), COMDAT groups for template functions and data, integer non-type parameters and dependent array-bound expressions, template static data and function-local statics merged across translation units, 64-bit `long long` locals/functions/globals/fields/static/arrays/references/thread-locals/arithmetic/compound-assignment/casts/float-conversion/wide-shifts/`printf`, matrices,
+exceptions/unwinding, `new`/`delete`, callable `std::thread` (function pointers, captureless and capturing lambdas, with cluster runtime coverage for all three, mutex synchronization, shared globals, detached workers, `std::move` construction, and handle transfer via release/adopt) /`std::thread::id`/`kr32::thread::id`/TLS/atomics, coarse timed `try_lock_for`/`sleep_for`/`sleep_until`/condition `wait_for`,
 per-thread
-`thread_local` construction/destruction, conditional
+`thread_local` construction/destruction with dynamic startup initialization, conditional
 expressions, switch statements, global and local aggregate initializers,
 designated initializers, access control (including friends), unsigned integer
 semantics, `std::initializer_list` parameters, constructors, braced and empty returns, `auto` variables with full return-type deduction, 64-bit elements including range-for, and begin/end iteration,
 captureless and
 value/reference/default-capturing lambdas,
-by-value class parameters/returns with `sret` (plus one-to-eight-byte trivial, including floating and mixed, class register arguments and returns; larger aggregates use hidden pointers), exit-time static destruction,
+by-value class parameters/returns with memory-class `R4` destinations (integer aggregates up to eight bytes in integer registers, FP-only aggregates up to sixteen bytes in FP registers; larger or mixed aggregates use hidden pointers), exit-time static destruction,
 range-based `for` over arrays, braced initializer lists, and
 `initializer_list` variables, `goto`/labels, and
 C++ debug records (including template and lambda functions). Template support and limitations are summarized in

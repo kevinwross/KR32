@@ -140,6 +140,44 @@ TEST_CASE("the linker can strip local symbols") {
     CHECK(find_symbol(image, "__heap_end") != nullptr);
 }
 
+TEST_CASE("comdat data and bss sections keep one copy") {
+    const container::Image first = assemble(
+        ".text\n"
+        ".global _start\n"
+        "_start:\n"
+        "    HALT\n"
+        ".section .data.shared\n"
+        ".weak value\n"
+        "value:\n"
+        "    .word 7\n"
+        ".section .bss.shared\n"
+        ".weak scratch\n"
+        "scratch:\n"
+        "    .space 4\n");
+    const container::Image second = assemble(
+        ".section .data.shared\n"
+        ".weak value\n"
+        "value:\n"
+        "    .word 9\n"
+        ".section .bss.shared\n"
+        ".weak scratch\n"
+        "scratch:\n"
+        "    .space 4\n");
+
+    container::Image image;
+    linker::Map map;
+    linker::Error error;
+    REQUIRE_MESSAGE(linker::link({first, second}, linker::Options{}, image, map, error),
+                    error.message);
+
+    const container::Section* data = find_section(image, ".data.shared");
+    REQUIRE(data != nullptr);
+    CHECK(data->size == 4);
+    const container::Section* bss = find_section(image, ".bss.shared");
+    REQUIRE(bss != nullptr);
+    CHECK(bss->size == 4);
+}
+
 TEST_CASE("comdat sections keep one copy across objects") {
     const container::Image first = assemble(
         ".text\n"

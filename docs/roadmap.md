@@ -35,42 +35,41 @@ known limitations.
 
 ### Aggregate ABI
 
-- One-to-four-byte trivial aggregates passed and returned in registers
-- Eight-byte trivial aggregates passed and returned in register pairs
-- Floating and mixed integer/floating register aggregates
-- Larger aggregates use hidden-pointer parameters and `sret` returns
+- One-to-eight-byte integer aggregates passed in one or two integer registers
+- FP-only aggregates up to 16 bytes passed in one or two FP registers and
+  returned in `F0`/`F1`
+- Mixed, non-trivial, and larger aggregates use hidden-pointer parameters and
+  an `R4` destination for memory-class returns
 - Aggregate copy construction and type-aware constructor selection
 
 ### Templates
 
 - Function and class templates
 - Full and partial specializations, including pointer, multi-level pointer,
-  reference, and fixed-size array patterns
+  reference, array, and nested template-id patterns
 - Out-of-class member definitions and static data members
-- Integer non-type parameters and constant-expression array bounds with
-  multipliers/offsets
+- Integer non-type parameters and dependent array bounds with `+`, `-`, `*`,
+  `/`, unary minus, and parentheses
 - Explicit function specializations
-- Weak template static data and function-local statics merged across
-  translation units
-- COMDAT `.text.<symbol>` sections for template functions with linker
-  deduplication
+- COMDAT `.text.<symbol>`, `.data.<symbol>`, and `.bss.<symbol>` groups with
+  linker deduplication
 
 ### Lambda, thread, and debug
 
 - Captureless and capturing lambdas
 - Capturing lambdas as `std::thread` entries
 - Cluster runtime coverage for function pointers and both lambda forms
-- Mutex synchronization, shared globals, detached workers, and explicit
-  handle transfer via `release`/`adopt`
+- Mutex synchronization, shared globals, detached workers, move construction
+  through `std::move`, and explicit handle transfer via `release`/`adopt`
+- Dynamic `thread_local` initialization through the C++ init array
 - Debug records for C++ templates and lambdas
 
 ## Known limitations
 
-- Template array bounds support constant multipliers/offsets, not arbitrary
-  symbolic expressions.
-- Nested template-id partial-specialization patterns are limited.
-- Aggregates larger than eight bytes use the interpreter's hidden-pointer ABI
-  rather than full register classification.
-- A `std::thread` move constructor is not provided; use `release`/`adopt`.
-- COMDAT grouping is implemented at template-function section granularity;
-  template data relies on weak-symbol merging.
+- Dependent template expressions outside array-bound constant arithmetic remain
+  unsupported.
+- Full template partial ordering, SFINAE, variable templates, and concepts are
+  deferred.
+- C structs are still passed by pointer rather than by value.
+- Threading is cooperative with one thread per core; preemption is deferred.
+- Per-thread variable and stack expansion in the debugger is partial.

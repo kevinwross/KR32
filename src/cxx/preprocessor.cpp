@@ -603,6 +603,7 @@ private:
                     "    void detach() { handle = 0; }\n"
                     "    int release() { int released = handle; handle = 0; return released; }\n"
                     "    void adopt(int other) { handle = other; }\n"
+                    "    thread(std::thread& other) { handle = other.handle; other.handle = 0; }\n"
                     "    void yield() { kr32::thread_yield(); }\n"
                     "};\n"
                     "namespace this_thread { inline void yield() { kr32::thread_yield(); } inline std::thread::id get_id() { return (std::thread::id)kr32::thread_self(); } inline void sleep_for(int milliseconds) { kr32::sleep_for(milliseconds); } inline void sleep_until(int seconds) { kr32::sleep_until(seconds); } }\n"

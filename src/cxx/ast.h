@@ -53,6 +53,18 @@ enum class TypeKind {
 struct Type;
 using TypePtr = std::shared_ptr<Type>;
 
+struct ArrayBoundExpr;
+using ArrayBoundExprPtr = std::shared_ptr<ArrayBoundExpr>;
+
+struct ArrayBoundExpr {
+    enum class Op { Value, Name, Add, Sub, Mul, Div };
+    Op op = Op::Value;
+    std::int64_t value = 0;
+    std::string name;
+    ArrayBoundExprPtr left;
+    ArrayBoundExprPtr right;
+};
+
 struct Type {
     TypeKind kind = TypeKind::Builtin;
     BuiltinKind builtin = BuiltinKind::Int;
@@ -62,6 +74,7 @@ struct Type {
     std::string array_bound_name;    // Array bound symbol (template parameter)
     int array_bound_offset = 0;      // Constant offset applied to the bound
     int array_bound_scale = 1;       // Constant multiplier applied to the bound
+    ArrayBoundExprPtr array_bound_expression; // Dependent bound expression
     std::vector<TypePtr> parameters; // Function
     std::vector<TypePtr> template_arguments; // Named template-id
     bool variadic = false;           // Function

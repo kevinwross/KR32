@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-03 17:02 -08:00
+> **Last updated:** 2026-11-03 18:07 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1649,6 +1649,14 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-03 17:02 -08:00** — Completed the roadmap audit and added
       `docs/roadmap.md` with completed areas and known limitations. Final
       suite: 335 cases / 5888 assertions.
+- **2026-11-03 18:07 -08:00** — Closed the prioritized roadmap gaps:
+      FP-only aggregates up to 16 bytes now use FPRs, integer/FP/memory
+      classification boundaries match the ABI, `std::move` and thread move
+      construction work, dependent template array bounds support general
+      constant arithmetic, nested template-id partial patterns match, COMDAT
+      groups cover template data and local statics, `long long` suffixes select
+      64-bit arithmetic, and dynamic `thread_local` initialization runs from
+      the C++ init array. 343 cases / 5914 assertions.
 
 ## 10. Updating this file
 

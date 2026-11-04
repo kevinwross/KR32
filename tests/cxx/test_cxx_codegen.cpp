@@ -987,6 +987,26 @@ TEST_CASE("C++ long long compound assignments preserve both halves") {
     CHECK(program.result == 600);
 }
 
+TEST_CASE("long long literal suffixes select 64-bit arithmetic") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 1LL << 40;\n"
+        "    return (int)((value >> 40) + (1000000000LL / 1000000000));\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 2);
+}
+
+TEST_CASE("thread_local dynamic initializers run at startup") {
+    const ProgramResult program = compile_and_run(
+        "int seed() { return 42; }\n"
+        "thread_local int value = seed();\n"
+        "thread_local long long wide = seed() * 1000000000LL;\n"
+        "int main() { return value + (int)(wide / 1000000000) - 42; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("thread_local long long keeps both halves") {
     const ProgramResult program = compile_and_run(
         "thread_local long long value = 10000000000;\n"
@@ -1446,6 +1466,37 @@ TEST_CASE("captureless lambda thread runs on a cluster") {
     CHECK(host.cluster().core(1).exit_code() == 42);
 }
 
+TEST_CASE("std::move transfers a thread handle") {
+    container::Image image;
+    std::string error;
+    REQUIRE(build_cluster_image(
+        "#include <thread>\n"
+        "int main() {\n"
+        "    std::thread first([](int value) {\n"
+        "        (void)__builtin_kr32_syscall(47, value, 0, 0);\n"
+        "    }, 42);\n"
+        "    std::thread second{std::move(first)};\n"
+        "    second.join();\n"
+        "    return first.joinable() ? 1 : 0;\n"
+        "}\n",
+        image, error));
+    vm::ClusterHost host({2, 1U * 1024U * 1024U, 64U * 1024U});
+    host.install();
+    REQUIRE(host.load_image(image, error));
+    host.start(image.entry);
+    for (int step = 0; step < 2000000; ++step) {
+        if (host.cluster().core(0).halted() &&
+            host.cluster().core(1).halted()) {
+            break;
+        }
+        (void)host.step();
+    }
+    CHECK(host.cluster().core(0).halted());
+    CHECK(host.cluster().core(0).exit_code() == 0);
+    CHECK(host.cluster().core(1).halted());
+    CHECK(host.cluster().core(1).exit_code() == 42);
+}
+
 TEST_CASE("thread handles transfer with release and adopt") {
     container::Image image;
     std::string error;
@@ -1708,6 +1759,20 @@ TEST_CASE("C++ unsigned arithmetic uses unsigned comparisons and shifts") {
     CHECK(overload.result == 2);
 }
 
+TEST_CASE("sixteen-byte floating aggregates use two FP registers") {
+    const ProgramResult program = compile_and_run(
+        "struct Four { float a; float b; float c; float d; };\n"
+        "Four make() {\n"
+        "    Four value;\n"
+        "    value.a = 1.0f; value.b = 2.0f; value.c = 3.0f; value.d = 4.0f;\n"
+        "    return value;\n"
+        "}\n"
+        "float sum(Four value) { return value.a + value.b + value.c + value.d; }\n"
+        "int main() { Four value = make(); return (int)sum(value); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
 TEST_CASE("larger aggregates pass and return through hidden pointers") {
     const ProgramResult program = compile_and_run(
         "struct Big { int whole; double fraction; };\n"
@@ -1808,6 +1873,17 @@ TEST_CASE("C++ by-value class parameters copy and sret returns objects") {
     CHECK(program.result == 160);
 }
 
+TEST_CASE("template statics are emitted in comdat sections") {
+    const cxx::Result compiled = cxx::compile(
+        "template <typename T> struct Counter { static int value; };\n"
+        "template <typename T> int Counter<T>::value = 1;\n"
+        "template <typename T> int next() { static int local = 0; return ++local; }\n"
+        "int main() { return Counter<int>::value + next<int>(); }\n");
+    REQUIRE(compiled.ok);
+    CHECK(compiled.assembly.find(".section .data.") != std::string::npos);
+    CHECK(compiled.assembly.find(".section .bss.") != std::string::npos);
+}
+
 TEST_CASE("template function local statics merge across translation units") {
     const std::string header =
         "template <typename T> int next() { static int value = 0; value = value + 1; return value; }\n";
@@ -1869,6 +1945,37 @@ TEST_CASE("class template instantiations are weak across translation units") {
     const ProgramResult program = run_assemblies({first.assembly, second.assembly});
     CHECK(program.ok);
     CHECK(program.result == 43);
+}
+
+TEST_CASE("partial specializations match nested template-id patterns") {
+    const ProgramResult program = compile_and_run(
+        "template <typename T> struct Box { int kind() { return 1; } };\n"
+        "template <typename T> struct Box<Box<T>> { int kind() { return 2; } };\n"
+        "int main() { Box<Box<int>> value; return value.kind(); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 2);
+}
+
+TEST_CASE("template array bounds accept symbolic expressions") {
+    const ProgramResult program = compile_and_run(
+        "template <int N, int M> struct Grid {\n"
+        "    int values[N + M];\n"
+        "    int size() { return N + M; }\n"
+        "};\n"
+        "template <int N, int M> struct Product {\n"
+        "    int values[(N + M) * 2];\n"
+        "    int size() { return N * 2 + M * 2; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Grid<2, 3> grid;\n"
+        "    grid.values[4] = 40;\n"
+        "    Product<1, 2> product;\n"
+        "    product.values[5] = 2;\n"
+        "    return grid.size() + product.size() +\n"
+        "           grid.values[4] + product.values[5] - 11;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
 }
 
 TEST_CASE("non-type template array bounds accept constant multipliers") {

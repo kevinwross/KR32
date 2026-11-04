@@ -136,6 +136,26 @@ public:
 - Bound values used inside member function bodies
 - Bound values used as array sizes
 - Integer constant expressions such as `2 + 3` and `1 << 3`
+- Dependent array bounds over multiple parameters, with `+`, `-`, `*`, `/`,
+  unary minus, and parentheses, such as `N + M` or `(N + M) * 2`
+
+### Nested template-id partial patterns
+
+```cpp
+template <typename T> struct Box { int kind() { return 1; } };
+template <typename T> struct Box<Box<T>> { int kind() { return 2; } };
+```
+
+- Nested template-id patterns match recursively
+- Type parameters bind through each nested argument layer
+
+### COMDAT groups
+
+- Template functions are emitted in `.text.<symbol>` COMDAT sections
+- Template static data members use `.data.<symbol>` COMDAT sections
+- Template function-local statics and their guards use `.bss.<symbol>` COMDAT
+  sections
+- The linker retains one copy of each matching COMDAT section across objects
 
 ### Function-template explicit specializations
 
@@ -152,10 +172,10 @@ template <> int twice<int>(int value) { return 42; }
 
 ## Deferred
 
-- Symbolic template expressions such as `N + 1`
-- Nested template-id partial-specialization patterns
-- COMDAT section groups and duplicate-instantiation merging
-- Template-aware debug information beyond class/function records
+- Arbitrary dependent expressions beyond array-bound constant arithmetic
+- Full template partial ordering, SFINAE, variable templates, and concepts
+- Template-aware debug information beyond class/function/variable records
+- Nested template-id patterns outside the supported recursive argument match
 
 ## Testing
 

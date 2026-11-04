@@ -703,6 +703,18 @@ private:
             current_ = sections_.size() - 1;
             return true;
         }
+        if (name.rfind(".data.", 0) == 0) {
+            add_section(name, container::SectionType::Data,
+                        container::Alloc | container::Write | container::Comdat);
+            current_ = sections_.size() - 1;
+            return true;
+        }
+        if (name.rfind(".bss.", 0) == 0) {
+            add_section(name, container::SectionType::Bss,
+                        container::Alloc | container::Write | container::Comdat);
+            current_ = sections_.size() - 1;
+            return true;
+        }
         return fail(line, "unknown section: " + name);
     }
 

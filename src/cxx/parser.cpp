@@ -766,63 +766,96 @@ private:
             parse_function_suffix(declarator);
         }
         std::vector<std::uint32_t> dimensions;
-        std::vector<std::string> bound_names;
-        std::vector<int> bound_offsets;
-        std::vector<int> bound_scales;
+        std::vector<ArrayBoundExprPtr> bound_expressions;
         while (at("[")) {
             advance();
             std::uint32_t size = 0;
-            std::string bound_name;
-            int bound_offset = 0;
-            int bound_scale = 1;
+            ArrayBoundExprPtr bound_expression;
             if (!at("]")) {
-                const Token& token = peek();
-                if (token.kind == TokenKind::IntegerLiteral) {
-                    size = static_cast<std::uint32_t>(token.integer);
+                if (peek().kind == TokenKind::IntegerLiteral) {
+                    size = static_cast<std::uint32_t>(peek().integer);
                     advance();
-                } else if (token.kind == TokenKind::Identifier) {
-                    bound_name = token.text;
-                    advance();
-                    if (at("*")) {
-                        advance();
-                        if (peek().kind == TokenKind::IntegerLiteral) {
-                            bound_scale = static_cast<int>(peek().integer);
-                            advance();
-                        }
-                    }
-                    if (at("+") || at("-")) {
-                        const bool negative = at("-");
-                        advance();
-                        if (peek().kind == TokenKind::IntegerLiteral) {
-                            bound_offset = static_cast<int>(peek().integer);
-                            if (negative) {
-                                bound_offset = -bound_offset;
-                            }
-                            advance();
-                        }
-                    }
                 } else {
-                    // Parse and discard other non-literal bounds for now.
-                    parse_assignment_expression();
+                    bound_expression = parse_array_bound_expression();
                 }
             }
             expect("]", "in array declarator");
             dimensions.push_back(size);
-            bound_names.push_back(bound_name);
-            bound_offsets.push_back(bound_offset);
-            bound_scales.push_back(bound_scale);
+            bound_expressions.push_back(std::move(bound_expression));
         }
         // The first declarator dimension is the outermost array:
         // int a[10][5][2] is array<10, array<5, array<2, int>>>.
         for (std::size_t index = dimensions.size(); index > 0; --index) {
             TypePtr array = Type::make_array(type, dimensions[index - 1]);
-            array->array_bound_name = bound_names[index - 1];
-            array->array_bound_offset = bound_offsets[index - 1];
-            array->array_bound_scale = bound_scales[index - 1];
+            array->array_bound_expression = bound_expressions[index - 1];
             type = array;
         }
         declarator.type = type;
         return true;
+    }
+
+    ArrayBoundExprPtr parse_array_bound_expression() {
+        return parse_array_bound_additive();
+    }
+
+    ArrayBoundExprPtr parse_array_bound_additive() {
+        ArrayBoundExprPtr left = parse_array_bound_multiplicative();
+        while (at("+") || at("-")) {
+            const bool subtract = at("-");
+            advance();
+            ArrayBoundExprPtr node = std::make_shared<ArrayBoundExpr>();
+            node->op = subtract ? ArrayBoundExpr::Op::Sub
+                                : ArrayBoundExpr::Op::Add;
+            node->left = std::move(left);
+            node->right = parse_array_bound_multiplicative();
+            left = std::move(node);
+        }
+        return left;
+    }
+
+    ArrayBoundExprPtr parse_array_bound_multiplicative() {
+        ArrayBoundExprPtr left = parse_array_bound_primary();
+        while (at("*") || at("/")) {
+            const bool divide = at("/");
+            advance();
+            ArrayBoundExprPtr node = std::make_shared<ArrayBoundExpr>();
+            node->op = divide ? ArrayBoundExpr::Op::Div
+                              : ArrayBoundExpr::Op::Mul;
+            node->left = std::move(left);
+            node->right = parse_array_bound_primary();
+            left = std::move(node);
+        }
+        return left;
+    }
+
+    ArrayBoundExprPtr parse_array_bound_primary() {
+        auto node = std::make_shared<ArrayBoundExpr>();
+        if (consume("(")) {
+            node = parse_array_bound_additive();
+            expect(")", "after array bound expression");
+            return node;
+        }
+        if (at("-")) {
+            advance();
+            node->op = ArrayBoundExpr::Op::Sub;
+            node->left = std::make_shared<ArrayBoundExpr>();
+            node->right = parse_array_bound_primary();
+            return node;
+        }
+        if (peek().kind == TokenKind::IntegerLiteral) {
+            node->op = ArrayBoundExpr::Op::Value;
+            node->value = peek().integer;
+            advance();
+            return node;
+        }
+        if (peek().kind == TokenKind::Identifier) {
+            node->op = ArrayBoundExpr::Op::Name;
+            node->name = peek().text;
+            advance();
+            return node;
+        }
+        error(peek(), "expected array bound expression");
+        return node;
     }
 
     void parse_function_suffix(Declarator& declarator) {

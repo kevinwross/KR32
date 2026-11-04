@@ -190,6 +190,16 @@ bool has_unsigned_suffix(const std::string& raw) {
     return index > 0 && (raw[index - 1] == 'u' || raw[index - 1] == 'U');
 }
 
+bool has_long_long_suffix(const std::string& raw) {
+    std::size_t index = raw.size();
+    int longs = 0;
+    while (index > 0 && (raw[index - 1] == 'l' || raw[index - 1] == 'L')) {
+        --index;
+        ++longs;
+    }
+    return longs >= 2;
+}
+
 bool is_pointer(const TypePtr& type) {
     return type && (type->kind == TypeKind::Pointer || type->kind == TypeKind::Array);
 }
@@ -865,6 +875,22 @@ private:
             }
             return match_partial_pattern(pattern->element, actual->element,
                                          parameters, bindings);
+        }
+        if (pattern->kind == TypeKind::Named &&
+            actual->kind == TypeKind::Named &&
+            pattern->name.to_string() == actual->name.to_string() &&
+            !pattern->template_arguments.empty() &&
+            pattern->template_arguments.size() ==
+                actual->template_arguments.size()) {
+            for (std::size_t index = 0; index < pattern->template_arguments.size();
+                 ++index) {
+                if (!match_partial_pattern(pattern->template_arguments[index],
+                                           actual->template_arguments[index],
+                                           parameters, bindings)) {
+                    return false;
+                }
+            }
+            return true;
         }
         return mangle_type(pattern) == mangle_type(actual);
     }
@@ -1882,14 +1908,16 @@ private:
         switch (expression.kind) {
         case ExprKind::IntegerLiteral: {
             const bool unsigned_suffix = has_unsigned_suffix(expression.text);
+            const bool long_long_suffix =
+                has_long_long_suffix(expression.text);
             if (unsigned_suffix) {
                 return Type::make_builtin(
-                    expression.integer > 2147483647LL
+                    long_long_suffix || expression.integer > 2147483647LL
                         ? BuiltinKind::UnsignedLongLong
                         : BuiltinKind::UnsignedInt);
             }
             return Type::make_builtin(
-                expression.integer > 2147483647LL ||
+                long_long_suffix || expression.integer > 2147483647LL ||
                         expression.integer < -2147483648LL
                     ? BuiltinKind::LongLong
                     : BuiltinKind::Int);
@@ -2060,6 +2088,12 @@ private:
                 return Type::make_pointer(list_data->type->element);
             }
 
+            if (!expression.children.empty() &&
+                expression.children[0]->kind == ExprKind::Name &&
+                expression.children[0]->name.to_string() == "std::move" &&
+                expression.arguments.size() == 1) {
+                return type_of(*expression.arguments[0], false);
+            }
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
             }
@@ -2339,6 +2373,46 @@ private:
         return result;
     }
 
+    bool eval_array_bound_expression(
+        const ArrayBoundExprPtr& expression,
+        const std::map<std::string, TypePtr>& bindings,
+        std::int64_t& value) {
+        if (!expression) {
+            return false;
+        }
+        if (expression->op == ArrayBoundExpr::Op::Value) {
+            value = expression->value;
+            return true;
+        }
+        if (expression->op == ArrayBoundExpr::Op::Name) {
+            const auto found = bindings.find(expression->name);
+            if (found == bindings.end() || !found->second ||
+                !found->second->has_template_integer_value) {
+                return false;
+            }
+            value = found->second->template_integer_value;
+            return true;
+        }
+        std::int64_t left = 0;
+        std::int64_t right = 0;
+        if (!eval_array_bound_expression(expression->left, bindings, left) ||
+            !eval_array_bound_expression(expression->right, bindings, right)) {
+            return false;
+        }
+        switch (expression->op) {
+        case ArrayBoundExpr::Op::Add: value = left + right; return true;
+        case ArrayBoundExpr::Op::Sub: value = left - right; return true;
+        case ArrayBoundExpr::Op::Mul: value = left * right; return true;
+        case ArrayBoundExpr::Op::Div:
+            if (right == 0) {
+                return false;
+            }
+            value = left / right;
+            return true;
+        default: return false;
+        }
+    }
+
     TypePtr substitute_type(const TypePtr& type,
                             const std::map<std::string, TypePtr>& bindings) {
         if (!type) {
@@ -2355,7 +2429,15 @@ private:
             type->kind == TypeKind::Function) {
             auto copy = std::make_shared<Type>(*type);
             copy->element = substitute_type(type->element, bindings);
-            if (type->kind == TypeKind::Array && !type->array_bound_name.empty()) {
+            if (type->kind == TypeKind::Array &&
+                type->array_bound_expression) {
+                std::int64_t value = 0;
+                if (eval_array_bound_expression(type->array_bound_expression,
+                                                bindings, value)) {
+                    copy->array_size = static_cast<std::uint32_t>(value);
+                }
+            } else if (type->kind == TypeKind::Array &&
+                       !type->array_bound_name.empty()) {
                 const auto bound = bindings.find(type->array_bound_name);
                 if (bound != bindings.end() && bound->second &&
                     bound->second->has_template_integer_value) {
@@ -2997,6 +3079,13 @@ private:
     }
 
     void gen_address(const Expr& expression) {
+        if (expression.kind == ExprKind::Call && !expression.children.empty() &&
+            expression.children[0]->kind == ExprKind::Name &&
+            expression.children[0]->name.to_string() == "std::move" &&
+            expression.arguments.size() == 1) {
+            gen_address(*expression.arguments[0]);
+            return;
+        }
         if (expression.kind == ExprKind::Name) {
             TypePtr capture_type;
             int capture_offset = 0;
@@ -3852,9 +3941,9 @@ private:
         switch (expression.kind) {
         case ExprKind::IntegerLiteral: {
             const bool unsigned_suffix = has_unsigned_suffix(expression.text);
-            const bool long_long =
-                expression.integer > 2147483647LL ||
-                expression.integer < -2147483648LL;
+            const bool long_long = has_long_long_suffix(expression.text) ||
+                                   expression.integer > 2147483647LL ||
+                                   expression.integer < -2147483648LL;
             if (long_long) {
                 const std::uint64_t bits =
                     static_cast<std::uint64_t>(expression.integer);
@@ -4942,7 +5031,12 @@ private:
     }
 
     TypePtr gen_call(const Expr& expression) {
-
+        if (!expression.children.empty() &&
+            expression.children[0]->kind == ExprKind::Name &&
+            expression.children[0]->name.to_string() == "std::move" &&
+            expression.arguments.size() == 1) {
+            return gen_expr(*expression.arguments[0]);
+        }
         std::string list_method;
         ClassInfo* list_info = nullptr;
         MemberInfo* list_data = nullptr;
@@ -5145,6 +5239,21 @@ private:
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
+                if (aggregate_abi(parameter_class) == AggregateAbi::Floating) {
+                    gen_expr(*expression.arguments[index]);
+                    const int argument_object = allocate_local(parameter);
+                    emit("    MOV R1, R0");
+                    emit("    MOV R2, #" + std::to_string(parameter_class->size));
+                    emit("    LEA R0, [R7 + " +
+                         std::to_string(argument_object) + "]");
+                    emit("    CALL memcpy");
+                    slot.fp = true;
+                    slot.type = parameter;
+                    slot.offset = argument_object;
+                    fp_argument += parameter_class->size > 8 ? 2 : 1;
+                    slots.push_back(std::move(slot));
+                    continue;
+                }
                 if (is_register_class(parameter_class)) {
                     gen_expr(*expression.arguments[index]);
                     const int address_temp =
@@ -5256,7 +5365,19 @@ private:
             integer_register = 1;
         }
         for (const ArgumentSlot& slot : slots) {
-            if (slot.fp) {
+            if (slot.fp &&
+                aggregate_abi(class_of(slot.type)) == AggregateAbi::Floating) {
+                const ClassInfo* aggregate = class_of(slot.type);
+                emit("    FLOAD.D F" + std::to_string(fp_register) + ", [R7 + " +
+                     std::to_string(slot.offset) + "]");
+                if (aggregate->size > 8) {
+                    emit("    FLOAD.D F" + std::to_string(fp_register + 1) +
+                         ", [R7 + " + std::to_string(slot.offset + 8) + "]");
+                    fp_register += 2;
+                } else {
+                    ++fp_register;
+                }
+            } else if (slot.fp) {
                 emit(std::string("    FLOAD.") +
                      (is_float32(slot.type) ? "W" : "D") + " F" +
                      std::to_string(fp_register) + ", [R7 + " +
@@ -5316,15 +5437,24 @@ private:
         record_call_site(call_start, call_end, call_landing);
         if (register_result) {
             const int result_object = allocate_local(call_result);
-            if (call_result_class->size > 4) {
-                emit("    MOV R2, R1");
+            if (aggregate_abi(call_result_class) == AggregateAbi::Floating) {
+                emit("    LEA R1, [R7 + " + std::to_string(result_object) + "]");
+                emit("    FSTORE.D F0, [R1]");
+                if (call_result_class->size > 8) {
+                    emit("    FSTORE.D F1, [R1 + 8]");
+                }
+                emit("    LEA R0, [R7 + " + std::to_string(result_object) + "]");
+            } else {
+                if (call_result_class->size > 4) {
+                    emit("    MOV R2, R1");
+                }
+                emit("    LEA R1, [R7 + " + std::to_string(result_object) + "]");
+                emit("    STORE R0, [R1]");
+                if (call_result_class->size > 4) {
+                    emit("    STORE R2, [R1 + 4]");
+                }
+                emit("    LEA R0, [R7 + " + std::to_string(result_object) + "]");
             }
-            emit("    LEA R1, [R7 + " + std::to_string(result_object) + "]");
-            emit("    STORE R0, [R1]");
-            if (call_result_class->size > 4) {
-                emit("    STORE R2, [R1 + 4]");
-            }
-            emit("    LEA R0, [R7 + " + std::to_string(result_object) + "]");
         }
         if (class_result_temp >= 0) {
             emit("    LEA R0, [R7 + " + std::to_string(class_result_temp) + "]");
@@ -5527,6 +5657,15 @@ private:
                     const int source_temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     emit("    STORE R0, [R7 + " + std::to_string(source_temp) + "]");
+                    if (aggregate_abi(result_class) == AggregateAbi::Floating) {
+                        emit("    LOAD R1, [R7 + " + std::to_string(source_temp) + "]");
+                        emit("    FLOAD.D F0, [R1]");
+                        if (result_class->size > 8) {
+                            emit("    FLOAD.D F1, [R1 + 8]");
+                        }
+                        emit("    JMP " + return_label_);
+                        return;
+                    }
                     if (is_register_return_class(result_class)) {
                         emit("    LOAD R1, [R7 + " + std::to_string(source_temp) + "]");
                         emit("    LOAD R0, [R1]");
@@ -6097,20 +6236,54 @@ private:
                info->qualified.find("initializer_list__") != std::string::npos;
     }
 
+    enum class AggregateAbi {
+        None,
+        Integer,
+        Floating,
+        Memory,
+    };
+
+    AggregateAbi aggregate_abi(const ClassInfo* info) const {
+        if (info == nullptr) {
+            return AggregateAbi::None;
+        }
+        if (is_initializer_list_class(info) || info->polymorphic ||
+            info->abstract || info->base != nullptr ||
+            !info->constructors.empty() || info->destructor != nullptr) {
+            return AggregateAbi::Memory;
+        }
+        if (info->size == 0) {
+            return AggregateAbi::Memory;
+        }
+        bool has_fp = false;
+        bool has_integer = false;
+        for (const MemberInfo& member : info->members) {
+            if (member.type == nullptr || member.type->kind == TypeKind::Array ||
+                member.type->kind == TypeKind::Function) {
+                return AggregateAbi::Memory;
+            }
+            if (is_fp(member.type)) {
+                has_fp = true;
+            } else {
+                has_integer = true;
+            }
+        }
+        if (has_fp) {
+            if (has_integer || info->size > 16) {
+                return AggregateAbi::Memory;
+            }
+            return AggregateAbi::Floating;
+        }
+        return info->size <= 8 ? AggregateAbi::Integer : AggregateAbi::Memory;
+    }
+
     bool is_register_class(const ClassInfo* info) const {
-        return info != nullptr && info->size > 0 && info->size <= 8 &&
-               !is_initializer_list_class(info) &&
-               !info->polymorphic && !info->abstract &&
-               info->base == nullptr && info->constructors.empty() &&
-               info->destructor == nullptr && info->members.size() <= 2;
+        return aggregate_abi(info) == AggregateAbi::Integer;
     }
 
     bool is_register_return_class(const ClassInfo* info) const {
-        return info != nullptr && info->size > 0 && info->size <= 8 &&
-               !is_initializer_list_class(info) &&
-               !info->polymorphic && !info->abstract &&
-               info->base == nullptr && info->constructors.empty() &&
-               info->destructor == nullptr && info->members.size() <= 2;
+        const AggregateAbi abi = aggregate_abi(info);
+        return abi == AggregateAbi::Integer || abi == AggregateAbi::Floating;
     }
 
     int prepare_initializer_list_argument(ClassInfo* info, const TypePtr& type,
@@ -6295,6 +6468,9 @@ private:
             const std::string linkage = template_owner ? ".weak " : ".global ";
             Global* raw = global.get();
             global_storage_.push_back(std::move(global));
+            if (template_owner) {
+                bss_ += ".section .bss." + raw->symbol + "\n";
+            }
             bss_ += linkage + raw->symbol + "\n" + raw->symbol +
                     ":\n    .space " + std::to_string(std::max(1, type_size(type))) +
                     "\n";
@@ -6342,6 +6518,9 @@ private:
                 emit("    LEA R0, [" + guard + "]");
                 emit("    CALL __cxa_guard_release");
                 emit(done + ":");
+            }
+            if (template_owner) {
+                bss_ += ".bss\n";
             }
             return;
         }
@@ -6724,6 +6903,23 @@ private:
                     error(parameter.location,
                           "more than eight FP parameters are not supported yet");
                 }
+            } else if (!local.is_reference &&
+                       aggregate_abi(class_of(local.type)) ==
+                           AggregateAbi::Floating) {
+                const ClassInfo* aggregate = class_of(local.type);
+                const int registers = aggregate->size > 8 ? 2 : 1;
+                if (fp_argument + registers <= 8) {
+                    emit("    FSTORE.D F" + std::to_string(fp_argument) +
+                         ", [R7 + " + std::to_string(local.offset) + "]");
+                    if (registers == 2) {
+                        emit("    FSTORE.D F" + std::to_string(fp_argument + 1) +
+                             ", [R7 + " + std::to_string(local.offset + 8) + "]");
+                    }
+                    fp_argument += registers;
+                } else {
+                    error(parameter.location,
+                          "more than eight FP parameters are not supported yet");
+                }
             } else if (is_long_long(local.type)) {
                 if (integer_argument + 1 < 4) {
                     if (!saved_integer_arguments.empty()) {
@@ -7040,11 +7236,36 @@ private:
                      (is_float32(global->type) ? "W" : "D") + " F0, [R1]");
             } else {
                 gen_expr(*global->initializer);
+                if (is_long_long(global->type)) {
+                    const TypePtr value_type =
+                        type_of(*global->initializer);
+                    if (!is_long_long(value_type)) {
+                        emit("    MOV R1, R0");
+                        emit(std::string("    ") +
+                             (is_unsigned_integer(value_type) ? "SHR" : "SAR") +
+                             " R1, R1, #31");
+                    }
+                }
+                const int low_temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(low_temp) + "]");
+                int high_temp = -1;
+                if (is_long_long(global->type)) {
+                    high_temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    STORE R1, [R7 + " +
+                         std::to_string(high_temp) + "]");
+                }
                 if (global->is_thread_local) {
                     emit_tls_address(global.get());
                     emit("    MOV R1, R0");
                 } else {
                     emit("    LEA R1, [" + global->symbol + "]");
+                }
+                emit("    LOAD R0, [R7 + " + std::to_string(low_temp) + "]");
+                if (high_temp >= 0) {
+                    emit("    LOAD R2, [R7 + " +
+                         std::to_string(high_temp) + "]");
                 }
                 store_value(global->type);
             }
@@ -7555,6 +7776,20 @@ private:
     }
 
     void emit_globals(bool late_template_statics = false) {
+        auto append_data = [&](const Global* global, const std::string& text) {
+            if (global->template_static_member) {
+                data_ += ".section .data." + global->symbol + "\n" + text + "\n.data\n";
+            } else {
+                data_ += text;
+            }
+        };
+        auto append_bss = [&](const Global* global, const std::string& text) {
+            if (global->template_static_member) {
+                bss_ += ".section .bss." + global->symbol + "\n" + text + "\n.bss\n";
+            } else {
+                bss_ += text;
+            }
+        };
         for (const auto& global : global_storage_) {
             if (global->template_static_member != late_template_statics) {
                 continue;
@@ -7609,6 +7844,8 @@ private:
                                 std::memcpy(tls_image_.data() + global->tls_offset,
                                             &value, sizeof(value));
                             }
+                        } else {
+                            global->needs_init = true;
                         }
                     } else {
                         std::int64_t value = 0;
@@ -7627,6 +7864,8 @@ private:
                                 std::memcpy(tls_image_.data() + global->tls_offset,
                                             &word, sizeof(word));
                             }
+                        } else {
+                            global->needs_init = true;
                         }
                     }
                 }
@@ -7653,7 +7892,7 @@ private:
                     for (std::uint8_t byte : bytes) {
                         image += "    .byte " + std::to_string(byte) + "\n";
                     }
-                    data_ += image;
+                    append_data(global.get(), image);
                     continue;
                 }
                 if (find_destructor(info) != nullptr) {
@@ -7662,7 +7901,7 @@ private:
                 if (global->initializer || find_constructor(info, 0) != nullptr) {
                     global->needs_init = true;
                     output += "    .space " + std::to_string(size) + "\n";
-                    bss_ += output;
+                    append_bss(global.get(), output);
                     continue;
                 }
             }
@@ -7678,13 +7917,13 @@ private:
                 for (std::uint8_t byte : bytes) {
                     image += "    .byte " + std::to_string(byte) + "\n";
                 }
-                data_ += image;
+                append_data(global.get(), image);
                 continue;
             }
             if (global->initializer && !is_constant_global(*global)) {
                 global->needs_init = true;
                 output += "    .space " + std::to_string(size) + "\n";
-                bss_ += output;
+                append_bss(global.get(), output);
                 continue;
             }
             if (global->initializer) {
@@ -7766,10 +8005,10 @@ private:
                         output += "    .word " + std::to_string(value & 0xFFFFFFFFU) + "\n";
                     }
                 }
-                data_ += output;
+                append_data(global.get(), output);
             } else {
                 output += "    .space " + std::to_string(size) + "\n";
-                bss_ += output;
+                append_bss(global.get(), output);
             }
         }
     }

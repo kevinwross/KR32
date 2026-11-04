@@ -113,7 +113,8 @@ order. The following consume an integer argument register:
 
 - scalar `bool`, `char`, `int`, and pointers/references;
 - the implicit `this` pointer of a non-static member function;
-- a hidden return pointer for a memory-class aggregate return.
+- a hidden destination pointer for a memory-class aggregate return travels in
+  `R4` and does not consume an integer argument register.
 
 The fifth and later integer-class arguments are passed in the outgoing stack
 argument area at increasing addresses. An argument that does not fit in the
@@ -121,7 +122,8 @@ remaining registers of its class is stack-passed; later arguments may still use
 remaining registers of the other class (integer and FP assignment are
 independent).
 
-`R0` holds the integer-class return value or the returned `sret` pointer.
+`R0` holds the integer-class return value. Memory-class aggregate returns copy
+to the destination supplied in `R4`; `R0` is not an aggregate return pointer.
 
 ### Floating-point argument, return, and callee-saved rules
 
@@ -199,40 +201,27 @@ shape and adds:
 
 ### C++ aggregate parameter and return convention
 
-**Implementation note (M9 integration):** the current compiler implements
-by-value class arguments by passing an invisible pointer to a caller-owned
-copy. Class results use a hidden destination pointer in `R4`; the callee copies
-the returned object there and the caller receives its address in `R0`. This is
-the implemented convention for the current front end. The fuller revision-1
-classification below remains the target contract and is not yet used for small
-register-class aggregates.
+The implemented convention is the adopted KR32 C++ ABI for this compiler:
 
-Revision 1 uses a deliberately small set of aggregate classes:
-
-- A trivial aggregate of 4 bytes or less with no FP members is passed in one
-  integer register.
 - A trivial aggregate of 8 bytes or less with no FP members is passed in one or
-  two integer registers as needed.
-- A trivial aggregate of 8 bytes or less whose members are all `float`/`double`
-  is passed in one FPR.
-- An FP-only trivial aggregate of more than 8 and up to 16 bytes is passed in
-  two FPRs and returned in `F0`/`F1`.
-- Every other aggregate, including `mat4` by value, mixed FP/integer aggregates
-  over 8 bytes, and aggregates larger than 16 bytes, is memory class:
+  two integer registers and returned in `R0`/`R1`.
+- A trivial FP-only aggregate of 8 bytes or less is passed and returned in one
+  FPR (`F0` for returns).
+- A trivial FP-only aggregate of more than 8 and up to 16 bytes is passed in two
+  FPRs and returned in `F0`/`F1`.
+- Every other aggregate, including mixed FP/integer aggregates, aggregates
+  larger than 8 bytes with integer members, and aggregates larger than 16 bytes
+  with only FP members, is memory class:
   - passed as an invisible pointer to a caller-owned copy (the callee may modify
     its copy);
-  - returned through a hidden `sret` pointer that is the first integer-class
-    argument (`R0`); the callee returns the same pointer in `R0`.
-- A type with a non-trivial copy constructor, move constructor, or destructor is
-  passed and returned by invisible reference to a caller-owned temporary, even
-  if it is small.
-- A stack-passed aggregate with alignment 16 starts at a 16-byte-aligned
-  outgoing offset.
+  - returned through a hidden destination pointer supplied in `R4`; the callee
+    copies the object there. The caller owns the destination object.
+- A type with a non-trivial constructor, destructor, polymorphic class, base
+  class, or `initializer_list` layout is memory class even if small.
+- An empty class has size 1 and is passed as a one-byte integer-class value.
 
-An empty class has size 1 and is passed as a one-byte integer-class value.
-
-The aggregate classification is a first-gate rule and is listed as a review
-item at the end of this document.
+The classification above is what the current compiler implements; there is no
+separate target revision for register-class aggregates.
 
 ## C++ ABI revision 1 (M9)
 
