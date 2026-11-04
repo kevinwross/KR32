@@ -10,16 +10,18 @@ KR32OS is a small operating system for the KR32 virtual machine.
 
 ## Status
 
-Scaffold only. The boot ABI, build workflow, kernel structure, and initial
-services will be defined in the design session before implementation.
+Scaffold only. Architecture is recorded in [DESIGN.md](DESIGN.md); the M0-M4
+implementation plan is in [kr32os-impl.md](kr32os-impl.md) and is pending review
+before coding starts.
 
-## Planned layout (to be confirmed)
+## Planned layout
 
 ```text
 kr32os/
   bios/       reset vector, ROM bootstrap, page tables, firmware stubs
   boot/       kernel entry and BIOS handoff
-  kernel/     traps, scheduler, memory, console, syscalls
+  kernel/     traps, memory, console, syscalls
+  libc/       OS-specific crt0 and syscall wrappers
   user/       shell and test programs
   include/    shared KR32OS headers
   build/      host-side build scripts and generated artifacts (ignored)

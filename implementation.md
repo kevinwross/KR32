@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 11:09 -08:00
+> **Last updated:** 2026-11-04 11:17 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1725,6 +1725,9 @@ Newest entries at the bottom. Use the local time zone.
       framebuffer access, init-test behavior, and eager fork plus initrd exec.
 - **2026-11-04 11:09 -08:00** — Recorded 32-byte directory entries, kernel
       shell through M5, framebuffer text/fill API, and interruptible idle loop.
+- **2026-11-04 11:17 -08:00** — Added the reviewed-pending M0-M4 KR32OS
+      implementation plan covering host prerequisites, milestones, gates, and
+      logging/handoff instructions.
 
 ## 10. Updating this file
 
