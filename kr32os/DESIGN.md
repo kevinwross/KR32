@@ -17,6 +17,12 @@ Status: draft for the interactive design session.
 - Flat image: `kr32 ld --flat --base 0x00020000` emits the raw kernel image.
 - BIOS: lives in `kr32os/bios/`; assembly reset/privileged stubs with optional
   freestanding C helpers for page tables, BootInfo, and diagnostics.
+- Kernel heap: bump allocator first; introduce a free-list only when allocation
+  patterns justify it.
+- Kernel/user ABI: stable numbered syscall vectors with explicit user-pointer
+  validation and copy-in/copy-out helpers.
+- Multicore: single core through M4; bring up secondary cores after the
+  scheduler and user-mode path are stable.
 
 ## Boot contract (initial assumption)
 
@@ -121,13 +127,67 @@ include/            shared headers and MMIO definitions
 build/              generated artifacts (ignored)
 ```
 
+## Kernel heap
+
+The first allocator is a monotonic bump allocator over the RAM reported by
+BootInfo:
+
+```text
+heap_start = first page after kernel .bss and reserved boot structures
+heap_end   = RAM end minus the kernel stack guard region
+```
+
+`kmalloc` aligns the cursor and returns `null` when the region is exhausted.
+`kfree` is a no-op initially. A free-list allocator with boundary tags and
+coalescing replaces the implementation behind the same API once the kernel has
+real allocation workloads.
+
+## Syscall ABI
+
+KR32 software vectors `32..255` are available through the vector table. The host
+already uses `32..50` for its debug services, so the KR32OS ABI reserves a
+separate range starting at vector `64` (`0x40`):
+
+```text
+vector 64..95   KR32OS kernel syscalls
+R0..R3          arguments
+R0              return value / negative error
+```
+
+The exact syscall numbers are assigned in a table and remain stable after the
+first user program depends on them. Initial candidates are exit, console write,
+console read, yield, and process identity.
+
+Every user pointer is range-checked against the current user address space
+before use. Kernel copy-in/copy-out helpers validate the entire range, handle
+page boundaries, and never trust a user pointer directly.
+
+The host's `32..50` vectors remain debug/host services and must not become part
+of the OS ABI. The OS console path should use the MMIO console once devices are
+attached to an OS boot; the host console is only a temporary bring-up aid.
+
+## Multicore policy
+
+M0–M4 run on the boot core only. Secondary cores remain parked until the
+scheduler, trap path, and one user process are stable. Multicore bring-up then
+adds:
+
+- per-core stacks and kernel state;
+- a parked-core startup path;
+- IPIs for scheduling and TLB/page-table coordination;
+- per-core idle loops.
+
+There is no core oversubscription in the first multicore milestone: one runnable
+thread per core at a time.
+
 ## Proposed milestones
 
 1. **M0 — scaffold:** build scripts, linker layout, boot stub, halt on entry.
 2. **M1 — boot banner:** kernel entry at `0x0002_0000`, console output, clean halt.
 3. **M2 — console + shell:** line input, prompt, `help`, `echo`, `clear`, `mem`.
 4. **M3 — faults + timer:** vector table, exception diagnostics, timer IRQ.
-5. **M4 — memory + processes:** page allocator, kernel heap, user-mode image.
+5. **M4 — memory + processes:** page allocator, kernel heap, first user-mode image.
+6. **M5 — scheduler + multicore:** context switching, per-core state, IPIs, secondary cores.
 
 ## M1 implementation sketch
 
@@ -175,8 +235,9 @@ executable, then `kr32os/build/kernel.bin` or `kr32os/build/kr32os.bin` in the
 current directory, then an installed `share/kr32` directory. The BIOS defaults
 to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
 
-## Open design questions
+## Follow-up design questions
 
-- Kernel heap: bump allocator first, then free-list?
-- Kernel/user ABI: syscall numbers and pointer validation rules.
-- Single core for M0–M2; when should multicore enter?
+- How should the host expose console input and output to an OS boot: through
+  DeviceBus MMIO only, or through a narrow host debug channel as well?
+- What is the exact user address-space layout above the kernel's low 4 MiB?
+- When should the free-list allocator replace the bump allocator?

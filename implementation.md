@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 10:15 -08:00
+> **Last updated:** 2026-11-04 10:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1695,6 +1695,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-04 10:15 -08:00** — Documented the BIOS as a separate
       `kr32os/bios/` ROM component with an assembly reset/privileged path and
       optional freestanding C helpers; updated the OS layout and build pipeline.
+- **2026-11-04 10:27 -08:00** — Recorded OS design decisions: bump allocator
+      first, stable numbered syscalls with validated user pointers, and
+      multicore after the scheduler milestone.
 
 ## 10. Updating this file
 
