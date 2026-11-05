@@ -3148,12 +3148,16 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         }
         if (row.pager) {
             int page = row.page;
-            if (x < row.row.x + row.row.width / 2) {
+            // The left-hand "<" steps back; everything else on the pager row
+            // advances.  This keeps the page text itself clickable.
+            if (x < row.row.x + 22) {
                 page = std::max(0, page - 1);
             } else {
                 page = std::min(row.page_count - 1, page + 1);
             }
             array_pages_[row.key] = page;
+            status_ = "array page " + std::to_string(page + 1) + "/" +
+                      std::to_string(row.page_count);
             return true;
         }
         if (row.array) {

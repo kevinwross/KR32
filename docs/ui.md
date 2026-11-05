@@ -170,7 +170,8 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   separates **Locals** and **Globals**; click a section header to collapse it.
   Pointers to known structs and arrays expand into indented children. Click an
   array row to collapse or expand it; large arrays show 16 elements per page
-  with a `< page N/M >` row (click its left or right half).
+  with a `< page N/M >` row. Click the left arrow to step back; click the
+  page text or right arrow to advance.
 - Double-click a variable row to inspect its address, or a pointer's target, in
   the memory panel. Double-click a GPR, PC, or SP cell to send its value to the
   memory panel; a single click still opens the register editor.
