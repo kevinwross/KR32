@@ -708,6 +708,7 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     continuous_run_ = false;
     continuous_has_target_ = false;
     continuous_owned_breakpoint_ = false;
+    continuous_remaining_ = 0;
     reset_stats();
     error_.clear();
     if (settings_stop_at_main_) {
@@ -843,6 +844,7 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     continuous_run_ = false;
     continuous_has_target_ = false;
     continuous_owned_breakpoint_ = false;
+    continuous_remaining_ = 0;
     reset_stats();
     error_.clear();
     memory_address_ = session_.machine().sp() & ~0xFU;
@@ -904,33 +906,18 @@ void DebuggerUI::run() {
         return;
     }
     if (continuous_run_) {
-        continuous_run_ = false;
-        if (continuous_owned_breakpoint_) {
-            session_.clear_breakpoint(continuous_target_);
-        }
-        continuous_has_target_ = false;
-        continuous_owned_breakpoint_ = false;
+        stop_continuous(false, core::StepResult{});
         status_ = "paused at " + hex(session_.machine().pc(), 8);
         return;
     }
-    const std::uint64_t run_limit = settings_run_limit_;
-    if (run_limit == 0) {
-        continuous_run_ = true;
-        continuous_has_target_ = false;
-        continuous_owned_breakpoint_ = false;
-        continuous_target_ = 0;
-        status_ = "running without an instruction limit; press Run to pause";
-        return;
-    }
-    const auto started = std::chrono::steady_clock::now();
-    const core::StepResult result = session_.run(run_limit);
-    stats_seconds_ += std::chrono::duration<double>(
-                          std::chrono::steady_clock::now() - started)
-                          .count();
-    set_status_from_result(result);
-    if (result.kind == core::StepResult::Kind::Retired && !session_.at_breakpoint()) {
-        status_ = "run step limit reached; press Run to continue";
-    }
+    continuous_run_ = true;
+    continuous_has_target_ = false;
+    continuous_owned_breakpoint_ = false;
+    continuous_target_ = 0;
+    continuous_remaining_ = settings_run_limit_;
+    status_ = continuous_remaining_ == 0
+                  ? "running without an instruction limit; press Run to pause"
+                  : "running; press Run to pause";
 }
 
 void DebuggerUI::update() {
@@ -938,8 +925,12 @@ void DebuggerUI::update() {
         return;
     }
     constexpr std::uint64_t kSlice = 100'000;
+    std::uint64_t slice = kSlice;
+    if (continuous_remaining_ != 0) {
+        slice = std::min(slice, continuous_remaining_);
+    }
     const auto started = std::chrono::steady_clock::now();
-    const core::StepResult result = session_.run(kSlice);
+    const core::StepResult result = session_.run(slice);
     stats_seconds_ += std::chrono::duration<double>(
                           std::chrono::steady_clock::now() - started)
                           .count();
@@ -949,19 +940,33 @@ void DebuggerUI::update() {
         result.kind == core::StepResult::Kind::Halted ||
         result.kind == core::StepResult::Kind::Raised) {
         stop_continuous(reached_target, result);
+        return;
+    }
+    if (continuous_remaining_ != 0) {
+        continuous_remaining_ -= slice;
+        if (continuous_remaining_ == 0) {
+            stop_continuous(false, result, true);
+        }
     }
 }
 
 void DebuggerUI::stop_continuous(bool reached_target,
-                                 const core::StepResult& result) {
+                                 const core::StepResult& result,
+                                 bool budget_exhausted) {
+    const bool had_target = continuous_has_target_;
     continuous_run_ = false;
     if (continuous_owned_breakpoint_) {
         session_.clear_breakpoint(continuous_target_);
     }
     continuous_has_target_ = false;
     continuous_owned_breakpoint_ = false;
+    continuous_remaining_ = 0;
     if (reached_target) {
         status_ = "stopped at " + hex(continuous_target_, 8);
+    } else if (budget_exhausted) {
+        status_ = had_target
+                      ? "run step limit before target " + hex(continuous_target_, 8)
+                      : "run step limit reached; press Run to continue";
     } else {
         set_status_from_result(result);
     }
@@ -2842,36 +2847,18 @@ void DebuggerUI::run_to(std::uint32_t address) {
     if (owned) {
         session_.set_breakpoint(address);
     }
-    const std::uint64_t run_limit = settings_run_limit_;
-    if (run_limit == 0) {
-        if (continuous_run_) {
-            continuous_run_ = false;
-            if (continuous_owned_breakpoint_) {
-                session_.clear_breakpoint(continuous_target_);
-            }
+    if (continuous_run_) {
+        continuous_run_ = false;
+        if (continuous_owned_breakpoint_) {
+            session_.clear_breakpoint(continuous_target_);
         }
-        continuous_run_ = true;
-        continuous_has_target_ = true;
-        continuous_owned_breakpoint_ = owned;
-        continuous_target_ = address;
-        status_ = "running to " + hex(address, 8) + "; press Run to pause";
-        return;
     }
-    const auto started = std::chrono::steady_clock::now();
-    const core::StepResult result = session_.run(run_limit);
-    stats_seconds_ += std::chrono::duration<double>(
-                          std::chrono::steady_clock::now() - started)
-                          .count();
-    set_status_from_result(result);
-    if (owned) {
-        session_.clear_breakpoint(address);
-    }
-    if (session_.machine().pc() == address) {
-        status_ = "stopped at " + hex(address, 8);
-    } else if (run_limit != 0 && result.kind == core::StepResult::Kind::Retired &&
-               !session_.at_breakpoint()) {
-        status_ = "run step limit before target " + hex(address, 8);
-    }
+    continuous_run_ = true;
+    continuous_has_target_ = true;
+    continuous_owned_breakpoint_ = owned;
+    continuous_target_ = address;
+    continuous_remaining_ = settings_run_limit_;
+    status_ = "running to " + hex(address, 8) + "; press Run to pause";
 }
 
 void DebuggerUI::open_context_menu(int x, int y, int width, int height) {

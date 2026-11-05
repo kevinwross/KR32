@@ -71,7 +71,8 @@ private:
     void toggle_source_breakpoint(int line);
     void toggle_instruction_breakpoint(std::uint32_t address);
     void prepare_initial_stop();
-    void stop_continuous(bool reached_target, const core::StepResult& result);
+    void stop_continuous(bool reached_target, const core::StepResult& result,
+                         bool budget_exhausted = false);
     void reset_stats();
     void record_stats_time(std::chrono::steady_clock::time_point start);
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);
@@ -236,6 +237,7 @@ private:
     bool continuous_has_target_ = false;
     bool continuous_owned_breakpoint_ = false;
     std::uint32_t continuous_target_ = 0;
+    std::uint64_t continuous_remaining_ = 0;
     int hover_settings_control_ = -1;
     bool os_mode_ = false;
     std::string bios_path_;

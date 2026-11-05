@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 00:51 -08:00
+> **Last updated:** 2026-11-05 01:05 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1790,6 +1790,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-05 00:51 -08:00** — Debugger toolbar stats: instruction count,
       active run time, instructions/second, and a CLR reset button. RUN turns
       green while an unlimited run is active and clears when paused/stopped.
+- **2026-11-05 01:05 -08:00** — All Run/Run-To paths now execute
+      100k-instruction slices. The RUN button is green while active; the
+      configured budget still stops bounded runs and Run pauses unlimited ones.
 
 ## 10. Updating this file
 

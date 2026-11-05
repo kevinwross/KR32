@@ -1,10 +1,51 @@
 #include "doctest.h"
 
+#include "kr32/asm/object_assembler.h"
+#include "kr32/cc/cc.h"
+#include "kr32/container/container.h"
+#include "kr32/link/linker.h"
 #include "kr32/ui/canvas.h"
 #include "kr32/ui/debugger_ui.h"
 #include "kr32/ui/help.h"
 
+#include <filesystem>
+#include <fstream>
+#include <string>
+#include <vector>
+
 using namespace kr32;
+
+namespace {
+
+std::string build_ui_test_image() {
+    const cc::Result compiled = cc::compile("int main(void) { return 0; }\n");
+    REQUIRE(compiled.ok);
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message);
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message);
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    linker::Options options;
+    options.stack_top = 0x0011'0000;
+    options.stack_limit = 0x0001'0000;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, options, image, map, link_error),
+                    link_error.message);
+    std::vector<std::uint8_t> bytes;
+    container::Error container_error;
+    REQUIRE_MESSAGE(container::write(image, bytes, container_error), container_error.message);
+    const std::string path = "kr32-ui-run.k32";
+    std::ofstream output(path, std::ios::binary);
+    output.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    return path;
+}
+
+} // namespace
 
 TEST_CASE("the portable canvas renders deterministic frames") {
     ui::Canvas first(320, 200);
@@ -89,4 +130,32 @@ TEST_CASE("instruction and addressing help describe KR32 operands") {
           std::string::npos);
     CHECK(ui::addressing_help("JMP 0x00010000", "JMP").find("branch target") !=
           std::string::npos);
+}
+
+TEST_CASE("running uses the responsive sliced path and clears the RUN highlight") {
+    const std::string path = build_ui_test_image();
+    ui::DebuggerUI debugger;
+    std::string error;
+    REQUIRE_MESSAGE(debugger.load(path, error), error.c_str());
+
+    ui::Canvas probe(1, 1);
+    probe.fill(ui::Rect{0, 0, 1, 1}, ui::Color{32, 122, 64, 255});
+    const std::uint32_t green = probe.pixel_at(0, 0);
+
+    ui::Canvas before(800, 600);
+    debugger.render(before);
+    CHECK(before.pixel_at(84, 6) != green);
+
+    debugger.run();
+    ui::Canvas running(800, 600);
+    debugger.render(running);
+    CHECK(running.pixel_at(84, 6) == green);
+
+    for (int index = 0; index < 1000; ++index) {
+        debugger.update();
+    }
+    ui::Canvas stopped(800, 600);
+    debugger.render(stopped);
+    CHECK(stopped.pixel_at(84, 6) != green);
+    std::filesystem::remove(path);
 }
