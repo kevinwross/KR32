@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 02:22 -08:00
+> **Last updated:** 2026-11-05 02:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1805,6 +1805,14 @@ Newest entries at the bottom. Use the local time zone.
       restoration records, so source lines after `<kr32/matrix.hpp>` no longer
       shift by the injected header size. Added regression tests for C++ array
       debug records, source-line mapping, and scalar formatting.
+- **2026-11-05 02:58 -08:00** — Standardized C++ `new`/`delete`: null-safe
+      delete, placement new, `std::nothrow`, `std::bad_alloc` on allocation
+      failure, array value/initializer-list initialization, sized array headers,
+      pointee-aligned allocation, scalar constructor-failure cleanup, implicit
+      base/member construction and vptr setup, and virtual destructor dispatch.
+      Fixed qualified pointer declarations (`kr32::mat4*`). Added regression
+      tests for allocation failure, placement, nothrow, initialization,
+      alignment, implicit construction, and virtual deletion.
 
 ## 10. Updating this file
 

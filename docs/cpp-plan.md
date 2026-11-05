@@ -314,7 +314,10 @@ new module should expose only a clean compile API; internal headers stay private
 
 Freestanding runtime additions:
 
-- `operator new`/`delete` and array forms.
+- `operator new`/`delete` and array forms. The current compiler lowers ordinary
+  `new`/`delete` directly to the runtime allocation helpers; replacement
+  `operator new`/`delete` overloads and placement `new[]` remain deferred with
+  general operator overloading.
 - Constructor/destructor helpers for arrays and aggregates.
 - `__cxa_atexit`-style registration and static destruction.
 - `__cxa_guard_acquire/release`.

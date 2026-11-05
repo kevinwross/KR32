@@ -628,6 +628,12 @@ private:
                     "int strlen(const char* text);\n");
                 return;
             }
+            if (header.find("<new>") != std::string::npos ||
+                header.find("new>") != std::string::npos) {
+                // std::bad_alloc is synthesized by codegen; std::nothrow is
+                // recognized directly by the new-expression parser.
+                return;
+            }
             if (header.find("kr32/matrix.hpp") != std::string::npos ||
                 header.find("matrix.hpp") != std::string::npos) {
                 append_line(

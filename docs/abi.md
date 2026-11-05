@@ -339,11 +339,25 @@ Concrete examples:
   declaration order, then the base destructor. `D1`/`D2` restore the vptr to
   their own class's vtable before the body so virtual calls in a destructor
   dispatch to that class.
-- A virtual destructor occupies two vtable slots: `D1` (complete) followed by
-  `D0` (deleting). A derived override replaces both.
-- `new T` calls `operator new`, then `C1`; `delete p` calls `D0`. Array forms use
-  the runtime constructor/destructor helpers described in `docs/cpp-plan.md`
-  section 8.
+- A virtual destructor reserves two vtable slots: `D1` (complete) followed by
+  `D0` (deleting). The current code generator places `D1` in both slots and
+  performs deallocation at the `delete` site after the virtual call; a derived
+  override replaces both slots.
+- `new T` allocates with `__kr32_new_alloc`, then constructs the object;
+  `new T[n]` uses `__kr32_new_array`, which stores the element count and
+  original allocation pointer in a 12-byte header before the first element.
+  `delete`/`delete[]` recover the original pointer from that header and call
+  `free`. The header is implementation-private and is not part of the object
+  layout.
+- Allocation respects the pointee alignment (including 8-byte `double` and
+  16-byte `kr32::mat4`). A failed allocating `new` throws `std::bad_alloc`;
+  `new (std::nothrow)` returns null instead. `delete` and `delete[]` ignore null
+  pointers. Placement `new (pointer) T` constructs into the supplied storage
+  without allocating.
+- `delete` dispatches a virtual destructor through the vtable. Array
+  construction that throws destroys the already-constructed elements and frees
+  the allocation; a scalar constructor that throws also frees the allocation
+  before continuing unwinding.
 
 The constructor return convention is approved in the review decisions below.
 

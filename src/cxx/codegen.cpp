@@ -148,6 +148,13 @@ ExprPtr clone_expr(const Expr& source) {
     copy->is_arrow = source.is_arrow;
     copy->is_prefix = source.is_prefix;
     copy->global_scope = source.global_scope;
+    copy->new_nothrow = source.new_nothrow;
+    copy->new_value_initialize = source.new_value_initialize;
+    copy->new_initializer =
+        source.new_initializer ? clone_expr(*source.new_initializer) : nullptr;
+    for (const ExprPtr& argument : source.placement_arguments) {
+        copy->placement_arguments.push_back(argument ? clone_expr(*argument) : nullptr);
+    }
     copy->has_field_designator = source.has_field_designator;
     copy->has_index_designator = source.has_index_designator;
     copy->field_designator = source.field_designator;
@@ -420,6 +427,7 @@ public:
     std::string run(const TranslationUnit& unit) {
         debug_record("S 0 " + unit.source_name);
         collect_classes(unit.declarations, "");
+        ensure_bad_alloc_class();
         layout_classes();
         collect(unit.declarations, "");
         build_vtables();
@@ -765,6 +773,26 @@ private:
         }
     }
 
+    void ensure_bad_alloc_class() {
+        if (class_index_.find("std::bad_alloc") != class_index_.end()) {
+            return;
+        }
+        auto declaration = std::make_shared<Decl>();
+        declaration->kind = DeclKind::Class;
+        declaration->name.parts.push_back("std");
+        declaration->name.parts.push_back("bad_alloc");
+        declaration->location = {1, 1};
+        synthetic_declarations_.push_back(declaration);
+        auto info = std::make_unique<ClassInfo>();
+        info->decl = declaration.get();
+        info->qualified = "std::bad_alloc";
+        info->size = 1;
+        info->align = 1;
+        info->laid_out = true;
+        info->vtables_built = true;
+        class_index_["std::bad_alloc"] = std::move(info);
+    }
+
     void layout_classes() {
         for (auto& entry : class_index_) {
             layout_class(*entry.second);
@@ -823,7 +851,8 @@ private:
             info.member_index[field.name] = nullptr;
             info.members.push_back(std::move(field));
         }
-        if (info.members.empty() && info.base == nullptr) {
+        if (info.members.empty() && info.base == nullptr &&
+            !info.polymorphic) {
             info.size = 1;
             info.align = 1;
         } else {
@@ -1478,7 +1507,12 @@ private:
                 }
             }
         }
-        if (info.destructor != nullptr && info.destructor->is_virtual) {
+        const bool inherited_virtual_destructor =
+            info.base != nullptr &&
+            info.base->virtual_slots.find("@dtor") != info.base->virtual_slots.end();
+        if (info.destructor != nullptr &&
+            (info.destructor->is_virtual || inherited_virtual_destructor)) {
+            info.destructor->is_virtual = true;
             const auto slot = info.virtual_slots.find("@dtor");
             if (slot != info.virtual_slots.end()) {
                 info.vtable[static_cast<std::size_t>(slot->second)] = info.destructor;
@@ -3321,8 +3355,43 @@ private:
         return offset;
     }
 
+    void set_vptr_at(ClassInfo& info, int address_temp) {
+        if (!info.polymorphic) {
+            return;
+        }
+        const std::vector<std::string> parts = split_qualified(info.qualified);
+        const std::string vtable_symbol = "_ZTV" + mangle_qualified(parts);
+        emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+        emit("    LEA R0, [" + vtable_symbol + "]");
+        emit("    ADD R0, R0, #8");
+        emit("    STORE R0, [R1]");
+    }
+
+    void construct_default_subobjects(ClassInfo& info, int address_temp) {
+        const std::vector<ExprPtr> empty;
+        if (info.base != nullptr) {
+            construct_object_at(info.base, address_temp, empty);
+        }
+        for (const MemberInfo& member : info.members) {
+            ClassInfo* member_class = class_of(member.type);
+            if (member_class == nullptr) {
+                continue;
+            }
+            const int member_address =
+                allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+            emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
+            if (member.offset != 0) {
+                emit("    ADD R0, R0, #" + std::to_string(member.offset));
+            }
+            emit("    STORE R0, [R7 + " + std::to_string(member_address) + "]");
+            construct_object_at(member_class, member_address, empty);
+        }
+        set_vptr_at(info, address_temp);
+    }
+
     void construct_object_at(ClassInfo* info, int address_temp,
-                             const std::vector<ExprPtr>& arguments) {
+                             const std::vector<ExprPtr>& arguments,
+                             const std::string& landing = {}) {
         if (info->qualified == "std::thread" && !arguments.empty() &&
             arguments[0] && arguments[0]->kind == ExprKind::Lambda &&
             !arguments[0]->text.empty()) {
@@ -3367,6 +3436,7 @@ private:
             emit("    MOV R1, #0");
             emit("    MOV R2, #" + std::to_string(info->size));
             emit("    CALL memset");
+            construct_default_subobjects(*info, address_temp);
             return;
         }
         std::vector<int> integer_temps;
@@ -3404,32 +3474,238 @@ private:
                  std::to_string(index) + ", [R7 + " +
                  std::to_string(fp_temps[index].first) + "]");
         }
+        const std::string call_start = new_label("ctor_call_start");
+        const std::string call_end = new_label("ctor_call_end");
+        emit(call_start + ":");
         emit("    CALL " + constructor->symbol);
+        emit(call_end + ":");
+        if (!landing.empty()) {
+            record_call_site(call_start, call_end, landing);
+            const std::string no_exception = new_label("ctor_no_exception");
+            emit("    LOAD R2, [__kr32_exception_pending]");
+            emit("    CMP R2, #0");
+            emit("    JZ " + no_exception);
+            emit("    JMP " + landing);
+            emit(no_exception + ":");
+        } else {
+            emit_pending_check();
+        }
+    }
+
+    void emit_bad_alloc_throw() {
+        ClassInfo* info = find_class("std::bad_alloc");
+        if (info == nullptr) {
+            emit("    MOV R0, #1");
+            emit("    CALL exit");
+            return;
+        }
+        uses_exceptions_ = true;
+        Name bad_name;
+        bad_name.parts.push_back("std");
+        bad_name.parts.push_back("bad_alloc");
+        const int type_id = exception_type_id(Type::make_named(bad_name));
+        const int object =
+            allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
+        emit("    MOV R0, #" + std::to_string(std::max(1, info->size)));
+        emit("    CALL __cxa_allocate_exception");
+        const std::string allocated = new_label("bad_alloc_object");
+        emit("    CMP R0, #0");
+        emit("    JNZ " + allocated);
+        emit("    MOV R0, #1");
+        emit("    CALL exit");
+        emit(allocated + ":");
+        emit("    STORE R0, [R7 + " + std::to_string(object) + "]");
+        emit("    LEA R1, [" + typeinfo_symbol(info) + "]");
+        emit("    STORE R1, [R0 - 12]");
+        emit("    MOV R1, #0");
+        emit("    STORE R1, [R0 - 8]");
+        emit("    STORE R1, [R0 - 4]");
+        emit("    STORE R0, [__kr32_exception_object]");
+        emit("    MOV R0, #" + std::to_string(type_id));
+        emit("    STORE R0, [__kr32_exception_type]");
+        emit("    MOV R0, #1");
+        emit("    STORE R0, [__kr32_exception_pending]");
+        const std::string throw_start = new_label("bad_alloc_throw");
+        const std::string throw_end = new_label("bad_alloc_throw_end");
+        const std::string throw_landing = new_label("bad_alloc_landing");
+        const std::string throw_continue = new_label("bad_alloc_continue");
+        emit(throw_start + ":");
+        emit("    CALL __kr32_throw");
+        emit(throw_end + ":");
+        emit("    JMP " + throw_continue);
+        emit_unwind_landing(throw_landing);
+        emit(throw_continue + ":");
+        record_call_site(throw_start, throw_end, throw_landing);
+    }
+
+    void emit_dynamic_destructor(ClassInfo* info, int address_temp) {
+        if (info == nullptr) {
+            return;
+        }
+        Function* destructor = find_destructor(info);
+        if (destructor == nullptr) {
+            return;
+        }
+        const auto slot = info->virtual_slots.find("@dtor");
+        if (slot != info->virtual_slots.end()) {
+            emit("    LOAD R4, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    LOAD R1, [R4]");
+            emit("    LOAD R12, [R1 + " +
+                 std::to_string(slot->second * 4) + "]");
+            emit("    MOV R0, R4");
+            emit("    CALL R12");
+            emit_pending_check();
+            return;
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
+        emit("    CALL " + destructor->symbol);
         emit_pending_check();
+    }
+
+    void store_new_value(const TypePtr& type, const Expr& value, int address_temp) {
+        if (is_fp(type)) {
+            gen_as_fp(value, type);
+            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+            emit(std::string("    FSTORE.") +
+                 (is_float32(type) ? "W" : "D") + " F0, [R1]");
+            return;
+        }
+        gen_expr(value);
+        emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+        store_value(type);
     }
 
     TypePtr gen_new(const Expr& expression) {
         const TypePtr pointee = resolve_type(expression.type);
         ClassInfo* info = class_of(pointee);
-        const int pointer_temp =
-            allocate_local(Type::make_pointer(pointee));
-        if (!expression.children.empty()) {
+        const bool array = !expression.children.empty();
+        const int element_size = std::max(1, type_size(pointee));
+        const int alignment = std::max(4, type_align(pointee));
+        const int pointer_temp = allocate_local(Type::make_pointer(pointee));
+        const std::string done = new_label("new_done");
+
+        // Placement new: construct into caller-provided storage; no allocation.
+        if (!expression.placement_arguments.empty()) {
+            if (array) {
+                error(expression.location, "placement new[] is not supported");
+                emit("    MOV R0, #0");
+                return Type::make_pointer(pointee);
+            }
+            if (expression.placement_arguments.size() != 1) {
+                error(expression.location, "placement new expects one pointer argument");
+                emit("    MOV R0, #0");
+                return Type::make_pointer(pointee);
+            }
+            gen_expr(*expression.placement_arguments[0]);
+            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            if (info != nullptr) {
+                if (expression.new_initializer != nullptr &&
+                    !expression.new_initializer->children.empty()) {
+                    error(expression.location,
+                          "initializer-list new for class types is not supported");
+                }
+                construct_object_at(info, pointer_temp, expression.arguments);
+            } else if (expression.new_initializer != nullptr) {
+                emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                emit("    MOV R1, #0");
+                emit("    MOV R2, #" + std::to_string(element_size));
+                emit("    CALL memset");
+                if (!expression.new_initializer->children.empty()) {
+                    if (expression.new_initializer->children.size() > 1) {
+                        error(expression.location,
+                              "too many initializers for scalar new");
+                    }
+                    store_new_value(pointee,
+                                    *expression.new_initializer->children[0],
+                                    pointer_temp);
+                }
+            } else if (expression.new_value_initialize) {
+                emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                emit("    MOV R1, #0");
+                emit("    MOV R2, #" + std::to_string(element_size));
+                emit("    CALL memset");
+            } else if (expression.arguments.size() == 1) {
+                store_new_value(pointee, *expression.arguments[0], pointer_temp);
+            }
+            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            return Type::make_pointer(pointee);
+        }
+
+        if (array) {
             gen_expr(*expression.children[0]);
             const int count_temp =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
-            const int base_temp =
-                allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
             emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
-            const int element_size = std::max(1, type_size(pointee));
-            if (element_size != 1) {
-                emit("    MUL R0, R0, #" + std::to_string(element_size));
-            }
-            emit("    ADD R0, R0, #4");
-            emit("    CALL malloc");
-            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    MOV R0, #" + std::to_string(element_size));
             emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
-            emit("    STORE R1, [R0]");
-            if (info != nullptr) {
+            emit("    MOV R2, #" + std::to_string(alignment));
+            emit("    CALL __kr32_new_array");
+        } else {
+            emit("    MOV R0, #" + std::to_string(element_size));
+            emit("    MOV R1, #" + std::to_string(alignment));
+            emit("    CALL __kr32_new_alloc");
+        }
+        emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+        const std::string allocated = new_label("new_allocated");
+        emit("    CMP R0, #0");
+        emit("    JNZ " + allocated);
+        if (expression.new_nothrow) {
+            emit("    MOV R0, #0");
+            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    JMP " + done);
+        } else {
+            emit_bad_alloc_throw();
+            emit("    JMP " + done);
+        }
+        emit(allocated + ":");
+
+        if (array) {
+            const int bound_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            // The bound was stored in a temporary before allocation; find it by
+            // recomputing the count header instead, which the allocator saved.
+            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    LOAD R1, [R0 - 8]");
+            emit("    STORE R1, [R7 + " + std::to_string(bound_temp) + "]");
+
+            if (expression.new_initializer != nullptr &&
+                !(info != nullptr && expression.new_initializer->children.empty())) {
+                if (info != nullptr && !expression.new_initializer->children.empty()) {
+                    error(expression.location,
+                          "initializer-list new[] for class types is not supported");
+                } else {
+                    emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                    emit("    MOV R1, #0");
+                    emit("    LOAD R2, [R7 + " + std::to_string(bound_temp) + "]");
+                    if (element_size != 1) {
+                        emit("    MUL R2, R2, #" + std::to_string(element_size));
+                    }
+                    emit("    CALL memset");
+                    int literal_bound = -1;
+                    if (expression.children[0]->kind == ExprKind::IntegerLiteral) {
+                        literal_bound = static_cast<int>(expression.children[0]->integer);
+                    }
+                    for (std::size_t index = 0;
+                         index < expression.new_initializer->children.size(); ++index) {
+                        if (literal_bound >= 0 &&
+                            index >= static_cast<std::size_t>(literal_bound)) {
+                            error(expression.location,
+                                  "too many initializers for new array");
+                            break;
+                        }
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(pointer_temp) + "]");
+                        if (index > 0) {
+                            emit("    ADD R0, R0, #" +
+                                 std::to_string(index * element_size));
+                        }
+                        emit("    STORE R0, [R7 + " + std::to_string(bound_temp) +
+                             "]");
+                        store_new_value(pointee,
+                                        *expression.new_initializer->children[index],
+                                        bound_temp);
+                    }
+                }
+            } else if (info != nullptr) {
                 Function* constructor = find_constructor(info, 0);
                 if (constructor != nullptr) {
                     const int index_temp =
@@ -3440,12 +3716,11 @@ private:
                     emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit(loop_label + ":");
                     emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
-                    emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(bound_temp) + "]");
                     emit("    CMP R0, R1");
                     emit("    JGE " + done_label);
                     emit("    MUL R1, R0, #" + std::to_string(element_size));
-                    emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
-                    emit("    ADD R0, R0, #4");
+                    emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
                     emit("    ADD R0, R0, R1");
                     const std::string ctor_start = new_label("array_ctor_start");
                     const std::string ctor_end = new_label("array_ctor_end");
@@ -3459,30 +3734,41 @@ private:
                     if (Function* destructor = find_destructor(info)) {
                         const int unwind_index =
                             allocate_local(Type::make_builtin(BuiltinKind::Int));
+                        const int unwind_address =
+                            allocate_local(Type::make_pointer(
+                                Type::make_builtin(BuiltinKind::Void)));
                         const std::string unwind_loop =
                             new_label("new_array_unwind");
                         const std::string unwind_done =
                             new_label("new_array_unwind_done");
-                        emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(index_temp) + "]");
                         emit("    SUB R0, R0, #1");
-                        emit("    STORE R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(unwind_index) + "]");
                         emit(unwind_loop + ":");
-                        emit("    LOAD R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(unwind_index) + "]");
                         emit("    CMP R0, #0");
                         emit("    JLT " + unwind_done);
                         emit("    MUL R1, R0, #" + std::to_string(element_size));
-                        emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
-                        emit("    ADD R0, R0, #4");
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(pointer_temp) + "]");
                         emit("    ADD R0, R0, R1");
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(unwind_address) + "]");
                         emit("    CALL " + destructor->symbol);
-                        emit("    LOAD R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(unwind_index) + "]");
                         emit("    SUB R0, R0, #1");
-                        emit("    STORE R0, [R7 + " + std::to_string(unwind_index) + "]");
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(unwind_index) + "]");
                         emit("    JMP " + unwind_loop);
                         emit(unwind_done + ":");
                     }
-                    emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
-                    emit("    CALL free");
+                    emit("    LOAD R0, [R7 + " +
+                         std::to_string(pointer_temp) + "]");
+                    emit("    CALL __kr32_new_free");
                     if (!exception_handlers_.empty()) {
                         const ExceptionHandler handler = exception_handlers_.back();
                         emit_destructors_from(handler.scope_depth);
@@ -3492,28 +3778,98 @@ private:
                     }
                     emit(ctor_continue + ":");
                     record_call_site(ctor_start, ctor_end, ctor_landing);
+                    emit("    LOAD R0, [R7 + " +
+                         std::to_string(index_temp) + "]");
+                    emit("    ADD R0, R0, #1");
+                    emit("    STORE R0, [R7 + " +
+                         std::to_string(index_temp) + "]");
+                    emit("    JMP " + loop_label);
+                    emit(done_label + ":");
+                } else {
+                    const int index_temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    const int element_temp =
+                        allocate_local(Type::make_pointer(
+                            Type::make_builtin(BuiltinKind::Void)));
+                    const std::vector<ExprPtr> empty;
+                    const std::string loop_label = new_label("new_array_default");
+                    const std::string done_label = new_label("new_array_default_done");
+                    emit("    MOV R0, #0");
+                    emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit(loop_label + ":");
+                    emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(bound_temp) + "]");
+                    emit("    CMP R0, R1");
+                    emit("    JGE " + done_label);
+                    emit("    MUL R1, R0, #" + std::to_string(element_size));
+                    emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+                    emit("    ADD R0, R0, R1");
+                    emit("    STORE R0, [R7 + " + std::to_string(element_temp) + "]");
+                    construct_object_at(info, element_temp, empty);
                     emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    ADD R0, R0, #1");
                     emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    JMP " + loop_label);
                     emit(done_label + ":");
                 }
+            } else if (expression.new_value_initialize) {
+                emit("    LOAD R0, [R7 + " +
+                     std::to_string(pointer_temp) + "]");
+                emit("    MOV R1, #0");
+                emit("    LOAD R2, [R7 + " + std::to_string(bound_temp) + "]");
+                if (element_size != 1) {
+                    emit("    MUL R2, R2, #" + std::to_string(element_size));
+                }
+                emit("    CALL memset");
             }
-            emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
-            emit("    ADD R0, R0, #4");
-            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
-        } else {
-            emit("    MOV R0, #" + std::to_string(std::max(1, type_size(pointee))));
-            emit("    CALL malloc");
-            emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
-            if (info != nullptr) {
-                construct_object_at(info, pointer_temp, expression.arguments);
-            } else if (expression.arguments.size() == 1) {
-                gen_expr(*expression.arguments[0]);
-                emit("    LOAD R1, [R7 + " + std::to_string(pointer_temp) + "]");
-                store_value(pointee);
+        } else if (info != nullptr) {
+            if (expression.new_initializer != nullptr &&
+                !expression.new_initializer->children.empty()) {
+                error(expression.location,
+                      "initializer-list new for class types is not supported");
             }
+            const std::string cleanup = new_label("new_constructor_cleanup");
+            const std::string after = new_label("new_constructor_after");
+            construct_object_at(info, pointer_temp, expression.arguments,
+                                cleanup);
+            emit("    JMP " + after);
+            emit(cleanup + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    CALL __kr32_new_free");
+            if (!exception_handlers_.empty()) {
+                const ExceptionHandler handler = exception_handlers_.back();
+                emit_destructors_from(handler.scope_depth);
+                emit("    JMP " + handler.label);
+            } else {
+                emit("    JMP _Unwind_Resume");
+            }
+            emit(after + ":");
+        } else if (expression.new_initializer != nullptr) {
+            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    MOV R1, #0");
+            emit("    MOV R2, #" + std::to_string(element_size));
+            emit("    CALL memset");
+            if (!expression.new_initializer->children.empty()) {
+                if (expression.new_initializer->children.size() > 1) {
+                    error(expression.location,
+                          "too many initializers for scalar new");
+                }
+                store_new_value(pointee,
+                                *expression.new_initializer->children[0],
+                                pointer_temp);
+            }
+        } else if (expression.new_value_initialize) {
+            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    MOV R1, #0");
+            emit("    MOV R2, #" + std::to_string(element_size));
+            emit("    CALL memset");
+        } else if (expression.arguments.size() == 1) {
+            store_new_value(pointee, *expression.arguments[0], pointer_temp);
+        } else if (!expression.arguments.empty()) {
+            error(expression.location, "too many arguments for scalar new");
         }
+
+        emit(done + ":");
         emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
         return Type::make_pointer(pointee);
     }
@@ -3530,55 +3886,50 @@ private:
         const int pointer_temp =
             allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
         emit("    STORE R0, [R7 + " + std::to_string(pointer_temp) + "]");
+        const std::string done = new_label("delete_done");
+        emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
+        emit("    CMP R0, #0");
+        emit("    JZ " + done);
         if (expression.text == "[]") {
-            const int base_temp =
+            const int count_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            const int index_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            const int element_temp =
                 allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Void)));
-            emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
-            emit("    SUB R0, R0, #4");
-            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    LOAD R1, [R7 + " + std::to_string(pointer_temp) + "]");
+            emit("    LOAD R0, [R1 - 8]");
+            emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
             if (ClassInfo* info = class_of(pointee)) {
-                if (Function* destructor = find_destructor(info)) {
-                    const int count_temp =
-                        allocate_local(Type::make_builtin(BuiltinKind::Int));
-                    const int index_temp =
-                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                if (find_destructor(info) != nullptr) {
                     const std::string loop_label = new_label("delete_array");
-                    const std::string done_label = new_label("delete_array_done");
-                    emit("    LOAD R1, [R7 + " + std::to_string(base_temp) + "]");
-                    emit("    LOAD R0, [R1]");
-                    emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
+                    const std::string elements_done = new_label("delete_array_done");
                     emit("    MOV R0, #0");
                     emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit(loop_label + ":");
                     emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    LOAD R1, [R7 + " + std::to_string(count_temp) + "]");
                     emit("    CMP R0, R1");
-                    emit("    JGE " + done_label);
+                    emit("    JGE " + elements_done);
                     emit("    MUL R1, R0, #" +
                          std::to_string(std::max(1, type_size(pointee))));
                     emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
                     emit("    ADD R0, R0, R1");
-                    emit("    CALL " + destructor->symbol);
+                    emit("    STORE R0, [R7 + " + std::to_string(element_temp) + "]");
+                    emit_dynamic_destructor(info, element_temp);
                     emit("    LOAD R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    ADD R0, R0, #1");
                     emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
                     emit("    JMP " + loop_label);
-                    emit(done_label + ":");
+                    emit(elements_done + ":");
                 }
             }
-            emit("    LOAD R0, [R7 + " + std::to_string(base_temp) + "]");
-            emit("    CALL free");
-            emit("    MOV R0, #0");
-            return Type::make_builtin(BuiltinKind::Void);
-        }
-        if (ClassInfo* info = class_of(pointee)) {
-            if (Function* destructor = find_destructor(info)) {
-                emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
-                emit("    CALL " + destructor->symbol);
-            }
+        } else if (ClassInfo* info = class_of(pointee)) {
+            emit_dynamic_destructor(info, pointer_temp);
         }
         emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
-        emit("    CALL free");
+        emit("    CALL __kr32_new_free");
+        emit(done + ":");
         emit("    MOV R0, #0");
         return Type::make_builtin(BuiltinKind::Void);
     }
@@ -8078,6 +8429,7 @@ private:
     std::map<std::string, std::set<std::string>> imports_;
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;
     std::map<std::string, std::unique_ptr<ClassInfo>> class_index_;
+    std::vector<std::shared_ptr<Decl>> synthetic_declarations_;
     std::map<std::string, const Decl*> class_templates_;
     struct PartialTemplate {
         std::string name;

@@ -162,6 +162,8 @@ struct Expr {
     TypePtr type;              // Cast/New/Sizeof/Alignof/trailing return
     std::vector<ExprPtr> children;
     std::vector<ExprPtr> arguments; // call/new/lambda body expression list
+    std::vector<ExprPtr> placement_arguments; // new (placement) T
+    ExprPtr new_initializer;   // new T{...} / new T[n]{...}
     std::vector<DeclPtr> parameters; // lambda parameters
     StmtPtr body;              // lambda body
     std::vector<Name> template_arguments;
@@ -169,6 +171,8 @@ struct Expr {
     bool is_arrow = false;     // Member access through `->`
     bool is_prefix = false;    // prefix unary/increment
     bool global_scope = false; // leading `::`
+    bool new_nothrow = false;  // new (std::nothrow) T
+    bool new_value_initialize = false; // new T() / new T[n]()
     bool has_field_designator = false;
     bool has_index_designator = false;
     std::string field_designator;

@@ -1634,7 +1634,34 @@ private:
         }
         const std::string_view next = peek(index).text;
         if (next == "*" || next == "&" || next == "&&") {
-            return is_known_type(name);
+            std::string_view type_name = name;
+            int template_depth = 0;
+            std::size_t type_index = index;
+            while (type_index > 0) {
+                --type_index;
+                const Token& token = peek(type_index);
+                if (token.text == ">") {
+                    ++template_depth;
+                    continue;
+                }
+                if (token.text == ">>") {
+                    template_depth += 2;
+                    continue;
+                }
+                if (token.text == "<") {
+                    if (template_depth > 0) {
+                        --template_depth;
+                    }
+                    continue;
+                }
+                if (template_depth == 0 &&
+                    (token.kind == TokenKind::Identifier ||
+                     token.kind == TokenKind::Keyword)) {
+                    type_name = token.text;
+                    break;
+                }
+            }
+            return is_known_type(type_name);
         }
         return peek(index).kind == TokenKind::Identifier ||
                peek(index).kind == TokenKind::Keyword;
@@ -2069,15 +2096,34 @@ private:
     ExprPtr parse_new_expression(const Token& token) {
         auto expression = make_expr(ExprKind::New, token);
         if (at("(")) {
-            expression->arguments = parse_argument_list();
+            std::vector<ExprPtr> placement = parse_argument_list();
+            if (placement.size() == 1 && placement[0] &&
+                placement[0]->kind == ExprKind::Name &&
+                placement[0]->name.to_string() == "std::nothrow") {
+                expression->new_nothrow = true;
+            } else {
+                expression->placement_arguments = std::move(placement);
+            }
         }
         expression->type = parse_type_id();
         if (at("[")) {
             advance();
             expression->children.push_back(parse_expression());
             expect("]", "after new array bound");
+            if (at("{")) {
+                expression->new_initializer = parse_initializer_list_expression();
+            } else if (at("(")) {
+                advance();
+                expect(")", "after new array value-initialization");
+                expression->new_value_initialize = true;
+            }
         } else if (at("(")) {
             expression->arguments = parse_argument_list();
+            if (expression->arguments.empty()) {
+                expression->new_value_initialize = true;
+            }
+        } else if (at("{")) {
+            expression->new_initializer = parse_initializer_list_expression();
         }
         return expression;
     }

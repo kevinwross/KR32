@@ -267,6 +267,51 @@ void free(void *pointer) {
     heap_insert(block);
 }
 
+void *__kr32_new_alloc(int size, int alignment) {
+    if (size <= 0) {
+        size = 1;
+    }
+    if (alignment < 4 || (alignment & (alignment - 1)) != 0) {
+        alignment = 4;
+    }
+    unsigned int limit = 0x7FFFFFFFu;
+    if ((unsigned int)size > limit - (unsigned int)alignment - 12U) {
+        return 0;
+    }
+    unsigned int total = (unsigned int)size + (unsigned int)alignment + 12U;
+    struct heap_block *base = (struct heap_block *)malloc((int)total);
+    if (base == 0) {
+        return 0;
+    }
+    unsigned int address = (unsigned int)base + 12U;
+    address = (address + (unsigned int)alignment - 1U) & ~((unsigned int)alignment - 1U);
+    *(unsigned int *)(address - 12U) = (unsigned int)base;
+    return (void *)address;
+}
+
+void __kr32_new_free(void *pointer) {
+    if (pointer == 0) {
+        return;
+    }
+    unsigned int base = *(unsigned int *)((unsigned int)pointer - 12U);
+    free((void *)base);
+}
+
+void *__kr32_new_array(int element_size, int count, int alignment) {
+    if (element_size <= 0 || count < 0) {
+        return 0;
+    }
+    unsigned int total = (unsigned int)element_size * (unsigned int)count;
+    if (count != 0 && total / (unsigned int)count != (unsigned int)element_size) {
+        return 0;
+    }
+    void *pointer = __kr32_new_alloc((int)total, alignment);
+    if (pointer != 0) {
+        *(unsigned int *)((unsigned int)pointer - 8U) = (unsigned int)count;
+    }
+    return pointer;
+}
+
 void *calloc(int count, int size) {
     if (count <= 0 || size <= 0) {
         return 0;

@@ -33,6 +33,16 @@ int main() {
     point.y = 4.0;
     point.z = 6.0;
     point.w = 1.0;
+    kr32::mat4 identity;
+    for (int i = 0; i < 16; ++i) {
+        identity.m[i] = (i % 5 == 0) ? 1.0 : 0.0;
+    }
+    kr32::mat4* madeMatrix = new kr32::mat4;
+    *madeMatrix = identity;
+    if (madeMatrix->m[0] != 1.0 || madeMatrix->m[1] != 0.0) {
+        return 4;
+    }
+    delete madeMatrix;
 
     // Translation uses the fourth column of the row-major matrix.
     kr32::mat4 translation = make_translation(10.0, 20.0, 30.0);

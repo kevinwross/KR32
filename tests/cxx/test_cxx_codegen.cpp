@@ -894,6 +894,148 @@ TEST_CASE("new and delete allocate and construct objects") {
     CHECK(throwing_array.result == 42);
 }
 
+TEST_CASE("new and delete handle null, placement, nothrow, and failure") {
+    const ProgramResult null_delete = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Guard { public: ~Guard() { destroyed = 1; } };\n"
+        "int main() {\n"
+        "    Guard* pointer = 0;\n"
+        "    delete pointer;\n"
+        "    Guard* array = 0;\n"
+        "    delete[] array;\n"
+        "    return destroyed;\n"
+        "}\n");
+    INFO(null_delete.diagnostics);
+    REQUIRE(null_delete.ok);
+    CHECK(null_delete.result == 0);
+
+    const ProgramResult placement = compile_and_run(
+        "class Value { public: int value; Value(int input) { value = input; } };\n"
+        "int main() {\n"
+        "    unsigned int storage[4];\n"
+        "    Value* value = new (storage) Value(7);\n"
+        "    if (value != (Value*)storage || value->value != 7) return 1;\n"
+        "    int* scalar_storage = (int*)storage;\n"
+        "    int* scalar = new (scalar_storage) int(42);\n"
+        "    return *scalar == 42 ? 42 : 2;\n"
+        "}\n");
+    INFO(placement.diagnostics);
+    REQUIRE(placement.ok);
+    CHECK(placement.result == 42);
+
+    const ProgramResult nothrow = compile_and_run(
+        "int main() {\n"
+        "    int* value = new (std::nothrow) int[0x7FFFFFFF];\n"
+        "    return value == 0 ? 42 : 0;\n"
+        "}\n");
+    INFO(nothrow.diagnostics);
+    REQUIRE(nothrow.ok);
+    CHECK(nothrow.result == 42);
+
+    const ProgramResult failure = compile_and_run(
+        "int main() {\n"
+        "    try {\n"
+        "        int* value = new int[0x7FFFFFFF];\n"
+        "        delete[] value;\n"
+        "    } catch (std::bad_alloc& error) {\n"
+        "        return 42;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(failure.diagnostics);
+    REQUIRE(failure.ok);
+    CHECK(failure.result == 42);
+
+    const ProgramResult constructor_failure = compile_and_run(
+        "class Throwing {\n"
+        "public:\n"
+        "    Throwing() { throw 7; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Throwing* value = new Throwing; }\n"
+        "    catch (int error) { return 42; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(constructor_failure.diagnostics);
+    REQUIRE(constructor_failure.ok);
+    CHECK(constructor_failure.result == 42);
+}
+
+TEST_CASE("new arrays initialize and delete dispatches virtual destructors") {
+    const ProgramResult arrays = compile_and_run(
+        "int main() {\n"
+        "    int* values = new int[4]{1, 2, 3};\n"
+        "    if (values[0] != 1 || values[2] != 3 || values[3] != 0) return 1;\n"
+        "    delete[] values;\n"
+        "    int* zeroed = new int[2]();\n"
+        "    if (zeroed[0] != 0 || zeroed[1] != 0) return 2;\n"
+        "    delete[] zeroed;\n"
+        "    float* floats = new float[2]{1.5f, 2.5f};\n"
+        "    if (floats[0] != 1.5f || floats[1] != 2.5f) return 3;\n"
+        "    delete[] floats;\n"
+        "    double* aligned = new double(2.5);\n"
+        "    if (((unsigned int)aligned & 7U) != 0 || *aligned != 2.5) return 4;\n"
+        "    delete aligned;\n"
+        "    return 42;\n"
+        "}\n");
+    INFO(arrays.diagnostics);
+    REQUIRE(arrays.ok);
+    CHECK(arrays.result == 42);
+
+    const ProgramResult virtual_delete = compile_and_run(
+        "int base_destroyed = 0;\n"
+        "int derived_destroyed = 0;\n"
+        "class Base {\n"
+        "public:\n"
+        "    virtual ~Base() { base_destroyed = 1; }\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    ~Derived() { derived_destroyed = 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Base* pointer = new Derived;\n"
+        "    delete pointer;\n"
+        "    return base_destroyed == 1 && derived_destroyed == 1 ? 42 : 0;\n"
+        "}\n");
+    INFO(virtual_delete.diagnostics);
+    REQUIRE(virtual_delete.ok);
+    CHECK(virtual_delete.result == 42);
+
+    const ProgramResult aligned_matrix = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4* matrix = new kr32::mat4;\n"
+        "    if (((unsigned int)matrix & 15U) != 0) return 1;\n"
+        "    matrix->m[0] = 1.0;\n"
+        "    float value = matrix->m[0];\n"
+        "    delete matrix;\n"
+        "    return value == 1.0 ? 42 : 2;\n"
+        "}\n");
+    INFO(aligned_matrix.diagnostics);
+    REQUIRE(aligned_matrix.ok);
+    CHECK(aligned_matrix.result == 42);
+
+    const ProgramResult virtual_array = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Base {\n"
+        "public:\n"
+        "    int value;\n"
+        "    virtual ~Base() { destroyed = destroyed + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Base* values = new Base[2];\n"
+        "    values[0].value = 1;\n"
+        "    values[1].value = 2;\n"
+        "    int result = values[0].value + values[1].value;\n"
+        "    delete[] values;\n"
+        "    return result == 3 && destroyed == 2 ? 42 : 0;\n"
+        "}\n");
+    INFO(virtual_array.diagnostics);
+    REQUIRE(virtual_array.ok);
+    CHECK(virtual_array.result == 42);
+}
+
 TEST_CASE("delete runs the destructor") {
     const ProgramResult program = compile_and_run(
         "int result = 0;\n"
