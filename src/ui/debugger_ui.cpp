@@ -9,6 +9,7 @@
 #include <cstring>
 #include <filesystem>
 #include <fstream>
+#include <functional>
 #include <iomanip>
 #include <iterator>
 #include <sstream>
@@ -1523,9 +1524,84 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         std::uint32_t size = 0;
         bool local = false;
         bool ok = false;
+        bool header = false;
+        bool expanded = true;
         int indent = 0;
     };
     std::vector<Entry> entries;
+    const auto class_for = [&](const std::string& type) -> const debug::ClassInfo* {
+        for (const debug::ClassInfo& klass : session_.info().classes) {
+            if (klass.name == type) {
+                return &klass;
+            }
+        }
+        return nullptr;
+    };
+    std::function<void(Entry, int)> append_entry;
+    append_entry = [&](Entry entry, int depth) {
+        if (entries.size() >= 256) {
+            return;
+        }
+        entries.push_back(entry);
+        if (!entry.ok || depth >= 2 || entry.size == 0) {
+            return;
+        }
+
+        std::string type = entry.type;
+        std::size_t bracket = type.rfind('[');
+        if (bracket != std::string::npos && type.back() == ']') {
+            const std::string count_text = type.substr(bracket + 1, type.size() - bracket - 2);
+            const int count = std::atoi(count_text.c_str());
+            const unsigned element_size =
+                count > 0 ? entry.size / static_cast<unsigned>(count) : 0;
+            if (count > 0 && count <= 64 && element_size > 0) {
+                const std::string element_type = type.substr(0, bracket);
+                for (int index = 0; index < count && entries.size() < 256; ++index) {
+                    Entry child;
+                    child.name = "[" + std::to_string(index) + "]";
+                    child.type = element_type;
+                    child.address = entry.address + static_cast<std::uint32_t>(index) * element_size;
+                    child.size = element_size;
+                    child.local = entry.local;
+                    child.indent = entry.indent + 1;
+                    child.ok = session_.read_memory(child.address, child.size, child.value);
+                    append_entry(std::move(child), depth + 1);
+                }
+                return;
+            }
+        }
+
+        std::string pointee;
+        bool pointer = false;
+        if (type.size() >= 2 && type.compare(type.size() - 2, 2, "_*") == 0) {
+            pointee = type.substr(0, type.size() - 2);
+            pointer = true;
+        } else if (type.size() >= 2 && type.compare(type.size() - 2, 2, " *") == 0) {
+            pointee = type.substr(0, type.size() - 2);
+            pointer = true;
+        }
+
+        const std::string structure = pointer ? pointee : type;
+        const debug::ClassInfo* klass = class_for(structure);
+        if (klass == nullptr) {
+            return;
+        }
+        const std::uint32_t base = pointer ? entry.value : entry.address;
+        for (const debug::Member& member : klass->members) {
+            if (entries.size() >= 256) break;
+            Entry child;
+            child.name = "." + member.name;
+            child.type = member.type;
+            child.address = base + member.offset;
+            child.size = member.size;
+            child.local = entry.local;
+            child.indent = entry.indent + 1;
+            child.ok = session_.read_memory(child.address, child.size, child.value);
+            append_entry(std::move(child), depth + 1);
+        }
+    };
+
+    std::vector<Entry> locals;
     const debug::Function* function = session_.function_at(session_.machine().pc());
     if (function != nullptr) {
         for (const debug::Variable& variable : session_.info().variables) {
@@ -1538,29 +1614,10 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             entry.local = true;
             std::string error;
             entry.ok = session_.read_variable(variable.name, entry.value, error);
-            entries.push_back(entry);
-            if (entry.ok && !variable.type.empty() && variable.type.back() == '*') {
-                for (const debug::ClassInfo& klass : session_.info().classes) {
-                    if (variable.type.find(klass.name) == std::string::npos) {
-                        continue;
-                    }
-                    for (const debug::Member& member : klass.members) {
-                        Entry member_entry;
-                        member_entry.name = "." + member.name;
-                        member_entry.type = member.type;
-                        member_entry.address = entry.value + member.offset;
-                        member_entry.size = member.size;
-                        member_entry.local = true;
-                        member_entry.indent = 1;
-                        member_entry.ok = session_.read_memory(
-                            member_entry.address, member_entry.size, member_entry.value);
-                        entries.push_back(std::move(member_entry));
-                    }
-                    break;
-                }
-            }
+            locals.push_back(std::move(entry));
         }
     }
+    std::vector<Entry> globals;
     for (const debug::Global& global : session_.info().globals) {
         Entry entry;
         entry.name = global.name;
@@ -1569,7 +1626,31 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         entry.size = global.size;
         std::string error;
         entry.ok = session_.read_global(global.name, entry.value, error);
-        entries.push_back(std::move(entry));
+        globals.push_back(std::move(entry));
+    }
+
+    Entry locals_header;
+    locals_header.name = "Locals";
+    locals_header.header = true;
+    locals_header.expanded = locals_expanded_;
+    locals_header.size = static_cast<std::uint32_t>(locals.size());
+    entries.push_back(locals_header);
+    if (locals_expanded_) {
+        for (Entry& entry : locals) {
+            append_entry(std::move(entry), 0);
+        }
+    }
+
+    Entry globals_header;
+    globals_header.name = "Globals";
+    globals_header.header = true;
+    globals_header.expanded = globals_expanded_;
+    globals_header.size = static_cast<std::uint32_t>(globals.size());
+    entries.push_back(globals_header);
+    if (globals_expanded_) {
+        for (Entry& entry : globals) {
+            append_entry(std::move(entry), 0);
+        }
     }
 
     const int row_height = 14;
@@ -1587,16 +1668,22 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         if (hover_var_ == visible_row) {
             canvas.fill(row, Color{42, 58, 74, 255});
         }
-        const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
-        const std::string text =
-            indent_text + entry.name + " = " +
-            (entry.ok ? "0x" + hex(entry.value, 8) : "?");
+        std::string text;
+        if (entry.header) {
+            text = std::string(entry.expanded ? "v " : "> ") + entry.name + " (" +
+                   std::to_string(entry.size) + ")";
+        } else {
+            const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
+            text = indent_text + entry.name + " = " +
+                   (entry.ok ? "0x" + hex(entry.value, 8) : "?");
+        }
         canvas.text(rect.x + 6, y, trim_to(text, static_cast<std::size_t>((rect.width - 20) / 7)),
-                    entry.ok ? (entry.indent > 0 ? kDim : kText) : kBad,
+                    entry.header ? kAccent
+                                 : (entry.ok ? (entry.indent > 0 ? kDim : kText) : kBad),
                     FontRole::MonoSmall);
         var_hover_rows_.push_back(
             VarHoverRow{row, entry.name, entry.type, entry.address, entry.value, entry.size,
-                        entry.local, entry.ok});
+                        entry.local, entry.ok, entry.header});
     }
     if (entries.empty()) {
         canvas.text(rect.x + 6, rect.y + 24, "(no variables)", kDim, FontRole::MonoSmall);
@@ -2058,9 +2145,14 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
         return;
     }
     const VarHoverRow& row = var_hover_rows_[static_cast<std::size_t>(hover_var_)];
+    if (row.header) {
+        return;
+    }
     std::vector<std::string> lines;
     lines.push_back(row.name + (row.local ? "  (local)" : "  (global)"));
-    lines.push_back("type: " + (row.type.empty() ? "?" : row.type));
+    std::string pretty_type = row.type;
+    std::replace(pretty_type.begin(), pretty_type.end(), '_', ' ');
+    lines.push_back("type: " + (pretty_type.empty() ? "?" : pretty_type));
     lines.push_back("size: " + std::to_string(row.size) + " bytes");
     lines.push_back("address: 0x" + hex(row.address, 8));
 
@@ -2903,6 +2995,20 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
     }
     for (std::size_t index = 0; index < register_cells_.size(); ++index) {
         if (!register_cells_[index].contains(x, y)) continue;
+        const auto now = std::chrono::steady_clock::now();
+        const bool double_click =
+            last_register_click_ == static_cast<int>(index) &&
+            now - last_register_click_time_ < std::chrono::milliseconds(400);
+        last_register_click_ = static_cast<int>(index);
+        last_register_click_time_ = now;
+        if (double_click) {
+            finish_register_edit(false);
+            memory_address_ = session_.machine().reg(index) & ~0xFU;
+            hover_memory_byte_ = -1;
+            status_ = "memory: 0x" + hex(memory_address_, 8);
+            last_register_click_ = -1;
+            return true;
+        }
         finish_memory_address_edit(true);
         begin_register_edit(static_cast<int>(index));
         return true;
@@ -2926,13 +3032,69 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         return true;
     }
     if (pc_cell_.contains(x, y)) {
+        const auto now = std::chrono::steady_clock::now();
+        const bool double_click =
+            last_register_click_ == 16 &&
+            now - last_register_click_time_ < std::chrono::milliseconds(400);
+        last_register_click_ = 16;
+        last_register_click_time_ = now;
+        if (double_click) {
+            finish_register_edit(false);
+            memory_address_ = session_.machine().pc() & ~0xFU;
+            hover_memory_byte_ = -1;
+            status_ = "memory: 0x" + hex(memory_address_, 8);
+            last_register_click_ = -1;
+            return true;
+        }
         finish_memory_address_edit(true);
         begin_register_edit(16);
         return true;
     }
     if (sp_cell_.contains(x, y)) {
+        const auto now = std::chrono::steady_clock::now();
+        const bool double_click =
+            last_register_click_ == 17 &&
+            now - last_register_click_time_ < std::chrono::milliseconds(400);
+        last_register_click_ = 17;
+        last_register_click_time_ = now;
+        if (double_click) {
+            finish_register_edit(false);
+            memory_address_ = session_.machine().sp() & ~0xFU;
+            hover_memory_byte_ = -1;
+            status_ = "memory: 0x" + hex(memory_address_, 8);
+            last_register_click_ = -1;
+            return true;
+        }
         finish_memory_address_edit(true);
         begin_register_edit(17);
+        return true;
+    }
+    const auto now = std::chrono::steady_clock::now();
+    for (std::size_t index = 0; index < var_hover_rows_.size(); ++index) {
+        const VarHoverRow& row = var_hover_rows_[index];
+        if (!row.row.contains(x, y)) continue;
+        if (row.header) {
+            if (row.name == "Locals") {
+                locals_expanded_ = !locals_expanded_;
+            } else if (row.name == "Globals") {
+                globals_expanded_ = !globals_expanded_;
+            }
+            last_variable_click_ = -1;
+            return true;
+        }
+        const bool double_click =
+            last_variable_click_ == static_cast<int>(index) &&
+            now - last_variable_click_time_ < std::chrono::milliseconds(400);
+        last_variable_click_ = static_cast<int>(index);
+        last_variable_click_time_ = now;
+        if (double_click) {
+            const bool pointer = row.type.find('*') != std::string::npos;
+            const std::uint32_t target = pointer ? row.value : row.address;
+            memory_address_ = target & ~0xFU;
+            hover_memory_byte_ = -1;
+            status_ = "memory: 0x" + hex(memory_address_, 8);
+            last_variable_click_ = -1;
+        }
         return true;
     }
     if (source_scroll_track_.contains(x, y)) source_follow_ = false;

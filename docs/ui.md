@@ -166,7 +166,12 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 - Click an FPR to open the decimal/scientific editor; hover an FPR for its
   signed decimal, scientific, and hex values. Use the FPR **DOUBLE / FLOAT**
   toggle to switch the active interpretation.
-- Hover a variable row for type/address/value details.
+- Hover a variable row for type/address/value details. The **VARIABLES** panel
+  separates **Locals** and **Globals**; click a section header to collapse it.
+  Pointers to known structs and array variables expand into indented children.
+- Double-click a variable row to inspect its address, or a pointer's target, in
+  the memory panel. Double-click a GPR, PC, or SP cell to send its value to the
+  memory panel; a single click still opens the register editor.
 - Click the memory **ADDR** field or label to edit the starting address; Enter
   commits and Escape cancels. **PTR** follows SP; **^** / **v** scroll by 16 bytes.
 - Use the mouse wheel over a panel to scroll it; click a scrollbar track to page.

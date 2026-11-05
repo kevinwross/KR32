@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 18:47 -08:00
+> **Last updated:** 2026-11-04 19:26 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1765,6 +1765,10 @@ Newest entries at the bottom. Use the local time zone.
       stopped, and `#line` markers preserve source line numbers after includes.
       The initrd parser now uses typed `initrd_header`/`initrd_entry` structures
       instead of raw offsets.
+- **2026-11-04 19:26 -08:00** — Debugger variable view: separate
+      collapsible Locals/Globals sections, automatic struct/array expansion,
+      pointer target inspection, and double-click register/PC/SP memory
+      navigation. C debug metadata now emits struct members and array types.
 
 ## 10. Updating this file
 

@@ -515,3 +515,45 @@ TEST_CASE("debug sessions expose and select thread snapshots") {
     session.select_thread(99);
     CHECK(session.selected_thread() == 2);
 }
+
+TEST_CASE("C debug info describes struct members and arrays") {
+    const container::Image image = compile_debug_image(
+        "struct pair { int left; int right; };\n"
+        "int main(void) {\n"
+        "    struct pair value;\n"
+        "    int items[4];\n"
+        "    value.left = 1;\n"
+        "    items[0] = 2;\n"
+        "    return value.left + items[0];\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    const debug::ClassInfo* pair = nullptr;
+    for (const debug::ClassInfo& klass : info.classes) {
+        if (klass.name == "struct:pair") {
+            pair = &klass;
+            break;
+        }
+    }
+    REQUIRE(pair != nullptr);
+    REQUIRE(pair->members.size() == 2);
+    CHECK(pair->members[0].name == "left");
+    CHECK(pair->members[0].offset == 0);
+    CHECK(pair->members[1].name == "right");
+    CHECK(pair->members[1].offset == 4);
+
+    bool found_struct = false;
+    bool found_array = false;
+    for (const debug::Variable& variable : info.variables) {
+        if (variable.name == "value" && variable.type == "struct:pair") {
+            found_struct = true;
+        }
+        if (variable.name == "items" && variable.type == "int[4]") {
+            found_array = true;
+        }
+    }
+    CHECK(found_struct);
+    CHECK(found_array);
+}

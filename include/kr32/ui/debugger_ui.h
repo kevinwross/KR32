@@ -1,5 +1,6 @@
 #pragma once
 
+#include <chrono>
 #include <map>
 #include <string>
 #include <vector>
@@ -236,9 +237,16 @@ private:
         std::uint32_t size = 0;
         bool local = false;
         bool ok = false;
+        bool header = false;
     };
     std::vector<VarHoverRow> var_hover_rows_;
     int hover_var_ = -1;
+    bool locals_expanded_ = true;
+    bool globals_expanded_ = true;
+    int last_variable_click_ = -1;
+    std::chrono::steady_clock::time_point last_variable_click_time_{};
+    int last_register_click_ = -1;
+    std::chrono::steady_clock::time_point last_register_click_time_{};
 
     struct ContextMenu {
         bool open = false;

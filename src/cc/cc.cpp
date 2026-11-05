@@ -1054,12 +1054,24 @@ private:
         case Type::Kind::Bool: return "_Bool";
         case Type::Kind::Float: return "float";
         case Type::Kind::Double: return "double";
-        case Type::Kind::Pointer: return "ptr";
-        case Type::Kind::Array: return "array";
+        case Type::Kind::Pointer: {
+            const TypePtr base = type->pointer_base.lock();
+            return base ? type_name(base) + " *" : "void *";
+        }
+        case Type::Kind::Array:
+            return type->base ? type_name(type->base) + "[" +
+                                    std::to_string(type->count) + "]"
+                              : "array";
         case Type::Kind::Struct: return "struct:" + type->tag;
         case Type::Kind::Union: return "union:" + type->tag;
         }
         return "int";
+    }
+
+    std::string debug_type_name(const TypePtr& type) const {
+        std::string name = type_name(type);
+        std::replace(name.begin(), name.end(), ' ', '_');
+        return name;
     }
 
     void debug_record(const std::string& record) {
@@ -1067,7 +1079,28 @@ private:
     }
 
     void debug_type(const TypePtr& type) {
-        debug_record("T " + type_name(type) + " " + std::to_string(type->size()));
+        if (type == nullptr) {
+            return;
+        }
+        const std::string name = debug_type_name(type);
+        if (!debug_types_.insert(name).second) {
+            return;
+        }
+        debug_record("T " + name + " " + std::to_string(type->size()));
+        if (type->kind == Type::Kind::Struct || type->kind == Type::Kind::Union) {
+            debug_record("C " + name + " " + std::to_string(type->size()) + " ");
+            for (const Member& member : type->members) {
+                debug_type(member.type);
+                debug_record("M " + name + " " + member.name + " " +
+                             std::to_string(member.offset) + " " +
+                             debug_type_name(member.type) + " " +
+                             std::to_string(member.type ? member.type->size() : 0));
+            }
+        } else if (type->kind == Type::Kind::Pointer) {
+            debug_type(type->pointer_base.lock());
+        } else if (type->kind == Type::Kind::Array) {
+            debug_type(type->base);
+        }
     }
 
     bool is_type_start() const {
@@ -1709,7 +1742,7 @@ private:
         }
         globals_.emplace(name, Variable{name, actual, 0, name, true});
         debug_type(actual);
-        debug_record("G " + name + " " + name + " " + type_name(actual) + " " +
+        debug_record("G " + name + " " + name + " " + debug_type_name(actual) + " " +
                      std::to_string(actual->size()));
     }
 
@@ -1820,7 +1853,8 @@ private:
             }
             debug_type(parameters[index]);
             debug_record("V " + name + " " + parameter_names[index] + " " +
-                         std::to_string(offset) + " " + type_name(parameters[index]) + " " +
+                         std::to_string(offset) + " " +
+                         debug_type_name(parameters[index]) + " " +
                          std::to_string(parameters[index]->size()));
         }
 
@@ -1843,7 +1877,7 @@ private:
         emit("    RET");
         emit(".Lend_" + name + ":");
         debug_record("F " + name + " " + name + " .Lend_" + name + " " +
-                     std::to_string(frame_size_) + " " + type_name(result_type));
+                     std::to_string(frame_size_) + " " + debug_type_name(result_type));
         replace_all("__FRAME_" + name + "__", std::to_string(frame_size_));
     }
 
@@ -2200,7 +2234,7 @@ private:
         locals_[name] = Variable{name, actual, offset, "", false};
         debug_type(actual);
         debug_record("V " + current_function_ + " " + name + " " + std::to_string(offset) +
-                     " " + type_name(actual) + " " + std::to_string(actual->size()));
+                     " " + debug_type_name(actual) + " " + std::to_string(actual->size()));
         if (match("=")) {
             if (actual->kind == Type::Kind::Array ||
                 actual->kind == Type::Kind::Struct ||
@@ -3807,6 +3841,7 @@ private:
     TypePtr current_result_type_;
     std::string return_label_;
     std::string debug_;
+    std::set<std::string> debug_types_;
     std::string* output_ = nullptr;
     int frame_size_ = 0;
     int line_counter_ = 0;
