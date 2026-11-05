@@ -43,6 +43,7 @@ public:
 
     [[nodiscard]] bool headless(const std::string& ppm_path);
     void open_settings();
+    void update();
 
 private:
     struct Layout {
@@ -70,6 +71,7 @@ private:
     void toggle_source_breakpoint(int line);
     void toggle_instruction_breakpoint(std::uint32_t address);
     void prepare_initial_stop();
+    void stop_continuous(bool reached_target, const core::StepResult& result);
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);
     void draw_toolbar(Canvas& canvas);
     void draw_source(Canvas& canvas, Rect rect);
@@ -225,6 +227,10 @@ private:
     std::string settings_run_limit_text_ = "5000000";
     std::uint64_t settings_run_limit_ = 5'000'000;
     std::string settings_error_;
+    bool continuous_run_ = false;
+    bool continuous_has_target_ = false;
+    bool continuous_owned_breakpoint_ = false;
+    std::uint32_t continuous_target_ = 0;
     int hover_settings_control_ = -1;
     bool os_mode_ = false;
     std::string bios_path_;

@@ -431,6 +431,14 @@ void DebuggerUI::save_settings() {
 }
 
 void DebuggerUI::open_settings() {
+    if (continuous_run_) {
+        continuous_run_ = false;
+        if (continuous_owned_breakpoint_) {
+            session_.clear_breakpoint(continuous_target_);
+        }
+        continuous_has_target_ = false;
+        continuous_owned_breakpoint_ = false;
+    }
     settings_open_ = true;
     settings_args_focused_ = false;
     settings_run_focused_ = false;
@@ -671,6 +679,9 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     asm_scroll_ = 0;
     array_expanded_.clear();
     array_pages_.clear();
+    continuous_run_ = false;
+    continuous_has_target_ = false;
+    continuous_owned_breakpoint_ = false;
     error_.clear();
     if (settings_stop_at_main_) {
         prepare_initial_stop();
@@ -802,6 +813,9 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     asm_scroll_ = 0;
     array_expanded_.clear();
     array_pages_.clear();
+    continuous_run_ = false;
+    continuous_has_target_ = false;
+    continuous_owned_breakpoint_ = false;
     error_.clear();
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
@@ -861,12 +875,59 @@ void DebuggerUI::run() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) {
+        continuous_run_ = false;
+        if (continuous_owned_breakpoint_) {
+            session_.clear_breakpoint(continuous_target_);
+        }
+        continuous_has_target_ = false;
+        continuous_owned_breakpoint_ = false;
+        status_ = "paused at " + hex(session_.machine().pc(), 8);
+        return;
+    }
     const std::uint64_t run_limit = settings_run_limit_;
+    if (run_limit == 0) {
+        continuous_run_ = true;
+        continuous_has_target_ = false;
+        continuous_owned_breakpoint_ = false;
+        continuous_target_ = 0;
+        status_ = "running without an instruction limit; press Run to pause";
+        return;
+    }
     const core::StepResult result = session_.run(run_limit);
     set_status_from_result(result);
-    if (run_limit != 0 && result.kind == core::StepResult::Kind::Retired &&
-        !session_.at_breakpoint()) {
+    if (result.kind == core::StepResult::Kind::Retired && !session_.at_breakpoint()) {
         status_ = "run step limit reached; press Run to continue";
+    }
+}
+
+void DebuggerUI::update() {
+    if (!continuous_run_) {
+        return;
+    }
+    constexpr std::uint64_t kSlice = 100'000;
+    const core::StepResult result = session_.run(kSlice);
+    const bool reached_target =
+        continuous_has_target_ && session_.machine().pc() == continuous_target_;
+    if (session_.at_breakpoint() || reached_target ||
+        result.kind == core::StepResult::Kind::Halted ||
+        result.kind == core::StepResult::Kind::Raised) {
+        stop_continuous(reached_target, result);
+    }
+}
+
+void DebuggerUI::stop_continuous(bool reached_target,
+                                 const core::StepResult& result) {
+    continuous_run_ = false;
+    if (continuous_owned_breakpoint_) {
+        session_.clear_breakpoint(continuous_target_);
+    }
+    continuous_has_target_ = false;
+    continuous_owned_breakpoint_ = false;
+    if (reached_target) {
+        status_ = "stopped at " + hex(continuous_target_, 8);
+    } else {
+        set_status_from_result(result);
     }
 }
 
@@ -874,6 +935,7 @@ void DebuggerUI::step() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) run();
     set_status_from_result(session_.step());
 }
 
@@ -881,6 +943,7 @@ void DebuggerUI::step_over() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) run();
     set_status_from_result(session_.step_over());
 }
 
@@ -888,6 +951,7 @@ void DebuggerUI::step_out() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) run();
     set_status_from_result(session_.step_out());
 }
 
@@ -895,6 +959,7 @@ void DebuggerUI::step_line_in() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) run();
     set_status_from_result(session_.step_line_in());
 }
 
@@ -902,6 +967,7 @@ void DebuggerUI::step_line_over() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) run();
     set_status_from_result(session_.step_line_over());
 }
 
@@ -909,6 +975,7 @@ void DebuggerUI::step_line_out() {
     if (!loaded_) {
         return;
     }
+    if (continuous_run_) run();
     set_status_from_result(session_.step_line_out());
 }
 
@@ -2680,6 +2747,20 @@ void DebuggerUI::run_to(std::uint32_t address) {
         session_.set_breakpoint(address);
     }
     const std::uint64_t run_limit = settings_run_limit_;
+    if (run_limit == 0) {
+        if (continuous_run_) {
+            continuous_run_ = false;
+            if (continuous_owned_breakpoint_) {
+                session_.clear_breakpoint(continuous_target_);
+            }
+        }
+        continuous_run_ = true;
+        continuous_has_target_ = true;
+        continuous_owned_breakpoint_ = owned;
+        continuous_target_ = address;
+        status_ = "running to " + hex(address, 8) + "; press Run to pause";
+        return;
+    }
     const core::StepResult result = session_.run(run_limit);
     set_status_from_result(result);
     if (owned) {

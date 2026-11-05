@@ -157,6 +157,7 @@ int run(int argc, char** argv) {
                 running = false;
             }
         }
+        debugger.update();
         debugger.render(*canvas);
         window.present(*canvas);
         std::this_thread::sleep_for(std::chrono::milliseconds(16));

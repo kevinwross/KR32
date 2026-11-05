@@ -144,7 +144,8 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   breakpoint when it stops. Existing user breakpoints are preserved.
 - Run and Run-to honor the instruction limit configured in Settings. If the
   limit is reached before the target or halt, the status line says so; press
-  Run again to continue. A limit of zero runs without an instruction cap.
+  Run again to continue. A limit of zero runs without an instruction cap;
+  execution is sliced so the UI remains responsive, and Run pauses it.
 - Hovering a gutter row highlights it.
 - Hovering a disassembly mnemonic highlights it and shows an instruction
   description tooltip.
