@@ -444,6 +444,17 @@ std::string format_scalar_value(const std::string& type,
     return "0x" + hex(value, 8);
 }
 
+int console_scroll_after_output(int scroll, int previous_line_count,
+                                int line_count, int visible) {
+    visible = std::max(1, visible);
+    const int previous_max = std::max(0, previous_line_count - visible);
+    const int max_scroll = std::max(0, line_count - visible);
+    if (scroll >= previous_max) {
+        return max_scroll;
+    }
+    return std::clamp(scroll, 0, max_scroll);
+}
+
 DebuggerUI::DebuggerUI() {
     load_settings();
 }
@@ -690,6 +701,8 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     if (!session_.load(image_, error)) {
         return false;
     }
+    console_scroll_ = 0;
+    console_line_count_ = 0;
     path_ = path;
     source_lines_.clear();
     source_cache_.clear();
@@ -852,6 +865,8 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     devices_.attach_machine(session_.machine());
     session_.machine().attach_devices(&devices_);
     serial_text_.clear();
+    console_scroll_ = 0;
+    console_line_count_ = 0;
     path_ = kernel_path;
     bios_path_ = bios_path;
     os_mode_ = true;
@@ -2801,14 +2816,18 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
         lines.push_back(line);
     }
     if (lines.empty()) {
+        console_scroll_ = 0;
+        console_line_count_ = 0;
         canvas.text(rect.x + 6, rect.y + 24, "(no console output)", kDim, FontRole::MonoSmall);
         draw_scrollbar(canvas, rect, 0, 0, 1, console_scroll_track_, console_scroll_thumb_);
         return;
     }
     const int row_height = 16;
     const int visible = std::max(1, (rect.height - 26) / row_height);
-    console_scroll_ =
-        std::clamp(console_scroll_, 0, std::max(0, static_cast<int>(lines.size()) - visible));
+    const int line_count = static_cast<int>(lines.size());
+    console_scroll_ = console_scroll_after_output(
+        console_scroll_, console_line_count_, line_count, visible);
+    console_line_count_ = line_count;
     for (int index = console_scroll_;
          index < static_cast<int>(lines.size()) && index < console_scroll_ + visible;
          ++index) {

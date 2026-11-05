@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 08:56 -08:00
+> **Last updated:** 2026-11-05 09:04 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1820,6 +1820,10 @@ Newest entries at the bottom. Use the local time zone.
       default construction of abstract base subobjects, and vptr setup for
       derived classes without user constructors. Added the example to CTest and
       the README command list.
+- **2026-11-05 09:04 -08:00** — Console output now auto-scrolls only when the
+      view is already at the bottom. Scrolling upward preserves the user's
+      position as new text arrives; returning to the bottom resumes following.
+      Added a pure scroll-policy helper and regression tests.
 
 ## 10. Updating this file
 

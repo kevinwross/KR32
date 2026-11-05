@@ -153,6 +153,7 @@ private:
     int variables_scroll_ = 0;
     int stack_scroll_ = 0;
     int console_scroll_ = 0;
+    int console_line_count_ = 0;
     bool scroll_dragging_ = false;
     int scroll_drag_panel_ = -1;
     int scroll_drag_last_y_ = 0;
@@ -306,6 +307,13 @@ private:
 [[nodiscard]] std::string format_scalar_value(const std::string& type,
                                               std::uint32_t value,
                                               bool available);
+
+// Keeps the console pinned to the newest line when it was already at the
+// bottom, while preserving the offset when the user has scrolled upward.
+[[nodiscard]] int console_scroll_after_output(int scroll,
+                                              int previous_line_count,
+                                              int line_count,
+                                              int visible);
 
 // Renders one frame without opening a window. Returns the canvas hash and
 // optionally writes a PPM screenshot.

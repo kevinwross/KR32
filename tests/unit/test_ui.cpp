@@ -132,6 +132,15 @@ TEST_CASE("debugger variable values format floats and scalar types") {
     CHECK(ui::format_scalar_value("int", 42, true) == "0x0000002A");
 }
 
+TEST_CASE("console output follows only when the view is at the bottom") {
+    CHECK(ui::console_scroll_after_output(90, 100, 105, 10) == 95);
+    CHECK(ui::console_scroll_after_output(50, 100, 105, 10) == 50);
+    CHECK(ui::console_scroll_after_output(0, 5, 6, 10) == 0);
+    CHECK(ui::console_scroll_after_output(2, 3, 5, 1) == 4);
+    CHECK(ui::console_scroll_after_output(90, 100, 5, 10) == 0);
+    CHECK(ui::console_scroll_after_output(50, 100, 5, 10) == 0);
+}
+
 TEST_CASE("instruction and addressing help describe KR32 operands") {
     CHECK(ui::instruction_help("PUSH").find("SP") != std::string::npos);
     CHECK(ui::instruction_help("LOAD8S").find("sign") != std::string::npos);

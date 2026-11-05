@@ -109,6 +109,8 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 
 - Source, disassembly, cores, variables, call stack, and console panels have
   vertical scrollbars when their content exceeds the visible area.
+- The console follows new output only while its view is already at the bottom.
+  Scrolling upward detaches the view; returning to the bottom resumes following.
 - Mouse-wheel scrolling works over every panel; clicking above or below a
   scrollbar thumb pages the corresponding panel. Source auto-follow suspends
   after manual scrolling and resumes on the next step/run.
