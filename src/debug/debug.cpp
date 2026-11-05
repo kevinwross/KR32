@@ -428,7 +428,9 @@ core::StepResult Session::run(std::uint64_t max_steps) {
     core::StepResult result;
     const std::uint32_t initial_pc = machine_.pc();
     bool skipped_initial = breakpoints_.find(initial_pc) == breakpoints_.end();
-    for (std::uint64_t step_index = 0; step_index < max_steps; ++step_index) {
+    const bool unlimited = max_steps == 0;
+    std::uint64_t step_index = 0;
+    while (unlimited || step_index < max_steps) {
         if (at_breakpoint()) {
             if (!skipped_initial) {
                 skipped_initial = true;
@@ -437,6 +439,7 @@ core::StepResult Session::run(std::uint64_t max_steps) {
                     result.kind == core::StepResult::Kind::Raised) {
                     return result;
                 }
+                ++step_index;
                 continue;
             }
             return result;
@@ -446,6 +449,7 @@ core::StepResult Session::run(std::uint64_t max_steps) {
             result.kind == core::StepResult::Kind::Raised) {
             return result;
         }
+        ++step_index;
     }
     return result;
 }

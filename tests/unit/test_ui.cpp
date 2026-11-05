@@ -71,8 +71,8 @@ TEST_CASE("the settings dialog renders and closes without a loaded image") {
     debugger.render(settings);
     CHECK(settings.hash() != baseline_hash);
 
-    // The modal is centered in 800x600 with a 560x360 body; click its X.
-    CHECK(debugger.click(120 + 560 - 20, 120 + 18, 800, 600));
+    // The modal is centered in 800x600 with a 560x440 body; click its X.
+    CHECK(debugger.click(120 + 560 - 20, 80 + 18, 800, 600));
     ui::Canvas closed(800, 600);
     debugger.render(closed);
     CHECK(closed.hash() == baseline_hash);

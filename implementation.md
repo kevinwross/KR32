@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 20:44 -08:00
+> **Last updated:** 2026-11-04 21:12 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1781,6 +1781,9 @@ Newest entries at the bottom. Use the local time zone.
       the bitmap allocator; `sys_write` translates user virtual addresses with
       `user_virt_to_phys`; user stack remains an intentionally reserved
       identity-mapped physical window.
+- **2026-11-04 21:12 -08:00** — Configurable debugger run budget in Settings;
+      zero means unlimited. The debugger reports an exhausted run budget instead
+      of silently appearing to stop at a breakpoint.
 
 ## 10. Updating this file
 

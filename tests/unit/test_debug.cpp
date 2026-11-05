@@ -516,6 +516,19 @@ TEST_CASE("debug sessions expose and select thread snapshots") {
     CHECK(session.selected_thread() == 2);
 }
 
+TEST_CASE("debug sessions treat a zero step limit as unlimited") {
+    const container::Image image = compile_debug_image(
+        "int main(void) {\n"
+        "    return 0;\n"
+        "}\n");
+    debug::Session session;
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const core::StepResult result = session.run(0);
+    CHECK(result.kind == core::StepResult::Kind::Halted);
+    CHECK(session.machine().exit_code() == 0);
+}
+
 TEST_CASE("C debug info describes struct members and arrays") {
     const container::Image image = compile_debug_image(
         "struct pair { int left; int right; };\n"

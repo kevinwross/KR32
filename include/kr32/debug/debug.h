@@ -147,6 +147,7 @@ public:
     [[nodiscard]] core::StepResult step_line_in();
     [[nodiscard]] core::StepResult step_line_over();
     [[nodiscard]] core::StepResult step_line_out();
+    // max_steps == 0 means no instruction limit.
     [[nodiscard]] core::StepResult run(std::uint64_t max_steps = 1'000'000);
     [[nodiscard]] core::StepResult step_over();
     [[nodiscard]] core::StepResult step_out();

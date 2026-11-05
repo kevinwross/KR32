@@ -12,6 +12,7 @@
 #include <functional>
 #include <iomanip>
 #include <iterator>
+#include <limits>
 #include <sstream>
 #include <string>
 #include <string_view>
@@ -334,6 +335,25 @@ bool has_cxx_extension(const std::string& path) {
     return extension == "cpp" || extension == "cc" || extension == "cxx";
 }
 
+bool parse_run_limit(const std::string& text, std::uint64_t& value) {
+    if (text.empty()) {
+        return false;
+    }
+    std::uint64_t result = 0;
+    for (const char character : text) {
+        if (character < '0' || character > '9') {
+            return false;
+        }
+        const std::uint64_t digit = static_cast<std::uint64_t>(character - '0');
+        if (result > (std::numeric_limits<std::uint64_t>::max() - digit) / 10) {
+            return false;
+        }
+        result = result * 10 + digit;
+    }
+    value = result;
+    return true;
+}
+
 } // namespace
 
 std::string DebuggerUI::format_fpr(std::uint64_t value, bool scientific) const {
@@ -387,6 +407,11 @@ void DebuggerUI::load_settings() {
             settings_stop_at_main_ = value != "0";
         } else if (key == "listing") {
             settings_write_listing_ = value != "0";
+        } else if (key == "run_limit") {
+            std::uint64_t limit = 0;
+            if (parse_run_limit(value, limit)) {
+                settings_run_limit_ = limit;
+            }
         }
     }
 }
@@ -402,11 +427,14 @@ void DebuggerUI::save_settings() {
     output << "arguments=" << settings_arguments_ << '\n';
     output << "stop_at_main=" << (settings_stop_at_main_ ? 1 : 0) << '\n';
     output << "listing=" << (settings_write_listing_ ? 1 : 0) << '\n';
+    output << "run_limit=" << settings_run_limit_ << '\n';
 }
 
 void DebuggerUI::open_settings() {
     settings_open_ = true;
     settings_args_focused_ = false;
+    settings_run_focused_ = false;
+    settings_run_limit_text_ = std::to_string(settings_run_limit_);
     settings_error_.clear();
     hover_settings_control_ = -1;
 }
@@ -417,6 +445,7 @@ void DebuggerUI::close_settings(bool save) {
     }
     settings_open_ = false;
     settings_args_focused_ = false;
+    settings_run_focused_ = false;
     settings_error_.clear();
     hover_settings_control_ = -1;
 }
@@ -427,6 +456,12 @@ void DebuggerUI::apply_settings() {
         settings_error_ = parsed.error;
         return;
     }
+    std::uint64_t run_limit = 0;
+    if (!parse_run_limit(settings_run_limit_text_, run_limit)) {
+        settings_error_ = "run limit must be a decimal instruction count";
+        return;
+    }
+    settings_run_limit_ = run_limit;
     settings_error_.clear();
     save_settings();
     if (!loaded_ || path_.empty()) {
@@ -448,14 +483,15 @@ void DebuggerUI::apply_settings() {
 
 void DebuggerUI::draw_settings(Canvas& canvas) {
     const int width = 560;
-    const int height = 360;
+    const int height = 440;
     const int x = (canvas.width() - width) / 2;
     const int y = (canvas.height() - height) / 2;
     settings_modal_ = Rect{x, y, width, height};
     settings_close_ = Rect{x + width - 32, y + 8, 24, 22};
     settings_args_rect_ = Rect{x + 18, y + 92, width - 36, 26};
-    settings_stop_box_ = Rect{x + 18, y + 142, 16, 16};
-    settings_listing_box_ = Rect{x + 18, y + 174, 16, 16};
+    settings_run_rect_ = Rect{x + 18, y + 152, width - 36, 26};
+    settings_stop_box_ = Rect{x + 18, y + 208, 16, 16};
+    settings_listing_box_ = Rect{x + 18, y + 240, 16, 16};
     settings_apply_rect_ = Rect{x + width - 200, y + height - 42, 112, 26};
     settings_cancel_rect_ = Rect{x + width - 80, y + height - 42, 62, 26};
 
@@ -484,6 +520,23 @@ void DebuggerUI::draw_settings(Canvas& canvas) {
                 "Arguments are stored as --arg values for the next Load/Restart.",
                 kDim, FontRole::MonoSmall);
 
+    canvas.text(x + 18, y + 136, "Run instruction limit (0 = unlimited)",
+                kText, FontRole::MonoSmall);
+    canvas.fill(settings_run_rect_,
+                settings_run_focused_ ? Color{34, 46, 58, 255}
+                                      : (hover_settings_control_ == 6
+                                             ? Color{42, 58, 74, 255}
+                                             : kPanelAlt));
+    canvas.frame(settings_run_rect_,
+                 settings_run_focused_ || hover_settings_control_ == 6 ? kAccent
+                                                                       : kBorder);
+    canvas.text(settings_run_rect_.x + 6, settings_run_rect_.y + 5,
+                settings_run_limit_text_ + (settings_run_focused_ ? "_" : ""),
+                kText, FontRole::MonoSmall);
+    canvas.text(x + 18, y + 184,
+                "Applied to Run/Run To; zero removes the instruction cap.",
+                kDim, FontRole::MonoSmall);
+
     const auto checkbox = [&](Rect box, bool enabled, int id, const char* label,
                               int label_y) {
         canvas.fill(box, enabled ? kAccent : kPanelAlt);
@@ -495,25 +548,25 @@ void DebuggerUI::draw_settings(Canvas& canvas) {
         canvas.text(box.x + 24, label_y, label, kText, FontRole::MonoSmall);
     };
     checkbox(settings_stop_box_, settings_stop_at_main_, 1,
-             "Stop at main after load", y + 140);
+             "Stop at main after load", y + 206);
     checkbox(settings_listing_box_, settings_write_listing_, 2,
-             "Write assembler listing (.lst) beside the source", y + 172);
+             "Write assembler listing (.lst) beside the source", y + 238);
 
     if (!settings_error_.empty()) {
-        canvas.text(x + 18, y + 212, settings_error_, kBad, FontRole::MonoSmall);
+        canvas.text(x + 18, y + 276, settings_error_, kBad, FontRole::MonoSmall);
     } else {
-        canvas.text(x + 18, y + 212,
+        canvas.text(x + 18, y + 276,
                     "Settings are saved in the user configuration directory.",
                     kDim, FontRole::MonoSmall);
     }
-    canvas.text(x + 18, y + 236,
+    canvas.text(x + 18, y + 300,
                 "Apply rebuilds the current source and applies arguments.",
                 kDim, FontRole::MonoSmall);
-    canvas.text(x + 18, y + 258,
-                "Other useful future controls: run-step budget, guest filesystem",
+    canvas.text(x + 18, y + 324,
+                "Other useful future controls: guest filesystem root/quota,",
                 kDim, FontRole::MonoSmall);
-    canvas.text(x + 18, y + 274,
-                "root/quota, read-only mode, and console echo.", kDim,
+    canvas.text(x + 18, y + 348,
+                "read-only mode, and console echo.", kDim,
                 FontRole::MonoSmall);
 
     canvas.fill(settings_apply_rect_,
@@ -808,8 +861,13 @@ void DebuggerUI::run() {
     if (!loaded_) {
         return;
     }
-    const core::StepResult result = session_.run(200000);
+    const std::uint64_t run_limit = settings_run_limit_;
+    const core::StepResult result = session_.run(run_limit);
     set_status_from_result(result);
+    if (run_limit != 0 && result.kind == core::StepResult::Kind::Retired &&
+        !session_.at_breakpoint()) {
+        status_ = "run step limit reached; press Run to continue";
+    }
 }
 
 void DebuggerUI::step() {
@@ -2621,12 +2679,17 @@ void DebuggerUI::run_to(std::uint32_t address) {
     if (owned) {
         session_.set_breakpoint(address);
     }
-    set_status_from_result(session_.run(200000));
+    const std::uint64_t run_limit = settings_run_limit_;
+    const core::StepResult result = session_.run(run_limit);
+    set_status_from_result(result);
     if (owned) {
         session_.clear_breakpoint(address);
     }
     if (session_.machine().pc() == address) {
         status_ = "stopped at " + hex(address, 8);
+    } else if (run_limit != 0 && result.kind == core::StepResult::Kind::Retired &&
+               !session_.at_breakpoint()) {
+        status_ = "run step limit before target " + hex(address, 8);
     }
 }
 
@@ -2825,6 +2888,7 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
         hover_settings_control_ = -1;
         if (settings_close_.contains(x, y)) hover_settings_control_ = 5;
         else if (settings_args_rect_.contains(x, y)) hover_settings_control_ = 0;
+        else if (settings_run_rect_.contains(x, y)) hover_settings_control_ = 6;
         else if (settings_stop_box_.contains(x, y)) hover_settings_control_ = 1;
         else if (settings_listing_box_.contains(x, y)) hover_settings_control_ = 2;
         else if (settings_apply_rect_.contains(x, y)) hover_settings_control_ = 3;
@@ -2990,9 +3054,16 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         }
         if (settings_args_rect_.contains(x, y)) {
             settings_args_focused_ = true;
+            settings_run_focused_ = false;
+            return true;
+        }
+        if (settings_run_rect_.contains(x, y)) {
+            settings_args_focused_ = false;
+            settings_run_focused_ = true;
             return true;
         }
         settings_args_focused_ = false;
+        settings_run_focused_ = false;
         if (settings_stop_box_.contains(x, y)) {
             settings_stop_at_main_ = !settings_stop_at_main_;
             save_settings();
@@ -3375,6 +3446,20 @@ bool DebuggerUI::key(int key_value, bool shift, bool control) {
             }
             if (key_value >= 32 && key_value <= 126) {
                 settings_arguments_.push_back(static_cast<char>(key_value));
+                settings_error_.clear();
+                return true;
+            }
+        }
+        if (settings_run_focused_) {
+            if (key_value == kr32::platform::key::Backspace) {
+                if (!settings_run_limit_text_.empty()) {
+                    settings_run_limit_text_.pop_back();
+                }
+                settings_error_.clear();
+                return true;
+            }
+            if (key_value >= '0' && key_value <= '9') {
+                settings_run_limit_text_.push_back(static_cast<char>(key_value));
                 settings_error_.clear();
                 return true;
             }

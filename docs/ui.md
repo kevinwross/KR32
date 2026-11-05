@@ -94,6 +94,8 @@ The toolbar gear at the upper right opens the settings dialog. It provides:
   `sys_argc`/`sys_arg`.
   Arguments use Windows-style quoting; backslashes are literal unless they
   precede a double quote.
+- **Run instruction limit**; zero means unlimited. The value applies to Run and
+  Run-to and is saved in the settings file.
 - **Stop at main after load**; disable it to pause at the image entry instead.
 - **Write assembler listing (.lst)** beside the compiled C/C++ source.
 
@@ -140,6 +142,9 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   **Toggle breakpoint** and **Run to line N** / **Run to 0xADDR**.
 - Run-to uses a temporary breakpoint, runs the CPU, and removes the temporary
   breakpoint when it stops. Existing user breakpoints are preserved.
+- Run and Run-to honor the instruction limit configured in Settings. If the
+  limit is reached before the target or halt, the status line says so; press
+  Run again to continue. A limit of zero runs without an instruction cap.
 - Hovering a gutter row highlights it.
 - Hovering a disassembly mnemonic highlights it and shows an instruction
   description tooltip.
@@ -194,7 +199,6 @@ canvas, and GUI targets and keeps the headless test suite green.
 
 ## Current limits
 
-- There is no native file dialog, settings panel, or guest-argument editor yet;
-  those are reserved for the M7 host services.
+- There is no native file dialog yet; loading uses the toolbar Load action.
 - "Break" is expressed through breakpoints; a cooperative pause of a running
   guest is not implemented.
