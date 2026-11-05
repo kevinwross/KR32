@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 20:23 -08:00
+> **Last updated:** 2026-11-04 20:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1776,6 +1776,11 @@ Newest entries at the bottom. Use the local time zone.
       and the page text/right arrow advances; paging reports its new page in the
       status line. The previous left-half/right-half split made a click on the
       page number a no-op on page 1.
+- **2026-11-04 20:44 -08:00** — Kernel address-space cleanup: `mem_phys_t`/
+      `mem_virt_t` and physical-to-virtual helpers; user code frames come from
+      the bitmap allocator; `sys_write` translates user virtual addresses with
+      `user_virt_to_phys`; user stack remains an intentionally reserved
+      identity-mapped physical window.
 
 ## 10. Updating this file
 

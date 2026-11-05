@@ -302,9 +302,10 @@ Acceptance:
 
 Tasks:
 
-- [x] Implement bitmap physical-page allocator; reserve kernel, BootInfo, page
-      tables, vectors, guard, framebuffer, MMIO, and ROM.
+- [x] Implement bitmap physical-page allocator; reserve low 4 MiB and the
+      identity-mapped user-stack window.
 - [x] Implement bump `kmalloc`/`kfree` over the kernel heap.
+- [x] Allocate user code frames from the bitmap and map them RX.
 - [x] Build user address space at `0x0040_0000`.
 - [x] Map user stack top `0x07F0_0000` with guard `0x07E0_0000`.
 - [x] Enforce W^X page permissions.
@@ -354,8 +355,8 @@ M4 deferred follow-ups:
 
 - `brk` currently returns the existing break without growing user data pages;
 - the process-table-full `-EAGAIN` regression test is not yet automated;
-- the bitmap allocator exists and reports `mem` statistics, but the user image
-  still uses the static M4 page-table windows.
+- user code frames are allocated from the bitmap, but the initial user stack
+  still uses a fixed identity-mapped physical window.
 
 ## 6. Test plan
 

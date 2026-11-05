@@ -1,6 +1,9 @@
 #include "console.h"
+#include "memory.h"
+#include "user_memory.h"
 
 void sys_exit(int status) {
+    // Kernel scratch page, identity-mapped low memory.
     unsigned int *result = (unsigned int *)0x0006F000;
     *result = (unsigned int)status;
 }
@@ -12,13 +15,18 @@ int sys_write(int descriptor, const char *buffer, int length) {
     if (length < 0) {
         return -22; // EINVAL
     }
-    const unsigned int address = (unsigned int)buffer;
-    if (address < 0x00400000 || address >= 0x07F00000) {
+    const mem_virt_t address = (mem_virt_t)buffer;
+    if (address < USER_CODE_VA || address >= USER_STACK_TOP_VA) {
         return -14; // EFAULT
     }
     int index = 0;
     while (index < length) {
-        console_putc(buffer[index]);
+        const mem_virt_t current = address + (mem_virt_t)index;
+        const mem_phys_t physical = user_virt_to_phys(current);
+        if (physical == MEM_PHYS_NONE) {
+            return -14; // EFAULT
+        }
+        console_putc(*(const char *)mem_phys_to_virt(physical));
         ++index;
     }
     return length;

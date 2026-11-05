@@ -9,8 +9,13 @@ notes:
 
 - BootInfo is written by the host loader and carries the initrd range read from
   `kernel.meta`.
-- User page tables use static M4 windows at `0x70000`/`0x71000`; a bitmap
-  allocator and bump heap exist for later dynamic mappings.
+- User page tables use static M4 windows at `0x70000`/`0x71000`; user code
+  frames come from the bitmap allocator, while the initial user stack remains
+  an identity-mapped physical window. The bump heap remains in low memory.
+- `memory.h` distinguishes `mem_phys_t` from `mem_virt_t`; the low-memory
+  identity mapping is centralized in `mem_phys_to_virt`/`mem_virt_to_phys`.
+  Page tables require physical frames (`PTBR`, PDEs, PTEs), while user pointers
+  are translated through the current page directory by `user_virt_to_phys`.
 - The process table is a fixed 256-entry array.
 - Syscall vectors 64-69 are installed (exit, write, read, yield, getpid, brk).
 - User faults terminate the process with status 139 instead of panicking the
@@ -324,9 +329,10 @@ the guest; F-keys remain debugger shortcuts.
 ```
 
 The first user image is a flat binary copied from an embedded initrd blob in the
-kernel image. It contains no relocations or dynamic loader. The user heap starts
-after the image and must stop before the stack guard. The image is capped at
-16 MiB.
+kernel image. It contains no relocations or dynamic loader. Code frames are
+allocated from the physical bitmap, copied through a temporary writable user
+mapping, then made RX before entry. The user heap starts after the image and
+must stop before the stack guard. The image is capped at 16 MiB.
 
 User mappings follow W^X:
 
@@ -340,14 +346,17 @@ stack            RW, NX
 The kernel low-memory window stays supervisor-only. User code cannot execute
 from the heap or stack.
 
-The physical page allocator is a bitmap with one bit per 4 KiB page. Kernel,
-page-table, BootInfo, framebuffer, MMIO, ROM, and stack-guard pages are reserved
-before any user page is allocated.
+The physical page allocator is a bitmap with one bit per 4 KiB page. Low 4 MiB
+(kernel, page tables, BootInfo, vectors, MMIO/ROM windows, and heap) and the
+identity-mapped user-stack window are reserved before any user code frame is
+allocated.
 
 The user runtime is OS-specific: a small `crt0` calls `main`, and syscall
 wrappers use vectors `64+`. Host vectors `32..50` are not part of this runtime.
 The first `crt0` only needs `exit`, `write`, `read`, `yield`, `getpid`, and
-`brk`.
+`brk`. `sys_write` treats its buffer as a user virtual address and translates
+each page through `user_virt_to_phys`; it never dereferences a raw user pointer
+as though it were a kernel address.
 
 The initrd uses a simple header table:
 
