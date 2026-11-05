@@ -111,6 +111,7 @@ kr32 build examples/binarytree.c -o binarytree-c.k32 --run
 kr32 cxx examples/hello.cpp -S -o hello-cxx.s
 kr32 build examples/hello.cpp -o hello-cxx.k32 --run
 kr32 build examples/cxx_libc.cpp -o cxx-libc.k32 --run
+kr32 build examples/matrix.cpp -o build/matrix-cxx.k32 --run
 kr32 gui examples/libc-test.c
 kr32 os
 kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin

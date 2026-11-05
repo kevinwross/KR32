@@ -98,6 +98,12 @@ add_test(NAME run_cxx_libc
 set_tests_properties(run_cxx_libc PROPERTIES
     PASS_REGULAR_EXPRESSION "C\\+\\+ via C libc: shared libc")
 
+add_test(NAME run_cxx_matrix
+    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/matrix.cpp --run
+            -o ${CMAKE_BINARY_DIR}/matrix-cxx.k32)
+set_tests_properties(run_cxx_matrix PROPERTIES
+    PASS_REGULAR_EXPRESSION "HALTED exit=42")
+
 add_test(NAME run_cxx_tls
     COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/cxx_tls.cpp --run
             -o ${CMAKE_BINARY_DIR}/cxx-tls.k32)
