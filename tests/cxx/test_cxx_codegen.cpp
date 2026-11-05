@@ -532,6 +532,27 @@ TEST_CASE("abstract classes cannot be instantiated") {
     CHECK(result.diagnostics.front().message.find("abstract") != std::string::npos);
 }
 
+TEST_CASE("derived classes override pure virtuals without the override keyword") {
+    const ProgramResult program = compile_and_run(
+        "class Base {\n"
+        "public:\n"
+        "    Base() { }\n"
+        "    virtual int value() = 0;\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    int value() { return 42; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Derived object;\n"
+        "    Base* pointer = &object;\n"
+        "    return pointer->value();\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
 TEST_CASE("matrix intrinsics lower to tile instructions") {
     const ProgramResult product = compile_and_run(
         "#include <kr32/matrix.hpp>\n"

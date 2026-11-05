@@ -1490,12 +1490,14 @@ private:
         }
         for (auto& entry : info.methods) {
             for (Function* function : entry.second) {
-                if (!function->is_virtual || function->is_constructor ||
-                    function->is_destructor) {
+                const auto slot = info.virtual_slots.find(function->member_name);
+                const bool overrides = slot != info.virtual_slots.end();
+                if ((!function->is_virtual && !overrides) ||
+                    function->is_constructor || function->is_destructor) {
                     continue;
                 }
-                const auto slot = info.virtual_slots.find(function->member_name);
-                if (slot != info.virtual_slots.end()) {
+                function->is_virtual = true;
+                if (overrides) {
                     info.vtable[static_cast<std::size_t>(slot->second)] = function;
                     function->vtable_index = slot->second;
                 } else {
@@ -3370,7 +3372,7 @@ private:
     void construct_default_subobjects(ClassInfo& info, int address_temp) {
         const std::vector<ExprPtr> empty;
         if (info.base != nullptr) {
-            construct_object_at(info.base, address_temp, empty);
+            construct_object_at(info.base, address_temp, empty, "", true);
         }
         for (const MemberInfo& member : info.members) {
             ClassInfo* member_class = class_of(member.type);
@@ -3391,7 +3393,8 @@ private:
 
     void construct_object_at(ClassInfo* info, int address_temp,
                              const std::vector<ExprPtr>& arguments,
-                             const std::string& landing = {}) {
+                             const std::string& landing = {},
+                             bool allow_abstract = false) {
         if (info->qualified == "std::thread" && !arguments.empty() &&
             arguments[0] && arguments[0]->kind == ExprKind::Lambda &&
             !arguments[0]->text.empty()) {
@@ -3417,7 +3420,7 @@ private:
             emit("    STORE R0, [R1]");
             return;
         }
-        if (info->abstract) {
+        if (info->abstract && !allow_abstract) {
             error(*info->decl, "cannot instantiate abstract class: " + info->qualified);
             return;
         }
@@ -3706,7 +3709,7 @@ private:
                     }
                 }
             } else if (info != nullptr) {
-                Function* constructor = find_constructor(info, 0);
+                Function* constructor = find_own_constructor(info, 0);
                 if (constructor != nullptr) {
                     const int index_temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -6338,45 +6341,55 @@ private:
         return nullptr;
     }
 
+    Function* find_own_constructor(ClassInfo* info, std::size_t argument_count) {
+        if (info == nullptr) {
+            return nullptr;
+        }
+        for (Function* constructor : info->constructors) {
+            if (constructor->parameters.size() == argument_count) {
+                return constructor;
+            }
+        }
+        return nullptr;
+    }
+
     Function* find_constructor_for_arguments(
         ClassInfo* info, const std::vector<ExprPtr>& arguments) {
         Function* best = nullptr;
         int best_score = -100000;
-        for (ClassInfo* current = info; current != nullptr; current = current->base) {
-            for (Function* constructor : current->constructors) {
-                if (constructor->parameters.size() != arguments.size()) {
-                    continue;
+        for (Function* constructor : info->constructors) {
+            if (constructor->parameters.size() != arguments.size()) {
+                continue;
+            }
+            int score = 0;
+            for (std::size_t index = 0; index < arguments.size(); ++index) {
+                const TypePtr parameter_raw =
+                    resolve_type(constructor->parameters[index]);
+                const TypePtr argument_raw =
+                    arguments[index] ? resolve_type(type_of(*arguments[index]))
+                                     : nullptr;
+                TypePtr parameter = parameter_raw;
+                TypePtr argument = argument_raw;
+                if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                                  parameter->kind == TypeKind::RValueRef)) {
+                    parameter = parameter->element;
                 }
-                int score = 0;
-                for (std::size_t index = 0; index < arguments.size(); ++index) {
-                    const TypePtr parameter_raw =
-                        resolve_type(constructor->parameters[index]);
-                    const TypePtr argument_raw =
-                        arguments[index] ? resolve_type(type_of(*arguments[index]))
-                                         : nullptr;
-                    TypePtr parameter = parameter_raw;
-                    TypePtr argument = argument_raw;
-                    if (parameter && (parameter->kind == TypeKind::LValueRef ||
-                                      parameter->kind == TypeKind::RValueRef)) {
-                        parameter = parameter->element;
-                    }
-                    if (argument && (argument->kind == TypeKind::LValueRef ||
-                                     argument->kind == TypeKind::RValueRef)) {
-                        argument = argument->element;
-                    }
-                    ClassInfo* parameter_class = class_of(parameter);
-                    ClassInfo* argument_class =
-                        argument ? class_of(argument) : nullptr;
-                    if (parameter_class != nullptr || argument_class != nullptr) {
-                        score += parameter_class == argument_class ? 10 : -100;
-                    } else {
-                        score += 1;
-                    }
+                if (argument && (argument->kind == TypeKind::LValueRef ||
+                                 argument->kind == TypeKind::RValueRef)) {
+                    argument = argument->element;
                 }
-                if (score > best_score) {
-                    best_score = score;
-                    best = constructor;
+                ClassInfo* parameter_class = class_of(parameter);
+                ClassInfo* argument_class =
+                    argument ? class_of(argument) : nullptr;
+                if (parameter_class != nullptr || argument_class != nullptr) {
+                    score += parameter_class == argument_class ? 10 : -100;
+                } else {
+                    score += 1;
                 }
+            }
+            if (score > best_score) {
+                best_score = score;
+                best = constructor;
             }
         }
         return best;
@@ -6404,6 +6417,12 @@ private:
         if (!constructor) {
             if (arguments.empty()) {
                 zero_object(offset, info->size);
+                const int address_temp =
+                    allocate_local(Type::make_pointer(
+                        Type::make_builtin(BuiltinKind::Void)));
+                emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+                emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+                construct_default_subobjects(*info, address_temp);
                 return;
             }
             error(*info->decl, "no matching constructor for " + info->qualified);

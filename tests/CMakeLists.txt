@@ -104,6 +104,12 @@ add_test(NAME run_cxx_matrix
 set_tests_properties(run_cxx_matrix PROPERTIES
     PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
+add_test(NAME run_cxx_balanced_tree
+    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/balanced-tree.cpp --run
+            -o ${CMAKE_BINARY_DIR}/balanced-tree.k32)
+set_tests_properties(run_cxx_balanced_tree PROPERTIES
+    PASS_REGULAR_EXPRESSION "Engineers in sorted order \\(30\\)")
+
 add_test(NAME run_cxx_tls
     COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/cxx_tls.cpp --run
             -o ${CMAKE_BINARY_DIR}/cxx-tls.k32)
