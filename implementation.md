@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 21:27 -08:00
+> **Last updated:** 2026-11-05 00:51 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1787,6 +1787,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-04 21:27 -08:00** — Unlimited debugger runs execute in 100k-step
       slices from the UI frame loop, keeping the window responsive and letting
       Run pause the guest. Run-to uses the same sliced path when the limit is 0.
+- **2026-11-05 00:51 -08:00** — Debugger toolbar stats: instruction count,
+      active run time, instructions/second, and a CLR reset button. RUN turns
+      green while an unlimited run is active and clears when paused/stopped.
 
 ## 10. Updating this file
 

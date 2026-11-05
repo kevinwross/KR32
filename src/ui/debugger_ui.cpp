@@ -79,6 +79,32 @@ std::string decimal(std::uint64_t value) {
     return buffer;
 }
 
+std::string format_stats_time(double seconds) {
+    char buffer[32] = {};
+    if (seconds < 60.0) {
+        std::snprintf(buffer, sizeof(buffer), "%.2fs", seconds);
+    } else {
+        const int minutes = static_cast<int>(seconds) / 60;
+        std::snprintf(buffer, sizeof(buffer), "%d:%04.1fs", minutes,
+                      seconds - static_cast<double>(minutes * 60));
+    }
+    return buffer;
+}
+
+std::string format_stats_rate(double rate) {
+    char buffer[32] = {};
+    if (rate >= 1'000'000'000.0) {
+        std::snprintf(buffer, sizeof(buffer), "%.2fG/s", rate / 1'000'000'000.0);
+    } else if (rate >= 1'000'000.0) {
+        std::snprintf(buffer, sizeof(buffer), "%.2fM/s", rate / 1'000'000.0);
+    } else if (rate >= 1'000.0) {
+        std::snprintf(buffer, sizeof(buffer), "%.1fk/s", rate / 1'000.0);
+    } else {
+        std::snprintf(buffer, sizeof(buffer), "%.0f/s", rate);
+    }
+    return buffer;
+}
+
 std::string trim_to(std::string value, std::size_t limit) {
     if (value.size() > limit) {
         value.resize(limit);
@@ -682,6 +708,7 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     continuous_run_ = false;
     continuous_has_target_ = false;
     continuous_owned_breakpoint_ = false;
+    reset_stats();
     error_.clear();
     if (settings_stop_at_main_) {
         prepare_initial_stop();
@@ -816,6 +843,7 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     continuous_run_ = false;
     continuous_has_target_ = false;
     continuous_owned_breakpoint_ = false;
+    reset_stats();
     error_.clear();
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
@@ -894,7 +922,11 @@ void DebuggerUI::run() {
         status_ = "running without an instruction limit; press Run to pause";
         return;
     }
+    const auto started = std::chrono::steady_clock::now();
     const core::StepResult result = session_.run(run_limit);
+    stats_seconds_ += std::chrono::duration<double>(
+                          std::chrono::steady_clock::now() - started)
+                          .count();
     set_status_from_result(result);
     if (result.kind == core::StepResult::Kind::Retired && !session_.at_breakpoint()) {
         status_ = "run step limit reached; press Run to continue";
@@ -906,7 +938,11 @@ void DebuggerUI::update() {
         return;
     }
     constexpr std::uint64_t kSlice = 100'000;
+    const auto started = std::chrono::steady_clock::now();
     const core::StepResult result = session_.run(kSlice);
+    stats_seconds_ += std::chrono::duration<double>(
+                          std::chrono::steady_clock::now() - started)
+                          .count();
     const bool reached_target =
         continuous_has_target_ && session_.machine().pc() == continuous_target_;
     if (session_.at_breakpoint() || reached_target ||
@@ -931,12 +967,25 @@ void DebuggerUI::stop_continuous(bool reached_target,
     }
 }
 
+void DebuggerUI::reset_stats() {
+    stats_base_ticks_ = session_.machine().ticks();
+    stats_seconds_ = 0.0;
+}
+
+void DebuggerUI::record_stats_time(std::chrono::steady_clock::time_point start) {
+    stats_seconds_ +=
+        std::chrono::duration<double>(std::chrono::steady_clock::now() - start).count();
+}
+
 void DebuggerUI::step() {
     if (!loaded_) {
         return;
     }
     if (continuous_run_) run();
-    set_status_from_result(session_.step());
+    const auto started = std::chrono::steady_clock::now();
+    const core::StepResult result = session_.step();
+    record_stats_time(started);
+    set_status_from_result(result);
 }
 
 void DebuggerUI::step_over() {
@@ -944,7 +993,10 @@ void DebuggerUI::step_over() {
         return;
     }
     if (continuous_run_) run();
-    set_status_from_result(session_.step_over());
+    const auto started = std::chrono::steady_clock::now();
+    const core::StepResult result = session_.step_over();
+    record_stats_time(started);
+    set_status_from_result(result);
 }
 
 void DebuggerUI::step_out() {
@@ -952,7 +1004,10 @@ void DebuggerUI::step_out() {
         return;
     }
     if (continuous_run_) run();
-    set_status_from_result(session_.step_out());
+    const auto started = std::chrono::steady_clock::now();
+    const core::StepResult result = session_.step_out();
+    record_stats_time(started);
+    set_status_from_result(result);
 }
 
 void DebuggerUI::step_line_in() {
@@ -960,7 +1015,10 @@ void DebuggerUI::step_line_in() {
         return;
     }
     if (continuous_run_) run();
-    set_status_from_result(session_.step_line_in());
+    const auto started = std::chrono::steady_clock::now();
+    const core::StepResult result = session_.step_line_in();
+    record_stats_time(started);
+    set_status_from_result(result);
 }
 
 void DebuggerUI::step_line_over() {
@@ -968,7 +1026,10 @@ void DebuggerUI::step_line_over() {
         return;
     }
     if (continuous_run_) run();
-    set_status_from_result(session_.step_line_over());
+    const auto started = std::chrono::steady_clock::now();
+    const core::StepResult result = session_.step_line_over();
+    record_stats_time(started);
+    set_status_from_result(result);
 }
 
 void DebuggerUI::step_line_out() {
@@ -976,7 +1037,10 @@ void DebuggerUI::step_line_out() {
         return;
     }
     if (continuous_run_) run();
-    set_status_from_result(session_.step_line_out());
+    const auto started = std::chrono::steady_clock::now();
+    const core::StepResult result = session_.step_line_out();
+    record_stats_time(started);
+    set_status_from_result(result);
 }
 
 void DebuggerUI::set_status_from_result(const core::StepResult& result) {
@@ -1126,12 +1190,44 @@ void DebuggerUI::draw_toolbar(Canvas& canvas) {
         {"BUILD", 396, 48},
     };
     for (const auto& button_entry : buttons) {
-        canvas.fill(Rect{button_entry.x, 4, button_entry.width, 22}, button);
-        canvas.frame(Rect{button_entry.x, 4, button_entry.width, 22}, kBorder);
-        canvas.text(button_entry.x + 6, 7, button_entry.label, kText, FontRole::Ui);
+        const bool running =
+            continuous_run_ && std::strcmp(button_entry.label, "RUN") == 0;
+        const Color fill = running ? Color{32, 122, 64, 255} : button;
+        const Color frame = running ? Color{86, 210, 126, 255} : kBorder;
+        canvas.fill(Rect{button_entry.x, 4, button_entry.width, 22}, fill);
+        canvas.frame(Rect{button_entry.x, 4, button_entry.width, 22}, frame);
+        canvas.text(button_entry.x + 6, 7, button_entry.label,
+                    running ? Color{235, 255, 240, 255} : kText, FontRole::Ui);
     }
-    canvas.text(452, 7, trim_to(status_, static_cast<std::size_t>((canvas.width() - 500) / 7)),
+
+    const std::uint64_t ticks = session_.machine().ticks();
+    const std::uint64_t instructions =
+        ticks >= stats_base_ticks_ ? ticks - stats_base_ticks_ : 0;
+    const double rate = stats_seconds_ > 0.0
+                            ? static_cast<double>(instructions) / stats_seconds_
+                            : 0.0;
+    const std::string stats_text =
+        "instr " + decimal(instructions) + "  time " + format_stats_time(stats_seconds_) +
+        "  ips " + format_stats_rate(rate);
+    stats_reset_rect_ = Rect{canvas.width() - 86, 4, 44, 22};
+    const int stats_right = stats_reset_rect_.x - 8;
+    const int stats_x = std::max(452, stats_right - 360);
+    if (stats_x > 520) {
+        canvas.text(452, 7,
+                    trim_to(status_, static_cast<std::size_t>((stats_x - 460) / 7)),
+                    kDim, FontRole::MonoSmall);
+    }
+    canvas.text(stats_x, 7,
+                trim_to(stats_text,
+                        static_cast<std::size_t>(std::max(0, stats_right - stats_x) / 7)),
                 kDim, FontRole::MonoSmall);
+
+    canvas.fill(stats_reset_rect_,
+                hover_settings_control_ == 101 ? Color{52, 70, 88, 255} : button);
+    canvas.frame(stats_reset_rect_,
+                 hover_settings_control_ == 101 ? kAccent : kBorder);
+    canvas.text(stats_reset_rect_.x + 6, 7, "CLR", kText, FontRole::MonoSmall);
+
     settings_rect_ = Rect{canvas.width() - 32, 4, 26, 22};
     draw_gear(canvas, settings_rect_, hover_settings_control_ == 100);
 }
@@ -2761,7 +2857,11 @@ void DebuggerUI::run_to(std::uint32_t address) {
         status_ = "running to " + hex(address, 8) + "; press Run to pause";
         return;
     }
+    const auto started = std::chrono::steady_clock::now();
     const core::StepResult result = session_.run(run_limit);
+    stats_seconds_ += std::chrono::duration<double>(
+                          std::chrono::steady_clock::now() - started)
+                          .count();
     set_status_from_result(result);
     if (owned) {
         session_.clear_breakpoint(address);
@@ -2981,6 +3081,8 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     console_hover_ = areas.console.contains(x, y);
     if (settings_rect_.contains(x, y)) {
         hover_settings_control_ = 100;
+    } else if (stats_reset_rect_.contains(x, y)) {
+        hover_settings_control_ = 101;
     }
     hover_row_ = -1;
     hover_source_ = false;
@@ -3359,6 +3461,11 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
     if (y < kToolbarHeight) {
         if (settings_rect_.contains(x, y)) {
             open_settings();
+            return true;
+        }
+        if (stats_reset_rect_.contains(x, y)) {
+            reset_stats();
+            status_ = "statistics reset";
             return true;
         }
         if (x >= 82 && x < 122) {

@@ -72,6 +72,8 @@ private:
     void toggle_instruction_breakpoint(std::uint32_t address);
     void prepare_initial_stop();
     void stop_continuous(bool reached_target, const core::StepResult& result);
+    void reset_stats();
+    void record_stats_time(std::chrono::steady_clock::time_point start);
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);
     void draw_toolbar(Canvas& canvas);
     void draw_source(Canvas& canvas, Rect rect);
@@ -210,6 +212,9 @@ private:
     int hover_control_ = -1;
 
     Rect settings_rect_{};
+    Rect stats_reset_rect_{};
+    std::uint64_t stats_base_ticks_ = 0;
+    double stats_seconds_ = 0.0;
     Rect settings_modal_{};
     Rect settings_close_{};
     Rect settings_args_rect_{};

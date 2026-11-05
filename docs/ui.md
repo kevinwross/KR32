@@ -39,7 +39,7 @@ executables load directly.
 
 | Area | Contents |
 | --- | --- |
-| Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, counters |
+| Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, instruction/time/IPS counters, stats reset |
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
@@ -160,7 +160,11 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 
 ## Controls
 
-- `F5` run to a breakpoint or halt.
+- `F5` run to a breakpoint or halt. With a zero run limit, Run executes in
+  slices and the **RUN** button turns green; press Run again to pause.
+- The toolbar counters show executed instructions, active run time, and
+  instructions per second since the last reset or image load. **CLR** resets
+  those counters.
 - `F10` instruction step over, `F11` instruction step in, `Shift+F11`
   instruction step out.
 - The source-pane **OVER / IN / OUT** buttons step by C source line.
