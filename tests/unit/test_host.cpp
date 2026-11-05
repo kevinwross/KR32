@@ -125,6 +125,43 @@ TEST_CASE("Host file I/O stays inside the sandbox") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host handles the remaining guest syscall vectors") {
+    const container::Image image = compile_image(
+        "int getchar(void);\n"
+        "int sys_random(void);\n"
+        "int sys_time(void);\n"
+        "int open(const char *path, int flags);\n"
+        "int close(int fd);\n"
+        "int read(int fd, void *buffer, int count);\n"
+        "int write(int fd, const void *buffer, int count);\n"
+        "int seek(int fd, int offset, int whence);\n"
+        "int main(void) {\n"
+        "    if (getchar() != 'Q') return 1;\n"
+        "    if (sys_random() == 0) return 2;\n"
+        "    if (sys_time() == 0) return 3;\n"
+        "    int fd = open(\"seek.txt\", 2 | 4 | 8);\n"
+        "    if (fd < 0) return 4;\n"
+        "    if (write(fd, \"abcdef\", 6) != 6) return 5;\n"
+        "    if (seek(fd, 2, 0) != 2) return 6;\n"
+        "    char buffer[2];\n"
+        "    if (read(fd, buffer, 1) != 1) return 7;\n"
+        "    close(fd);\n"
+        "    return buffer[0] == 'c' ? 0 : 8;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    options.input = "Q";
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    INFO(result.host_error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

@@ -44,6 +44,11 @@ The C runtime supplies `getchar`, `open`, `close`, `read`, `write`, `seek`,
 remain in the same path. The built-in `<stdio.h>`/`<string.h>`/`<stdlib.h>`
 prototypes expose the console, memory, string, and file helpers.
 
+The standalone debugger `Session` also handles vectors `32..43`; it supports
+`putchar`, `exit`, `getchar`, `time`, `random`, `argc`, and `arg`. Its file
+vectors return an I/O error because the debugger has no host filesystem
+sandbox.
+
 ## Sandbox
 
 `HostOptions` controls:

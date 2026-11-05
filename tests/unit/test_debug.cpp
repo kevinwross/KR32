@@ -86,6 +86,39 @@ TEST_CASE("debug sessions expose guest command-line arguments") {
     CHECK(session.machine().exit_code() == 0);
 }
 
+TEST_CASE("debug sessions handle the host syscall range") {
+    const container::Image image = compile_debug_image(
+        "int sys_random(void);\n"
+        "int sys_time(void);\n"
+        "int getchar(void);\n"
+        "int open(const char *path, int flags);\n"
+        "int close(int fd);\n"
+        "int read(int fd, void *buffer, int count);\n"
+        "int write(int fd, const void *buffer, int count);\n"
+        "int seek(int fd, int offset, int whence);\n"
+        "int main(void) {\n"
+        "    if (sys_random() == 0) return 1;\n"
+        "    if (sys_random() == 0) return 2;\n"
+        "    if (sys_time() == 0) return 3;\n"
+        "    if (getchar() != 'Q') return 4;\n"
+        "    if (getchar() != -1) return 5;\n"
+        "    if (open(\"data.txt\", 0) >= 0) return 6;\n"
+        "    if (close(0) >= 0) return 7;\n"
+        "    char buffer[1];\n"
+        "    if (read(0, buffer, 1) >= 0) return 8;\n"
+        "    if (write(0, buffer, 1) >= 0) return 9;\n"
+        "    if (seek(0, 0, 0) >= 0) return 10;\n"
+        "    return 0;\n"
+        "}\n");
+    debug::Session session;
+    session.set_input("Q");
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const core::StepResult result = session.run(100000);
+    CHECK(result.kind == core::StepResult::Kind::Halted);
+    CHECK(session.machine().exit_code() == 0);
+}
+
 TEST_CASE("C++ debug sessions expose guest command-line arguments") {
     const container::Image image = compile_cxx_debug_image(
         "int main(int argc, char** argv) {\n"

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 10:18 -08:00
+> **Last updated:** 2026-11-05 10:29 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1827,6 +1827,12 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-05 10:18 -08:00** — Variable arrays now start collapsed on image
       load and whenever a new array key first appears. Clicking the array row
       expands or collapses it, and the explicit state is retained per key.
+- **2026-11-05 10:29 -08:00** — Fixed debugger syscall handling: the standalone
+      `Session` now handles vectors 34..41 (`getchar`, file-error returns,
+      `time`, `random`) instead of faulting at `sys_random`. Added Host and
+      debugger tests covering every advertised `32..43` vector. KR32OS now
+      fills unused software-vector slots with a `BRK` stub before installing
+      vectors 64..69, so undefined syscalls trap instead of jumping to zero.
 
 ## 10. Updating this file
 

@@ -285,8 +285,10 @@ The initial error set follows POSIX numbering:
 | `EINVAL` | 22 |
 | `ENOSYS` | 38 |
 
-A default vector handler returns `-ENOSYS` rather than jumping to an unknown
-address.
+Every unused software vector is initialized to a `BRK` stub, so an undefined or
+unimplemented syscall raises a contained user breakpoint instead of jumping to
+an unknown address. Implemented dispatch entries can still return `-ENOSYS` for
+unknown internal operations.
 
 Every user pointer is range-checked against the current user address space
 before use. Kernel copy-in/copy-out helpers validate the entire range, handle

@@ -14,7 +14,21 @@ initrd_address:
     RET
 
     .global user_install_syscalls
-user_install_syscalls:    MOV R1, #0x00050000
+user_install_syscalls:
+    ; Every unused software vector traps via BRK instead of jumping to zero.
+    ; The implemented user syscall entries overwrite their slots below.
+    MOV R3, #32
+    MOV R4, #0x00050000
+    ADD R4, R4, #128             ; vector 32 * 4
+    MOV R5, #224                 ; vectors 32..255
+    LEA R6, [syscall_unimplemented_stub]
+.Lsyscall_fill:
+    STORE R6, [R4]
+    ADD R4, R4, #4
+    SUB R5, R5, #1
+    JNZ .Lsyscall_fill
+
+    MOV R1, #0x00050000
     LEA R2, [syscall_exit_stub]
     STORE R2, [R1 + 256]         ; vector 64
     LEA R2, [syscall_write_stub]
@@ -132,3 +146,6 @@ syscall_common:
     CALL sys_dispatch
     POPR
     IRET
+
+syscall_unimplemented_stub:
+    BRK

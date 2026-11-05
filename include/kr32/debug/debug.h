@@ -136,6 +136,9 @@ public:
     void set_program_name(std::string name) {
         program_name_ = std::move(name);
     }
+    void set_input(std::string input) {
+        input_ = std::move(input);
+    }
 
     void set_breakpoint(std::uint32_t address);
     void clear_breakpoint(std::uint32_t address);
@@ -187,6 +190,8 @@ private:
     std::vector<std::string> arguments_;
     std::string program_name_ = "program";
     std::string console_;
+    std::string input_;
+    std::uint32_t random_state_ = 0x4B523332U;
 };
 
 } // namespace kr32::debug

@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cctype>
+#include <chrono>
 #include <cstdio>
 #include <map>
 #include <sstream>
@@ -32,6 +33,8 @@ bool resolve_symbol(const std::map<std::string, std::uint32_t>& symbols,
     value = found->second;
     return true;
 }
+
+constexpr std::uint32_t kErrorIo = 0xFFFF'FFFFU;
 
 } // namespace
 
@@ -271,8 +274,48 @@ void Session::install_syscall_handler() {
             console_.push_back(static_cast<char>(current.reg(0) & 0xFFU));
             return true;
         }
+        if (vector == 34) {
+            if (input_.empty()) {
+                current.set_reg(0, kErrorIo);
+            } else {
+                current.set_reg(0, static_cast<std::uint32_t>(
+                                      static_cast<unsigned char>(input_.front())));
+                input_.erase(input_.begin());
+            }
+            return true;
+        }
+        if (vector >= 35 && vector <= 39) {
+            // The standalone debugger has no host filesystem sandbox; keep
+            // file syscalls handled and return a normal error instead of
+            // turning them into a guest fault.
+            current.set_reg(0, kErrorIo);
+            return true;
+        }
+        if (vector == 40) {
+            const auto now = std::chrono::system_clock::now().time_since_epoch();
+            current.set_reg(
+                0, static_cast<std::uint32_t>(
+                       std::chrono::duration_cast<std::chrono::seconds>(now).count() &
+                       0xFFFF'FFFFU));
+            return true;
+        }
+        if (vector == 41) {
+            random_state_ ^= random_state_ << 13U;
+            random_state_ ^= random_state_ >> 17U;
+            random_state_ ^= random_state_ << 5U;
+            current.set_reg(0, random_state_);
+            return true;
+        }
         if (vector == 32) {
             current.halt(current.reg(0));
+            return true;
+        }
+        if (vector == 46) {
+            current.set_reg(0, 0);
+            return true;
+        }
+        if (vector == 50) {
+            current.set_reg(0, 1);
             return true;
         }
         if (vector == 42) {
