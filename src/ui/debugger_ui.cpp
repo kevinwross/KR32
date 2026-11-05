@@ -616,6 +616,8 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     bios_path_.clear();
     source_scroll_ = 0;
     asm_scroll_ = 0;
+    array_expanded_.clear();
+    array_pages_.clear();
     error_.clear();
     if (settings_stop_at_main_) {
         prepare_initial_stop();
@@ -745,6 +747,8 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     loaded_ = true;
     source_scroll_ = 0;
     asm_scroll_ = 0;
+    array_expanded_.clear();
+    array_pages_.clear();
     error_.clear();
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
@@ -1525,8 +1529,14 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         bool local = false;
         bool ok = false;
         bool header = false;
+        bool array = false;
+        bool pager = false;
         bool expanded = true;
+        int page = 0;
+        int page_count = 1;
+        int array_count = 0;
         int indent = 0;
+        std::string key;
     };
     std::vector<Entry> entries;
     const auto class_for = [&](const std::string& type) -> const debug::ClassInfo* {
@@ -1542,33 +1552,69 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         if (entries.size() >= 256) {
             return;
         }
+
+        constexpr int kPageSize = 16;
+        std::string type = entry.type;
+        const std::size_t bracket = type.rfind('[');
+        int array_count = 0;
+        unsigned element_size = 0;
+        std::string element_type;
+        if (bracket != std::string::npos && type.back() == ']') {
+            const std::string count_text = type.substr(bracket + 1, type.size() - bracket - 2);
+            array_count = std::atoi(count_text.c_str());
+            if (array_count > 0) {
+                element_size = entry.size / static_cast<unsigned>(array_count);
+                element_type = type.substr(0, bracket);
+            }
+        }
+        if (array_count > 0 && element_size > 0) {
+            entry.array = true;
+            entry.array_count = array_count;
+            entry.page_count = (array_count + kPageSize - 1) / kPageSize;
+            const auto expanded = array_expanded_.find(entry.key);
+            entry.expanded = expanded == array_expanded_.end() || expanded->second;
+            const auto page = array_pages_.find(entry.key);
+            entry.page = page == array_pages_.end() ? 0 : page->second;
+            entry.page = std::clamp(entry.page, 0, std::max(0, entry.page_count - 1));
+        }
+
         entries.push_back(entry);
         if (!entry.ok || depth >= 2 || entry.size == 0) {
             return;
         }
 
-        std::string type = entry.type;
-        std::size_t bracket = type.rfind('[');
-        if (bracket != std::string::npos && type.back() == ']') {
-            const std::string count_text = type.substr(bracket + 1, type.size() - bracket - 2);
-            const int count = std::atoi(count_text.c_str());
-            const unsigned element_size =
-                count > 0 ? entry.size / static_cast<unsigned>(count) : 0;
-            if (count > 0 && count <= 64 && element_size > 0) {
-                const std::string element_type = type.substr(0, bracket);
-                for (int index = 0; index < count && entries.size() < 256; ++index) {
-                    Entry child;
-                    child.name = "[" + std::to_string(index) + "]";
-                    child.type = element_type;
-                    child.address = entry.address + static_cast<std::uint32_t>(index) * element_size;
-                    child.size = element_size;
-                    child.local = entry.local;
-                    child.indent = entry.indent + 1;
-                    child.ok = session_.read_memory(child.address, child.size, child.value);
-                    append_entry(std::move(child), depth + 1);
-                }
+        if (entry.array) {
+            if (!entry.expanded) {
                 return;
             }
+            const int start = entry.page * kPageSize;
+            const int end = std::min(entry.array_count, start + kPageSize);
+            for (int index = start; index < end && entries.size() < 256; ++index) {
+                Entry child;
+                child.name = "[" + std::to_string(index) + "]";
+                child.type = element_type;
+                child.address = entry.address +
+                                static_cast<std::uint32_t>(index) * element_size;
+                child.size = element_size;
+                child.local = entry.local;
+                child.indent = entry.indent + 1;
+                child.key = entry.key + "[" + std::to_string(index) + "]";
+                child.ok = session_.read_memory(child.address, child.size, child.value);
+                append_entry(std::move(child), depth + 1);
+            }
+            if (entry.page_count > 1 && entries.size() < 256) {
+                Entry pager;
+                pager.name = "< page " + std::to_string(entry.page + 1) + "/" +
+                             std::to_string(entry.page_count) + " >";
+                pager.pager = true;
+                pager.key = entry.key;
+                pager.page = entry.page;
+                pager.page_count = entry.page_count;
+                pager.local = entry.local;
+                pager.indent = entry.indent + 1;
+                entries.push_back(std::move(pager));
+            }
+            return;
         }
 
         std::string pointee;
@@ -1596,6 +1642,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             child.size = member.size;
             child.local = entry.local;
             child.indent = entry.indent + 1;
+            child.key = entry.key + "." + member.name;
             child.ok = session_.read_memory(child.address, child.size, child.value);
             append_entry(std::move(child), depth + 1);
         }
@@ -1612,6 +1659,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             entry.address = session_.machine().reg(7) + variable.offset;
             entry.size = variable.size;
             entry.local = true;
+            entry.key = "L:" + function->name + ":" + variable.name;
             std::string error;
             entry.ok = session_.read_variable(variable.name, entry.value, error);
             locals.push_back(std::move(entry));
@@ -1624,6 +1672,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         entry.type = global.type;
         entry.address = global.address;
         entry.size = global.size;
+        entry.key = "G:" + global.name;
         std::string error;
         entry.ok = session_.read_global(global.name, entry.value, error);
         globals.push_back(std::move(entry));
@@ -1672,6 +1721,15 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         if (entry.header) {
             text = std::string(entry.expanded ? "v " : "> ") + entry.name + " (" +
                    std::to_string(entry.size) + ")";
+        } else if (entry.pager) {
+            text = std::string(static_cast<std::size_t>(entry.indent * 2), ' ') + entry.name;
+        } else if (entry.array) {
+            const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
+            text = indent_text + (entry.expanded ? "[-] " : "[+] ") + entry.name + "[" +
+                   std::to_string(entry.array_count) + "]" +
+                   (entry.expanded && entry.page_count > 1
+                        ? " (page " + std::to_string(entry.page + 1) + ")"
+                        : "");
         } else {
             const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
             text = indent_text + entry.name + " = " +
@@ -1679,11 +1737,14 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         }
         canvas.text(rect.x + 6, y, trim_to(text, static_cast<std::size_t>((rect.width - 20) / 7)),
                     entry.header ? kAccent
-                                 : (entry.ok ? (entry.indent > 0 ? kDim : kText) : kBad),
+                                 : (entry.pager ? kDim
+                                                : (entry.ok ? (entry.indent > 0 ? kDim : kText)
+                                                            : kBad)),
                     FontRole::MonoSmall);
         var_hover_rows_.push_back(
             VarHoverRow{row, entry.name, entry.type, entry.address, entry.value, entry.size,
-                        entry.local, entry.ok, entry.header});
+                        entry.local, entry.ok, entry.header, entry.array, entry.pager,
+                        entry.key, entry.page, entry.page_count});
     }
     if (entries.empty()) {
         canvas.text(rect.x + 6, rect.y + 24, "(no variables)", kDim, FontRole::MonoSmall);
@@ -2146,6 +2207,9 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
     }
     const VarHoverRow& row = var_hover_rows_[static_cast<std::size_t>(hover_var_)];
     if (row.header) {
+        return;
+    }
+    if (row.pager) {
         return;
     }
     std::vector<std::string> lines;
@@ -3079,6 +3143,23 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
             } else if (row.name == "Globals") {
                 globals_expanded_ = !globals_expanded_;
             }
+            last_variable_click_ = -1;
+            return true;
+        }
+        if (row.pager) {
+            int page = row.page;
+            if (x < row.row.x + row.row.width / 2) {
+                page = std::max(0, page - 1);
+            } else {
+                page = std::min(row.page_count - 1, page + 1);
+            }
+            array_pages_[row.key] = page;
+            return true;
+        }
+        if (row.array) {
+            const auto expanded = array_expanded_.find(row.key);
+            array_expanded_[row.key] =
+                expanded == array_expanded_.end() ? false : !expanded->second;
             last_variable_click_ = -1;
             return true;
         }

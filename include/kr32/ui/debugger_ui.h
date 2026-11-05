@@ -238,11 +238,18 @@ private:
         bool local = false;
         bool ok = false;
         bool header = false;
+        bool array = false;
+        bool pager = false;
+        std::string key;
+        int page = 0;
+        int page_count = 1;
     };
     std::vector<VarHoverRow> var_hover_rows_;
     int hover_var_ = -1;
     bool locals_expanded_ = true;
     bool globals_expanded_ = true;
+    std::map<std::string, bool> array_expanded_;
+    std::map<std::string, int> array_pages_;
     int last_variable_click_ = -1;
     std::chrono::steady_clock::time_point last_variable_click_time_{};
     int last_register_click_ = -1;
