@@ -40,6 +40,7 @@ executables load directly.
 | Area | Contents |
 | --- | --- |
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, instruction/time/IPS counters, stats reset |
+| Status bar | Current status on the left; active mode key hints on the lower right |
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
@@ -160,11 +161,18 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 
 ## Controls
 
-- `F5` run to a breakpoint or halt. With a zero run limit, Run executes in
-  slices and the **RUN** button turns green; press Run again to pause.
+- `F5` run to a breakpoint or halt. Run executes in slices and the **RUN**
+  button turns green; press Run again to pause.
+- `F6` breaks a running guest without starting a paused one.
+- The bottom status bar shows the current status and the available keys for the
+  active mode. While running it offers `F5 PAUSE` and `F6 BREAK`; the F5 badge
+  is green in that mode.
 - The toolbar counters show executed instructions, active run time, and
   instructions per second since the last reset or image load. **CLR** resets
   those counters.
+- Hovering the console makes its **CONSOLE** title green, indicating keyboard
+  input will go to the guest TTY. Typing while the guest is running does not
+  pause it.
 - `F10` instruction step over, `F11` instruction step in, `Shift+F11`
   instruction step out.
 - The source-pane **OVER / IN / OUT** buttons step by C source line.

@@ -40,6 +40,7 @@ constexpr Color kPanelAlt{28, 36, 44, 255};
 constexpr Color kBorder{54, 68, 80, 255};
 constexpr Color kText{220, 228, 236, 255};
 constexpr Color kDim{132, 146, 158, 255};
+constexpr Color kStats{163, 173, 182, 255};
 constexpr Color kAccent{76, 170, 255, 255};
 constexpr Color kBad{255, 104, 104, 255};
 
@@ -52,6 +53,7 @@ constexpr std::uint32_t kGearIcon[24] = {
 };
 
 constexpr int kToolbarHeight = 30;
+constexpr int kStatusBarHeight = 22;
 constexpr int kSourceGutter = 58;
 constexpr int kSourceBreakGutter = 18;
 constexpr int kAsmGutter = 104;
@@ -1225,7 +1227,7 @@ void DebuggerUI::draw_toolbar(Canvas& canvas) {
     canvas.text(stats_x, 7,
                 trim_to(stats_text,
                         static_cast<std::size_t>(std::max(0, stats_right - stats_x) / 7)),
-                kDim, FontRole::MonoSmall);
+                kStats, FontRole::MonoSmall);
 
     canvas.fill(stats_reset_rect_,
                 hover_settings_control_ == 101 ? Color{52, 70, 88, 255} : button);
@@ -1250,6 +1252,51 @@ void DebuggerUI::draw_gear(Canvas& canvas, Rect rect, bool hover) {
             }
         }
     }
+}
+
+void DebuggerUI::draw_status_bar(Canvas& canvas) {
+    const int y = canvas.height() - kStatusBarHeight;
+    canvas.fill(Rect{0, y, canvas.width(), kStatusBarHeight}, kPanelAlt);
+    canvas.fill(Rect{0, y, canvas.width(), 1}, kBorder);
+
+    struct Hint {
+        const char* key;
+        const char* label;
+        bool active = false;
+    };
+    std::vector<Hint> hints;
+    if (settings_open_) {
+        hints = {{"ENTER", "APPLY", true}, {"ESC", "CANCEL", false}};
+    } else if (continuous_run_) {
+        hints = {{"F5", "PAUSE", true}, {"F6", "BREAK", false}};
+    } else {
+        hints = {{"F5", "RUN", false}, {"F6", "BREAK", false},
+                 {"F9", "BKPT", false}, {"F10", "OVER", false},
+                 {"F11", "IN", false},  {"R", "RST", false}};
+    }
+
+    int right = canvas.width() - 8;
+    for (const Hint& hint : hints) {
+        const int key_width = Canvas::text_width(hint.key, FontRole::MonoSmall) + 8;
+        const int label_width = Canvas::text_width(hint.label, FontRole::MonoSmall);
+        const int total = key_width + 4 + label_width + 8;
+        if (right - total < 160) {
+            break;
+        }
+        right -= total;
+        const Rect badge{right, y + 3, key_width, 16};
+        canvas.fill(badge, hint.active ? Color{32, 122, 64, 255} : kPanel);
+        canvas.frame(badge, hint.active ? Color{86, 210, 126, 255} : kBorder);
+        canvas.text(badge.x + 4, y + 4, hint.key,
+                    hint.active ? Color{235, 255, 240, 255} : kStats,
+                    FontRole::MonoSmall);
+        canvas.text(badge.x + key_width + 4, y + 4, hint.label, kDim,
+                    FontRole::MonoSmall);
+    }
+    const int status_width = std::max(0, right - 16);
+    canvas.text(8, y + 4,
+                trim_to(status_, static_cast<std::size_t>(status_width / 7)),
+                kStats, FontRole::MonoSmall);
 }
 
 void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
@@ -2701,6 +2748,11 @@ void DebuggerUI::finish_memory_address_edit(bool commit) {
 
 void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "CONSOLE");
+    if (console_hover_) {
+        canvas.fill(Rect{rect.x + 1, rect.y + 1, rect.width - 2, 20}, kPanelAlt);
+        canvas.text(rect.x + 6, rect.y + 3, "CONSOLE", Color{86, 210, 126, 255},
+                    FontRole::UiBold);
+    }
     std::vector<std::string> lines;
     std::istringstream stream(os_mode_ ? serial_text_ : session_.console());
     std::string line;
@@ -2738,8 +2790,9 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
         disassembly_width = 300;
         source_width = width - disassembly_width - right_width;
     }
-    const int bottom_height = std::clamp(height * 24 / 100, 190, 230);
-    const int bottom_top = height - bottom_height;
+    const int content_height = height - kStatusBarHeight;
+    const int bottom_height = std::clamp(content_height * 24 / 100, 190, 230);
+    const int bottom_top = content_height - bottom_height;
     const int top_height = bottom_top - kToolbarHeight;
     constexpr int memory_height = 112;
     const int source_height = std::max(120, top_height - memory_height);
@@ -3198,6 +3251,7 @@ void DebuggerUI::render(Canvas& canvas) {
         }
     }
     draw_console(canvas, areas.console);
+    draw_status_bar(canvas);
     draw_error(canvas);
     draw_memory_tooltip(canvas);
     draw_register_tooltip(canvas);
@@ -3678,9 +3732,7 @@ bool DebuggerUI::key(int key_value, bool shift, bool control) {
             pushed = true;
         }
         if (pushed) {
-            run();
-        }
-        if (pushed) {
+            if (!continuous_run_) run();
             return true;
         }
     }
@@ -3818,6 +3870,13 @@ bool DebuggerUI::key(int key_value, bool shift, bool control) {
     }
     if (key_value == kr32::platform::key::F5) {
         run();
+        return true;
+    }
+    if (key_value == kr32::platform::key::F6) {
+        if (continuous_run_) {
+            stop_continuous(false, core::StepResult{});
+            status_ = "paused at " + hex(session_.machine().pc(), 8);
+        }
         return true;
     }
     if (key_value == kr32::platform::key::F10) {

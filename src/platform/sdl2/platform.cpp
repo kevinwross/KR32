@@ -19,6 +19,7 @@ int map_key(SDL_Keycode key) {
     case SDLK_ESCAPE: return key::Escape;
     case SDLK_TAB: return key::Tab;
     case SDLK_F5: return key::F5;
+    case SDLK_F6: return key::F6;
     case SDLK_F9: return key::F9;
     case SDLK_F10: return key::F10;
     case SDLK_F11: return key::F11;

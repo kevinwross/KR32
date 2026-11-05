@@ -10,6 +10,7 @@ namespace key {
 inline constexpr int Escape = 256;
 inline constexpr int Tab = 257;
 inline constexpr int F5 = 258;
+inline constexpr int F6 = 268;
 inline constexpr int F9 = 259;
 inline constexpr int F10 = 260;
 inline constexpr int F11 = 261;

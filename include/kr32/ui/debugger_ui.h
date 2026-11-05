@@ -77,6 +77,7 @@ private:
     void record_stats_time(std::chrono::steady_clock::time_point start);
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);
     void draw_toolbar(Canvas& canvas);
+    void draw_status_bar(Canvas& canvas);
     void draw_source(Canvas& canvas, Rect rect);
     void draw_disassembly(Canvas& canvas, Rect rect);
     void draw_cores(Canvas& canvas, Rect rect);

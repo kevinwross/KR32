@@ -4,6 +4,7 @@
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/link/linker.h"
+#include "kr32/platform/window.h"
 #include "kr32/ui/canvas.h"
 #include "kr32/ui/debugger_ui.h"
 #include "kr32/ui/help.h"
@@ -141,16 +142,38 @@ TEST_CASE("running uses the responsive sliced path and clears the RUN highlight"
     ui::Canvas probe(1, 1);
     probe.fill(ui::Rect{0, 0, 1, 1}, ui::Color{32, 122, 64, 255});
     const std::uint32_t green = probe.pixel_at(0, 0);
+    ui::Canvas title_probe(1, 1);
+    title_probe.fill(ui::Rect{0, 0, 1, 1}, ui::Color{86, 210, 126, 255});
+    const std::uint32_t title_green = title_probe.pixel_at(0, 0);
 
     ui::Canvas before(800, 600);
     debugger.render(before);
     CHECK(before.pixel_at(84, 6) != green);
+
+    debugger.hover(600, 430, 800, 600);
+    ui::Canvas hovered(800, 600);
+    debugger.render(hovered);
+    int green_title_pixels = 0;
+    for (int y = 389; y < 409; ++y) {
+        for (int x = 561; x < 680; ++x) {
+            if (hovered.pixel_at(x, y) == title_green) {
+                ++green_title_pixels;
+            }
+        }
+    }
+    CHECK(green_title_pixels > 0);
 
     debugger.run();
     ui::Canvas running(800, 600);
     debugger.render(running);
     CHECK(running.pixel_at(84, 6) == green);
 
+    CHECK(debugger.key(kr32::platform::key::F6, false, false));
+    ui::Canvas broken(800, 600);
+    debugger.render(broken);
+    CHECK(broken.pixel_at(84, 6) != green);
+
+    debugger.run();
     for (int index = 0; index < 1000; ++index) {
         debugger.update();
     }
