@@ -382,6 +382,19 @@ bool parse_run_limit(const std::string& text, std::uint64_t& value) {
     return true;
 }
 
+std::string format_float_text(float number, bool scientific) {
+    if (std::isnan(number)) return "nan";
+    if (std::isinf(number)) return std::signbit(number) ? "-inf" : "+inf";
+    std::ostringstream out;
+    out << std::showpos;
+    if (scientific) {
+        out << std::scientific << std::setprecision(6) << number;
+    } else {
+        out << std::defaultfloat << std::setprecision(8) << number;
+    }
+    return out.str();
+}
+
 } // namespace
 
 std::string DebuggerUI::format_fpr(std::uint64_t value, bool scientific) const {
@@ -399,17 +412,36 @@ std::string DebuggerUI::format_fpr(std::uint64_t value, bool scientific) const {
 }
 
 std::string DebuggerUI::format_fpr_float(std::uint32_t value, bool scientific) const {
-    const float number = std::bit_cast<float>(value);
-    if (std::isnan(number)) return "nan";
-    if (std::isinf(number)) return std::signbit(number) ? "-inf" : "+inf";
-    std::ostringstream out;
-    out << std::showpos;
-    if (scientific) {
-        out << std::scientific << std::setprecision(6) << number;
-    } else {
-        out << std::defaultfloat << std::setprecision(8) << number;
+    return format_float_text(std::bit_cast<float>(value), scientific);
+}
+
+std::string format_scalar_value(const std::string& type,
+                                std::uint32_t value,
+                                bool available) {
+    if (!available) {
+        return "?";
     }
-    return out.str();
+    if (type == "float") {
+        std::string text = format_float_text(std::bit_cast<float>(value), false);
+        if (text.find('.') == std::string::npos &&
+            text.find('e') == std::string::npos &&
+            text.find('E') == std::string::npos &&
+            text.find("inf") == std::string::npos &&
+            text.find("nan") == std::string::npos) {
+            text += ".0";
+        }
+        return text;
+    }
+    if (type == "bool") {
+        return value == 0 ? "false" : "true";
+    }
+    if (type == "char") {
+        if (value >= 32 && value < 127) {
+            return "'" + std::string(1, static_cast<char>(value)) + "'";
+        }
+        return "0x" + hex(value, 2);
+    }
+    return "0x" + hex(value, 8);
 }
 
 DebuggerUI::DebuggerUI() {
@@ -2005,8 +2037,12 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
                         : "");
         } else {
             const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
-            text = indent_text + entry.name + " = " +
-                   (entry.ok ? "0x" + hex(entry.value, 8) : "?");
+            std::string value_text =
+                format_scalar_value(entry.type, entry.value, entry.ok);
+            if (entry.ok && class_for(entry.type) != nullptr) {
+                value_text = "{...}";
+            }
+            text = indent_text + entry.name + " = " + value_text;
         }
         canvas.text(rect.x + 6, y, trim_to(text, static_cast<std::size_t>((rect.width - 20) / 7)),
                     entry.header ? kAccent
@@ -2546,12 +2582,15 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
             }
             if (count > 0) {
                 lines.push_back("array[" + std::to_string(count) + "]");
+                const std::string element_type =
+                    bracket == std::string::npos ? std::string{}
+                                                 : row.type.substr(0, bracket);
                 for (int index = 0; index < std::min(4, count); ++index) {
                     std::uint32_t element = 0;
                     if (session_.read_memory(row.address + static_cast<std::uint32_t>(index * 4),
                                              4, element)) {
-                        lines.push_back("[" + std::to_string(index) + "] = 0x" +
-                                        hex(element, 8));
+                        lines.push_back("[" + std::to_string(index) + "] = " +
+                                        format_scalar_value(element_type, element, true));
                     }
                 }
             }
@@ -2561,8 +2600,10 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
         if (row.size == 2) {
             value &= 0xFFFFU;
         }
-        lines.push_back("value: 0x" +
-                        hex(value, row.size == 1 ? 2 : (row.size == 2 ? 4 : 8)));
+        lines.push_back("value: " + format_scalar_value(row.type, value, row.ok));
+        if (row.type == "float") {
+            lines.push_back("bits: 0x" + hex(value, 8));
+        }
         const std::int32_t signed_value =
             row.size == 1 ? static_cast<std::int8_t>(value)
                           : (row.size == 2 ? static_cast<std::int16_t>(value)

@@ -424,7 +424,14 @@ private:
         const std::string directive(line.substr(0, name_end));
         std::string_view rest =
             name_end == std::string_view::npos ? std::string_view() : trim(line.substr(name_end));
+        const bool include_directive = directive == "include" && active();
         handle_directive(directive, rest, line_number);
+        if (include_directive) {
+            // Built-in headers expand to several declarations. Reset the
+            // preprocessed line counter so the following blank line and the
+            // next source line keep their original line numbers.
+            append_line("#line " + std::to_string(line_number));
+        }
         append_line("");
     }
 

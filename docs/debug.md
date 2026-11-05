@@ -22,7 +22,11 @@ Types include `float` (4 bytes) and `double` (8 bytes) alongside the integer,
 pointer, array, struct, union, and function types emitted by the C compiler.
 Floating-point variables and globals use the same `V`/`G` records with their
 size and type name, so the debugger can identify them without changing the
-container format. Source-line lookup is scoped to a function’s `F` range:
+container format. C++ array types carry their element count (`float[16]`,
+`char[32]`) so the GUI can expand and page them; an unknown bound is written as
+`[]`. Built-in C++ header injection emits `#line` restoration records so source
+lines after `#include <kr32/matrix.hpp>` and the other freestanding headers keep
+their original numbers. Source-line lookup is scoped to a function’s `F` range:
 addresses in runtime/libc code without debug records do not inherit the last
 line of the previous user function.
 

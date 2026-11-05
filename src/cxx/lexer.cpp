@@ -194,8 +194,60 @@ private:
         diagnostics_.push_back({line, column, std::move(message)});
     }
 
+    bool skip_line_directive() {
+        if (column_ != 1 || peek() != '#') {
+            return false;
+        }
+        const std::size_t saved_position = position_;
+        const int saved_line = line_;
+        const int saved_column = column_;
+        advance(); // '#'
+        while (peek() == ' ' || peek() == '\t') {
+            advance();
+        }
+        if (!starts_with("line")) {
+            position_ = saved_position;
+            line_ = saved_line;
+            column_ = saved_column;
+            return false;
+        }
+        advance(4);
+        if (peek() != ' ' && peek() != '\t') {
+            position_ = saved_position;
+            line_ = saved_line;
+            column_ = saved_column;
+            return false;
+        }
+        while (peek() == ' ' || peek() == '\t') {
+            advance();
+        }
+        if (std::isdigit(static_cast<unsigned char>(peek())) == 0) {
+            position_ = saved_position;
+            line_ = saved_line;
+            column_ = saved_column;
+            return false;
+        }
+        int next_line = 0;
+        while (std::isdigit(static_cast<unsigned char>(peek())) != 0) {
+            next_line = next_line * 10 + (peek() - '0');
+            advance();
+        }
+        while (position_ < source_.size() && peek() != '\n') {
+            advance();
+        }
+        if (peek() == '\n') {
+            advance();
+        }
+        line_ = next_line;
+        column_ = 1;
+        return true;
+    }
+
     void skip_space_and_comments() {
         while (position_ < source_.size()) {
+            if (skip_line_directive()) {
+                continue;
+            }
             const char c = peek();
             if (c == ' ' || c == '\t' || c == '\r' || c == '\n' || c == '\f' ||
                 c == '\v') {

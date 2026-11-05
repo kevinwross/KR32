@@ -621,6 +621,51 @@ TEST_CASE("matrix transpose, multiply-add, and transform stack run") {
     CHECK(alias.result == 42);
 }
 
+TEST_CASE("matrix debug info keeps array bounds and float members") {
+    container::Image image;
+    std::string error;
+    REQUIRE_MESSAGE(build_cluster_image(
+                        "#include <kr32/matrix.hpp>\n"
+                        "int main() {\n"
+                        "    kr32::mat4 m;\n"
+                        "    kr32::vec4 v;\n"
+                        "    v.x = 1.0;\n"
+                        "    return 0;\n"
+                        "}\n",
+                        image, error),
+                    error);
+    debug::Info info;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error);
+
+    const debug::ClassInfo* matrix = nullptr;
+    const debug::ClassInfo* vector = nullptr;
+    for (const debug::ClassInfo& klass : info.classes) {
+        if (klass.name == "kr32::mat4") matrix = &klass;
+        if (klass.name == "kr32::vec4") vector = &klass;
+    }
+    REQUIRE(matrix != nullptr);
+    REQUIRE(vector != nullptr);
+    REQUIRE(matrix->members.size() == 1);
+    CHECK(matrix->members[0].name == "m");
+    CHECK(matrix->members[0].type == "float[16]");
+    REQUIRE(vector->members.size() == 4);
+    CHECK(vector->members[0].type == "float");
+
+    const debug::Function* main = nullptr;
+    for (const debug::Function& function : info.functions) {
+        if (function.name == "main") main = &function;
+    }
+    REQUIRE(main != nullptr);
+    bool found_return_line = false;
+    for (const debug::Line& line : info.lines) {
+        if (line.source == 0 && line.line == 6 &&
+            line.address >= main->start && line.address < main->end) {
+            found_return_line = true;
+        }
+    }
+    CHECK(found_return_line);
+}
+
 TEST_CASE("try/catch handles thrown scalars and nested handlers") {
     const ProgramResult scalar = compile_and_run(
         "int main() {\n"

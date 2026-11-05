@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 01:38 -08:00
+> **Last updated:** 2026-11-05 02:22 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1797,6 +1797,14 @@ Newest entries at the bottom. Use the local time zone.
       execution; F6 breaks a running guest. The console title highlights green
       on hover, toolbar stats are brighter, and a bottom status bar shows the
       current status plus mode-specific key hints.
+- **2026-11-05 02:22 -08:00** — Fixed matrix debug symbols: C++ array debug
+      types now include element counts (`float[16]`), so `mat4` expands in the
+      variables panel. Float scalars and members render as decimal values
+      instead of hex bit patterns, aggregate rows show `{...}`, and tooltips use
+      the same formatting. Built-in C++ header injection now emits `#line`
+      restoration records, so source lines after `<kr32/matrix.hpp>` no longer
+      shift by the injected header size. Added regression tests for C++ array
+      debug records, source-line mapping, and scalar formatting.
 
 ## 10. Updating this file
 

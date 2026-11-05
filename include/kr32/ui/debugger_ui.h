@@ -301,6 +301,12 @@ private:
     int mouse_y_ = 0;
 };
 
+// Formats a scalar debugger value for the variables panel. Floating-point
+// values are rendered as decimal text instead of their raw bit patterns.
+[[nodiscard]] std::string format_scalar_value(const std::string& type,
+                                              std::uint32_t value,
+                                              bool available);
+
 // Renders one frame without opening a window. Returns the canvas hash and
 // optionally writes a PPM screenshot.
 [[nodiscard]] bool render_headless(const std::string& image_path,

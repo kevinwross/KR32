@@ -2974,7 +2974,11 @@ private:
             return debug_type(type->element) + "&";
         }
         if (type->kind == TypeKind::Array) {
-            return debug_type(type->element) + "[]";
+            const std::string element = debug_type(type->element);
+            if (type->array_size == 0) {
+                return element + "[]";
+            }
+            return element + "[" + std::to_string(type->array_size) + "]";
         }
         if (type->kind == TypeKind::Function) {
             return "function";

@@ -120,6 +120,18 @@ TEST_CASE("the settings dialog renders and closes without a loaded image") {
     CHECK(closed.hash() == baseline_hash);
 }
 
+TEST_CASE("debugger variable values format floats and scalar types") {
+    CHECK(ui::format_scalar_value("float", 0x40000000U, true) == "+2.0");
+    CHECK(ui::format_scalar_value("float", 0xC0000000U, true) == "-2.0");
+    CHECK(ui::format_scalar_value("float", 0x3FC00000U, true) == "+1.5");
+    CHECK(ui::format_scalar_value("float", 0x7FC00000U, true) == "nan");
+    CHECK(ui::format_scalar_value("float", 0, false) == "?");
+    CHECK(ui::format_scalar_value("bool", 0, true) == "false");
+    CHECK(ui::format_scalar_value("bool", 1, true) == "true");
+    CHECK(ui::format_scalar_value("char", 'A', true) == "'A'");
+    CHECK(ui::format_scalar_value("int", 42, true) == "0x0000002A");
+}
+
 TEST_CASE("instruction and addressing help describe KR32 operands") {
     CHECK(ui::instruction_help("PUSH").find("SP") != std::string::npos);
     CHECK(ui::instruction_help("LOAD8S").find("sign") != std::string::npos);
