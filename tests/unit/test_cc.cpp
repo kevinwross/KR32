@@ -7,6 +7,8 @@
 #include "kr32/link/linker.h"
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -838,4 +840,37 @@ TEST_CASE("the C compiler reports syntax errors with positions") {
     CHECK_FALSE(result.ok);
     REQUIRE_FALSE(result.diagnostics.empty());
     CHECK(result.diagnostics.front().line >= 1);
+}
+
+TEST_CASE("quoted user headers are expanded into the translation unit") {
+    const auto directory = std::filesystem::current_path() / "kr32-cc-header-test";
+    std::filesystem::create_directories(directory);
+    {
+        std::ofstream header(directory / "pair.h", std::ios::binary);
+        header << "#pragma once\n"
+                  "struct pair { int left; int right; };\n";
+    }
+    const auto source_path = directory / "main.c";
+    {
+        std::ofstream source(source_path, std::ios::binary);
+        source << "#include \"pair.h\"\n"
+                  "int main(void) {\n"
+                  "    struct pair value;\n"
+                  "    value.left = 3;\n"
+                  "    value.right = 4;\n"
+                  "    return value.left + value.right;\n"
+                  "}\n";
+    }
+    const cc::Result result = cc::compile(
+        "#include \"pair.h\"\n"
+        "int main(void) {\n"
+        "    struct pair value;\n"
+        "    value.left = 3;\n"
+        "    value.right = 4;\n"
+        "    return value.left + value.right;\n"
+        "}\n",
+        source_path.string());
+    CHECK(result.ok);
+    CHECK(result.diagnostics.empty());
+    std::filesystem::remove_all(directory);
 }

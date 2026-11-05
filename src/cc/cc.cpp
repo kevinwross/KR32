@@ -8,9 +8,13 @@
 #include <cstdint>
 #include <cstdio>
 #include <cstdlib>
+#include <filesystem>
+#include <fstream>
 #include <functional>
+#include <iterator>
 #include <map>
 #include <memory>
+#include <set>
 #include <sstream>
 #include <stdexcept>
 #include <string>
@@ -28,7 +32,7 @@ struct CompileError : std::runtime_error {
     int column;
 };
 
-std::string preprocess(std::string_view source) {
+std::string strip_comments(std::string_view source) {
     std::string without_comments;
     without_comments.reserve(source.size());
     bool in_block = false;
@@ -77,6 +81,126 @@ std::string preprocess(std::string_view source) {
             without_comments.push_back(c);
         }
     }
+    return without_comments;
+}
+
+std::string expand_local_includes(std::string_view source,
+                                  const std::filesystem::path& source_path,
+                                  std::set<std::string>& once_files,
+                                  std::set<std::string>& active_files);
+
+std::string read_include_file(const std::filesystem::path& path,
+                              std::set<std::string>& once_files,
+                              std::set<std::string>& active_files) {
+    std::ifstream input(path, std::ios::binary);
+    if (!input) {
+        return {};
+    }
+    std::string text((std::istreambuf_iterator<char>(input)),
+                     std::istreambuf_iterator<char>());
+    const std::string stripped = strip_comments(text);
+    std::istringstream lines(stripped);
+    std::string line;
+    bool once = false;
+    while (std::getline(lines, line)) {
+        const std::size_t first = line.find_first_not_of(" \t");
+        if (first != std::string::npos &&
+            line.compare(first, 12, "#pragma once") == 0) {
+            once = true;
+            break;
+        }
+    }
+    const std::string key = std::filesystem::weakly_canonical(path).string();
+    if (once) {
+        once_files.insert(key);
+    }
+    if (active_files.find(key) != active_files.end()) {
+        return {};
+    }
+    active_files.insert(key);
+    std::string expanded = expand_local_includes(stripped, path, once_files, active_files);
+    active_files.erase(key);
+    return expanded;
+}
+
+std::string expand_local_includes(std::string_view source,
+                                  const std::filesystem::path& source_path,
+                                  std::set<std::string>& once_files,
+                                  std::set<std::string>& active_files) {
+    std::string result;
+    std::istringstream lines{std::string(source)};
+    std::string line;
+    int line_number = 0;
+    while (std::getline(lines, line)) {
+        ++line_number;
+        const std::size_t first = line.find_first_not_of(" \t");
+        if (first == std::string::npos || line[first] != '#') {
+            result += line;
+            result.push_back('\n');
+            continue;
+        }
+        const std::string directive = line.substr(first);
+        if (directive.rfind("#include", 0) != 0) {
+            result += line;
+            result.push_back('\n');
+            continue;
+        }
+        const std::size_t quote = directive.find('"');
+        if (quote == std::string::npos) {
+            result += line;
+            result.push_back('\n');
+            continue;
+        }
+        const std::size_t end = directive.find('"', quote + 1);
+        if (end == std::string::npos) {
+            result += line;
+            result.push_back('\n');
+            continue;
+        }
+        const std::string name = directive.substr(quote + 1, end - quote - 1);
+        const std::filesystem::path relative =
+            source_path.has_parent_path() ? source_path.parent_path() / name
+                                          : std::filesystem::path(name);
+        std::vector<std::filesystem::path> candidates;
+        candidates.push_back(relative);
+        candidates.push_back(std::filesystem::current_path() / name);
+        std::filesystem::path found;
+        for (const std::filesystem::path& candidate : candidates) {
+            std::error_code error;
+            if (std::filesystem::is_regular_file(candidate, error)) {
+                found = candidate;
+                break;
+            }
+        }
+        if (found.empty()) {
+            result += line;
+            result.push_back('\n');
+            continue;
+        }
+        const std::string key = std::filesystem::weakly_canonical(found).string();
+        if (once_files.find(key) != once_files.end()) {
+            result.push_back('\n');
+            continue;
+        }
+        if (active_files.find(key) != active_files.end()) {
+            result.push_back('\n');
+            continue;
+        }
+        result += "#line 1 \"" + found.string() + "\"\n";
+        result += read_include_file(found, once_files, active_files);
+        result += "#line " + std::to_string(line_number + 1) + " \"" +
+                  source_path.string() + "\"\n";
+    }
+    return result;
+}
+
+std::string preprocess(std::string_view source, const std::string& source_name) {
+    std::string without_comments = strip_comments(source);
+    std::set<std::string> once_files;
+    std::set<std::string> active_files;
+    without_comments = expand_local_includes(
+        without_comments, std::filesystem::path(source_name), once_files, active_files);
+
 
     std::map<std::string, std::string> macros;
     struct FunctionMacro {
@@ -365,6 +489,8 @@ std::string preprocess(std::string_view source) {
                         "float fmaxf(float left, float right);";
                     macros["M_PI"] = "3.14159265358979323846";
                 }
+            } else if (directive.rfind("#line", 0) == 0 && active) {
+                result += directive;
             }
             result.push_back('\n');
             continue;
@@ -437,8 +563,43 @@ private:
         }
     }
 
+    void skip_line_directives() {
+        for (;;) {
+            skip_space();
+            if (peek() != '#') {
+                return;
+            }
+            std::string directive;
+            while (position_ < source_.size() && peek() != '\n') {
+                directive.push_back(peek());
+                advance();
+            }
+            if (position_ < source_.size()) {
+                advance();
+            }
+            if (directive.rfind("#line", 0) != 0) {
+                continue;
+            }
+            std::size_t position = 5;
+            while (position < directive.size() &&
+                   std::isspace(static_cast<unsigned char>(directive[position])) != 0) {
+                ++position;
+            }
+            int line = 0;
+            while (position < directive.size() &&
+                   std::isdigit(static_cast<unsigned char>(directive[position])) != 0) {
+                line = line * 10 + (directive[position] - '0');
+                ++position;
+            }
+            if (line > 0) {
+                line_ = line;
+                column_ = 1;
+            }
+        }
+    }
+
     Token next() {
-        skip_space();
+        skip_line_directives();
         Token token;
         token.line = line_;
         token.column = column_;
@@ -767,7 +928,7 @@ class Compiler {
 public:
     Compiler(std::string_view source, std::string_view name, int source_id = 0)
         : source_name_(name), source_id_(source_id),
-          tokens_(Lexer(preprocess(source)).tokenize()) {}
+          tokens_(Lexer(preprocess(source, std::string(name))).tokenize()) {}
 
     Result run() {
         Result result;

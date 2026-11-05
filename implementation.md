@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-04 14:28 -08:00
+> **Last updated:** 2026-11-04 18:47 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1760,6 +1760,11 @@ Newest entries at the bottom. Use the local time zone.
       for R1-R15 and `PUSHFP`/`POPFP` for all FPRs, with encoder, decoder,
       assemblers, disassembler, help, docs, tests, and OS syscall/timer stubs
       updated. TSP remains saved explicitly through `RDSP`/`WRSP`.
+- **2026-11-04 18:47 -08:00** — C compiler quoted-include support:
+      local headers are recursively expanded with `#pragma once`, cycles are
+      stopped, and `#line` markers preserve source line numbers after includes.
+      The initrd parser now uses typed `initrd_header`/`initrd_entry` structures
+      instead of raw offsets.
 
 ## 10. Updating this file
 
