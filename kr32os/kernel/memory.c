@@ -1,6 +1,6 @@
 #include "memory.h"
 
-static unsigned int mem_bitmap[1024];
+static unsigned int mem_physical_bitmap[1024];
 static unsigned int mem_used_count = 0;
 static unsigned int mem_heap_next = 0x00300000;
 static unsigned int mem_heap_start = 0x00300000;
@@ -13,7 +13,7 @@ static void mark_used(unsigned int page) {
         if (page_is_used(page) == 0) {
             ++mem_used_count;
         }
-        mem_bitmap[page >> 5] |= 1U << (page & 31);
+        mem_physical_bitmap[page >> 5] |= 1U << (page & 31);
     }
 }
 
@@ -22,18 +22,18 @@ static void mark_free(unsigned int page) {
         if (page_is_used(page) != 0) {
             --mem_used_count;
         }
-        mem_bitmap[page >> 5] &= ~(1U << (page & 31));
+        mem_physical_bitmap[page >> 5] &= ~(1U << (page & 31));
     }
 }
 
 static int page_is_used(unsigned int page) {
-    return page < 32768 && (mem_bitmap[page >> 5] & (1U << (page & 31))) != 0;
+    return page < 32768 && (mem_physical_bitmap[page >> 5] & (1U << (page & 31))) != 0;
 }
 
 void memory_init(void) {
     unsigned int index = 0;
     while (index < 1024) {
-        mem_bitmap[index] = 0;
+        mem_physical_bitmap[index] = 0;
         ++index;
     }
     mem_used_count = 0;
