@@ -1892,7 +1892,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             entry.array_count = array_count;
             entry.page_count = (array_count + kPageSize - 1) / kPageSize;
             const auto expanded = array_expanded_.find(entry.key);
-            entry.expanded = expanded == array_expanded_.end() || expanded->second;
+            entry.expanded = expanded != array_expanded_.end() && expanded->second;
             const auto page = array_pages_.find(entry.key);
             entry.page = page == array_pages_.end() ? 0 : page->second;
             entry.page = std::clamp(entry.page, 0, std::max(0, entry.page_count - 1));
@@ -3517,8 +3517,9 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         }
         if (row.array) {
             const auto expanded = array_expanded_.find(row.key);
-            array_expanded_[row.key] =
-                expanded == array_expanded_.end() ? false : !expanded->second;
+            const bool currently_expanded =
+                expanded != array_expanded_.end() && expanded->second;
+            array_expanded_[row.key] = !currently_expanded;
             last_variable_click_ = -1;
             return true;
         }

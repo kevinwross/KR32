@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 09:04 -08:00
+> **Last updated:** 2026-11-05 10:18 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1824,6 +1824,9 @@ Newest entries at the bottom. Use the local time zone.
       view is already at the bottom. Scrolling upward preserves the user's
       position as new text arrives; returning to the bottom resumes following.
       Added a pure scroll-policy helper and regression tests.
+- **2026-11-05 10:18 -08:00** — Variable arrays now start collapsed on image
+      load and whenever a new array key first appears. Clicking the array row
+      expands or collapses it, and the explicit state is retained per key.
 
 ## 10. Updating this file
 

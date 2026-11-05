@@ -191,8 +191,9 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   Floating-point values are shown as decimal text rather than raw bit patterns,
   and aggregate rows show `{...}` while their members expand below. Pointers to
   known structs and arrays expand into indented children. Array types include
-  their bounds (`float[16]`, `char[32]`). Click an array row to collapse or
-  expand it; large arrays show 16 elements per page with a `< page N/M >` row.
+  their bounds (`float[16]`, `char[32]`). Arrays start collapsed; click an
+  array row to expand or collapse it. Large arrays show 16 elements per page
+  with a `< page N/M >` row.
   Click the left arrow to step back; click the page text or right arrow to
   advance.
 - Double-click a variable row to inspect its address, or a pointer's target, in
