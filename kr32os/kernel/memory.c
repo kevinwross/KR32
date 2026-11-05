@@ -1,42 +1,42 @@
 #include "memory.h"
 
-static unsigned int bitmap[1024];
-static unsigned int used_count = 0;
-static unsigned int heap_next = 0x00300000;
-static unsigned int heap_start = 0x00300000;
-static unsigned int heap_end = 0x003F0000;
+static unsigned int mem_bitmap[1024];
+static unsigned int mem_used_count = 0;
+static unsigned int mem_heap_next = 0x00300000;
+static unsigned int mem_heap_start = 0x00300000;
+static unsigned int mem_heap_end = 0x003F0000;
 
 static int page_is_used(unsigned int page);
 
 static void mark_used(unsigned int page) {
     if (page < 32768) {
         if (page_is_used(page) == 0) {
-            ++used_count;
+            ++mem_used_count;
         }
-        bitmap[page >> 5] |= 1U << (page & 31);
+        mem_bitmap[page >> 5] |= 1U << (page & 31);
     }
 }
 
 static void mark_free(unsigned int page) {
     if (page < 32768) {
         if (page_is_used(page) != 0) {
-            --used_count;
+            --mem_used_count;
         }
-        bitmap[page >> 5] &= ~(1U << (page & 31));
+        mem_bitmap[page >> 5] &= ~(1U << (page & 31));
     }
 }
 
 static int page_is_used(unsigned int page) {
-    return page < 32768 && (bitmap[page >> 5] & (1U << (page & 31))) != 0;
+    return page < 32768 && (mem_bitmap[page >> 5] & (1U << (page & 31))) != 0;
 }
 
 void memory_init(void) {
     unsigned int index = 0;
     while (index < 1024) {
-        bitmap[index] = 0;
+        mem_bitmap[index] = 0;
         ++index;
     }
-    used_count = 0;
+    mem_used_count = 0;
     index = 0;
     while (index < 1024) {
         mark_used(index);
@@ -48,7 +48,7 @@ void memory_init(void) {
         mark_used(index);
         ++index;
     }
-    heap_next = heap_start;
+    mem_heap_next = mem_heap_start;
 }
 
 unsigned int page_alloc(void) {
@@ -71,11 +71,11 @@ void page_free(unsigned int address) {
 
 void *kmalloc(unsigned int size) {
     unsigned int aligned = (size + 7) & ~7U;
-    if (aligned == 0 || heap_next + aligned > heap_end) {
+    if (aligned == 0 || mem_heap_next + aligned > mem_heap_end) {
         return 0;
     }
-    void *result = (void *)heap_next;
-    heap_next += aligned;
+    void *result = (void *)mem_heap_next;
+    mem_heap_next += aligned;
     return result;
 }
 
@@ -84,9 +84,9 @@ void kfree(void *pointer) {
 }
 
 unsigned int memory_used_pages(void) {
-    return used_count;
+    return mem_used_count;
 }
 
 unsigned int heap_used(void) {
-    return heap_next - heap_start;
+    return mem_heap_next - mem_heap_start;
 }
