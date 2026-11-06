@@ -505,6 +505,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int sscanf(const char *text, const char *format, ...); "
                         "int remove(const char *path); "
                         "int rename(const char *old_path, const char *new_path); "
+                        "FILE *tmpfile(void); "
                         "int getline(char **line, int *capacity, FILE *stream); "
                         "int getdelim(char **line, int *capacity, int delimiter, FILE *stream); "
                         "int printf(const char *format, ...); "

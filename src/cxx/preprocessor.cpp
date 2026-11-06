@@ -872,6 +872,7 @@ private:
                     "int getdelim(char** line, int* capacity, int delimiter, FILE* stream);\n"
                     "int remove(const char* path);\n"
                     "int rename(const char* old_path, const char* new_path);\n"
+                    "FILE* tmpfile();\n"
                     "int snprintf(char* buffer, int size, const char* format, ...);\n"
                     "int sprintf(char* buffer, const char* format, ...);\n"
                     "}\n");

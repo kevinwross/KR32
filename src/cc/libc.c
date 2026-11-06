@@ -1026,6 +1026,16 @@ int vfscanf(struct kr32_file *stream, const char *format, va_list arguments) {
                 *target = value;
                 assigned = assigned + 1;
             }
+        } else if (spec == 'p') {
+            unsigned int value = 0;
+            if (!scanf_integer(stream, &value, 16)) {
+                break;
+            }
+            if (!suppress) {
+                void **target = va_arg(arguments, void **);
+                *target = (void *)value;
+                assigned = assigned + 1;
+            }
         } else if (spec == 'f' || spec == 'e' || spec == 'g') {
             double value = 0.0;
             if (!scanf_double(stream, &value)) {
@@ -2632,4 +2642,17 @@ int sprintf(char *buffer, const char *format, ...) {
     const int result = vsprintf(buffer, format, arguments);
     va_end(arguments);
     return result;
+}
+
+struct kr32_file *tmpfile(void) {
+    static int counter = 0;
+    char path[64];
+    counter = counter + 1;
+    snprintf(path, 64, "kr32-tmp-%d.tmp", counter);
+    struct kr32_file *stream = fopen(path, "w+");
+    if (stream == 0) {
+        return 0;
+    }
+    (void)remove(path);
+    return stream;
 }

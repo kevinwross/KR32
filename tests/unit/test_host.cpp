@@ -446,6 +446,31 @@ TEST_CASE("Host buffers FILE output and flushes on close") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host supports tmpfile") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    FILE *stream = tmpfile();\n"
+        "    if (stream == 0) return 1;\n"
+        "    fputs(\"temp\", stream);\n"
+        "    rewind(stream);\n"
+        "    char buffer[8];\n"
+        "    if (fgets(buffer, 8, stream) == 0) return 2;\n"
+        "    fclose(stream);\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

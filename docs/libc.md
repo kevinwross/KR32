@@ -35,7 +35,7 @@ source line numbers and debugger line mappings are preserved.
 `fopen`/`fdopen`/`freopen`/`fclose`, `fread`/`fwrite`, `fgetc`/`fputc`,
 `ungetc`, `fgets`/`fputs`/`puts`, `fprintf`/`fscanf`/`scanf`/`sscanf`,
 `fseek`/`ftell`/`rewind`/`fgetpos`/`fsetpos`, `feof`/`ferror`/`clearerr`,
-`fileno`, `getline`/`getdelim`, and `snprintf`/`sprintf`. `stdin`, `stdout`,
+`fileno`, `getline`/`getdelim`, `tmpfile`, and `snprintf`/`sprintf`. `stdin`, `stdout`,
 and `stderr` map to the console syscalls; file streams use descriptors 3 and
 above. Output is unbuffered by default; `setvbuf`/`setbuf` can install full or
 line output buffering, and `fflush`/`fclose`/`fseek`/`ftell` flush the buffer.
