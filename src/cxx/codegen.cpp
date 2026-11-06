@@ -5354,6 +5354,39 @@ private:
                                         *expression.children[1], operation);
     }
 
+    TypePtr gen_member_operator_args(const Expr& object,
+                                     const std::vector<ExprPtr>& arguments,
+                                     Function* operation) {
+        const int this_temp =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        gen_address(object);
+        emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+        std::vector<int> temporary;
+        for (std::size_t index = 0; index < arguments.size(); ++index) {
+            const TypePtr parameter =
+                index < operation->parameters.size()
+                    ? operation->parameters[index]
+                    : Type::make_builtin(BuiltinKind::Int);
+            if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                              parameter->kind == TypeKind::RValueRef)) {
+                gen_address(*arguments[index]);
+            } else {
+                gen_expr(*arguments[index]);
+            }
+            const int slot =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+            temporary.push_back(slot);
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
+        for (std::size_t index = 0; index < temporary.size(); ++index) {
+            emit("    LOAD R" + std::to_string(index + 1) + ", [R7 + " +
+                 std::to_string(temporary[index]) + "]");
+        }
+        emit("    CALL " + operation->symbol);
+        return operation->result;
+    }
+
     TypePtr gen_member_unary(const Expr& expression, Function* operation) {
         const int this_temp =
             allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -5761,10 +5794,9 @@ private:
                         *expression.children[0], *expression.arguments[0],
                         operation);
                 }
-                diagnose_once(expression,
-                              "operator() with multiple arguments is not supported yet");
-                emit("    MOV R0, #0");
-                return operation->result;
+                return gen_member_operator_args(*expression.children[0],
+                                                expression.arguments,
+                                                operation);
             }
         }
         std::string list_method;

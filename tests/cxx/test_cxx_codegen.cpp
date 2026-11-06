@@ -307,6 +307,25 @@ TEST_CASE("free stream operators support custom types") {
     CHECK(program.output == "value=42\n");
 }
 
+TEST_CASE("member operator() supports multiple arguments") {
+    const ProgramResult program = compile_and_run(
+        "class Combine {\n"
+        "public:\n"
+        "    int base;\n"
+        "    Combine(int value) : base(value) {}\n"
+        "    int operator()(int left, int right);\n"
+        "};\n"
+        "int Combine::operator()(int left, int right) {\n"
+        "    return base + left + right;\n"
+        "}\n"
+        "int main() {\n"
+        "    Combine combine(1);\n"
+        "    return combine(2, 3) - 6;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
