@@ -188,7 +188,7 @@ C++ programs can include `<stdio.h>` and use the same `FILE` API. They can also
 include `<iostream>` or `<fstream>` for a compact stream subset:
 `std::ifstream`, `std::ofstream`, `std::fstream`, `std::cin`, `std::cout`,
 `std::cerr`, `operator<<`, `operator>>`, `std::endl`, `read`, `write`, `get`,
-`getline`, `seekg`/`tellg`, and `seekp`/`tellp`. These streams are unbuffered
+`getline`, `seekg`/`tellg`, `seekp`/`tellp`, `hex`/`dec`/`oct`, `width`, and\n`precision`. These streams are unbuffered
 wrappers over `FILE`. The compiler currently supports member binary operator
 overloads (including class-by-value parameters), member `operator[]`, compound assignment operators, and simple
 unary operators, and postfix increment/decrement. Free binary operators are

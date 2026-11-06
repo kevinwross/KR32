@@ -371,6 +371,24 @@ TEST_CASE("member operators accept class-by-value parameters") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("iostream formatting state supports base, width, and precision") {
+    const ProgramResult program = compile_and_run(
+        "#include <iostream>\n"
+        "int main() {\n"
+        "    std::cout.hex();\n"
+        "    std::cout << 255 << std::endl;\n"
+        "    std::cout.dec();\n"
+        "    std::cout.width(4);\n"
+        "    std::cout << 7 << std::endl;\n"
+        "    std::cout.precision(2);\n"
+        "    std::cout << 3.14159 << std::endl;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+    CHECK(program.output == "ff\n   7\n3.1\n");
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
