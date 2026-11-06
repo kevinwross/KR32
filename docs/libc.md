@@ -26,14 +26,22 @@ source line numbers and debugger line mappings are preserved.
 | `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, and string prototypes |
 | `<stdarg.h>` | `va_list` and the `va_start`/`va_arg`/`va_end`/`va_copy` macros |
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
+| `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
+| `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
 | `<math.h>` | `sqrt`, `sqrtf`, `fabs`, `fabsf`, `fmin`, `fminf`, `fmax`, `fmaxf`, `M_PI` |
 
 `<stdio.h>` provides an unbuffered `FILE` layer over the descriptor syscalls:
-`fopen`/`fclose`, `fread`/`fwrite`, `fgetc`/`fputc`, `fgets`/`fputs`,
-`fprintf`/`fscanf`, `fseek`/`ftell`/`rewind`, `feof`/`ferror`/`clearerr`, and
-`snprintf`/`sprintf`. `stdin`, `stdout`, and `stderr` map to the console
-syscalls; file streams use descriptors 3 and above. The implementation is
-unbuffered and therefore does not need `setvbuf` for correctness.
+`fopen`/`fdopen`/`freopen`/`fclose`, `fread`/`fwrite`, `fgetc`/`fputc`,
+`ungetc`, `fgets`/`fputs`/`puts`, `fprintf`/`fscanf`/`scanf`/`sscanf`,
+`fseek`/`ftell`/`rewind`/`fgetpos`/`fsetpos`, `feof`/`ferror`/`clearerr`,
+`fileno`, `getline`/`getdelim`, and `snprintf`/`sprintf`. `stdin`, `stdout`,
+and `stderr` map to the console syscalls; file streams use descriptors 3 and
+above. The implementation is unbuffered; `setvbuf`/`setbuf` currently return
+success without changing buffering.
+
+`<errno.h>` provides `errno`, `strerror`, and `perror`. `<sys/stat.h>` provides
+`struct stat`, `stat`, `fstat`, `remove`, and `rename`; the host operations are
+sandboxed just like `open`.
 
 ## Compiler extensions used by libc
 

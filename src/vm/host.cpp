@@ -16,6 +16,16 @@ constexpr std::uint32_t kErrorIo = 0xFFFF'FFFFU;
 constexpr std::uint32_t kErrorInvalid = 0xFFFF'FFFCU;
 constexpr std::uint32_t kErrorNoSpace = 0xFFFF'FFFBU;
 
+bool write_guest_u32(core::Machine& machine, std::uint32_t address, std::uint32_t value) {
+    for (std::uint32_t index = 0; index < 4; ++index) {
+        if (!machine.write8(address + index,
+                            static_cast<std::uint8_t>((value >> (index * 8U)) & 0xFFU))) {
+            return false;
+        }
+    }
+    return true;
+}
+
 bool starts_with_path(const std::string& candidate, const std::string& root) {
     if (candidate == root) {
         return true;
@@ -445,6 +455,110 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         authorized_paths_.insert(result.path);
         authorized_paths_.insert(canonical.string());
         machine.set_reg(0, length);
+        return true;
+    }
+    case syscall::Unlink: {
+        std::string path;
+        if (!read_guest_string(machine, machine.reg(0), path)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        bool ok = false;
+        const std::string resolved = resolve(path, true, ok);
+        if (!ok) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        std::error_code error;
+        if (std::filesystem::is_directory(resolved, error)) {
+            last_error_ = "unlink requires a regular file";
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        const bool removed = std::filesystem::remove(resolved, error);
+        if (error || !removed) {
+            last_error_ = error ? error.message() : "file does not exist";
+            machine.set_reg(0, kErrorIo);
+            return true;
+        }
+        machine.set_reg(0, 0);
+        return true;
+    }
+    case syscall::Rename: {
+        std::string source;
+        std::string target;
+        if (!read_guest_string(machine, machine.reg(0), source) ||
+            !read_guest_string(machine, machine.reg(1), target)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        bool source_ok = false;
+        bool target_ok = false;
+        const std::string resolved_source = resolve(source, true, source_ok);
+        const std::string resolved_target = resolve(target, true, target_ok);
+        if (!source_ok || !target_ok) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        std::error_code error;
+        std::filesystem::rename(resolved_source, resolved_target, error);
+        if (error) {
+            last_error_ = error.message();
+            machine.set_reg(0, kErrorIo);
+            return true;
+        }
+        machine.set_reg(0, 0);
+        return true;
+    }
+    case syscall::Stat: {
+        std::string path;
+        if (!read_guest_string(machine, machine.reg(0), path)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        const std::uint32_t address = machine.reg(1);
+        const std::uint32_t capacity = machine.reg(2);
+        if (capacity < stat_abi::Size) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        bool ok = false;
+        const std::string resolved = resolve(path, false, ok);
+        if (!ok) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        std::error_code error;
+        const std::filesystem::file_status status =
+            std::filesystem::status(resolved, error);
+        if (error || !std::filesystem::exists(status)) {
+            last_error_ = error ? error.message() : "file does not exist";
+            machine.set_reg(0, kErrorIo);
+            return true;
+        }
+        std::uint32_t size = 0;
+        std::uint32_t mode = 0;
+        if (std::filesystem::is_directory(status)) {
+            mode = stat_abi::Directory;
+        } else if (std::filesystem::is_regular_file(status)) {
+            mode = stat_abi::Regular;
+            size = static_cast<std::uint32_t>(
+                std::filesystem::file_size(resolved, error));
+            if (error) {
+                machine.set_reg(0, kErrorIo);
+                return true;
+            }
+        } else {
+            mode = stat_abi::Regular;
+        }
+        if (!write_guest_u32(machine, address, size) ||
+            !write_guest_u32(machine, address + 4, mode) ||
+            !write_guest_u32(machine, address + 8, 0) ||
+            !write_guest_u32(machine, address + 12, 0)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        machine.set_reg(0, 0);
         return true;
     }
     case 46: // thread yield

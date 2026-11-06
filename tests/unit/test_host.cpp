@@ -254,6 +254,32 @@ TEST_CASE("Host file dialog cancellation and unavailable status are distinct") {
     CHECK(unavailable.result == 0);
 }
 
+TEST_CASE("Host FILE errors set errno and perror") {
+    const container::Image image = compile_image(
+        "#include <errno.h>\n"
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    errno = 0;\n"
+        "    FILE *stream = fopen(\"missing-file.txt\", \"r\");\n"
+        "    if (stream != 0) return 1;\n"
+        "    if (errno == 0) return 2;\n"
+        "    if (strerror(errno) == 0) return 3;\n"
+        "    perror(\"open failed\");\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    CHECK(result.console.find("open failed: ") == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host supports C FILE streams") {
     const container::Image image = compile_image(
         "#include <stdio.h>\n"
@@ -273,6 +299,110 @@ TEST_CASE("Host supports C FILE streams") {
         "    char buffer[32];\n"
         "    if (snprintf(buffer, 32, \"%s %d %.2f\", word, number, real) != 13) return 7;\n"
         "    return strcmp(buffer, \"value 42 3.50\");\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
+TEST_CASE("Host supports sscanf, scansets, and getline") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    char word[16];\n"
+        "    int number = 0;\n"
+        "    double real = 0.0;\n"
+        "    if (sscanf(\"value 42 3.5\", \"%s %d %lf\", word, &number, &real) != 3) return 1;\n"
+        "    char letters[16];\n"
+        "    int digits = 0;\n"
+        "    if (sscanf(\"abc123\", \"%[a-z]%d\", letters, &digits) != 2) return 2;\n"
+        "    FILE *stream = fopen(\"lines.txt\", \"w\");\n"
+        "    if (stream == 0) return 3;\n"
+        "    fputs(\"one\\ntwo\\n\", stream);\n"
+        "    fclose(stream);\n"
+        "    stream = fopen(\"lines.txt\", \"r\");\n"
+        "    if (stream == 0) return 4;\n"
+        "    char *line = 0;\n"
+        "    int capacity = 0;\n"
+        "    int length = getline(&line, &capacity, stream);\n"
+        "    if (length != 4) return 5;\n"
+        "    free(line);\n"
+        "    fclose(stream);\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
+TEST_CASE("Host exposes stat, fstat, rename, and remove") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "#include <sys/stat.h>\n"
+        "int main(void) {\n"
+        "    FILE *stream = fopen(\"stat-test.txt\", \"w\");\n"
+        "    if (stream == 0) return 1;\n"
+        "    fputs(\"hello\", stream);\n"
+        "    fclose(stream);\n"
+        "    struct stat info;\n"
+        "    if (stat(\"stat-test.txt\", &info) != 0) return 2;\n"
+        "    if (info.st_size != 5) return 3;\n"
+        "    stream = fopen(\"stat-test.txt\", \"r\");\n"
+        "    if (stream == 0) return 4;\n"
+        "    if (fstat(fileno(stream), &info) != 0) return 5;\n"
+        "    if (info.st_size != 5) return 6;\n"
+        "    fclose(stream);\n"
+        "    if (rename(\"stat-test.txt\", \"renamed.txt\") != 0) return 7;\n"
+        "    if (stat(\"stat-test.txt\", &info) == 0) return 8;\n"
+        "    if (remove(\"renamed.txt\") != 0) return 9;\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
+TEST_CASE("Host supports freopen and file positions") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    FILE *stream = fopen(\"positions.txt\", \"w+\");\n"
+        "    if (stream == 0) return 1;\n"
+        "    fputs(\"abcdef\", stream);\n"
+        "    fpos_t position = 0;\n"
+        "    if (fgetpos(stream, &position) != 0) return 2;\n"
+        "    if (position != 6) return 3;\n"
+        "    position = 2;\n"
+        "    if (fsetpos(stream, &position) != 0) return 4;\n"
+        "    char value = 0;\n"
+        "    if (fread(&value, 1, 1, stream) != 1 || value != 'c') return 5;\n"
+        "    stream = freopen(\"other.txt\", \"w\", stream);\n"
+        "    if (stream == 0) return 6;\n"
+        "    fputs(\"new\", stream);\n"
+        "    fclose(stream);\n"
+        "    return 0;\n"
         "}\n");
     const std::filesystem::path sandbox = temporary_sandbox();
     vm::HostOptions options;

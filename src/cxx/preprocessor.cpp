@@ -651,11 +651,47 @@ private:
                     "}\n");
                 return;
             }
+            if (header.find("sys/stat.h") != std::string::npos) {
+                append_line(
+                    "struct stat { unsigned int st_size; unsigned int st_mode; "
+                    "unsigned int st_mtime; unsigned int st_reserved; };\n"
+                    "extern \"C\" {\n"
+                    "int stat(const char* path, struct stat* status);\n"
+                    "int fstat(int descriptor, struct stat* status);\n"
+                    "int remove(const char* path);\n"
+                    "int rename(const char* old_path, const char* new_path);\n"
+                    "}\n");
+                macros_["S_IFMT"] = Macro{false, {}, "0xF000"};
+                macros_["S_IFREG"] = Macro{false, {}, "0x8000"};
+                macros_["S_IFDIR"] = Macro{false, {}, "0x4000"};
+                return;
+            }
+            if (header.find("errno.h") != std::string::npos ||
+                header.find("cerrno") != std::string::npos) {
+                append_line(
+                    "extern \"C\" {\n"
+                    "extern int errno;\n"
+                    "const char* strerror(int code);\n"
+                    "void perror(const char* prefix);\n"
+                    "}\n");
+                macros_["EPERM"] = Macro{false, {}, "1"};
+                macros_["ENOENT"] = Macro{false, {}, "2"};
+                macros_["EIO"] = Macro{false, {}, "5"};
+                macros_["EBADF"] = Macro{false, {}, "9"};
+                macros_["ENOMEM"] = Macro{false, {}, "12"};
+                macros_["EACCES"] = Macro{false, {}, "13"};
+                macros_["EEXIST"] = Macro{false, {}, "17"};
+                macros_["EINVAL"] = Macro{false, {}, "22"};
+                macros_["ENOSPC"] = Macro{false, {}, "28"};
+                macros_["ENOSYS"] = Macro{false, {}, "38"};
+                return;
+            }
             if (header.find("fstream") != std::string::npos ||
                 header.find("iostream") != std::string::npos) {
                 append_line(
-                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; };\n"
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; };\n"
                     "typedef struct kr32_file FILE;\n"
+                    "typedef int fpos_t;\n"
                     "extern \"C\" {\n"
                     "extern FILE* stdin;\n"
                     "extern FILE* stdout;\n"
@@ -674,6 +710,10 @@ private:
                     "int feof(FILE* stream);\n"
                     "int ferror(FILE* stream);\n"
                     "int fscanf(FILE* stream, const char* format, ...);\n"
+                    "int scanf(const char* format, ...);\n"
+                    "int sscanf(const char* text, const char* format, ...);\n"
+                    "int getline(char** line, int* capacity, FILE* stream);\n"
+                    "int getdelim(char** line, int* capacity, int delimiter, FILE* stream);\n"
                     "int fprintf(FILE* stream, const char* format, ...);\n"
                     "int snprintf(char* buffer, int size, const char* format, ...);\n"
                     "}\n"
@@ -778,8 +818,9 @@ private:
             if (header.find("stdio.h") != std::string::npos ||
                 header.find("cstdio") != std::string::npos) {
                 append_line(
-                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; };\n"
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; };\n"
                     "typedef struct kr32_file FILE;\n"
+                    "typedef int fpos_t;\n"
                     "extern \"C\" {\n"
                     "extern FILE* stdin;\n"
                     "extern FILE* stdout;\n"
@@ -789,6 +830,7 @@ private:
                     "int printf(const char* format, ...);\n"
                     "FILE* fopen(const char* path, const char* mode);\n"
                     "FILE* fdopen(int fd, const char* mode);\n"
+                    "FILE* freopen(const char* path, const char* mode, FILE* stream);\n"
                     "int fclose(FILE* stream);\n"
                     "int fflush(FILE* stream);\n"
                     "int fgetc(FILE* stream);\n"
@@ -802,12 +844,22 @@ private:
                     "int fseek(FILE* stream, int offset, int whence);\n"
                     "int ftell(FILE* stream);\n"
                     "void rewind(FILE* stream);\n"
+                    "int fgetpos(FILE* stream, fpos_t* position);\n"
+                    "int fsetpos(FILE* stream, const fpos_t* position);\n"
+                    "int setvbuf(FILE* stream, char* buffer, int mode, int size);\n"
+                    "void setbuf(FILE* stream, char* buffer);\n"
                     "int feof(FILE* stream);\n"
                     "int ferror(FILE* stream);\n"
                     "void clearerr(FILE* stream);\n"
                     "int fileno(FILE* stream);\n"
                     "int fprintf(FILE* stream, const char* format, ...);\n"
                     "int fscanf(FILE* stream, const char* format, ...);\n"
+                    "int scanf(const char* format, ...);\n"
+                    "int sscanf(const char* text, const char* format, ...);\n"
+                    "int getline(char** line, int* capacity, FILE* stream);\n"
+                    "int getdelim(char** line, int* capacity, int delimiter, FILE* stream);\n"
+                    "int remove(const char* path);\n"
+                    "int rename(const char* old_path, const char* new_path);\n"
                     "int snprintf(char* buffer, int size, const char* format, ...);\n"
                     "int sprintf(char* buffer, const char* format, ...);\n"
                     "}\n");

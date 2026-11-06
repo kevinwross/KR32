@@ -427,7 +427,33 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     conditions.pop_back();
                 }
             } else if (directive.rfind("#include", 0) == 0 && active) {
-                if (directive.find("kr32.h") != std::string::npos ||
+                if (directive.find("sys/stat.h") != std::string::npos) {
+                    result +=
+                        "struct stat { unsigned int st_size; unsigned int st_mode; "
+                        "unsigned int st_mtime; unsigned int st_reserved; }; "
+                        "int stat(const char *path, struct stat *status); "
+                        "int fstat(int descriptor, struct stat *status); "
+                        "int remove(const char *path); "
+                        "int rename(const char *old_path, const char *new_path);";
+                    macros["S_IFMT"] = "0xF000";
+                    macros["S_IFREG"] = "0x8000";
+                    macros["S_IFDIR"] = "0x4000";
+                } else if (directive.find("errno.h") != std::string::npos) {
+                    result +=
+                        "extern int errno; "
+                        "const char *strerror(int code); "
+                        "void perror(const char *prefix);";
+                    macros["EPERM"] = "1";
+                    macros["ENOENT"] = "2";
+                    macros["EIO"] = "5";
+                    macros["EBADF"] = "9";
+                    macros["ENOMEM"] = "12";
+                    macros["EACCES"] = "13";
+                    macros["EEXIST"] = "17";
+                    macros["EINVAL"] = "22";
+                    macros["ENOSPC"] = "28";
+                    macros["ENOSYS"] = "38";
+                } else if (directive.find("kr32.h") != std::string::npos ||
                     directive.find("stdio.h") != std::string::npos ||
                     directive.find("stdlib.h") != std::string::npos ||
                     directive.find("string.h") != std::string::npos) {
@@ -442,11 +468,13 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int sys_file_dialog(int mode, int flags, char *path, int capacity); "
                         "int sys_open_dialog(char *path, int capacity); "
                         "int sys_save_dialog(char *path, int capacity); "
-                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; }; "
+                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; }; "
                         "typedef struct kr32_file FILE; "
                         "extern FILE *stdin; extern FILE *stdout; extern FILE *stderr; "
+                        "typedef int fpos_t; "
                         "FILE *fopen(const char *path, const char *mode); "
                         "FILE *fdopen(int fd, const char *mode); "
+                        "FILE *freopen(const char *path, const char *mode, FILE *stream); "
                         "int fclose(FILE *stream); int fflush(FILE *stream); "
                         "int fgetc(FILE *stream); int fputc(int c, FILE *stream); "
                         "int ungetc(int c, FILE *stream); "
@@ -457,10 +485,20 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int fwrite(const void *buffer, int size, int count, FILE *stream); "
                         "int fseek(FILE *stream, int offset, int whence); "
                         "int ftell(FILE *stream); void rewind(FILE *stream); "
+                        "int fgetpos(FILE *stream, fpos_t *position); "
+                        "int fsetpos(FILE *stream, const fpos_t *position); "
+                        "int setvbuf(FILE *stream, char *buffer, int mode, int size); "
+                        "void setbuf(FILE *stream, char *buffer); "
                         "int feof(FILE *stream); int ferror(FILE *stream); "
                         "void clearerr(FILE *stream); int fileno(FILE *stream); "
                         "int fprintf(FILE *stream, const char *format, ...); "
                         "int fscanf(FILE *stream, const char *format, ...); "
+                        "int scanf(const char *format, ...); "
+                        "int sscanf(const char *text, const char *format, ...); "
+                        "int remove(const char *path); "
+                        "int rename(const char *old_path, const char *new_path); "
+                        "int getline(char **line, int *capacity, FILE *stream); "
+                        "int getdelim(char **line, int *capacity, int delimiter, FILE *stream); "
                         "int printf(const char *format, ...); "
                         "int snprintf(char *buffer, int size, const char *format, ...); "
                         "int sprintf(char *buffer, const char *format, ...); "
@@ -3969,6 +4007,19 @@ std::string runtime_assembly() {
         ".global seek\n"
         "seek:\n"
         "    SYSCALL #39\n"
+        "    RET\n"
+        ".global unlink\n"
+        "unlink:\n"
+        "    SYSCALL #52\n"
+        "    RET\n"
+        ".global rename\n"
+        "rename:\n"
+        "    SYSCALL #53\n"
+        "    RET\n"
+        ".global stat\n"
+        "stat:\n"
+        "    MOV R2, #16\n"
+        "    SYSCALL #54\n"
         "    RET\n"
         ".global sys_time\n"
         "sys_time:\n"

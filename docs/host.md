@@ -26,6 +26,9 @@ The guest reaches the host through `SYSCALL` vectors 32..51. Arguments are in
 | 49 | futex_wake | address, count | woken count |
 | 50 | thread_self | — | current thread handle |
 | 51 | file_dialog | mode, flags, path, capacity | path length or error |
+| 52 | unlink | path | 0 or error |
+| 53 | rename | old_path, new_path | 0 or error |
+| 54 | stat | path, buffer, capacity | 0 or error |
 
 Thread services are provided by `vm::ClusterHost`, which maps one guest thread
 per `core::Cluster` core and advances one core turn at a time. A thread handle
@@ -80,6 +83,11 @@ as an authorized path, so a guest `open(path, ...)` can use the returned path
 without weakening the normal sandbox rule for other paths. Save does not create
 the file: the guest still calls `open` with the desired
 write/create/truncate flags.
+
+`stat` writes a 16-byte guest structure: `st_size`, `st_mode`, `st_mtime`, and
+a reserved word. `st_mode` uses `0x8000` for regular files and `0x4000` for
+directories. `unlink` and `rename` use the same path authorization and
+read-only rules as `open`.
 
 ## Sandbox
 

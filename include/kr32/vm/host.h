@@ -35,7 +35,16 @@ inline constexpr std::uint32_t Random = 41;
 inline constexpr std::uint32_t Argc = 42;
 inline constexpr std::uint32_t Arg = 43;
 inline constexpr std::uint32_t FileDialog = file_dialog::Vector;
+inline constexpr std::uint32_t Unlink = 52;
+inline constexpr std::uint32_t Rename = 53;
+inline constexpr std::uint32_t Stat = 54;
 } // namespace syscall
+
+namespace stat_abi {
+inline constexpr std::uint32_t Size = 16;
+inline constexpr std::uint32_t Regular = 0x8000;
+inline constexpr std::uint32_t Directory = 0x4000;
+} // namespace stat_abi
 
 using FileDialogCallback =
     std::function<FileDialogResult(const FileDialogOptions&)>;

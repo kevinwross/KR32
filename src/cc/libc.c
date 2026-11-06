@@ -6,11 +6,34 @@ int putchar(int c);
 int getchar(void);
 void exit(int code);
 
+int errno = 0;
+
+#define EPERM 1
+#define ENOENT 2
+#define EIO 5
+#define EBADF 9
+#define ENOMEM 12
+#define EACCES 13
+#define EEXIST 17
+#define EINVAL 22
+#define ENOSPC 28
+#define ENOSYS 38
+
+struct stat {
+    unsigned int st_size;
+    unsigned int st_mode;
+    unsigned int st_mtime;
+    unsigned int st_reserved;
+};
+
 int open(const char *path, int flags);
 int close(int fd);
 int read(int fd, void *buffer, int count);
 int write(int fd, const void *buffer, int count);
 int seek(int fd, int offset, int whence);
+int unlink(const char *path);
+int rename(const char *old_path, const char *new_path);
+int stat(const char *path, struct stat *status);
 
 void *memcpy(void *destination, const void *source, int count);
 void *memset(void *destination, int value, int count);
@@ -26,6 +49,9 @@ struct kr32_file {
     int flags;
     int ungot;
     int owns_descriptor;
+    const char *memory;
+    int memory_position;
+    int memory_mode;
 };
 
 typedef struct kr32_file FILE;
@@ -403,12 +429,27 @@ void *realloc(void *pointer, int size) {
 
 static int stream_read_byte(struct kr32_file *stream) {
     if (stream == 0 || (stream->flags & KR32_FILE_READ) == 0) {
+        errno = EBADF;
         return EOF;
     }
     if (stream->ungot >= 0) {
         const int value = stream->ungot;
         stream->ungot = -1;
         return value;
+    }
+    if (stream->memory_mode != 0) {
+        if (stream->memory == 0) {
+            stream->flags = stream->flags | KR32_FILE_EOF;
+            return EOF;
+        }
+        const char *memory = stream->memory;
+        const char value = memory[stream->memory_position];
+        if (value == '\0') {
+            stream->flags = stream->flags | KR32_FILE_EOF;
+            return EOF;
+        }
+        stream->memory_position = stream->memory_position + 1;
+        return (unsigned char)value;
     }
     if (stream->descriptor == 0) {
         const int value = getchar();
@@ -426,6 +467,7 @@ static int stream_read_byte(struct kr32_file *stream) {
     }
     if (count < 0) {
         stream->flags = stream->flags | KR32_FILE_ERROR;
+        errno = count == -4 ? EBADF : EIO;
         return EOF;
     }
     return (int)byte;
@@ -433,12 +475,14 @@ static int stream_read_byte(struct kr32_file *stream) {
 
 static int stream_write_byte(struct kr32_file *stream, int character) {
     if (stream == 0 || (stream->flags & KR32_FILE_WRITE) == 0) {
+        errno = EBADF;
         return EOF;
     }
     const unsigned char byte = (unsigned char)character;
     if (stream->descriptor == 1 || stream->descriptor == 2) {
         if (putchar((int)byte) < 0) {
             stream->flags = stream->flags | KR32_FILE_ERROR;
+            errno = EIO;
             return EOF;
         }
         return (int)byte;
@@ -446,6 +490,7 @@ static int stream_write_byte(struct kr32_file *stream, int character) {
     const int count = write(stream->descriptor, &byte, 1);
     if (count != 1) {
         stream->flags = stream->flags | KR32_FILE_ERROR;
+        errno = count == -4 ? EBADF : EIO;
         return EOF;
     }
     return (int)byte;
@@ -453,6 +498,9 @@ static int stream_write_byte(struct kr32_file *stream, int character) {
 
 static int stream_write_bytes(struct kr32_file *stream, const void *buffer, int count) {
     if (stream == 0 || (stream->flags & KR32_FILE_WRITE) == 0 || count <= 0) {
+        if (stream == 0 || (stream->flags & KR32_FILE_WRITE) == 0) {
+            errno = EBADF;
+        }
         return 0;
     }
     if (stream->descriptor == 1 || stream->descriptor == 2) {
@@ -469,6 +517,7 @@ static int stream_write_bytes(struct kr32_file *stream, const void *buffer, int 
     const int written = write(stream->descriptor, buffer, count);
     if (written < 0) {
         stream->flags = stream->flags | KR32_FILE_ERROR;
+        errno = written == -4 ? EBADF : (written == -5 ? ENOSPC : EIO);
         return 0;
     }
     return written;
@@ -476,6 +525,7 @@ static int stream_write_bytes(struct kr32_file *stream, const void *buffer, int 
 
 struct kr32_file *fopen(const char *path, const char *mode) {
     if (path == 0 || mode == 0 || mode[0] == '\0') {
+        errno = EINVAL;
         return 0;
     }
     int readable = 0;
@@ -494,6 +544,7 @@ struct kr32_file *fopen(const char *path, const char *mode) {
         create = 1;
         append = 1;
     } else {
+        errno = EINVAL;
         return 0;
     }
     int index = 0;
@@ -515,11 +566,13 @@ struct kr32_file *fopen(const char *path, const char *mode) {
     if (append) flags = flags | 16;
     const int descriptor = open(path, flags);
     if (descriptor < 0) {
+        errno = EIO;
         return 0;
     }
     struct kr32_file *stream = (struct kr32_file *)malloc(sizeof(struct kr32_file));
     if (stream == 0) {
         close(descriptor);
+        errno = ENOMEM;
         return 0;
     }
     stream->descriptor = descriptor;
@@ -528,11 +581,15 @@ struct kr32_file *fopen(const char *path, const char *mode) {
     if (writable) stream->flags = stream->flags | KR32_FILE_WRITE;
     stream->ungot = -1;
     stream->owns_descriptor = 1;
+    stream->memory = 0;
+    stream->memory_position = 0;
+    stream->memory_mode = 0;
     return stream;
 }
 
 struct kr32_file *fdopen(int descriptor, const char *mode) {
     if (descriptor < 0 || mode == 0) {
+        errno = EINVAL;
         return 0;
     }
     int readable = 0;
@@ -542,6 +599,7 @@ struct kr32_file *fdopen(int descriptor, const char *mode) {
     } else if (mode[0] == 'w' || mode[0] == 'a') {
         writable = 1;
     } else {
+        errno = EINVAL;
         return 0;
     }
     int index = 0;
@@ -554,6 +612,7 @@ struct kr32_file *fdopen(int descriptor, const char *mode) {
     }
     struct kr32_file *stream = (struct kr32_file *)malloc(sizeof(struct kr32_file));
     if (stream == 0) {
+        errno = ENOMEM;
         return 0;
     }
     stream->descriptor = descriptor;
@@ -562,11 +621,42 @@ struct kr32_file *fdopen(int descriptor, const char *mode) {
     if (writable) stream->flags = stream->flags | KR32_FILE_WRITE;
     stream->ungot = -1;
     stream->owns_descriptor = 1;
+    stream->memory = 0;
+    stream->memory_position = 0;
+    stream->memory_mode = 0;
+    return stream;
+}
+
+struct kr32_file *freopen(const char *path, const char *mode,
+                          struct kr32_file *stream) {
+    if (stream == 0) {
+        return fopen(path, mode);
+    }
+    if (stream->descriptor < 3) {
+        errno = EINVAL;
+        return 0;
+    }
+    struct kr32_file *replacement = fopen(path, mode);
+    if (replacement == 0) {
+        return 0;
+    }
+    if (stream->owns_descriptor) {
+        (void)close(stream->descriptor);
+    }
+    stream->descriptor = replacement->descriptor;
+    stream->flags = replacement->flags;
+    stream->ungot = replacement->ungot;
+    stream->owns_descriptor = replacement->owns_descriptor;
+    stream->memory = replacement->memory;
+    stream->memory_position = replacement->memory_position;
+    stream->memory_mode = replacement->memory_mode;
+    free(replacement);
     return stream;
 }
 
 int fclose(struct kr32_file *stream) {
     if (stream == 0) {
+        errno = EINVAL;
         return EOF;
     }
     if (stream->descriptor < 3) {
@@ -577,7 +667,11 @@ int fclose(struct kr32_file *stream) {
         result = close(stream->descriptor);
     }
     free(stream);
-    return result < 0 ? EOF : 0;
+    if (result < 0) {
+        errno = EIO;
+        return EOF;
+    }
+    return 0;
 }
 
 int fflush(struct kr32_file *stream) {
@@ -782,12 +876,11 @@ static int scanf_double(struct kr32_file *stream, double *value) {
     return 1;
 }
 
-int fscanf(struct kr32_file *stream, const char *format, ...) {
+int vfscanf(struct kr32_file *stream, const char *format, va_list arguments) {
     if (stream == 0 || format == 0) {
+        errno = EINVAL;
         return EOF;
     }
-    va_list arguments;
-    va_start(arguments, format);
     int assigned = 0;
     const char *cursor = format;
     while (*cursor != '\0') {
@@ -862,6 +955,75 @@ int fscanf(struct kr32_file *stream, const char *format, ...) {
                 *target = value;
                 assigned = assigned + 1;
             }
+        } else if (spec == '[') {
+            int negate = 0;
+            if (*cursor == '^') {
+                negate = 1;
+                cursor = cursor + 1;
+            }
+            unsigned char set[256];
+            int set_index = 0;
+            while (set_index < 256) {
+                set[set_index] = 0;
+                set_index = set_index + 1;
+            }
+            int any = 0;
+            while (*cursor != '\0' && *cursor != ']') {
+                unsigned char first = (unsigned char)*cursor;
+                cursor = cursor + 1;
+                unsigned char last = first;
+                if (*cursor == '-' && cursor[1] != ']' && cursor[1] != '\0') {
+                    cursor = cursor + 1;
+                    last = (unsigned char)*cursor;
+                    cursor = cursor + 1;
+                }
+                int code = (int)first;
+                while (code <= (int)last) {
+                    set[code] = 1;
+                    code = code + 1;
+                }
+                any = 1;
+            }
+            if (!any) {
+                break;
+            }
+            if (*cursor == ']') {
+                cursor = cursor + 1;
+            }
+            char *target = 0;
+            char *destination = 0;
+            if (!suppress) {
+                target = va_arg(arguments, char *);
+                destination = target;
+            }
+            int index = 0;
+            int character = fgetc(stream);
+            while (character != EOF) {
+                const int matched = set[(unsigned char)character] != 0;
+                if ((negate ? !matched : matched) == 0) {
+                    break;
+                }
+                if (width == 0 || index < width - 1) {
+                    if (!suppress) {
+                        *destination = (char)character;
+                        destination = destination + 1;
+                    }
+                    index = index + 1;
+                }
+                character = fgetc(stream);
+            }
+            if (character != EOF) {
+                ungetc(character, stream);
+            }
+            if (!suppress) {
+                *destination = '\0';
+            }
+            if (index == 0) {
+                break;
+            }
+            if (!suppress) {
+                assigned = assigned + 1;
+            }
         } else if (spec == 's') {
             int character = fgetc(stream);
             while (character != EOF && is_space_character(character)) {
@@ -925,15 +1087,105 @@ int fscanf(struct kr32_file *stream, const char *format, ...) {
             break;
         }
     }
-    va_end(arguments);
     if (assigned == 0) {
         return feof(stream) ? EOF : 0;
     }
     return assigned;
 }
 
+int fscanf(struct kr32_file *stream, const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    const int result = vfscanf(stream, format, arguments);
+    va_end(arguments);
+    return result;
+}
+
+int vsscanf(const char *text, const char *format, va_list arguments) {
+    if (text == 0 || format == 0) {
+        errno = EINVAL;
+        return EOF;
+    }
+    struct kr32_file source;
+    source.descriptor = -1;
+    source.flags = KR32_FILE_READ;
+    source.ungot = -1;
+    source.owns_descriptor = 0;
+    source.memory = text;
+    source.memory_position = 0;
+    source.memory_mode = 1;
+    return vfscanf(&source, format, arguments);
+}
+
+int sscanf(const char *text, const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    const int result = vsscanf(text, format, arguments);
+    va_end(arguments);
+    return result;
+}
+
+int scanf(const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    const int result = vfscanf(stdin, format, arguments);
+    va_end(arguments);
+    return result;
+}
+
+int getdelim(char **line, int *capacity, int delimiter, struct kr32_file *stream) {
+    if (line == 0 || capacity == 0 || stream == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    if (*line == 0 || *capacity <= 0) {
+        *capacity = 128;
+        *line = (char *)malloc(*capacity);
+        if (*line == 0) {
+            errno = ENOMEM;
+            return -1;
+        }
+    }
+    int length = 0;
+    char *destination = *line;
+    while (1) {
+        const int character = fgetc(stream);
+        if (character == EOF) {
+            if (length == 0) {
+                return -1;
+            }
+            break;
+        }
+        if (length + 1 >= *capacity) {
+            const int next_capacity = *capacity * 2;
+            char *replacement = (char *)realloc(*line, next_capacity);
+            if (replacement == 0) {
+                errno = ENOMEM;
+                return -1;
+            }
+            *line = replacement;
+            destination = replacement;
+            *capacity = next_capacity;
+        }
+        destination[length] = (char)character;
+        length = length + 1;
+        if (character == delimiter) {
+            break;
+        }
+    }
+    destination[length] = '\0';
+    return length;
+}
+
+int getline(char **line, int *capacity, struct kr32_file *stream) {
+    return getdelim(line, capacity, '\n', stream);
+}
+
 int fread(void *buffer, int size, int count, struct kr32_file *stream) {
     if (buffer == 0 || size <= 0 || count <= 0 || stream == 0) {
+        if (stream == 0 || buffer == 0) {
+            errno = EINVAL;
+        }
         return 0;
     }
     const int requested = size * count;
@@ -952,6 +1204,7 @@ int fread(void *buffer, int size, int count, struct kr32_file *stream) {
         const int result = read(stream->descriptor, buffer, requested);
         if (result < 0) {
             stream->flags = stream->flags | KR32_FILE_ERROR;
+            errno = result == -4 ? EBADF : EIO;
             return 0;
         }
         if (result == 0) {
@@ -964,6 +1217,9 @@ int fread(void *buffer, int size, int count, struct kr32_file *stream) {
 
 int fwrite(const void *buffer, int size, int count, struct kr32_file *stream) {
     if (buffer == 0 || size <= 0 || count <= 0 || stream == 0) {
+        if (stream == 0 || buffer == 0) {
+            errno = EINVAL;
+        }
         return 0;
     }
     const int requested = size * count;
@@ -973,12 +1229,14 @@ int fwrite(const void *buffer, int size, int count, struct kr32_file *stream) {
 
 int fseek(struct kr32_file *stream, int offset, int whence) {
     if (stream == 0 || stream->descriptor < 3) {
+        errno = EINVAL;
         return EOF;
     }
     const int result = seek(stream->descriptor, offset, whence);
     stream->flags = stream->flags & ~KR32_FILE_EOF;
     if (result < 0) {
         stream->flags = stream->flags | KR32_FILE_ERROR;
+        errno = result == -4 ? EBADF : EIO;
         return EOF;
     }
     return 0;
@@ -986,9 +1244,14 @@ int fseek(struct kr32_file *stream, int offset, int whence) {
 
 int ftell(struct kr32_file *stream) {
     if (stream == 0 || stream->descriptor < 3) {
+        errno = EINVAL;
         return EOF;
     }
-    return seek(stream->descriptor, 0, 1);
+    const int result = seek(stream->descriptor, 0, 1);
+    if (result < 0) {
+        errno = result == -4 ? EBADF : EIO;
+    }
+    return result;
 }
 
 void rewind(struct kr32_file *stream) {
@@ -996,6 +1259,39 @@ void rewind(struct kr32_file *stream) {
         (void)fseek(stream, 0, 0);
         clearerr(stream);
     }
+}
+
+int fgetpos(struct kr32_file *stream, int *position) {
+    if (position == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    const int current = ftell(stream);
+    if (current < 0) {
+        return -1;
+    }
+    *position = current;
+    return 0;
+}
+
+int fsetpos(struct kr32_file *stream, const int *position) {
+    if (position == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    return fseek(stream, *position, 0);
+}
+
+int setvbuf(struct kr32_file *stream, char *buffer, int mode, int size) {
+    (void)stream;
+    (void)buffer;
+    (void)mode;
+    (void)size;
+    return 0;
+}
+
+void setbuf(struct kr32_file *stream, char *buffer) {
+    (void)setvbuf(stream, buffer, 0, 0);
 }
 
 int feof(struct kr32_file *stream) {
@@ -1014,6 +1310,68 @@ void clearerr(struct kr32_file *stream) {
 
 int fileno(struct kr32_file *stream) {
     return stream == 0 ? -1 : stream->descriptor;
+}
+
+int remove(const char *path) {
+    if (path == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    const int result = unlink(path);
+    if (result < 0) {
+        errno = result == -4 ? EINVAL : EIO;
+        return -1;
+    }
+    return 0;
+}
+
+int fstat(int descriptor, struct stat *status) {
+    if (status == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    const int current = seek(descriptor, 0, 1);
+    if (current < 0) {
+        errno = EBADF;
+        return -1;
+    }
+    const int end = seek(descriptor, 0, 2);
+    if (end < 0) {
+        errno = EBADF;
+        return -1;
+    }
+    (void)seek(descriptor, current, 0);
+    status->st_size = (unsigned int)end;
+    status->st_mode = 0x8000;
+    status->st_mtime = 0;
+    status->st_reserved = 0;
+    return 0;
+}
+
+const char *strerror(int code) {
+    switch (code) {
+    case 0: return "no error";
+    case 1: return "operation not permitted";
+    case 2: return "no such file or directory";
+    case 5: return "input/output error";
+    case 9: return "bad file descriptor";
+    case 12: return "out of memory";
+    case 13: return "permission denied";
+    case 17: return "file exists";
+    case 22: return "invalid argument";
+    case 28: return "no space left on device";
+    case 38: return "function not implemented";
+    default: return "unknown error";
+    }
+}
+
+void perror(const char *prefix) {
+    if (prefix != 0 && prefix[0] != '\0') {
+        fputs(prefix, stderr);
+        fputs(": ", stderr);
+    }
+    fputs(strerror(errno), stderr);
+    fputc('\n', stderr);
 }
 
 static int heap_free_list_contains(struct heap_block *target) {
