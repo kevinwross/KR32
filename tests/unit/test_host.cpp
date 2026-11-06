@@ -362,6 +362,7 @@ TEST_CASE("Host exposes stat, fstat, rename, and remove") {
         "    struct stat info;\n"
         "    if (stat(\"stat-test.txt\", &info) != 0) return 2;\n"
         "    if (info.st_size != 5) return 3;\n"
+        "    if (info.st_mtime == 0) return 10;\n"
         "    stream = fopen(\"stat-test.txt\", \"r\");\n"
         "    if (stream == 0) return 4;\n"
         "    if (fstat(fileno(stream), &info) != 0) return 5;\n"

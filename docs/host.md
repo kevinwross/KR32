@@ -87,8 +87,8 @@ write/create/truncate flags.
 
 `stat` writes a 16-byte guest structure: `st_size`, `st_mode`, `st_mtime`, and
 a reserved word. `st_mode` uses `0x8000` for regular files and `0x4000` for
-directories. `unlink` and `rename` use the same path authorization and
-read-only rules as `open`.
+directories; `st_mtime` is the host file timestamp in seconds. `unlink` and
+`rename` use the same path authorization and read-only rules as `open`.
 
 ## Sandbox
 

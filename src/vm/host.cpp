@@ -538,6 +538,7 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         }
         std::uint32_t size = 0;
         std::uint32_t mode = 0;
+        std::uint32_t modified = 0;
         if (std::filesystem::is_directory(status)) {
             mode = stat_abi::Directory;
         } else if (std::filesystem::is_regular_file(status)) {
@@ -551,9 +552,16 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         } else {
             mode = stat_abi::Regular;
         }
+        const auto stamp = std::filesystem::last_write_time(resolved, error);
+        if (!error) {
+            modified = static_cast<std::uint32_t>(
+                std::chrono::duration_cast<std::chrono::seconds>(
+                    stamp.time_since_epoch())
+                    .count());
+        }
         if (!write_guest_u32(machine, address, size) ||
             !write_guest_u32(machine, address + 4, mode) ||
-            !write_guest_u32(machine, address + 8, 0) ||
+            !write_guest_u32(machine, address + 8, modified) ||
             !write_guest_u32(machine, address + 12, 0)) {
             machine.set_reg(0, kErrorInvalid);
             return true;
