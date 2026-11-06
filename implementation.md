@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 08:10 -08:00
+> **Last updated:** 2026-11-06 08:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1858,8 +1858,11 @@ Newest entries at the bottom. Use the local time zone.
       propagation through FILE operations; `sscanf`/`scanf` via an in-memory
       FILE, `getline`/`getdelim`, and `%[...]` scansets; host `unlink`,
       `rename`, and `stat` syscalls (52–54) with libc `remove`/`rename`/`stat`/
-      `fstat`; and `freopen`, `fgetpos`/`fsetpos`, `setvbuf`/`setbuf` (currently
+      `fstat`; and `freopen`, `fgetpos`/`fsetpos`, `setvbuf`/`setbuf` (initially
       no-op buffering).
+- **2026-11-06 08:27 -08:00** — Added full and line output buffering through
+      `setvbuf`/`setbuf`, with flush on `fflush`, `fclose`, `fseek`, `ftell`,
+      and stream reads; added `access`/`isatty` and `<unistd.h>`.
 
 ## 10. Updating this file
 

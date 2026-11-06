@@ -427,7 +427,15 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     conditions.pop_back();
                 }
             } else if (directive.rfind("#include", 0) == 0 && active) {
-                if (directive.find("sys/stat.h") != std::string::npos) {
+                if (directive.find("unistd.h") != std::string::npos) {
+                    result +=
+                        "int access(const char *path, int mode); "
+                        "int isatty(int descriptor);";
+                    macros["F_OK"] = "0";
+                    macros["X_OK"] = "1";
+                    macros["W_OK"] = "2";
+                    macros["R_OK"] = "4";
+                } else if (directive.find("sys/stat.h") != std::string::npos) {
                     result +=
                         "struct stat { unsigned int st_size; unsigned int st_mode; "
                         "unsigned int st_mtime; unsigned int st_reserved; }; "
@@ -468,7 +476,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int sys_file_dialog(int mode, int flags, char *path, int capacity); "
                         "int sys_open_dialog(char *path, int capacity); "
                         "int sys_save_dialog(char *path, int capacity); "
-                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; }; "
+                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; }; "
                         "typedef struct kr32_file FILE; "
                         "extern FILE *stdin; extern FILE *stdout; extern FILE *stderr; "
                         "typedef int fpos_t; "
@@ -527,6 +535,10 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     macros["SEEK_SET"] = "0";
                     macros["SEEK_CUR"] = "1";
                     macros["SEEK_END"] = "2";
+                    macros["_IOFBF"] = "0";
+                    macros["_IOLBF"] = "1";
+                    macros["_IONBF"] = "2";
+                    macros["BUFSIZ"] = "1024";
                 }
                 if (directive.find("stdarg.h") != std::string::npos) {
                     result += "typedef char *va_list;";

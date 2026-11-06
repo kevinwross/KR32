@@ -651,6 +651,18 @@ private:
                     "}\n");
                 return;
             }
+            if (header.find("unistd.h") != std::string::npos) {
+                append_line(
+                    "extern \"C\" {\n"
+                    "int access(const char* path, int mode);\n"
+                    "int isatty(int descriptor);\n"
+                    "}\n");
+                macros_["F_OK"] = Macro{false, {}, "0"};
+                macros_["X_OK"] = Macro{false, {}, "1"};
+                macros_["W_OK"] = Macro{false, {}, "2"};
+                macros_["R_OK"] = Macro{false, {}, "4"};
+                return;
+            }
             if (header.find("sys/stat.h") != std::string::npos) {
                 append_line(
                     "struct stat { unsigned int st_size; unsigned int st_mode; "
@@ -689,7 +701,7 @@ private:
             if (header.find("fstream") != std::string::npos ||
                 header.find("iostream") != std::string::npos) {
                 append_line(
-                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; };\n"
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; };\n"
                     "typedef struct kr32_file FILE;\n"
                     "typedef int fpos_t;\n"
                     "extern \"C\" {\n"
@@ -818,7 +830,7 @@ private:
             if (header.find("stdio.h") != std::string::npos ||
                 header.find("cstdio") != std::string::npos) {
                 append_line(
-                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; };\n"
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; };\n"
                     "typedef struct kr32_file FILE;\n"
                     "typedef int fpos_t;\n"
                     "extern \"C\" {\n"
@@ -867,6 +879,10 @@ private:
                 macros_["SEEK_SET"] = Macro{false, {}, "0"};
                 macros_["SEEK_CUR"] = Macro{false, {}, "1"};
                 macros_["SEEK_END"] = Macro{false, {}, "2"};
+                macros_["_IOFBF"] = Macro{false, {}, "0"};
+                macros_["_IOLBF"] = Macro{false, {}, "1"};
+                macros_["_IONBF"] = Macro{false, {}, "2"};
+                macros_["BUFSIZ"] = Macro{false, {}, "1024"};
                 return;
             }
             if (header.find("stdlib.h") != std::string::npos) {

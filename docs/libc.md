@@ -28,16 +28,18 @@ source line numbers and debugger line mappings are preserved.
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
+| `<unistd.h>` | `access`, `isatty` |
 | `<math.h>` | `sqrt`, `sqrtf`, `fabs`, `fabsf`, `fmin`, `fminf`, `fmax`, `fmaxf`, `M_PI` |
 
-`<stdio.h>` provides an unbuffered `FILE` layer over the descriptor syscalls:
+`<stdio.h>` provides a `FILE` layer over the descriptor syscalls:
 `fopen`/`fdopen`/`freopen`/`fclose`, `fread`/`fwrite`, `fgetc`/`fputc`,
 `ungetc`, `fgets`/`fputs`/`puts`, `fprintf`/`fscanf`/`scanf`/`sscanf`,
 `fseek`/`ftell`/`rewind`/`fgetpos`/`fsetpos`, `feof`/`ferror`/`clearerr`,
 `fileno`, `getline`/`getdelim`, and `snprintf`/`sprintf`. `stdin`, `stdout`,
 and `stderr` map to the console syscalls; file streams use descriptors 3 and
-above. The implementation is unbuffered; `setvbuf`/`setbuf` currently return
-success without changing buffering.
+above. Output is unbuffered by default; `setvbuf`/`setbuf` can install full or
+line output buffering, and `fflush`/`fclose`/`fseek`/`ftell` flush the buffer.
+Input buffering is not implemented.
 
 `<errno.h>` provides `errno`, `strerror`, and `perror`. `<sys/stat.h>` provides
 `struct stat`, `stat`, `fstat`, `remove`, and `rename`; the host operations are

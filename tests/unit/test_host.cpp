@@ -416,6 +416,36 @@ TEST_CASE("Host supports freopen and file positions") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host buffers FILE output and flushes on close") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    FILE *stream = fopen(\"buffered.txt\", \"w\");\n"
+        "    if (stream == 0) return 1;\n"
+        "    if (setvbuf(stream, 0, _IOFBF, 4) != 0) return 2;\n"
+        "    fputs(\"abcdef\", stream);\n"
+        "    if (ftell(stream) != 6) return 3;\n"
+        "    fputs(\"ghi\", stream);\n"
+        "    if (fflush(stream) != 0) return 4;\n"
+        "    fclose(stream);\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::ifstream input(sandbox / "buffered.txt", std::ios::binary);
+    std::string content((std::istreambuf_iterator<char>(input)),
+                        std::istreambuf_iterator<char>());
+    CHECK(content == "abcdefghi");
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"
