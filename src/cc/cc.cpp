@@ -479,7 +479,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int sys_file_dialog(int mode, int flags, char *path, int capacity); "
                         "int sys_open_dialog(char *path, int capacity); "
                         "int sys_save_dialog(char *path, int capacity); "
-                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; }; "
+                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; unsigned char* input_buffer; int input_capacity; int input_begin; int input_end; int input_owned; }; "
                         "typedef struct kr32_file FILE; "
                         "extern FILE *stdin; extern FILE *stdout; extern FILE *stderr; "
                         "typedef int fpos_t; "

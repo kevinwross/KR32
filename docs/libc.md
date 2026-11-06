@@ -37,9 +37,9 @@ source line numbers and debugger line mappings are preserved.
 `fseek`/`ftell`/`rewind`/`fgetpos`/`fsetpos`, `feof`/`ferror`/`clearerr`,
 `fileno`, `getline`/`getdelim`, `tmpfile`, and `snprintf`/`sprintf`. `stdin`, `stdout`,
 and `stderr` map to the console syscalls; file streams use descriptors 3 and
-above. Output is unbuffered by default; `setvbuf`/`setbuf` can install full or
-line output buffering, and `fflush`/`fclose`/`fseek`/`ftell` flush the buffer.
-Input buffering is not implemented.
+above. Streams are unbuffered by default; `setvbuf`/`setbuf` can install full
+or line output buffering and block input buffering. `fflush`/`fclose`/`fseek`/
+`ftell` flush output, and seeks reset the input buffer.
 
 `<errno.h>` provides `errno`, `strerror`, and `perror`. `<sys/stat.h>` provides
 `struct stat`, `stat`, `fstat`, `remove`, and `rename`; the host operations are

@@ -61,6 +61,11 @@ struct kr32_file {
     int buffer_length;
     int buffer_mode;
     int buffer_owned;
+    unsigned char *input_buffer;
+    int input_capacity;
+    int input_begin;
+    int input_end;
+    int input_owned;
 };
 
 typedef struct kr32_file FILE;
@@ -438,6 +443,27 @@ void *realloc(void *pointer, int size) {
 
 static int stream_flush(struct kr32_file *stream);
 
+static int stream_raw_read(struct kr32_file *stream,
+                           unsigned char *buffer,
+                           int count) {
+    if (count <= 0) {
+        return 0;
+    }
+    if (stream->descriptor == 0) {
+        int index = 0;
+        while (index < count) {
+            const int value = getchar();
+            if (value < 0) {
+                break;
+            }
+            buffer[index] = (unsigned char)value;
+            index = index + 1;
+        }
+        return index;
+    }
+    return read(stream->descriptor, buffer, count);
+}
+
 static int stream_read_byte(struct kr32_file *stream) {
     if (stream == 0 || (stream->flags & KR32_FILE_READ) == 0) {
         errno = EBADF;
@@ -467,23 +493,37 @@ static int stream_read_byte(struct kr32_file *stream) {
         stream->memory_position = stream->memory_position + 1;
         return (unsigned char)value;
     }
-    if (stream->descriptor == 0) {
-        const int value = getchar();
-        if (value < 0) {
-            stream->flags = stream->flags | KR32_FILE_EOF;
-            return EOF;
+    if (stream->input_capacity > 0 && stream->input_buffer != 0) {
+        if (stream->input_begin >= stream->input_end) {
+            unsigned char *input = stream->input_buffer;
+            const int filled = stream_raw_read(
+                stream, input, stream->input_capacity);
+            if (filled < 0) {
+                stream->flags = stream->flags | KR32_FILE_ERROR;
+                errno = EIO;
+                return EOF;
+            }
+            if (filled == 0) {
+                stream->flags = stream->flags | KR32_FILE_EOF;
+                return EOF;
+            }
+            stream->input_begin = 0;
+            stream->input_end = filled;
         }
+        unsigned char *input = stream->input_buffer;
+        const int value = input[stream->input_begin];
+        stream->input_begin = stream->input_begin + 1;
         return value;
     }
     unsigned char byte = 0;
-    const int count = read(stream->descriptor, &byte, 1);
+    const int count = stream_raw_read(stream, &byte, 1);
     if (count == 0) {
         stream->flags = stream->flags | KR32_FILE_EOF;
         return EOF;
     }
     if (count < 0) {
         stream->flags = stream->flags | KR32_FILE_ERROR;
-        errno = count == -4 ? EBADF : EIO;
+        errno = EIO;
         return EOF;
     }
     return (int)byte;
@@ -643,6 +683,11 @@ struct kr32_file *fopen(const char *path, const char *mode) {
     stream->buffer_length = 0;
     stream->buffer_mode = _IONBF;
     stream->buffer_owned = 0;
+    stream->input_buffer = 0;
+    stream->input_capacity = 0;
+    stream->input_begin = 0;
+    stream->input_end = 0;
+    stream->input_owned = 0;
     return stream;
 }
 
@@ -688,6 +733,11 @@ struct kr32_file *fdopen(int descriptor, const char *mode) {
     stream->buffer_length = 0;
     stream->buffer_mode = _IONBF;
     stream->buffer_owned = 0;
+    stream->input_buffer = 0;
+    stream->input_capacity = 0;
+    stream->input_begin = 0;
+    stream->input_end = 0;
+    stream->input_owned = 0;
     return stream;
 }
 
@@ -708,6 +758,9 @@ struct kr32_file *freopen(const char *path, const char *mode,
     if (stream->buffer_owned) {
         free(stream->buffer);
     }
+    if (stream->input_owned) {
+        free(stream->input_buffer);
+    }
     if (stream->owns_descriptor) {
         (void)close(stream->descriptor);
     }
@@ -723,6 +776,11 @@ struct kr32_file *freopen(const char *path, const char *mode,
     stream->buffer_length = replacement->buffer_length;
     stream->buffer_mode = replacement->buffer_mode;
     stream->buffer_owned = replacement->buffer_owned;
+    stream->input_buffer = replacement->input_buffer;
+    stream->input_capacity = replacement->input_capacity;
+    stream->input_begin = replacement->input_begin;
+    stream->input_end = replacement->input_end;
+    stream->input_owned = replacement->input_owned;
     free(replacement);
     return stream;
 }
@@ -744,6 +802,9 @@ int fclose(struct kr32_file *stream) {
     }
     if (stream->buffer_owned) {
         free(stream->buffer);
+    }
+    if (stream->input_owned) {
+        free(stream->input_buffer);
     }
     free(stream);
     if (result < 0) {
@@ -1315,7 +1376,7 @@ int fread(void *buffer, int size, int count, struct kr32_file *stream) {
     const int requested = size * count;
     int total = 0;
     unsigned char *bytes = (unsigned char *)buffer;
-    if (stream->descriptor == 0) {
+    if (stream->descriptor == 0 || stream->input_capacity > 0) {
         while (total < requested) {
             const int value = fgetc(stream);
             if (value == EOF) {
@@ -1359,6 +1420,8 @@ int fseek(struct kr32_file *stream, int offset, int whence) {
     if (stream_flush(stream) != 0) {
         return EOF;
     }
+    stream->input_begin = 0;
+    stream->input_end = 0;
     const int result = seek(stream->descriptor, offset, whence);
     stream->flags = stream->flags & ~KR32_FILE_EOF;
     if (result < 0) {
@@ -1425,9 +1488,17 @@ int setvbuf(struct kr32_file *stream, char *buffer, int mode, int size) {
         stream->buffer = 0;
         stream->buffer_owned = 0;
     }
+    if (stream->input_owned) {
+        free(stream->input_buffer);
+        stream->input_buffer = 0;
+        stream->input_owned = 0;
+    }
     stream->buffer_capacity = 0;
     stream->buffer_length = 0;
     stream->buffer_mode = mode;
+    stream->input_capacity = 0;
+    stream->input_begin = 0;
+    stream->input_end = 0;
     if (mode == _IONBF) {
         stream->buffer = 0;
         return 0;
@@ -1443,6 +1514,19 @@ int setvbuf(struct kr32_file *stream, char *buffer, int mode, int size) {
         }
         stream->buffer_owned = 1;
     }
+    unsigned char *input = (unsigned char *)malloc(size);
+    if (input == 0) {
+        if (stream->buffer_owned) {
+            free(buffer);
+            stream->buffer = 0;
+            stream->buffer_owned = 0;
+        }
+        errno = ENOMEM;
+        return -1;
+    }
+    stream->input_buffer = input;
+    stream->input_capacity = size;
+    stream->input_owned = 1;
     stream->buffer = (unsigned char *)buffer;
     stream->buffer_capacity = size;
     return 0;

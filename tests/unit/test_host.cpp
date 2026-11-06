@@ -525,6 +525,37 @@ TEST_CASE("Host supports scanf position capture with %n") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host buffers FILE input") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    FILE *file = fopen(\"input-buffer.txt\", \"w\");\n"
+        "    if (file == 0) return 1;\n"
+        "    fputs(\"abcdef\", file);\n"
+        "    fclose(file);\n"
+        "    file = fopen(\"input-buffer.txt\", \"r\");\n"
+        "    if (file == 0) return 2;\n"
+        "    if (setvbuf(file, 0, _IOFBF, 2) != 0) return 3;\n"
+        "    char buffer[4];\n"
+        "    if (fread(buffer, 1, 4, file) != 4) return 4;\n"
+        "    if (buffer[0] != 'a' || buffer[1] != 'b' || buffer[2] != 'c' || buffer[3] != 'd') return 5;\n"
+        "    if (fgetc(file) != 'e') return 6;\n"
+        "    if (fgetc(file) != 'f') return 7;\n"
+        "    fclose(file);\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

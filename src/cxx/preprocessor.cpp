@@ -704,7 +704,7 @@ private:
             if (header.find("fstream") != std::string::npos ||
                 header.find("iostream") != std::string::npos) {
                 append_line(
-                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; };\n"
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; unsigned char* input_buffer; int input_capacity; int input_begin; int input_end; int input_owned; };\n"
                     "typedef struct kr32_file FILE;\n"
                     "typedef int fpos_t;\n"
                     "extern \"C\" {\n"
@@ -833,7 +833,7 @@ private:
             if (header.find("stdio.h") != std::string::npos ||
                 header.find("cstdio") != std::string::npos) {
                 append_line(
-                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; };\n"
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; unsigned char* input_buffer; int input_capacity; int input_begin; int input_end; int input_owned; };\n"
                     "typedef struct kr32_file FILE;\n"
                     "typedef int fpos_t;\n"
                     "extern \"C\" {\n"
