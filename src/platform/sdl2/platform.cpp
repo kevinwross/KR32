@@ -2,13 +2,18 @@
 
 #include <SDL.h>
 
+#include <algorithm>
 #include <cstdio>
+#include <sstream>
 #include <string>
 #include <utility>
+#include <vector>
 
 #ifdef _WIN32
 #include <windows.h>
 #include <commdlg.h>
+#else
+#include <sys/wait.h>
 #endif
 
 namespace kr32::platform {
@@ -212,65 +217,242 @@ std::string clipboard_text() {
     return result;
 }
 
-bool open_file_dialog(std::string& path) {
+namespace {
+
+constexpr const char* kDefaultFilter = "*.k32;*.c;*.cpp;*.cc;*.cxx";
+
+#ifdef _WIN32
+std::wstring widen(const std::string& text) {
+    if (text.empty()) {
+        return {};
+    }
+    const int length =
+        MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, nullptr, 0);
+    if (length <= 0) {
+        return {};
+    }
+    std::wstring converted(static_cast<std::size_t>(length - 1), L'\0');
+    MultiByteToWideChar(CP_UTF8, 0, text.c_str(), -1, converted.data(), length);
+    return converted;
+}
+
+std::string narrow(const std::wstring& text) {
+    if (text.empty()) {
+        return {};
+    }
+    const int length =
+        WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, nullptr, 0, nullptr, nullptr);
+    if (length <= 1) {
+        return {};
+    }
+    std::string converted(static_cast<std::size_t>(length - 1), '\0');
+    WideCharToMultiByte(CP_UTF8, 0, text.c_str(), -1, converted.data(), length,
+                        nullptr, nullptr);
+    return converted;
+}
+
+std::wstring make_filter(const std::string& patterns) {
+    const std::string value = patterns.empty() ? "*.*" : patterns;
+    const std::wstring wide = widen(value);
+    std::wstring filter = L"Supported files (" + wide + L")";
+    filter.push_back(L'\0');
+    filter += wide;
+    filter.push_back(L'\0');
+    filter += L"All files (*.*)";
+    filter.push_back(L'\0');
+    filter += L"*.*";
+    filter.push_back(L'\0');
+    filter.push_back(L'\0');
+    return filter;
+}
+#else
+std::string shell_quote(const std::string& value) {
+    std::string result = "'";
+    for (const char character : value) {
+        if (character == '\'') {
+            result += "'\\''";
+        } else {
+            result += character;
+        }
+    }
+    result += "'";
+    return result;
+}
+
+std::string pattern_list(const std::string& patterns) {
+    std::string result = patterns.empty() ? "*" : patterns;
+    std::replace(result.begin(), result.end(), ';', ' ');
+    return result;
+}
+
+FileDialogResult run_dialog_command(const std::string& command) {
+    FileDialogResult result;
+    FILE* pipe = popen(command.c_str(), "r");
+    if (pipe == nullptr) {
+        result.status = FileDialogStatus::Unavailable;
+        result.error = "cannot start dialog process";
+        return result;
+    }
+    std::string output;
+    char buffer[4096];
+    while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr) {
+        output += buffer;
+    }
+    const int status = pclose(pipe);
+    const int code = WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+    if (code == 127) {
+        result.status = FileDialogStatus::Unavailable;
+        return result;
+    }
+    while (!output.empty() &&
+           (output.back() == '\n' || output.back() == '\r')) {
+        output.pop_back();
+    }
+    if (code == 1) {
+        result.status = FileDialogStatus::Canceled;
+        return result;
+    }
+    if (code != 0) {
+        result.status = FileDialogStatus::Error;
+        result.error = "dialog exited with status " + std::to_string(code);
+        return result;
+    }
+    if (output.empty()) {
+        result.status = FileDialogStatus::Canceled;
+        return result;
+    }
+    result.status = FileDialogStatus::Selected;
+    result.path = std::move(output);
+    return result;
+}
+#endif
+
+} // namespace
+
+FileDialogResult show_file_dialog(const FileDialogOptions& options) {
+    FileDialogResult result;
+    const std::string patterns =
+        options.filter.empty() ? kDefaultFilter : options.filter;
 #ifdef _WIN32
     wchar_t file[32768] = L"";
+    if (!options.initial_path.empty()) {
+        const std::wstring initial = widen(options.initial_path);
+        if (!initial.empty()) {
+            wcsncpy_s(file, 32768, initial.c_str(), _TRUNCATE);
+        }
+    }
     OPENFILENAMEW dialog{};
     dialog.lStructSize = sizeof(dialog);
     dialog.hwndOwner = GetActiveWindow();
-    dialog.lpstrFilter =
-        L"KR32 sources and images (*.k32;*.c;*.cpp;*.cc;*.cxx)\0"
-        L"*.k32;*.c;*.cpp;*.cc;*.cxx\0All files (*.*)\0*.*\0";
+    const std::wstring filter = make_filter(patterns);
+    const std::wstring title = widen(options.title);
+    const std::wstring extension = widen(options.default_extension);
+    dialog.lpstrFilter = filter.c_str();
     dialog.lpstrFile = file;
     dialog.nMaxFile = 32768;
-    dialog.lpstrDefExt = L"k32";
-    dialog.Flags = OFN_EXPLORER | OFN_FILEMUSTEXIST | OFN_PATHMUSTEXIST |
-                   OFN_NOCHANGEDIR;
-    if (GetOpenFileNameW(&dialog) == 0) {
-        return false;
+    dialog.lpstrDefExt = extension.empty() ? nullptr : extension.c_str();
+    dialog.lpstrTitle = title.empty() ? nullptr : title.c_str();
+    dialog.Flags = OFN_EXPLORER | OFN_NOCHANGEDIR;
+    if (options.kind == FileDialogKind::Open) {
+        if (options.must_exist) {
+            dialog.Flags |= OFN_FILEMUSTEXIST;
+        }
+        dialog.Flags |= OFN_PATHMUSTEXIST;
+    } else {
+        dialog.Flags |= OFN_PATHMUSTEXIST;
+        if (options.overwrite_prompt) {
+            dialog.Flags |= OFN_OVERWRITEPROMPT;
+        }
     }
-    const int length = WideCharToMultiByte(CP_UTF8, 0, file, -1, nullptr, 0,
-                                           nullptr, nullptr);
-    if (length <= 1) {
-        return false;
+    const BOOL accepted = options.kind == FileDialogKind::Open
+                              ? GetOpenFileNameW(&dialog)
+                              : GetSaveFileNameW(&dialog);
+    if (!accepted) {
+        const DWORD error = CommDlgExtendedError();
+        if (error == 0) {
+            result.status = FileDialogStatus::Canceled;
+        } else {
+            result.status = FileDialogStatus::Error;
+            result.error = "file dialog error " + std::to_string(error);
+        }
+        return result;
     }
-    std::string converted(static_cast<std::size_t>(length - 1), '\0');
-    WideCharToMultiByte(CP_UTF8, 0, file, -1, converted.data(), length,
-                        nullptr, nullptr);
-    path = std::move(converted);
-    return true;
+    result.path = narrow(file);
+    if (result.path.empty()) {
+        result.status = FileDialogStatus::Error;
+        result.error = "file dialog returned an empty path";
+        return result;
+    }
+    result.status = FileDialogStatus::Selected;
+    return result;
 #else
-    const char* commands[] = {
-        "zenity --file-selection --title='Load KR32 source or image' "
-        "--file-filter='KR32 sources and images | *.k32 *.c *.cpp *.cc *.cxx' "
-        "--file-filter='All files | *' 2>/dev/null",
-        "kdialog --getopenfilename . 'KR32 sources and images (*.k32 *.c *.cpp *.cc *.cxx)|All files (*)' 2>/dev/null",
-    };
-    for (const char* command : commands) {
-        FILE* pipe = popen(command, "r");
-        if (pipe == nullptr) {
-            continue;
+    const std::string patterns_list = pattern_list(patterns);
+    const std::string title = options.title.empty() ? "Select File" : options.title;
+    const std::string initial =
+        options.initial_path.empty() ? "." : options.initial_path;
+    std::vector<std::string> commands;
+    {
+        std::ostringstream command;
+        command << "command -v zenity >/dev/null 2>&1 || exit 127; "
+                << "zenity --file-selection";
+        if (options.kind == FileDialogKind::Save) {
+            command << " --save";
+            if (options.overwrite_prompt) {
+                command << " --confirm-overwrite";
+            }
         }
-        std::string result;
-        char buffer[4096];
-        while (std::fgets(buffer, sizeof(buffer), pipe) != nullptr) {
-            result += buffer;
-        }
-        const int status = pclose(pipe);
-        if (status != 0) {
-            continue;
-        }
-        while (!result.empty() &&
-               (result.back() == '\n' || result.back() == '\r')) {
-            result.pop_back();
-        }
-        if (!result.empty()) {
-            path = std::move(result);
-            return true;
-        }
+        command << " --title=" << shell_quote(title)
+                << " --filename=" << shell_quote(initial)
+                << " --file-filter=" << shell_quote("Supported files | " + patterns_list)
+                << " --file-filter=" << shell_quote("All files | *")
+                << " 2>/dev/null";
+        commands.push_back(command.str());
     }
-    return false;
+    {
+        std::ostringstream command;
+        command << "command -v kdialog >/dev/null 2>&1 || exit 127; "
+                << "kdialog --title " << shell_quote(title) << " ";
+        command << (options.kind == FileDialogKind::Save ? "--getsavefilename "
+                                                         : "--getopenfilename ")
+                << shell_quote(initial) << " "
+                << shell_quote("Supported files (" + patterns_list +
+                               ")|All files (*)")
+                << " 2>/dev/null";
+        commands.push_back(command.str());
+    }
+    FileDialogResult last;
+    for (const std::string& command : commands) {
+        FileDialogResult candidate = run_dialog_command(command);
+        if (candidate.status == FileDialogStatus::Unavailable) {
+            continue;
+        }
+        if (candidate.status == FileDialogStatus::Selected ||
+            candidate.status == FileDialogStatus::Canceled) {
+            return candidate;
+        }
+        last = std::move(candidate);
+    }
+    if (last.status == FileDialogStatus::Error) {
+        return last;
+    }
+    result.status = FileDialogStatus::Unavailable;
+    result.error = "no file dialog backend is available";
+    return result;
 #endif
+}
+
+bool open_file_dialog(std::string& path) {
+    FileDialogOptions options;
+    options.title = "Load KR32 source or image";
+    options.filter = kDefaultFilter;
+    options.default_extension = "k32";
+    options.must_exist = true;
+    const FileDialogResult result = show_file_dialog(options);
+    if (result.status != FileDialogStatus::Selected) {
+        return false;
+    }
+    path = result.path;
+    return true;
 }
 
 } // namespace kr32::platform

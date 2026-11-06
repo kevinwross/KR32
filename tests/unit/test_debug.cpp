@@ -119,6 +119,30 @@ TEST_CASE("debug sessions handle the host syscall range") {
     CHECK(session.machine().exit_code() == 0);
 }
 
+TEST_CASE("debug sessions expose the file dialog syscall") {
+    const container::Image image = compile_debug_image(
+        "int sys_save_dialog(char *path, int capacity);\n"
+        "int main(void) {\n"
+        "    char path[64];\n"
+        "    int length = sys_save_dialog(path, 64);\n"
+        "    if (length <= 0) return 1;\n"
+        "    if (path[0] != '/') return 2;\n"
+        "    if (path[length] != 0) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    debug::Session session;
+    session.set_file_dialog([](const FileDialogOptions& options) {
+        CHECK(options.kind == FileDialogKind::Save);
+        CHECK(options.overwrite_prompt);
+        return FileDialogResult{FileDialogStatus::Selected, "/tmp/out.k32", {}};
+    });
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const core::StepResult result = session.run(100000);
+    CHECK(result.kind == core::StepResult::Kind::Halted);
+    CHECK(session.machine().exit_code() == 0);
+}
+
 TEST_CASE("C++ debug sessions expose guest command-line arguments") {
     const container::Image image = compile_cxx_debug_image(
         "int main(int argc, char** argv) {\n"

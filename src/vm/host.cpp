@@ -54,6 +54,20 @@ std::string Host::resolve(const std::string& path, bool write, bool& ok) {
         last_error_ = "empty or invalid path";
         return {};
     }
+    if (write && options_.read_only) {
+        last_error_ = "sandbox is read-only";
+        return {};
+    }
+    std::error_code error;
+    std::filesystem::path requested(path);
+    std::filesystem::path canonical = std::filesystem::weakly_canonical(requested, error);
+    if (error) {
+        canonical = requested.lexically_normal();
+    }
+    if (!canonical.empty() && authorized_paths_.count(canonical.string()) != 0) {
+        ok = true;
+        return canonical.string();
+    }
     const std::filesystem::path relative(path);
     if (relative.is_absolute()) {
         last_error_ = "absolute paths are outside the sandbox";
@@ -65,11 +79,6 @@ std::string Host::resolve(const std::string& path, bool write, bool& ok) {
             return {};
         }
     }
-    if (write && options_.read_only) {
-        last_error_ = "sandbox is read-only";
-        return {};
-    }
-    std::error_code error;
     std::filesystem::path candidate = std::filesystem::path(root_) / relative;
     candidate = std::filesystem::weakly_canonical(candidate, error);
     if (error) {
@@ -353,6 +362,73 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         }
         (void)machine.write8(address + count, 0);
         machine.set_reg(0, count);
+        return true;
+    }
+    case syscall::FileDialog: {
+        const std::uint32_t mode = machine.reg(0);
+        const std::uint32_t flags = machine.reg(1);
+        const std::uint32_t address = machine.reg(2);
+        const std::uint32_t capacity = machine.reg(3);
+        if (mode > file_dialog::Save || (flags & ~(file_dialog::MustExist |
+                                                   file_dialog::OverwritePrompt)) != 0 ||
+            address == 0 || capacity == 0) {
+            machine.set_reg(0, file_dialog::Invalid);
+            return true;
+        }
+        if (!options_.file_dialog) {
+            machine.set_reg(0, file_dialog::Unavailable);
+            return true;
+        }
+        FileDialogOptions dialog;
+        dialog.kind = mode == file_dialog::Save ? FileDialogKind::Save
+                                                : FileDialogKind::Open;
+        dialog.title = dialog.kind == FileDialogKind::Save ? "Save File" : "Open File";
+        dialog.filter = options_.dialog_filter;
+        dialog.default_extension = dialog.kind == FileDialogKind::Save ? "k32" : "";
+        dialog.must_exist = (flags & file_dialog::MustExist) != 0;
+        dialog.overwrite_prompt = (flags & file_dialog::OverwritePrompt) != 0;
+        const FileDialogResult result = options_.file_dialog(dialog);
+        if (result.status == FileDialogStatus::Canceled) {
+            machine.set_reg(0, file_dialog::Canceled);
+            return true;
+        }
+        if (result.status == FileDialogStatus::Unavailable) {
+            machine.set_reg(0, file_dialog::Unavailable);
+            last_error_ = result.error;
+            return true;
+        }
+        if (result.status != FileDialogStatus::Selected || result.path.empty()) {
+            machine.set_reg(0, file_dialog::Error);
+            last_error_ = result.error.empty() ? "file dialog failed" : result.error;
+            return true;
+        }
+        const std::uint32_t length =
+            static_cast<std::uint32_t>(result.path.size());
+        if (capacity <= length) {
+            machine.set_reg(1, length + 1U);
+            machine.set_reg(0, file_dialog::NoSpace);
+            return true;
+        }
+        for (std::uint32_t index = 0; index < length; ++index) {
+            if (!machine.write8(address + index,
+                                static_cast<std::uint8_t>(result.path[index]))) {
+                machine.set_reg(0, file_dialog::Fault);
+                return true;
+            }
+        }
+        if (!machine.write8(address + length, 0)) {
+            machine.set_reg(0, file_dialog::Fault);
+            return true;
+        }
+        std::error_code error;
+        std::filesystem::path selected(result.path);
+        std::filesystem::path canonical =
+            std::filesystem::weakly_canonical(selected, error);
+        if (error) {
+            canonical = selected.lexically_normal();
+        }
+        authorized_paths_.insert(canonical.string());
+        machine.set_reg(0, length);
         return true;
     }
     case 46: // thread yield

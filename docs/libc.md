@@ -158,7 +158,8 @@ low-level building blocks for synchronization primitives.
 
 The assembly startup/runtime provides `_start`, `putchar`, `getchar`, `exit`,
 `open`, `close`, `read`, `write`, `seek`, `sys_time`, `sys_random`, `sys_argc`,
-`sys_arg`, `memcpy`, `memset`, and `strlen`.
+`sys_arg`, `sys_file_dialog`, `sys_open_dialog`, `sys_save_dialog`, `memcpy`,
+`memset`, and `strlen`.
 
 The program loader builds a conventional `argv` array on the guest stack before
 entry and places `argc` in `R0` and `argv` in `R1`; `_start` forwards those

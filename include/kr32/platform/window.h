@@ -2,6 +2,7 @@
 
 #include <string>
 
+#include "kr32/file_dialog.h"
 #include "kr32/ui/canvas.h"
 
 namespace kr32::platform {
@@ -58,7 +59,11 @@ private:
 // Initializes and tears down the SDL2 platform. Used by `kr32 --smoke-ui`.
 [[nodiscard]] bool smoke_test();
 
-// Shows the platform file picker. Returns false when canceled or unavailable.
+// Shows a native open/save file dialog. Returns Selected, Canceled,
+// Unavailable (no dialog backend), or Error.
+[[nodiscard]] FileDialogResult show_file_dialog(const FileDialogOptions& options);
+
+// Backward-compatible open dialog helper.
 [[nodiscard]] bool open_file_dialog(std::string& path);
 
 // Returns the host clipboard as UTF-8 text, or an empty string.

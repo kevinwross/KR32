@@ -1,6 +1,6 @@
 # Host services and sandbox (M7)
 
-The guest reaches the host through `SYSCALL` vectors 32..50. Arguments are in
+The guest reaches the host through `SYSCALL` vectors 32..51. Arguments are in
 `R0..R3`; the result is in `R0`. Error results are small negative values
 (`0xFFFFFFFF`, `0xFFFFFFFC`, ...).
 
@@ -25,6 +25,7 @@ The guest reaches the host through `SYSCALL` vectors 32..50. Arguments are in
 | 48 | futex_wait | address, expected | 0 blocked, 1 value mismatch |
 | 49 | futex_wake | address, count | woken count |
 | 50 | thread_self | — | current thread handle |
+| 51 | file_dialog | mode, flags, path, capacity | path length or error |
 
 Thread services are provided by `vm::ClusterHost`, which maps one guest thread
 per `core::Cluster` core and advances one core turn at a time. A thread handle
@@ -48,6 +49,36 @@ The standalone debugger `Session` also handles vectors `32..43`; it supports
 `putchar`, `exit`, `getchar`, `time`, `random`, `argc`, and `arg`. Its file
 vectors return an I/O error because the debugger has no host filesystem
 sandbox.
+
+## File dialogs
+
+Vector `51` shows a native open/save dialog:
+
+```text
+R0  mode       0 = open, 1 = save
+R1  flags      bit 0 = must exist, bit 1 = overwrite prompt
+R2  path       guest buffer
+R3  capacity   buffer bytes, including the trailing NUL
+
+returns >= 0   UTF-8 path length, excluding NUL
+        -1     canceled
+        -2     dialog backend unavailable
+        -5     dialog/host error
+        -14    guest path buffer fault
+        -22    invalid mode/flags/buffer
+        -28    buffer too small; R1 returns the required capacity
+```
+
+`sys_open_dialog(path, capacity)` and `sys_save_dialog(path, capacity)` are
+runtime wrappers. The C and C++ `<stdlib.h>` surfaces expose all three
+functions.
+
+The host callback is `HostOptions::file_dialog`. The command-line `kr32`
+wrappers install the platform dialog when the UI is built; tests inject a fake
+callback. A selected absolute path is recorded by the host as an authorized
+path, so a guest `open(path, ...)` can use the returned path without weakening
+the normal sandbox rule for other paths. Save does not create the file: the
+guest still calls `open` with the desired write/create/truncate flags.
 
 ## Sandbox
 

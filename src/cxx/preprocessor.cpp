@@ -670,6 +670,9 @@ private:
                     "void* realloc(void* pointer, int size);\n"
                     "int _heapwalk(void);\n"
                     "int sys_random();\n"
+                    "int sys_file_dialog(int mode, int flags, char* path, int capacity);\n"
+                    "int sys_open_dialog(char* path, int capacity);\n"
+                    "int sys_save_dialog(char* path, int capacity);\n"
                     "}\n");
                 return;
             }

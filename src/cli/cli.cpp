@@ -17,6 +17,10 @@
 #include "kr32/version.h"
 #include "kr32/vm/host.h"
 
+#ifdef KR32_HAS_UI
+#include "kr32/platform/window.h"
+#endif
+
 #include <algorithm>
 #include <cctype>
 #include <cstdint>
@@ -41,6 +45,14 @@
 
 namespace kr32::cli {
 namespace {
+
+#ifdef KR32_HAS_UI
+vm::FileDialogCallback platform_file_dialog() {
+    return [](const kr32::FileDialogOptions& options) {
+        return platform::show_file_dialog(options);
+    };
+}
+#endif
 
 constexpr std::uint32_t kDefaultBase = 0x0001'0000;
 constexpr std::uint64_t kDefaultMaxSteps = 1'000'000;
@@ -764,6 +776,9 @@ int command_build(int argc, char** argv) {
     bool run = false;
     bool strip = false;
     vm::HostOptions host_options;
+#ifdef KR32_HAS_UI
+    host_options.file_dialog = platform_file_dialog();
+#endif
 
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
@@ -1195,6 +1210,9 @@ int command_vm(int argc, char** argv) {
     bool os_mode = false;
     std::string serial_input;
     vm::HostOptions host_options;
+#ifdef KR32_HAS_UI
+    host_options.file_dialog = platform_file_dialog();
+#endif
 
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);

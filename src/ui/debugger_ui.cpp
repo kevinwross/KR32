@@ -456,6 +456,9 @@ int console_scroll_after_output(int scroll, int previous_line_count,
 }
 
 DebuggerUI::DebuggerUI() {
+    session_.set_file_dialog([](const FileDialogOptions& options) {
+        return platform::show_file_dialog(options);
+    });
     load_settings();
 }
 

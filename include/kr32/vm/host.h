@@ -2,11 +2,14 @@
 
 #include <cstdint>
 #include <fstream>
+#include <functional>
 #include <map>
+#include <set>
 #include <string>
 #include <vector>
 
 #include "kr32/core/machine.h"
+#include "kr32/file_dialog.h"
 
 namespace kr32::vm {
 
@@ -17,6 +20,7 @@ namespace kr32::vm {
 //   38 write(fd, buffer, count)   39 seek(fd, offset, whence)
 //   40 time() -> seconds           41 random() -> uint32
 //   42 argc()                      43 arg(index, buffer, size)
+//   51 file_dialog(mode, flags, path, capacity) -> length or error
 namespace syscall {
 inline constexpr std::uint32_t Exit = 32;
 inline constexpr std::uint32_t PutChar = 33;
@@ -30,7 +34,11 @@ inline constexpr std::uint32_t Time = 40;
 inline constexpr std::uint32_t Random = 41;
 inline constexpr std::uint32_t Argc = 42;
 inline constexpr std::uint32_t Arg = 43;
+inline constexpr std::uint32_t FileDialog = file_dialog::Vector;
 } // namespace syscall
+
+using FileDialogCallback =
+    std::function<FileDialogResult(const FileDialogOptions&)>;
 
 struct HostOptions {
     std::string fs_root = ".";
@@ -38,6 +46,8 @@ struct HostOptions {
     std::uint64_t quota = 1024U * 1024U;
     std::vector<std::string> args;
     std::string input;
+    std::string dialog_filter = "*.k32;*.c;*.cpp;*.cc;*.cxx";
+    FileDialogCallback file_dialog;
     bool echo_console = true;
 };
 
@@ -87,6 +97,7 @@ private:
     int next_fd_ = 3;
     std::string console_;
     std::string input_;
+    std::set<std::string> authorized_paths_;
     std::string last_error_;
     std::uint32_t random_state_ = 0x4B523332U;
     std::uint64_t bytes_written_ = 0;

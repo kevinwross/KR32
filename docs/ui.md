@@ -218,6 +218,7 @@ canvas, and GUI targets and keeps the headless test suite green.
 
 ## Current limits
 
-- There is no native file dialog yet; loading uses the toolbar Load action.
+- File dialogs are modal host services. Headless runs and KR32OS guests report
+  the dialog as unavailable.
 - "Break" is expressed through breakpoints; a cooperative pause of a running
   guest is not implemented.

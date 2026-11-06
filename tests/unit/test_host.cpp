@@ -162,6 +162,98 @@ TEST_CASE("Host handles the remaining guest syscall vectors") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host file dialogs return an authorized guest path") {
+    const container::Image image = compile_image(
+        "int sys_open_dialog(char *path, int capacity);\n"
+        "int open(const char *path, int flags);\n"
+        "int close(int fd);\n"
+        "int read(int fd, void *buffer, int count);\n"
+        "int main(void) {\n"
+        "    char path[512];\n"
+        "    int length = sys_open_dialog(path, 512);\n"
+        "    if (length <= 0) return 1;\n"
+        "    int fd = open(path, 0);\n"
+        "    if (fd < 0) return 2;\n"
+        "    char value = 0;\n"
+        "    if (read(fd, &value, 1) != 1) return 3;\n"
+        "    close(fd);\n"
+        "    return value == 'Z' ? 0 : 4;\n"
+        "}\n");
+
+    const std::filesystem::path sandbox = temporary_sandbox();
+    const std::filesystem::path selected =
+        std::filesystem::current_path() / "host-dialog-selected.txt";
+    {
+        std::ofstream output(selected, std::ios::binary);
+        output << 'Z';
+    }
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    options.file_dialog = [&](const FileDialogOptions& request) {
+        CHECK(request.kind == FileDialogKind::Open);
+        CHECK(request.must_exist);
+        return FileDialogResult{FileDialogStatus::Selected, selected.string(), {}};
+    };
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    INFO(result.host_error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove(selected, cleanup);
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
+TEST_CASE("Host file dialog reports buffer capacity and save mode") {
+    const container::Image image = compile_image(
+        "int sys_file_dialog(int mode, int flags, char *path, int capacity);\n"
+        "int sys_save_dialog(char *path, int capacity);\n"
+        "int main(void) {\n"
+        "    char small[4];\n"
+        "    if (sys_file_dialog(1, 2, small, 4) != -28) return 1;\n"
+        "    char path[64];\n"
+        "    return sys_save_dialog(path, 64) > 0 ? 0 : 2;\n"
+        "}\n");
+    vm::HostOptions options;
+    options.echo_console = false;
+    options.file_dialog = [](const FileDialogOptions& request) {
+        CHECK(request.kind == FileDialogKind::Save);
+        CHECK(request.overwrite_prompt);
+        return FileDialogResult{FileDialogStatus::Selected,
+                                "/tmp/a-very-long-selected-file-name.k32", {}};
+    };
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+}
+
+TEST_CASE("Host file dialog cancellation and unavailable status are distinct") {
+    const container::Image canceled_image = compile_image(
+        "int sys_open_dialog(char *path, int capacity);\n"
+        "int main(void) { char path[32]; return sys_open_dialog(path, 32) == -1 ? 0 : 1; }\n");
+    vm::HostOptions canceled_options;
+    canceled_options.echo_console = false;
+    canceled_options.file_dialog = [](const FileDialogOptions&) {
+        return FileDialogResult{FileDialogStatus::Canceled, {}, {}};
+    };
+    std::string error;
+    const RunResult canceled = run_image(canceled_image, canceled_options, error);
+    CHECK(canceled.halted);
+    CHECK(canceled.result == 0);
+
+    const container::Image unavailable_image = compile_image(
+        "int sys_open_dialog(char *path, int capacity);\n"
+        "int main(void) { char path[32]; return sys_open_dialog(path, 32) == -2 ? 0 : 1; }\n");
+    vm::HostOptions unavailable_options;
+    unavailable_options.echo_console = false;
+    const RunResult unavailable =
+        run_image(unavailable_image, unavailable_options, error);
+    CHECK(unavailable.halted);
+    CHECK(unavailable.result == 0);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

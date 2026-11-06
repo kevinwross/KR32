@@ -8,8 +8,12 @@
 
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
+#include "kr32/file_dialog.h"
 
 namespace kr32::debug {
+
+using FileDialogCallback =
+    std::function<FileDialogResult(const FileDialogOptions&)>;
 
 struct Source {
     int id = 0;
@@ -139,6 +143,9 @@ public:
     void set_input(std::string input) {
         input_ = std::move(input);
     }
+    void set_file_dialog(FileDialogCallback callback) {
+        file_dialog_ = std::move(callback);
+    }
 
     void set_breakpoint(std::uint32_t address);
     void clear_breakpoint(std::uint32_t address);
@@ -191,6 +198,7 @@ private:
     std::string program_name_ = "program";
     std::string console_;
     std::string input_;
+    FileDialogCallback file_dialog_;
     std::uint32_t random_state_ = 0x4B523332U;
 };
 

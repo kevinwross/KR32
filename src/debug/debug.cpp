@@ -318,6 +318,68 @@ void Session::install_syscall_handler() {
             current.set_reg(0, 1);
             return true;
         }
+        if (vector == file_dialog::Vector) {
+            const std::uint32_t mode = current.reg(0);
+            const std::uint32_t flags = current.reg(1);
+            const std::uint32_t address = current.reg(2);
+            const std::uint32_t capacity = current.reg(3);
+            if (mode > file_dialog::Save ||
+                (flags & ~(file_dialog::MustExist |
+                           file_dialog::OverwritePrompt)) != 0 ||
+                address == 0 || capacity == 0) {
+                current.set_reg(0, file_dialog::Invalid);
+                return true;
+            }
+            if (!file_dialog_) {
+                current.set_reg(0, file_dialog::Unavailable);
+                return true;
+            }
+            FileDialogOptions dialog;
+            dialog.kind = mode == file_dialog::Save ? FileDialogKind::Save
+                                                    : FileDialogKind::Open;
+            dialog.title = dialog.kind == FileDialogKind::Save ? "Save File"
+                                                               : "Open File";
+            dialog.filter = "*.k32;*.c;*.cpp;*.cc;*.cxx";
+            dialog.default_extension =
+                dialog.kind == FileDialogKind::Save ? "k32" : "";
+            dialog.must_exist = (flags & file_dialog::MustExist) != 0;
+            dialog.overwrite_prompt = (flags & file_dialog::OverwritePrompt) != 0;
+            const FileDialogResult result = file_dialog_(dialog);
+            if (result.status == FileDialogStatus::Canceled) {
+                current.set_reg(0, file_dialog::Canceled);
+                return true;
+            }
+            if (result.status == FileDialogStatus::Unavailable) {
+                current.set_reg(0, file_dialog::Unavailable);
+                return true;
+            }
+            if (result.status != FileDialogStatus::Selected ||
+                result.path.empty()) {
+                current.set_reg(0, file_dialog::Error);
+                return true;
+            }
+            const std::uint32_t length =
+                static_cast<std::uint32_t>(result.path.size());
+            if (capacity <= length) {
+                current.set_reg(1, length + 1U);
+                current.set_reg(0, file_dialog::NoSpace);
+                return true;
+            }
+            for (std::uint32_t index = 0; index < length; ++index) {
+                if (!current.write8(
+                        address + index,
+                        static_cast<std::uint8_t>(result.path[index]))) {
+                    current.set_reg(0, file_dialog::Fault);
+                    return true;
+                }
+            }
+            if (!current.write8(address + length, 0)) {
+                current.set_reg(0, file_dialog::Fault);
+                return true;
+            }
+            current.set_reg(0, length);
+            return true;
+        }
         if (vector == 42) {
             current.set_reg(0, static_cast<std::uint32_t>(arguments_.size()));
             return true;
