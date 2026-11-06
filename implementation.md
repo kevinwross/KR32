@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 10:15 -08:00
+> **Last updated:** 2026-11-06 10:23 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1882,6 +1882,9 @@ Newest entries at the bottom. Use the local time zone.
       two-argument functor test.
 - **2026-11-06 10:15 -08:00** — Added member postfix `operator++`/`operator--`
       (`operator++(int)` and peers), with prefix and postfix runtime coverage.
+- **2026-11-06 10:23 -08:00** — Added `%n` position capture to
+      `fscanf`/`sscanf` and made `fflush(NULL)` flush the standard streams;
+      added a `%n` runtime test.
 
 ## 10. Updating this file
 

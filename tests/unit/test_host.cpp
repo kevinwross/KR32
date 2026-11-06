@@ -500,6 +500,31 @@ TEST_CASE("Host supports truncate and fsync") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host supports scanf position capture with %n") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "int main(void) {\n"
+        "    char word[16];\n"
+        "    int count = -1;\n"
+        "    int number = 0;\n"
+        "    int assigned = sscanf(\"abc 123\", \"%s%n %d\", word, &count, &number);\n"
+        "    if (assigned != 2) return 1;\n"
+        "    if (count != 3) return 2;\n"
+        "    if (number != 123) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

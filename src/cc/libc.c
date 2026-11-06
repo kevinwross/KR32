@@ -755,6 +755,8 @@ int fclose(struct kr32_file *stream) {
 
 int fflush(struct kr32_file *stream) {
     if (stream == 0) {
+        (void)stream_flush(stdout);
+        (void)stream_flush(stderr);
         return 0;
     }
     return stream_flush(stream);
@@ -957,12 +959,29 @@ static int scanf_double(struct kr32_file *stream, double *value) {
     return 1;
 }
 
+static int stream_position(struct kr32_file *stream) {
+    if (stream == 0) {
+        return -1;
+    }
+    if (stream->memory_mode != 0) {
+        return stream->memory_position;
+    }
+    if (stream->descriptor < 3) {
+        return -1;
+    }
+    if (stream_flush(stream) != 0) {
+        return -1;
+    }
+    return seek(stream->descriptor, 0, 1);
+}
+
 int vfscanf(struct kr32_file *stream, const char *format, va_list arguments) {
     if (stream == 0 || format == 0) {
         errno = EINVAL;
         return EOF;
     }
     int assigned = 0;
+    const int start_position = stream_position(stream);
     const char *cursor = format;
     while (*cursor != '\0') {
         if (is_space_character((int)*cursor)) {
@@ -1025,6 +1044,17 @@ int vfscanf(struct kr32_file *stream, const char *format, va_list arguments) {
                 unsigned int *target = va_arg(arguments, unsigned int *);
                 *target = value;
                 assigned = assigned + 1;
+            }
+        } else if (spec == 'n') {
+            if (!suppress) {
+                int *target = va_arg(arguments, int *);
+                int current = stream_position(stream);
+                if (current > 0 && stream->ungot >= 0) {
+                    current = current - 1;
+                }
+                *target = current >= 0 && start_position >= 0
+                              ? current - start_position
+                              : 0;
             }
         } else if (spec == 'p') {
             unsigned int value = 0;
