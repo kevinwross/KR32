@@ -38,6 +38,7 @@ inline constexpr std::uint32_t FileDialog = file_dialog::Vector;
 inline constexpr std::uint32_t Unlink = 52;
 inline constexpr std::uint32_t Rename = 53;
 inline constexpr std::uint32_t Stat = 54;
+inline constexpr std::uint32_t Truncate = 55;
 } // namespace syscall
 
 namespace stat_abi {

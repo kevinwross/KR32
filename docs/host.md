@@ -29,6 +29,7 @@ The guest reaches the host through `SYSCALL` vectors 32..51. Arguments are in
 | 52 | unlink | path | 0 or error |
 | 53 | rename | old_path, new_path | 0 or error |
 | 54 | stat | path, buffer, capacity | 0 or error |
+| 55 | truncate | path, length | 0 or error |
 
 Thread services are provided by `vm::ClusterHost`, which maps one guest thread
 per `core::Cluster` core and advances one core turn at a time. A thread handle

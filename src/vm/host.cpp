@@ -561,6 +561,33 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         machine.set_reg(0, 0);
         return true;
     }
+    case syscall::Truncate: {
+        std::string path;
+        if (!read_guest_string(machine, machine.reg(0), path)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        bool ok = false;
+        const std::string resolved = resolve(path, true, ok);
+        if (!ok) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        const std::uint32_t length = machine.reg(1);
+        std::error_code error;
+        if (std::filesystem::is_directory(resolved, error)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        std::filesystem::resize_file(resolved, length, error);
+        if (error) {
+            last_error_ = error.message();
+            machine.set_reg(0, kErrorIo);
+            return true;
+        }
+        machine.set_reg(0, 0);
+        return true;
+    }
     case 46: // thread yield
         machine.set_reg(0, 0);
         return true;

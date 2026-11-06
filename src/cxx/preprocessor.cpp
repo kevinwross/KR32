@@ -656,6 +656,9 @@ private:
                     "extern \"C\" {\n"
                     "int access(const char* path, int mode);\n"
                     "int isatty(int descriptor);\n"
+                    "int truncate(const char* path, int length);\n"
+                    "int fsync(int descriptor);\n"
+                    "int fdatasync(int descriptor);\n"
                     "}\n");
                 macros_["F_OK"] = Macro{false, {}, "0"};
                 macros_["X_OK"] = Macro{false, {}, "1"};

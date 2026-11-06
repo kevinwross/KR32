@@ -1444,6 +1444,18 @@ int isatty(int descriptor) {
     return descriptor >= 0 && descriptor <= 2;
 }
 
+int fsync(int descriptor) {
+    if (descriptor < 0) {
+        errno = EBADF;
+        return -1;
+    }
+    return 0;
+}
+
+int fdatasync(int descriptor) {
+    return fsync(descriptor);
+}
+
 int access(const char *path, int mode) {
     if (path == 0) {
         errno = EINVAL;

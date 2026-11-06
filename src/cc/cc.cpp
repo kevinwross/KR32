@@ -430,7 +430,10 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                 if (directive.find("unistd.h") != std::string::npos) {
                     result +=
                         "int access(const char *path, int mode); "
-                        "int isatty(int descriptor);";
+                        "int isatty(int descriptor); "
+                        "int truncate(const char *path, int length); "
+                        "int fsync(int descriptor); "
+                        "int fdatasync(int descriptor);";
                     macros["F_OK"] = "0";
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
@@ -4033,6 +4036,10 @@ std::string runtime_assembly() {
         "stat:\n"
         "    MOV R2, #16\n"
         "    SYSCALL #54\n"
+        "    RET\n"
+        ".global truncate\n"
+        "truncate:\n"
+        "    SYSCALL #55\n"
         "    RET\n"
         ".global sys_time\n"
         "sys_time:\n"

@@ -28,7 +28,7 @@ source line numbers and debugger line mappings are preserved.
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
-| `<unistd.h>` | `access`, `isatty` |
+| `<unistd.h>` | `access`, `isatty`, `truncate`, `fsync`, `fdatasync` |
 | `<math.h>` | `sqrt`, `sqrtf`, `fabs`, `fabsf`, `fmin`, `fminf`, `fmax`, `fmaxf`, `M_PI` |
 
 `<stdio.h>` provides a `FILE` layer over the descriptor syscalls:
