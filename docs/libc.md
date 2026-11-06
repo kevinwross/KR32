@@ -174,7 +174,12 @@ directly.
 
 `malloc`, `free`, `calloc`, `realloc`, and `printf` are implemented in C.
 
-C++ programs can include `<stdio.h>` and use the same `FILE` API. The C++
-front end currently has no operator overloading, so `<iostream>`/`<fstream>`
-and `operator<<`/`operator>>` are not available yet; `std::fstream` remains a
-future layer over this `FILE` implementation.
+C++ programs can include `<stdio.h>` and use the same `FILE` API. They can also
+include `<iostream>` or `<fstream>` for a compact stream subset:
+`std::ifstream`, `std::ofstream`, `std::fstream`, `std::cin`, `std::cout`,
+`std::cerr`, `operator<<`, `operator>>`, `std::endl`, `read`, `write`, `get`,
+`getline`, `seekg`/`tellg`, and `seekp`/`tellp`. These streams are unbuffered
+wrappers over `FILE`. The compiler currently supports member binary operator
+overloads; free operators, `operator[]`, `operator()`, and compound
+assignment operators are still pending. Full standard iostreams, locales,
+facets, and `std::string` are not implemented.

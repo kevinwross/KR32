@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 07:22 -08:00
+> **Last updated:** 2026-11-06 07:37 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1841,13 +1841,19 @@ Newest entries at the bottom. Use the local time zone.
       `open`. Added C/C++ runtime wrappers, CLI/debugger wiring, and fake-dialog
       tests. The debugger now hosts file I/O through the same `vm::Host`, so
       selected files can be opened immediately.
-- **2026-11-06 07:22 -08:00** — Added the unbuffered C `FILE` layer
+- **2026-11-06 07:37 -08:00** — Added the unbuffered C `FILE` layer
       (`fopen`/`fread`/`fwrite`/`fprintf`/`fscanf`/seeking/status), formatted
       string output, and console/file separation. Added C compiler support for
       `extern` global declarations and missing control-character escapes, and
       C++ typedef registration. A CLI-level exception handler now reports
       embedded-libc compile failures instead of terminating. C++ can use the
-      C `FILE` API; native iostreams remain blocked on operator overloading.
+      C `FILE` API.
+- **2026-11-06 07:37 -08:00** — Implemented member binary operator
+      overloading (`<<`, `>>`, arithmetic/comparison operators), operator
+      mangling, class-reference returns, and chained reference results. Added
+      the compact `<iostream>`/`<fstream>` subset over `FILE` with
+      `std::ifstream`, `std::ofstream`, `std::fstream`, `std::cin`,
+      `std::cout`, `std::cerr`, `std::endl`, `operator<<`, and `operator>>`.
 
 ## 10. Updating this file
 

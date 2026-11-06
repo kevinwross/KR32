@@ -206,6 +206,20 @@ ProgramResult compile_and_run_many(const std::vector<std::string>& sources) {
 
 } // namespace
 
+TEST_CASE("member operator overloading supports chaining") {
+    const ProgramResult program = compile_and_run(
+        "class Box {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Box(int initial) : value(initial) {}\n"
+        "    Box& operator<<(int amount);\n"
+        "};\n"
+        "Box& Box::operator<<(int amount) { value = value + amount; return *this; }\n"
+        "int main() { Box box(0); box << 1 << 2; return box.value; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 3);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

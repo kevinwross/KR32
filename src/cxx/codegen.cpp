@@ -39,13 +39,55 @@ std::vector<std::string> split_qualified(std::string_view text) {
     return parts;
 }
 
+std::string mangle_component(const std::string& name) {
+    static const std::map<std::string, std::string> operators = {
+        {"operator+", "operator_plus"},
+        {"operator-", "operator_minus"},
+        {"operator*", "operator_star"},
+        {"operator/", "operator_slash"},
+        {"operator%", "operator_percent"},
+        {"operator==", "operator_eq"},
+        {"operator!=", "operator_ne"},
+        {"operator<", "operator_lt"},
+        {"operator<=", "operator_le"},
+        {"operator>", "operator_gt"},
+        {"operator>=", "operator_ge"},
+        {"operator<<", "operator_lshift"},
+        {"operator>>", "operator_rshift"},
+        {"operator[]", "operator_index"},
+        {"operator()", "operator_call"},
+        {"operator=", "operator_assign"},
+        {"operator+=", "operator_add_assign"},
+        {"operator-=", "operator_sub_assign"},
+        {"operator*=", "operator_mul_assign"},
+        {"operator/=", "operator_div_assign"},
+        {"operator%=", "operator_mod_assign"},
+        {"operator&", "operator_amp"},
+        {"operator|", "operator_pipe"},
+        {"operator^", "operator_xor"},
+        {"operator~", "operator_not"},
+        {"operator!", "operator_lnot"},
+        {"operator&&", "operator_land"},
+        {"operator||", "operator_lor"},
+        {"operator++", "operator_inc"},
+        {"operator--", "operator_dec"},
+        {"operator->", "operator_arrow"},
+        {"operator->*", "operator_arrow_star"},
+        {"operator,", "operator_comma"},
+    };
+    const auto found = operators.find(name);
+    return found == operators.end() ? name : found->second;
+}
+
 std::string mangle_qualified(std::vector<std::string> parts) {
     if (parts.size() == 1) {
-        return std::to_string(parts[0].size()) + parts[0];
+        const std::string part = mangle_component(parts[0]);
+        return std::to_string(part.size()) + part;
     }
     std::string result = "N";
     for (const std::string& part : parts) {
-        result += std::to_string(part.size()) + part;
+        const std::string component = mangle_component(part);
+        result += std::to_string(component.size()) + component;
     }
     result += "E";
     return result;
@@ -374,7 +416,8 @@ std::string mangle_member(std::string_view class_name, std::string_view name,
     } else if (destructor) {
         result += "D1";
     } else {
-        result += std::to_string(name.size()) + std::string(name);
+        const std::string component = mangle_component(std::string(name));
+        result += std::to_string(component.size()) + component;
     }
     result += "E";
     if (parameter_types.empty()) {
@@ -655,7 +698,11 @@ private:
     ClassInfo* find_class(const Name& name) { return find_class(name.to_string()); }
 
     ClassInfo* class_of(const TypePtr& raw) {
-        const TypePtr type = resolve_type(raw);
+        TypePtr type = resolve_type(raw);
+        while (type && (type->kind == TypeKind::LValueRef ||
+                        type->kind == TypeKind::RValueRef)) {
+            type = type->element;
+        }
         if (!type || type->kind != TypeKind::Named) {
             return nullptr;
         }
@@ -1393,11 +1440,6 @@ private:
             error(declaration, "member function has no class context");
             return nullptr;
         }
-        if (declaration.is_operator) {
-            error(declaration, "operator overloads are not supported until M9.6");
-            return nullptr;
-        }
-
         auto function = std::make_unique<Function>();
         function->decl = &declaration;
         function->qualified = qualified;
@@ -2042,6 +2084,10 @@ private:
         case ExprKind::Binary: {
             const TypePtr left = type_of(*expression.children[0]);
             const TypePtr right = type_of(*expression.children[1]);
+            if (Function* operation = find_member_operator(
+                    class_of(left), "operator" + expression.text, right, false)) {
+                return operation->result;
+            }
             if (expression.text == "==" || expression.text == "!=" ||
                 expression.text == "<" || expression.text == "<=" ||
                 expression.text == ">" || expression.text == ">=" ||
@@ -2278,6 +2324,32 @@ private:
             }
         }
         return {};
+    }
+
+    Function* find_member_operator(ClassInfo* info,
+                                   const std::string& name,
+                                   const TypePtr& argument,
+                                   bool unary) {
+        if (info == nullptr) {
+            return nullptr;
+        }
+        const auto candidates = class_methods(info, name);
+        for (Function* candidate : candidates) {
+            const std::size_t arity = unary ? 0U : 1U;
+            if (candidate->parameters.size() != arity) {
+                continue;
+            }
+            TypePtr parameter = candidate->parameters[0];
+            if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                              parameter->kind == TypeKind::RValueRef)) {
+                parameter = parameter->element;
+            }
+            if (arity == 0 ||
+                same_type(decay(parameter), decay(argument))) {
+                return candidate;
+            }
+        }
+        return nullptr;
     }
 
     bool matrix_intrinsic_name(const Expr& call, std::string& name) {
@@ -3119,6 +3191,15 @@ private:
     }
 
     void gen_address(const Expr& expression) {
+        if (expression.kind == ExprKind::Binary ||
+            expression.kind == ExprKind::Call) {
+            const TypePtr type = type_of(expression);
+            if (type && (type->kind == TypeKind::LValueRef ||
+                         type->kind == TypeKind::RValueRef)) {
+                gen_expr(expression);
+                return;
+            }
+        }
         if (expression.kind == ExprKind::Call && !expression.children.empty() &&
             expression.children[0]->kind == ExprKind::Name &&
             expression.children[0]->name.to_string() == "std::move" &&
@@ -5030,8 +5111,47 @@ private:
                                       : BuiltinKind::LongLong);
     }
 
+    TypePtr gen_member_operator(const Expr& expression, Function* operation) {
+        const int this_temp =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        gen_address(*expression.children[0]);
+        emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+        const TypePtr parameter =
+            operation->parameters.empty()
+                ? Type::make_builtin(BuiltinKind::Void)
+                : operation->parameters[0];
+        int argument_temp = -1;
+        bool floating_argument = false;
+        if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                          parameter->kind == TypeKind::RValueRef)) {
+            gen_address(*expression.children[1]);
+            argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
+        } else if (is_fp(parameter)) {
+            gen_as_fp(*expression.children[1],
+                      Type::make_builtin(BuiltinKind::Double));
+            floating_argument = true;
+        } else {
+            gen_expr(*expression.children[1]);
+            argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
+        if (!floating_argument && argument_temp >= 0) {
+            emit("    LOAD R1, [R7 + " + std::to_string(argument_temp) + "]");
+        }
+        emit("    CALL " + operation->symbol);
+        return operation->result;
+    }
+
     TypePtr gen_binary(const Expr& expression) {
         const std::string& op = expression.text;
+        const TypePtr left_operand = type_of(*expression.children[0]);
+        if (Function* operation = find_member_operator(
+                class_of(left_operand), "operator" + op,
+                type_of(*expression.children[1]), false)) {
+            return gen_member_operator(expression, operation);
+        }
         if (op == "&&" || op == "||") {
             const std::string short_label = new_label(op == "&&" ? "andfalse" : "ortrue");
             const std::string end_label = new_label("logicend");
@@ -6014,6 +6134,18 @@ private:
                     }
                     emit_all_local_destructors();
                     emit("    MOV R0, #0");
+                    emit("    JMP " + return_label_);
+                    return;
+                }
+                const TypePtr declared_result =
+                    current_function_ != nullptr
+                        ? resolve_type(current_function_->result)
+                        : nullptr;
+                if (declared_result &&
+                    (declared_result->kind == TypeKind::LValueRef ||
+                     declared_result->kind == TypeKind::RValueRef)) {
+                    gen_address(*statement.expression);
+                    emit_all_local_destructors();
                     emit("    JMP " + return_label_);
                     return;
                 }

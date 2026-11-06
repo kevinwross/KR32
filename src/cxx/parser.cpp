@@ -743,6 +743,11 @@ private:
                         if (!component_arguments.empty()) {
                             declarator.owner_template_arguments = component_arguments;
                         }
+                        if (at("operator")) {
+                            declarator.is_operator = true;
+                            declarator.name.parts.push_back(parse_operator_name());
+                            break;
+                        }
                         if (!at_identifier() && peek().kind != TokenKind::Keyword) {
                             error(peek(), "expected name after '::'");
                             break;

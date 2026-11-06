@@ -163,6 +163,37 @@ TEST_CASE("debug sessions expose the file dialog syscall") {
     std::filesystem::remove(selected, cleanup);
 }
 
+TEST_CASE("C++ iostreams use the FILE host layer") {
+    const std::filesystem::path path =
+        std::filesystem::current_path() / "cxx-stream-test.txt";
+    const container::Image image = compile_cxx_debug_image(
+        "#include <fstream>\n"
+        "int main() {\n"
+        "    std::ofstream out(\"cxx-stream-test.txt\");\n"
+        "    if (!out.is_open()) return 1;\n"
+        "    out << \"hello \" << 42 << std::endl;\n"
+        "    out.close();\n"
+        "    std::ifstream in(\"cxx-stream-test.txt\");\n"
+        "    if (!in.is_open()) return 2;\n"
+        "    char word[16];\n"
+        "    int value = 0;\n"
+        "    in >> word >> value;\n"
+        "    in.close();\n"
+        "    std::cout << word << \" \" << value << std::endl;\n"
+        "    return value == 42 ? 0 : 3;\n"
+        "}\n");
+    debug::Session session;
+    std::string error;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const core::StepResult result = session.run(100000);
+    INFO(session.host_error());
+    CHECK(result.kind == core::StepResult::Kind::Halted);
+    CHECK(session.machine().exit_code() == 0);
+    CHECK(session.console() == "hello 42\n");
+    std::error_code cleanup;
+    std::filesystem::remove(path, cleanup);
+}
+
 TEST_CASE("C++ debug sessions expose guest command-line arguments") {
     const container::Image image = compile_cxx_debug_image(
         "int main(int argc, char** argv) {\n"
