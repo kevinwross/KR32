@@ -659,6 +659,8 @@ private:
                     "int truncate(const char* path, int length);\n"
                     "int fsync(int descriptor);\n"
                     "int fdatasync(int descriptor);\n"
+                    "char* getcwd(char* buffer, int size);\n"
+                    "int chdir(const char* path);\n"
                     "}\n");
                 macros_["F_OK"] = Macro{false, {}, "0"};
                 macros_["X_OK"] = Macro{false, {}, "1"};

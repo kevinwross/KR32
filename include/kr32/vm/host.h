@@ -39,6 +39,8 @@ inline constexpr std::uint32_t Unlink = 52;
 inline constexpr std::uint32_t Rename = 53;
 inline constexpr std::uint32_t Stat = 54;
 inline constexpr std::uint32_t Truncate = 55;
+inline constexpr std::uint32_t GetCwd = 56;
+inline constexpr std::uint32_t Chdir = 57;
 } // namespace syscall
 
 namespace stat_abi {
@@ -107,6 +109,7 @@ private:
 
     HostOptions options_;
     std::string root_;
+    std::string cwd_;
     std::map<int, File> files_;
     int next_fd_ = 3;
     std::string console_;

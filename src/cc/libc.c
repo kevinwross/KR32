@@ -37,6 +37,8 @@ int write(int fd, const void *buffer, int count);
 int seek(int fd, int offset, int whence);
 int unlink(const char *path);
 int rename(const char *old_path, const char *new_path);
+int kr32_getcwd(char *buffer, int size);
+int kr32_chdir(const char *path);
 int stat(const char *path, struct stat *status);
 
 void *memcpy(void *destination, const void *source, int count);
@@ -1568,6 +1570,44 @@ int fsync(int descriptor) {
 
 int fdatasync(int descriptor) {
     return fsync(descriptor);
+}
+
+char *getcwd(char *buffer, int size) {
+    if (size <= 0) {
+        errno = EINVAL;
+        return 0;
+    }
+    int allocated = 0;
+    if (buffer == 0) {
+        buffer = (char *)malloc(size);
+        if (buffer == 0) {
+            errno = ENOMEM;
+            return 0;
+        }
+        allocated = 1;
+    }
+    const int result = kr32_getcwd(buffer, size);
+    if (result < 0) {
+        if (allocated) {
+            free(buffer);
+        }
+        errno = result == -4 ? EINVAL : EIO;
+        return 0;
+    }
+    return buffer;
+}
+
+int chdir(const char *path) {
+    if (path == 0) {
+        errno = EINVAL;
+        return -1;
+    }
+    const int result = kr32_chdir(path);
+    if (result < 0) {
+        errno = result == -4 ? ENOENT : EIO;
+        return -1;
+    }
+    return 0;
 }
 
 int access(const char *path, int mode) {

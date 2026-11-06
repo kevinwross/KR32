@@ -557,6 +557,35 @@ TEST_CASE("Host buffers FILE input") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host supports chdir and getcwd") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "#include <unistd.h>\n"
+        "int main(void) {\n"
+        "    char buffer[64];\n"
+        "    if (getcwd(buffer, 64) == 0) return 1;\n"
+        "    if (chdir(\"sub\") != 0) return 2;\n"
+        "    if (getcwd(buffer, 64) == 0) return 3;\n"
+        "    FILE *file = fopen(\"inside.txt\", \"w\");\n"
+        "    if (file == 0) return 4;\n"
+        "    fputs(\"ok\", file);\n"
+        "    fclose(file);\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    std::filesystem::create_directories(sandbox / "sub");
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    CHECK(std::filesystem::exists(sandbox / "sub" / "inside.txt"));
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

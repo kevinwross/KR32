@@ -59,6 +59,7 @@ Host::Host(HostOptions options) : options_(std::move(options)) {
 
 void Host::reset() {
     files_.clear();
+    cwd_.clear();
     next_fd_ = 3;
     console_.clear();
     input_ = options_.input;
@@ -93,10 +94,13 @@ std::string Host::resolve(const std::string& path, bool write, bool& ok) {
         ok = true;
         return canonical.string();
     }
-    const std::filesystem::path relative(path);
+    std::filesystem::path relative(path);
     if (relative.is_absolute()) {
         last_error_ = "absolute paths are outside the sandbox";
         return {};
+    }
+    if (!cwd_.empty()) {
+        relative = std::filesystem::path(cwd_) / relative;
     }
     for (const auto& component : relative) {
         if (component == "..") {
@@ -593,6 +597,48 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
             machine.set_reg(0, kErrorIo);
             return true;
         }
+        machine.set_reg(0, 0);
+        return true;
+    }
+    case syscall::GetCwd: {
+        const std::string path = cwd_.empty() ? "/" : "/" + cwd_;
+        const std::uint32_t address = machine.reg(0);
+        const std::uint32_t capacity = machine.reg(1);
+        if (capacity < path.size() + 1) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        for (std::size_t index = 0; index < path.size(); ++index) {
+            if (!machine.write8(address + static_cast<std::uint32_t>(index),
+                                static_cast<std::uint8_t>(path[index]))) {
+                machine.set_reg(0, kErrorInvalid);
+                return true;
+            }
+        }
+        (void)machine.write8(address + static_cast<std::uint32_t>(path.size()), 0);
+        machine.set_reg(0, static_cast<std::uint32_t>(path.size()));
+        return true;
+    }
+    case syscall::Chdir: {
+        std::string path;
+        if (!read_guest_string(machine, machine.reg(0), path)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        bool ok = false;
+        const std::string resolved = resolve(path, false, ok);
+        std::error_code error;
+        if (!ok || !std::filesystem::is_directory(resolved, error)) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        const std::filesystem::path relative =
+            std::filesystem::relative(resolved, root_, error);
+        if (error) {
+            machine.set_reg(0, kErrorIo);
+            return true;
+        }
+        cwd_ = relative == "." ? std::string() : relative.generic_string();
         machine.set_reg(0, 0);
         return true;
     }

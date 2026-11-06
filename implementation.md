@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 10:43 -08:00
+> **Last updated:** 2026-11-06 10:52 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1890,6 +1890,9 @@ Newest entries at the bottom. Use the local time zone.
       cleanup; added an input-buffering runtime test.
 - **2026-11-06 10:43 -08:00** — Populated `st_mtime` from the host file
       timestamp and added a non-zero timestamp assertion to the stat test.
+- **2026-11-06 10:52 -08:00** — Added host `getcwd`/`chdir` (syscalls 56/57),
+      a sandbox-relative working directory in path resolution, libc wrappers,
+      and a chdir/getcwd runtime test.
 
 ## 10. Updating this file
 

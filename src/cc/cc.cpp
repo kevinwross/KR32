@@ -433,7 +433,9 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int isatty(int descriptor); "
                         "int truncate(const char *path, int length); "
                         "int fsync(int descriptor); "
-                        "int fdatasync(int descriptor);";
+                        "int fdatasync(int descriptor); "
+                        "char *getcwd(char *buffer, int size); "
+                        "int chdir(const char *path);";
                     macros["F_OK"] = "0";
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
@@ -4040,6 +4042,14 @@ std::string runtime_assembly() {
         ".global truncate\n"
         "truncate:\n"
         "    SYSCALL #55\n"
+        "    RET\n"
+        ".global kr32_getcwd\n"
+        "kr32_getcwd:\n"
+        "    SYSCALL #56\n"
+        "    RET\n"
+        ".global kr32_chdir\n"
+        "kr32_chdir:\n"
+        "    SYSCALL #57\n"
         "    RET\n"
         ".global sys_time\n"
         "sys_time:\n"
