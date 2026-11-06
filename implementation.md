@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 11:02 -08:00
+> **Last updated:** 2026-11-06 11:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1896,6 +1896,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-06 11:02 -08:00** — Added `dup`/`dup2` (syscalls 58/59) with
       shared descriptor state, refcounted close, libc wrappers, and a
       shared-offset runtime test.
+- **2026-11-06 11:10 -08:00** — Added class-by-value member operator
+      parameters for register-sized aggregates; added a runtime test.
 
 ## 10. Updating this file
 

@@ -5346,11 +5346,21 @@ private:
                 : operation->parameters[0];
         int argument_temp = -1;
         bool floating_argument = false;
+        bool class_argument = false;
+        int class_size = 0;
+        ClassInfo* parameter_class = class_of(parameter);
         if (parameter && (parameter->kind == TypeKind::LValueRef ||
                           parameter->kind == TypeKind::RValueRef)) {
             gen_address(right);
             argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
+        } else if (parameter_class != nullptr &&
+                   is_register_class(parameter_class)) {
+            gen_expr(right);
+            argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
+            class_argument = true;
+            class_size = parameter_class->size;
         } else if (is_fp(parameter)) {
             gen_as_fp(right, Type::make_builtin(BuiltinKind::Double));
             floating_argument = true;
@@ -5360,7 +5370,13 @@ private:
             emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
         }
         emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
-        if (!floating_argument && argument_temp >= 0) {
+        if (class_argument) {
+            emit("    LOAD R2, [R7 + " + std::to_string(argument_temp) + "]");
+            emit("    LOAD R1, [R2]");
+            if (class_size > 4) {
+                emit("    LOAD R2, [R2 + 4]");
+            }
+        } else if (!floating_argument && argument_temp >= 0) {
             emit("    LOAD R1, [R7 + " + std::to_string(argument_temp) + "]");
         }
         emit("    CALL " + operation->symbol);

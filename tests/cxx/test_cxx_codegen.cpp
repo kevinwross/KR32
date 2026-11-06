@@ -353,6 +353,24 @@ TEST_CASE("member postfix increment and decrement run") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("member operators accept class-by-value parameters") {
+    const ProgramResult program = compile_and_run(
+        "class Point {\n"
+        "public:\n"
+        "    int x;\n"
+        "    Point(int value) : x(value) {}\n"
+        "    int operator+(Point other);\n"
+        "};\n"
+        "int Point::operator+(Point other) { return x + other.x; }\n"
+        "int main() {\n"
+        "    Point a(1);\n"
+        "    Point b(2);\n"
+        "    return a + b - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
