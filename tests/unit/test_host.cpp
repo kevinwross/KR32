@@ -254,6 +254,38 @@ TEST_CASE("Host file dialog cancellation and unavailable status are distinct") {
     CHECK(unavailable.result == 0);
 }
 
+TEST_CASE("Host supports C FILE streams") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "#include <string.h>\n"
+        "int main(void) {\n"
+        "    FILE *stream = fopen(\"stdio.txt\", \"w\");\n"
+        "    if (stream == 0) return 1;\n"
+        "    if (fprintf(stream, \"%s %d %.2f\\n\", \"value\", 42, 3.5) < 0) return 2;\n"
+        "    if (fclose(stream) != 0) return 3;\n"
+        "    stream = fopen(\"stdio.txt\", \"r\");\n"
+        "    if (stream == 0) return 4;\n"
+        "    char word[16];\n"
+        "    int number = 0;\n"
+        "    double real = 0.0;\n"
+        "    if (fscanf(stream, \"%s %d %lf\", word, &number, &real) != 3) return 5;\n"
+        "    if (fclose(stream) != 0) return 6;\n"
+        "    char buffer[32];\n"
+        "    if (snprintf(buffer, 32, \"%s %d %.2f\", word, number, real) != 13) return 7;\n"
+        "    return strcmp(buffer, \"value 42 3.50\");\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

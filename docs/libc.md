@@ -23,13 +23,17 @@ source line numbers and debugger line mappings are preserved.
 
 | Include | Contents |
 | --- | --- |
-| `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, raw file descriptor, argument, memory, and string prototypes |
+| `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, and string prototypes |
 | `<stdarg.h>` | `va_list` and the `va_start`/`va_arg`/`va_end`/`va_copy` macros |
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
 | `<math.h>` | `sqrt`, `sqrtf`, `fabs`, `fabsf`, `fmin`, `fminf`, `fmax`, `fmaxf`, `M_PI` |
 
-`<stdio.h>` and `<stdlib.h>` currently expose the same prototype block. There is
-no `FILE`, `EOF`, `O_RDONLY`, or stream buffering.
+`<stdio.h>` provides an unbuffered `FILE` layer over the descriptor syscalls:
+`fopen`/`fclose`, `fread`/`fwrite`, `fgetc`/`fputc`, `fgets`/`fputs`,
+`fprintf`/`fscanf`, `fseek`/`ftell`/`rewind`, `feof`/`ferror`/`clearerr`, and
+`snprintf`/`sprintf`. `stdin`, `stdout`, and `stderr` map to the console
+syscalls; file streams use descriptors 3 and above. The implementation is
+unbuffered and therefore does not need `setvbuf` for correctness.
 
 ## Compiler extensions used by libc
 
@@ -169,3 +173,8 @@ values follow as `argv[1..]`. Programs may also use `sys_argc`/`sys_arg`
 directly.
 
 `malloc`, `free`, `calloc`, `realloc`, and `printf` are implemented in C.
+
+C++ programs can include `<stdio.h>` and use the same `FILE` API. The C++
+front end currently has no operator overloading, so `<iostream>`/`<fstream>`
+and `operator<<`/`operator>>` are not available yet; `std::fstream` remains a
+future layer over this `FILE` implementation.

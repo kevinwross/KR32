@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 16:12 -08:00
+> **Last updated:** 2026-11-06 07:22 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1833,7 +1833,7 @@ Newest entries at the bottom. Use the local time zone.
       debugger tests covering every advertised `32..43` vector. KR32OS now
       fills unused software-vector slots with a `BRK` stub before installing
       vectors 64..69, so undefined syscalls trap instead of jumping to zero.
-- **2026-11-05 16:12 -08:00** — Added native open/save file dialogs. Platform
+- **2026-11-05 15:59 -08:00** — Added native open/save file dialogs. Platform
       API supports Windows common dialogs and Linux zenity/kdialog; host syscall
       51 returns a UTF-8 path into a guest buffer with cancel, unavailable,
       error, fault, invalid-argument, and buffer-too-small statuses. Selected
@@ -1841,6 +1841,13 @@ Newest entries at the bottom. Use the local time zone.
       `open`. Added C/C++ runtime wrappers, CLI/debugger wiring, and fake-dialog
       tests. The debugger now hosts file I/O through the same `vm::Host`, so
       selected files can be opened immediately.
+- **2026-11-06 07:22 -08:00** — Added the unbuffered C `FILE` layer
+      (`fopen`/`fread`/`fwrite`/`fprintf`/`fscanf`/seeking/status), formatted
+      string output, and console/file separation. Added C compiler support for
+      `extern` global declarations and missing control-character escapes, and
+      C++ typedef registration. A CLI-level exception handler now reports
+      embedded-libc compile failures instead of terminating. C++ can use the
+      C `FILE` API; native iostreams remain blocked on operator overloading.
 
 ## 10. Updating this file
 

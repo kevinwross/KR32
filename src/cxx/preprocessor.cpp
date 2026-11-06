@@ -651,13 +651,46 @@ private:
                     "}\n");
                 return;
             }
-            if (header.find("stdio.h") != std::string::npos) {
+            if (header.find("stdio.h") != std::string::npos ||
+                header.find("cstdio") != std::string::npos) {
                 append_line(
+                    "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; };\n"
+                    "typedef struct kr32_file FILE;\n"
                     "extern \"C\" {\n"
+                    "extern FILE* stdin;\n"
+                    "extern FILE* stdout;\n"
+                    "extern FILE* stderr;\n"
                     "int putchar(int c);\n"
                     "int getchar();\n"
                     "int printf(const char* format, ...);\n"
+                    "FILE* fopen(const char* path, const char* mode);\n"
+                    "FILE* fdopen(int fd, const char* mode);\n"
+                    "int fclose(FILE* stream);\n"
+                    "int fflush(FILE* stream);\n"
+                    "int fgetc(FILE* stream);\n"
+                    "int fputc(int c, FILE* stream);\n"
+                    "int ungetc(int c, FILE* stream);\n"
+                    "char* fgets(char* buffer, int size, FILE* stream);\n"
+                    "int fputs(const char* text, FILE* stream);\n"
+                    "int puts(const char* text);\n"
+                    "int fread(void* buffer, int size, int count, FILE* stream);\n"
+                    "int fwrite(const void* buffer, int size, int count, FILE* stream);\n"
+                    "int fseek(FILE* stream, int offset, int whence);\n"
+                    "int ftell(FILE* stream);\n"
+                    "void rewind(FILE* stream);\n"
+                    "int feof(FILE* stream);\n"
+                    "int ferror(FILE* stream);\n"
+                    "void clearerr(FILE* stream);\n"
+                    "int fileno(FILE* stream);\n"
+                    "int fprintf(FILE* stream, const char* format, ...);\n"
+                    "int fscanf(FILE* stream, const char* format, ...);\n"
+                    "int snprintf(char* buffer, int size, const char* format, ...);\n"
+                    "int sprintf(char* buffer, const char* format, ...);\n"
                     "}\n");
+                macros_["EOF"] = Macro{false, {}, "-1"};
+                macros_["SEEK_SET"] = Macro{false, {}, "0"};
+                macros_["SEEK_CUR"] = Macro{false, {}, "1"};
+                macros_["SEEK_END"] = Macro{false, {}, "2"};
                 return;
             }
             if (header.find("stdlib.h") != std::string::npos) {

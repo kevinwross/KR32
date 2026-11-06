@@ -1171,6 +1171,7 @@ private:
                 }
             } else if (specifiers.is_typedef) {
                 declaration->kind = DeclKind::TypeAlias;
+                add_known_type(declaration->name);
             } else {
                 declaration->kind = DeclKind::Variable;
             }

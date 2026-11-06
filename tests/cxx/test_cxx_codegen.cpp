@@ -206,6 +206,22 @@ ProgramResult compile_and_run_many(const std::vector<std::string>& sources) {
 
 } // namespace
 
+TEST_CASE("C++ can use the C FILE type") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "int main() { FILE* stream = 0; return stream == 0 ? 0 : 1; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("C++ typedef names resolve for struct types") {
+    const ProgramResult program = compile_and_run(
+        "typedef struct Node { int value; } Node;\n"
+        "int main() { Node node; node.value = 9; return node.value; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 9);
+}
+
 TEST_CASE("mangling matches the documented itanium-like examples") {
     const auto int_type =
         cxx::ast::Type::make_builtin(cxx::ast::BuiltinKind::Int);

@@ -819,6 +819,28 @@ TEST_CASE("the runtime provides memory and string helpers") {
     CHECK(program.result == 68);
 }
 
+TEST_CASE("extern globals are declarations, not definitions") {
+    const ProgramResult program = compile_and_run(
+        "extern int shared;\n"
+        "int shared = 7;\n"
+        "int main(void) { return shared; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 7);
+}
+
+TEST_CASE("C character escapes include vertical tab and form feed") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    if ('\\v' != 11) return 1;\n"
+        "    if ('\\f' != 12) return 2;\n"
+        "    if ('\\a' != 7) return 3;\n"
+        "    if ('\\b' != 8) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("a compiled C program calls putchar and exits") {
     const ProgramResult program = compile_and_run(
         "int putchar(int c);\n"

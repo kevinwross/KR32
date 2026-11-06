@@ -6,8 +6,59 @@ int putchar(int c);
 int getchar(void);
 void exit(int code);
 
+int open(const char *path, int flags);
+int close(int fd);
+int read(int fd, void *buffer, int count);
+int write(int fd, const void *buffer, int count);
+int seek(int fd, int offset, int whence);
+
 void *memcpy(void *destination, const void *source, int count);
 void *memset(void *destination, int value, int count);
+
+#define EOF (-1)
+#define KR32_FILE_READ 1
+#define KR32_FILE_WRITE 2
+#define KR32_FILE_EOF 4
+#define KR32_FILE_ERROR 8
+
+struct kr32_file {
+    int descriptor;
+    int flags;
+    int ungot;
+    int owns_descriptor;
+};
+
+typedef struct kr32_file FILE;
+
+
+
+static struct kr32_file stdin_object;
+static struct kr32_file stdout_object;
+static struct kr32_file stderr_object;
+
+struct kr32_file *stdin = 0;
+struct kr32_file *stdout = 0;
+struct kr32_file *stderr = 0;
+
+void __kr32_stdio_init(void) {
+    stdin_object.descriptor = 0;
+    stdin_object.flags = KR32_FILE_READ;
+    stdin_object.ungot = -1;
+    stdin_object.owns_descriptor = 0;
+    stdout_object.descriptor = 1;
+    stdout_object.flags = KR32_FILE_WRITE;
+    stdout_object.ungot = -1;
+    stdout_object.owns_descriptor = 0;
+    stderr_object.descriptor = 2;
+    stderr_object.flags = KR32_FILE_WRITE;
+    stderr_object.ungot = -1;
+    stderr_object.owns_descriptor = 0;
+    stdin = &stdin_object;
+    stdout = &stdout_object;
+    stderr = &stderr_object;
+}
+
+void clearerr(struct kr32_file *stream);
 
 struct heap_block {
     unsigned int size;
@@ -350,6 +401,621 @@ void *realloc(void *pointer, int size) {
     return replacement;
 }
 
+static int stream_read_byte(struct kr32_file *stream) {
+    if (stream == 0 || (stream->flags & KR32_FILE_READ) == 0) {
+        return EOF;
+    }
+    if (stream->ungot >= 0) {
+        const int value = stream->ungot;
+        stream->ungot = -1;
+        return value;
+    }
+    if (stream->descriptor == 0) {
+        const int value = getchar();
+        if (value < 0) {
+            stream->flags = stream->flags | KR32_FILE_EOF;
+            return EOF;
+        }
+        return value;
+    }
+    unsigned char byte = 0;
+    const int count = read(stream->descriptor, &byte, 1);
+    if (count == 0) {
+        stream->flags = stream->flags | KR32_FILE_EOF;
+        return EOF;
+    }
+    if (count < 0) {
+        stream->flags = stream->flags | KR32_FILE_ERROR;
+        return EOF;
+    }
+    return (int)byte;
+}
+
+static int stream_write_byte(struct kr32_file *stream, int character) {
+    if (stream == 0 || (stream->flags & KR32_FILE_WRITE) == 0) {
+        return EOF;
+    }
+    const unsigned char byte = (unsigned char)character;
+    if (stream->descriptor == 1 || stream->descriptor == 2) {
+        if (putchar((int)byte) < 0) {
+            stream->flags = stream->flags | KR32_FILE_ERROR;
+            return EOF;
+        }
+        return (int)byte;
+    }
+    const int count = write(stream->descriptor, &byte, 1);
+    if (count != 1) {
+        stream->flags = stream->flags | KR32_FILE_ERROR;
+        return EOF;
+    }
+    return (int)byte;
+}
+
+static int stream_write_bytes(struct kr32_file *stream, const void *buffer, int count) {
+    if (stream == 0 || (stream->flags & KR32_FILE_WRITE) == 0 || count <= 0) {
+        return 0;
+    }
+    if (stream->descriptor == 1 || stream->descriptor == 2) {
+        const unsigned char *bytes = (const unsigned char *)buffer;
+        int index = 0;
+        while (index < count) {
+            if (stream_write_byte(stream, (int)bytes[index]) == EOF) {
+                return index;
+            }
+            index = index + 1;
+        }
+        return count;
+    }
+    const int written = write(stream->descriptor, buffer, count);
+    if (written < 0) {
+        stream->flags = stream->flags | KR32_FILE_ERROR;
+        return 0;
+    }
+    return written;
+}
+
+struct kr32_file *fopen(const char *path, const char *mode) {
+    if (path == 0 || mode == 0 || mode[0] == '\0') {
+        return 0;
+    }
+    int readable = 0;
+    int writable = 0;
+    int create = 0;
+    int truncate = 0;
+    int append = 0;
+    if (mode[0] == 'r') {
+        readable = 1;
+    } else if (mode[0] == 'w') {
+        writable = 1;
+        create = 1;
+        truncate = 1;
+    } else if (mode[0] == 'a') {
+        writable = 1;
+        create = 1;
+        append = 1;
+    } else {
+        return 0;
+    }
+    int index = 0;
+    while (mode[index] != '\0') {
+        if (mode[index] == '+') {
+            readable = 1;
+            writable = 1;
+        }
+        index = index + 1;
+    }
+    int flags = 0;
+    if (readable && writable) {
+        flags = 2;
+    } else if (writable) {
+        flags = 1;
+    }
+    if (create) flags = flags | 4;
+    if (truncate) flags = flags | 8;
+    if (append) flags = flags | 16;
+    const int descriptor = open(path, flags);
+    if (descriptor < 0) {
+        return 0;
+    }
+    struct kr32_file *stream = (struct kr32_file *)malloc(sizeof(struct kr32_file));
+    if (stream == 0) {
+        close(descriptor);
+        return 0;
+    }
+    stream->descriptor = descriptor;
+    stream->flags = 0;
+    if (readable) stream->flags = stream->flags | KR32_FILE_READ;
+    if (writable) stream->flags = stream->flags | KR32_FILE_WRITE;
+    stream->ungot = -1;
+    stream->owns_descriptor = 1;
+    return stream;
+}
+
+struct kr32_file *fdopen(int descriptor, const char *mode) {
+    if (descriptor < 0 || mode == 0) {
+        return 0;
+    }
+    int readable = 0;
+    int writable = 0;
+    if (mode[0] == 'r') {
+        readable = 1;
+    } else if (mode[0] == 'w' || mode[0] == 'a') {
+        writable = 1;
+    } else {
+        return 0;
+    }
+    int index = 0;
+    while (mode[index] != '\0') {
+        if (mode[index] == '+') {
+            readable = 1;
+            writable = 1;
+        }
+        index = index + 1;
+    }
+    struct kr32_file *stream = (struct kr32_file *)malloc(sizeof(struct kr32_file));
+    if (stream == 0) {
+        return 0;
+    }
+    stream->descriptor = descriptor;
+    stream->flags = 0;
+    if (readable) stream->flags = stream->flags | KR32_FILE_READ;
+    if (writable) stream->flags = stream->flags | KR32_FILE_WRITE;
+    stream->ungot = -1;
+    stream->owns_descriptor = 1;
+    return stream;
+}
+
+int fclose(struct kr32_file *stream) {
+    if (stream == 0) {
+        return EOF;
+    }
+    if (stream->descriptor < 3) {
+        return 0;
+    }
+    int result = 0;
+    if (stream->owns_descriptor) {
+        result = close(stream->descriptor);
+    }
+    free(stream);
+    return result < 0 ? EOF : 0;
+}
+
+int fflush(struct kr32_file *stream) {
+    (void)stream;
+    return 0;
+}
+
+int fgetc(struct kr32_file *stream) {
+    return stream_read_byte(stream);
+}
+
+int ungetc(int character, struct kr32_file *stream) {
+    if (stream == 0 || character == EOF || stream->ungot != -1) {
+        return EOF;
+    }
+    stream->ungot = character & 0xFF;
+    stream->flags = stream->flags & ~KR32_FILE_EOF;
+    return stream->ungot;
+}
+
+int fputc(int character, struct kr32_file *stream) {
+    return stream_write_byte(stream, character);
+}
+
+int fputs(const char *text, struct kr32_file *stream) {
+    if (text == 0 || stream == 0) {
+        return EOF;
+    }
+    int index = 0;
+    while (text[index] != '\0') {
+        if (stream_write_byte(stream, (int)(unsigned char)text[index]) == EOF) {
+            return EOF;
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
+int puts(const char *text) {
+    if (fputs(text, stdout) == EOF) {
+        return EOF;
+    }
+    if (fputc('\n', stdout) == EOF) {
+        return EOF;
+    }
+    return 0;
+}
+
+char *fgets(char *buffer, int size, struct kr32_file *stream) {
+    if (buffer == 0 || size <= 0 || stream == 0) {
+        return 0;
+    }
+    int index = 0;
+    while (index < size - 1) {
+        const int value = fgetc(stream);
+        if (value == EOF) {
+            if (index == 0) {
+                return 0;
+            }
+            break;
+        }
+        buffer[index] = (char)value;
+        index = index + 1;
+        if (value == '\n') {
+            break;
+        }
+    }
+    buffer[index] = '\0';
+    return buffer;
+}
+
+static int is_space_character(int character) {
+    return character == ' ' || character == '\t' || character == '\n' ||
+           character == '\r' || character == '\f' || character == '\v';
+}
+
+static void scanf_skip_space(struct kr32_file *stream) {
+    int character = fgetc(stream);
+    while (character != EOF && is_space_character(character)) {
+        character = fgetc(stream);
+    }
+    if (character != EOF) {
+        ungetc(character, stream);
+    }
+}
+
+static int scanf_integer(struct kr32_file *stream, unsigned int *value, int base) {
+    scanf_skip_space(stream);
+    int character = fgetc(stream);
+    int negative = 0;
+    if (character == '+' || character == '-') {
+        negative = character == '-';
+        character = fgetc(stream);
+    }
+    if (base == 0) {
+        base = 10;
+        if (character == '0') {
+            base = 8;
+            character = fgetc(stream);
+            if (character == 'x' || character == 'X') {
+                base = 16;
+                character = fgetc(stream);
+            }
+        }
+    } else if (base == 16 && character == '0') {
+        const int next = fgetc(stream);
+        if (next == 'x' || next == 'X') {
+            character = fgetc(stream);
+        } else {
+            ungetc(next, stream);
+        }
+    }
+    int digits = 0;
+    unsigned int result = 0;
+    while (character != EOF) {
+        int digit = -1;
+        if (character >= '0' && character <= '9') {
+            digit = character - '0';
+        } else if (character >= 'a' && character <= 'f') {
+            digit = character - 'a' + 10;
+        } else if (character >= 'A' && character <= 'F') {
+            digit = character - 'A' + 10;
+        }
+        if (digit < 0 || digit >= base) {
+            break;
+        }
+        result = result * (unsigned int)base + (unsigned int)digit;
+        digits = digits + 1;
+        character = fgetc(stream);
+    }
+    if (character != EOF) {
+        ungetc(character, stream);
+    }
+    if (digits == 0) {
+        return 0;
+    }
+    *value = negative ? (unsigned int)(0 - result) : result;
+    return 1;
+}
+
+static int scanf_double(struct kr32_file *stream, double *value) {
+    scanf_skip_space(stream);
+    int character = fgetc(stream);
+    int negative = 0;
+    if (character == '+' || character == '-') {
+        negative = character == '-';
+        character = fgetc(stream);
+    }
+    int digits = 0;
+    double result = 0.0;
+    while (character >= '0' && character <= '9') {
+        result = result * 10.0 + (double)(character - '0');
+        digits = digits + 1;
+        character = fgetc(stream);
+    }
+    if (character == '.') {
+        character = fgetc(stream);
+        double place = 0.1;
+        while (character >= '0' && character <= '9') {
+            result = result + (double)(character - '0') * place;
+            place = place * 0.1;
+            digits = digits + 1;
+            character = fgetc(stream);
+        }
+    }
+    if (digits == 0) {
+        if (character != EOF) {
+            ungetc(character, stream);
+        }
+        return 0;
+    }
+    if (character == 'e' || character == 'E') {
+        character = fgetc(stream);
+        int exponent_negative = 0;
+        if (character == '+' || character == '-') {
+            exponent_negative = character == '-';
+            character = fgetc(stream);
+        }
+        int exponent = 0;
+        int exponent_digits = 0;
+        while (character >= '0' && character <= '9') {
+            exponent = exponent * 10 + (character - '0');
+            exponent_digits = exponent_digits + 1;
+            character = fgetc(stream);
+        }
+        if (exponent_digits == 0) {
+            if (character != EOF) {
+                ungetc(character, stream);
+            }
+        } else {
+            int power = 0;
+            while (power < exponent) {
+                result = exponent_negative ? result / 10.0 : result * 10.0;
+                power = power + 1;
+            }
+        }
+    }
+    if (character != EOF) {
+        ungetc(character, stream);
+    }
+    *value = negative ? 0.0 - result : result;
+    return 1;
+}
+
+int fscanf(struct kr32_file *stream, const char *format, ...) {
+    if (stream == 0 || format == 0) {
+        return EOF;
+    }
+    va_list arguments;
+    va_start(arguments, format);
+    int assigned = 0;
+    const char *cursor = format;
+    while (*cursor != '\0') {
+        if (is_space_character((int)*cursor)) {
+            scanf_skip_space(stream);
+            cursor = cursor + 1;
+            continue;
+        }
+        if (*cursor != '%') {
+            const int character = fgetc(stream);
+            if (character != (int)(unsigned char)*cursor) {
+                if (character != EOF) {
+                    ungetc(character, stream);
+                }
+                break;
+            }
+            cursor = cursor + 1;
+            continue;
+        }
+        cursor = cursor + 1;
+        if (*cursor == '%') {
+            const int character = fgetc(stream);
+            if (character != '%') {
+                if (character != EOF) {
+                    ungetc(character, stream);
+                }
+                break;
+            }
+            cursor = cursor + 1;
+            continue;
+        }
+        int suppress = 0;
+        if (*cursor == '*') {
+            suppress = 1;
+            cursor = cursor + 1;
+        }
+        int width = 0;
+        while (*cursor >= '0' && *cursor <= '9') {
+            width = width * 10 + (*cursor - '0');
+            cursor = cursor + 1;
+        }
+        while (*cursor == 'h' || *cursor == 'l' || *cursor == 'j' ||
+               *cursor == 'z' || *cursor == 't' || *cursor == 'L') {
+            cursor = cursor + 1;
+        }
+        const char spec = *cursor;
+        if (spec == '\0') {
+            break;
+        }
+        cursor = cursor + 1;
+        if (spec == 'd' || spec == 'i' || spec == 'u' || spec == 'x' ||
+            spec == 'X' || spec == 'o') {
+            unsigned int value = 0;
+            const int base = (spec == 'x' || spec == 'X')
+                                 ? 16
+                                 : (spec == 'o' ? 8 : (spec == 'i' ? 0 : 10));
+            if (!scanf_integer(stream, &value, base)) {
+                break;
+            }
+            if (!suppress) {
+                unsigned int *target = va_arg(arguments, unsigned int *);
+                *target = value;
+                assigned = assigned + 1;
+            }
+        } else if (spec == 'f' || spec == 'e' || spec == 'g') {
+            double value = 0.0;
+            if (!scanf_double(stream, &value)) {
+                break;
+            }
+            if (!suppress) {
+                double *target = va_arg(arguments, double *);
+                *target = value;
+                assigned = assigned + 1;
+            }
+        } else if (spec == 's') {
+            int character = fgetc(stream);
+            while (character != EOF && is_space_character(character)) {
+                character = fgetc(stream);
+            }
+            if (suppress) {
+                while (character != EOF && !is_space_character(character)) {
+                    character = fgetc(stream);
+                }
+                if (character != EOF) {
+                    ungetc(character, stream);
+                }
+            } else {
+                char *target = va_arg(arguments, char *);
+                char *destination = target;
+                int index = 0;
+                while (character != EOF && !is_space_character(character)) {
+                    if (width == 0 || index < width - 1) {
+                        *destination = (char)character;
+                        destination = destination + 1;
+                        index = index + 1;
+                    }
+                    character = fgetc(stream);
+                }
+                if (character != EOF) {
+                    ungetc(character, stream);
+                }
+                *destination = '\0';
+                if (index == 0) {
+                    break;
+                }
+                assigned = assigned + 1;
+            }
+        } else if (spec == 'c') {
+            if (suppress) {
+                int count = width == 0 ? 1 : width;
+                while (count > 0) {
+                    if (fgetc(stream) == EOF) {
+                        break;
+                    }
+                    count = count - 1;
+                }
+            } else {
+                char *target = va_arg(arguments, char *);
+                int count = width == 0 ? 1 : width;
+                int index = 0;
+                while (index < count) {
+                    const int character = fgetc(stream);
+                    if (character == EOF) {
+                        break;
+                    }
+                    target[index] = (char)character;
+                    index = index + 1;
+                }
+                if (index == 0) {
+                    break;
+                }
+                assigned = assigned + 1;
+            }
+        } else {
+            break;
+        }
+    }
+    va_end(arguments);
+    if (assigned == 0) {
+        return feof(stream) ? EOF : 0;
+    }
+    return assigned;
+}
+
+int fread(void *buffer, int size, int count, struct kr32_file *stream) {
+    if (buffer == 0 || size <= 0 || count <= 0 || stream == 0) {
+        return 0;
+    }
+    const int requested = size * count;
+    int total = 0;
+    unsigned char *bytes = (unsigned char *)buffer;
+    if (stream->descriptor == 0) {
+        while (total < requested) {
+            const int value = fgetc(stream);
+            if (value == EOF) {
+                break;
+            }
+            bytes[total] = (unsigned char)value;
+            total = total + 1;
+        }
+    } else {
+        const int result = read(stream->descriptor, buffer, requested);
+        if (result < 0) {
+            stream->flags = stream->flags | KR32_FILE_ERROR;
+            return 0;
+        }
+        if (result == 0) {
+            stream->flags = stream->flags | KR32_FILE_EOF;
+        }
+        total = result;
+    }
+    return total / size;
+}
+
+int fwrite(const void *buffer, int size, int count, struct kr32_file *stream) {
+    if (buffer == 0 || size <= 0 || count <= 0 || stream == 0) {
+        return 0;
+    }
+    const int requested = size * count;
+    const int written = stream_write_bytes(stream, buffer, requested);
+    return written / size;
+}
+
+int fseek(struct kr32_file *stream, int offset, int whence) {
+    if (stream == 0 || stream->descriptor < 3) {
+        return EOF;
+    }
+    const int result = seek(stream->descriptor, offset, whence);
+    stream->flags = stream->flags & ~KR32_FILE_EOF;
+    if (result < 0) {
+        stream->flags = stream->flags | KR32_FILE_ERROR;
+        return EOF;
+    }
+    return 0;
+}
+
+int ftell(struct kr32_file *stream) {
+    if (stream == 0 || stream->descriptor < 3) {
+        return EOF;
+    }
+    return seek(stream->descriptor, 0, 1);
+}
+
+void rewind(struct kr32_file *stream) {
+    if (stream != 0) {
+        (void)fseek(stream, 0, 0);
+        clearerr(stream);
+    }
+}
+
+int feof(struct kr32_file *stream) {
+    return stream != 0 && (stream->flags & KR32_FILE_EOF) != 0;
+}
+
+int ferror(struct kr32_file *stream) {
+    return stream != 0 && (stream->flags & KR32_FILE_ERROR) != 0;
+}
+
+void clearerr(struct kr32_file *stream) {
+    if (stream != 0) {
+        stream->flags = stream->flags & ~(KR32_FILE_EOF | KR32_FILE_ERROR);
+    }
+}
+
+int fileno(struct kr32_file *stream) {
+    return stream == 0 ? -1 : stream->descriptor;
+}
+
 static int heap_free_list_contains(struct heap_block *target) {
     struct heap_block *current = heap_free_list;
     int guard = 0;
@@ -446,15 +1112,37 @@ int _heapwalk(void) {
     return 0;
 }
 
-static int out_char(char c) {
-    putchar((int)c);
-    return 1;
+struct string_sink {
+    char *buffer;
+    int capacity;
+    int length;
+};
+
+static int format_target = 0; /* 0 console, 1 file, 2 string */
+static struct kr32_file *format_stream = 0;
+static struct string_sink *format_sink = 0;
+
+static void emit_character(int character) {
+    if (format_target == 1 && format_stream != 0) {
+        fputc(character, format_stream);
+    } else if (format_target == 2 && format_sink != 0) {
+        if (format_sink->capacity < 0 ||
+            format_sink->length < format_sink->capacity - 1) {
+            char *destination = format_sink->buffer;
+            if (destination != 0) {
+                destination[format_sink->length] = (char)character;
+            }
+        }
+        format_sink->length = format_sink->length + 1;
+    } else {
+        putchar(character);
+    }
 }
 
 static int out_pad(int count, char c) {
     int written = 0;
     while (written < count) {
-        putchar((int)c);
+        emit_character((int)c);
         written = written + 1;
     }
     return written;
@@ -472,7 +1160,7 @@ static int out_field(const char *text, int length, int width, int flags) {
     }
     if (left) {
         while (index < length) {
-            putchar((int)text[index]);
+            emit_character((int)text[index]);
             written = written + 1;
             index = index + 1;
         }
@@ -481,13 +1169,13 @@ static int out_field(const char *text, int length, int width, int flags) {
     }
     if (zero) {
         while (index < prefix && index < length) {
-            putchar((int)text[index]);
+            emit_character((int)text[index]);
             written = written + 1;
             index = index + 1;
         }
         written = written + out_pad(padding, '0');
         while (index < length) {
-            putchar((int)text[index]);
+            emit_character((int)text[index]);
             written = written + 1;
             index = index + 1;
         }
@@ -495,7 +1183,7 @@ static int out_field(const char *text, int length, int width, int flags) {
     }
     written = written + out_pad(padding, ' ');
     while (index < length) {
-        putchar((int)text[index]);
+        emit_character((int)text[index]);
         written = written + 1;
         index = index + 1;
     }
@@ -1138,22 +1826,20 @@ void *memchr(const void *memory, int character, int count) {
     return 0;
 }
 
-int printf(const char *format, ...) {
-    va_list arguments;
-    va_start(arguments, format);
+static int format_output(const char *format, va_list arguments) {
     int total = 0;
     const char *cursor = format;
     char buffer[160];
     while (*cursor != '\0') {
         if (*cursor != '%') {
-            putchar((int)*cursor);
+            emit_character((int)*cursor);
             total = total + 1;
             cursor = cursor + 1;
             continue;
         }
         cursor = cursor + 1;
         if (*cursor == '%') {
-            putchar('%');
+            emit_character('%');
             total = total + 1;
             cursor = cursor + 1;
             continue;
@@ -1360,6 +2046,91 @@ int printf(const char *format, ...) {
         field_flags = field_flags | (prefix << 8);
         total = total + out_field(buffer, length, width, field_flags);
     }
-    va_end(arguments);
     return total;
+}
+
+int vfprintf(struct kr32_file *stream, const char *format, va_list arguments) {
+    format_target = 1;
+    format_stream = stream;
+    format_sink = 0;
+    return format_output(format, arguments);
+}
+
+int fprintf(struct kr32_file *stream, const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    format_target = 1;
+    format_stream = stream;
+    format_sink = 0;
+    const int result = format_output(format, arguments);
+    va_end(arguments);
+    return result;
+}
+
+int vprintf(const char *format, va_list arguments) {
+    format_target = 0;
+    format_stream = 0;
+    format_sink = 0;
+    return format_output(format, arguments);
+}
+
+int printf(const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    format_target = 0;
+    format_stream = 0;
+    format_sink = 0;
+    const int result = format_output(format, arguments);
+    va_end(arguments);
+    return result;
+}
+
+int vsnprintf(char *buffer, int size, const char *format, va_list arguments) {
+    struct string_sink sink;
+    sink.buffer = buffer;
+    sink.capacity = size;
+    sink.length = 0;
+    format_target = 2;
+    format_stream = 0;
+    format_sink = &sink;
+    const int result = format_output(format, arguments);
+    if (size > 0 && buffer != 0) {
+        int end = sink.length;
+        if (end > size - 1) {
+            end = size - 1;
+        }
+        buffer[end] = '\0';
+    }
+    return result;
+}
+
+int snprintf(char *buffer, int size, const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    const int result = vsnprintf(buffer, size, format, arguments);
+    va_end(arguments);
+    return result;
+}
+
+int vsprintf(char *buffer, const char *format, va_list arguments) {
+    struct string_sink sink;
+    sink.buffer = buffer;
+    sink.capacity = -1;
+    sink.length = 0;
+    format_target = 2;
+    format_stream = 0;
+    format_sink = &sink;
+    const int result = format_output(format, arguments);
+    if (buffer != 0) {
+        buffer[sink.length] = '\0';
+    }
+    return result;
+}
+
+int sprintf(char *buffer, const char *format, ...) {
+    va_list arguments;
+    va_start(arguments, format);
+    const int result = vsprintf(buffer, format, arguments);
+    va_end(arguments);
+    return result;
 }

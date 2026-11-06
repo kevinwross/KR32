@@ -442,7 +442,29 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int sys_file_dialog(int mode, int flags, char *path, int capacity); "
                         "int sys_open_dialog(char *path, int capacity); "
                         "int sys_save_dialog(char *path, int capacity); "
-                        "int printf(const char *format, ...); void *malloc(int size); "
+                        "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; }; "
+                        "typedef struct kr32_file FILE; "
+                        "extern FILE *stdin; extern FILE *stdout; extern FILE *stderr; "
+                        "FILE *fopen(const char *path, const char *mode); "
+                        "FILE *fdopen(int fd, const char *mode); "
+                        "int fclose(FILE *stream); int fflush(FILE *stream); "
+                        "int fgetc(FILE *stream); int fputc(int c, FILE *stream); "
+                        "int ungetc(int c, FILE *stream); "
+                        "char *fgets(char *buffer, int size, FILE *stream); "
+                        "int fputs(const char *text, FILE *stream); "
+                        "int puts(const char *text); "
+                        "int fread(void *buffer, int size, int count, FILE *stream); "
+                        "int fwrite(const void *buffer, int size, int count, FILE *stream); "
+                        "int fseek(FILE *stream, int offset, int whence); "
+                        "int ftell(FILE *stream); void rewind(FILE *stream); "
+                        "int feof(FILE *stream); int ferror(FILE *stream); "
+                        "void clearerr(FILE *stream); int fileno(FILE *stream); "
+                        "int fprintf(FILE *stream, const char *format, ...); "
+                        "int fscanf(FILE *stream, const char *format, ...); "
+                        "int printf(const char *format, ...); "
+                        "int snprintf(char *buffer, int size, const char *format, ...); "
+                        "int sprintf(char *buffer, const char *format, ...); "
+                        "void *malloc(int size); "
                         "void free(void *pointer); void *calloc(int count, int size); "
                         "void *realloc(void *pointer, int size); "
                         "int _heapwalk(void); "
@@ -463,6 +485,10 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "void *memmove(void *destination, const void *source, int count); "
                         "int memcmp(const void *left, const void *right, int count); "
                         "void *memchr(const void *memory, int character, int count);";
+                    macros["EOF"] = "-1";
+                    macros["SEEK_SET"] = "0";
+                    macros["SEEK_CUR"] = "1";
+                    macros["SEEK_END"] = "2";
                 }
                 if (directive.find("stdarg.h") != std::string::npos) {
                     result += "typedef char *va_list;";
@@ -725,6 +751,10 @@ private:
                     case 'n': value.push_back('\n'); break;
                     case 'r': value.push_back('\r'); break;
                     case 't': value.push_back('\t'); break;
+                    case 'a': value.push_back('\a'); break;
+                    case 'b': value.push_back('\b'); break;
+                    case 'f': value.push_back('\f'); break;
+                    case 'v': value.push_back('\v'); break;
                     case '0': value.push_back('\0'); break;
                     case '\\': value.push_back('\\'); break;
                     case '\'': value.push_back('\''); break;
@@ -1426,13 +1456,16 @@ private:
         bool long_flag = false;
         bool long_long_flag = false;
         bool short_flag = false;
+        parsed_extern_ = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
                peek().text == "register" || peek().text == "typedef" ||
                peek().text == "long" || peek().text == "short") {
             const std::string qualifier = take().text;
-            if (qualifier == "unsigned") {
+            if (qualifier == "extern") {
+                parsed_extern_ = true;
+            } else if (qualifier == "unsigned") {
                 unsigned_flag = true;
             } else if (qualifier == "signed") {
                 signed_flag = true;
@@ -1538,6 +1571,7 @@ private:
             return;
         }
         TypePtr type = parse_type();
+        const bool is_extern = parsed_extern_;
         if (match(";")) {
             return;
         }
@@ -1546,7 +1580,7 @@ private:
             parse_function(type, name);
             return;
         }
-        parse_global(type, name);
+        parse_global(type, name, is_extern);
     }
 
     void write_global_scalar(std::vector<std::uint8_t>& bytes, int offset,
@@ -1669,7 +1703,7 @@ private:
         parse_global_scalar(type, bytes, offset);
     }
 
-    void parse_global(const TypePtr& type, const std::string& name) {
+    void parse_global(const TypePtr& type, const std::string& name, bool is_extern) {
         TypePtr actual = parse_array_suffix(type);
         if (match("=")) {
             if (actual->kind == Type::Kind::Array ||
@@ -1737,11 +1771,13 @@ private:
             }
         } else {
             expect(";");
-            bss_ += ".global " + name + "\n" + name + ":\n";
-            if (actual->kind == Type::Kind::Double) {
-                bss_ += "    .align 8\n";
+            if (!is_extern) {
+                bss_ += ".global " + name + "\n" + name + ":\n";
+                if (actual->kind == Type::Kind::Double) {
+                    bss_ += "    .align 8\n";
+                }
+                bss_ += "    .space " + std::to_string(actual->size()) + "\n";
             }
-            bss_ += "    .space " + std::to_string(actual->size()) + "\n";
         }
         globals_.emplace(name, Variable{name, actual, 0, name, true});
         debug_type(actual);
@@ -3834,6 +3870,7 @@ private:
     std::string bss_;
     std::map<std::string, Variable> locals_;
     std::map<std::string, Variable> globals_;
+    bool parsed_extern_ = false;
     std::map<std::string, FunctionSignature> functions_;
     std::map<std::string, TypePtr> typedefs_;
     std::map<std::string, TypePtr> tags_;
@@ -3886,6 +3923,11 @@ std::string runtime_assembly() {
         ".text\n"
         ".global _start\n"
         "_start:\n"
+        "    PUSH R0\n"
+        "    PUSH R1\n"
+        "    CALL __kr32_stdio_init\n"
+        "    POP R1\n"
+        "    POP R0\n"
         "    CALL main\n"
         "    CALL exit\n"
         "    HALT\n"
