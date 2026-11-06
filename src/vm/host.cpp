@@ -171,7 +171,7 @@ int Host::open(const std::string& path, std::uint32_t flags, bool& ok) {
     file.readable = access != 1U;
     file.writable = access != 0U;
     const int descriptor = next_fd_++;
-    files_.emplace(descriptor, std::move(file));
+    files_.emplace(descriptor, std::make_shared<File>(std::move(file)));
     ok = true;
     return descriptor;
 }
@@ -199,13 +199,13 @@ bool Host::read(std::uint32_t descriptor,
                 std::uint32_t count,
                 std::uint32_t& result) {
     const auto found = files_.find(static_cast<int>(descriptor));
-    if (found == files_.end() || !found->second.readable) {
+    if (found == files_.end() || !found->second->readable) {
         result = kErrorInvalid;
         return false;
     }
     std::vector<char> buffer(count);
-    found->second.stream.read(buffer.data(), static_cast<std::streamsize>(count));
-    const std::streamsize bytes = found->second.stream.gcount();
+    found->second->stream.read(buffer.data(), static_cast<std::streamsize>(count));
+    const std::streamsize bytes = found->second->stream.gcount();
     for (std::streamsize index = 0; index < bytes; ++index) {
         if (!machine.write8(address + static_cast<std::uint32_t>(index),
                             static_cast<std::uint8_t>(buffer[static_cast<std::size_t>(index)]))) {
@@ -223,7 +223,7 @@ bool Host::write(std::uint32_t descriptor,
                  std::uint32_t count,
                  std::uint32_t& result) {
     const auto found = files_.find(static_cast<int>(descriptor));
-    if (found == files_.end() || !found->second.writable) {
+    if (found == files_.end() || !found->second->writable) {
         result = kErrorInvalid;
         return false;
     }
@@ -240,8 +240,8 @@ bool Host::write(std::uint32_t descriptor,
         }
         buffer[index] = static_cast<char>(byte);
     }
-    found->second.stream.write(buffer.data(), static_cast<std::streamsize>(count));
-    if (!found->second.stream) {
+    found->second->stream.write(buffer.data(), static_cast<std::streamsize>(count));
+    if (!found->second->stream) {
         result = kErrorIo;
         return false;
     }
@@ -265,12 +265,12 @@ bool Host::seek(std::uint32_t descriptor,
     } else if (whence == 2) {
         direction = std::ios::end;
     }
-    found->second.stream.clear();
-    found->second.stream.seekg(offset, direction);
-    found->second.stream.seekp(offset, direction);
-    std::streampos position = found->second.stream.tellg();
+    found->second->stream.clear();
+    found->second->stream.seekg(offset, direction);
+    found->second->stream.seekp(offset, direction);
+    std::streampos position = found->second->stream.tellg();
     if (position < 0) {
-        position = found->second.stream.tellp();
+        position = found->second->stream.tellp();
     }
     if (position < 0) {
         result = kErrorIo;
@@ -337,10 +337,48 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         if (found == files_.end()) {
             machine.set_reg(0, kErrorInvalid);
         } else {
-            found->second.stream.close();
+            std::shared_ptr<File> file = found->second;
             files_.erase(found);
+            if (file.use_count() == 1) {
+                file->stream.close();
+            }
             machine.set_reg(0, 0);
         }
+        return true;
+    }
+    case syscall::Dup: {
+        const auto found = files_.find(static_cast<int>(machine.reg(0)));
+        if (found == files_.end()) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        const int descriptor = next_fd_++;
+        files_.emplace(descriptor, found->second);
+        machine.set_reg(0, static_cast<std::uint32_t>(descriptor));
+        return true;
+    }
+    case syscall::Dup2: {
+        const int source = static_cast<int>(machine.reg(0));
+        const int target = static_cast<int>(machine.reg(1));
+        const auto found = files_.find(source);
+        if (found == files_.end()) {
+            machine.set_reg(0, kErrorInvalid);
+            return true;
+        }
+        if (source == target) {
+            machine.set_reg(0, static_cast<std::uint32_t>(target));
+            return true;
+        }
+        const auto existing = files_.find(target);
+        if (existing != files_.end()) {
+            std::shared_ptr<File> file = existing->second;
+            files_.erase(existing);
+            if (file.use_count() == 1) {
+                file->stream.close();
+            }
+        }
+        files_.emplace(target, found->second);
+        machine.set_reg(0, static_cast<std::uint32_t>(target));
         return true;
     }
     case syscall::Read: {

@@ -586,6 +586,46 @@ TEST_CASE("Host supports chdir and getcwd") {
     std::filesystem::remove_all(sandbox, cleanup);
 }
 
+TEST_CASE("Host duplicates descriptors with shared offsets") {
+    const container::Image image = compile_image(
+        "#include <stdio.h>\n"
+        "#include <unistd.h>\n"
+        "int main(void) {\n"
+        "    FILE *file = fopen(\"dup.txt\", \"w\");\n"
+        "    int first = 0;\n"
+        "    int second = 0;\n"
+        "    char a = 0;\n"
+        "    char b = 0;\n"
+        "    char c = 0;\n"
+        "    if (file == 0) return 1;\n"
+        "    fputs(\"abc\", file);\n"
+        "    fclose(file);\n"
+        "    file = fopen(\"dup.txt\", \"r\");\n"
+        "    if (file == 0) return 2;\n"
+        "    first = dup(fileno(file));\n"
+        "    if (first < 0) return 3;\n"
+        "    second = dup2(first, 10);\n"
+        "    if (second != 10) return 4;\n"
+        "    if (read(fileno(file), &a, 1) != 1 || a != 'a') return 5;\n"
+        "    if (read(second, &b, 1) != 1 || b != 'b') return 6;\n"
+        "    if (close(first) != 0) return 7;\n"
+        "    if (read(fileno(file), &c, 1) != 1 || c != 'c') return 8;\n"
+        "    if (close(second) != 0) return 9;\n"
+        "    fclose(file);\n"
+        "    return 0;\n"
+        "}\n");
+    const std::filesystem::path sandbox = temporary_sandbox();
+    vm::HostOptions options;
+    options.fs_root = sandbox.string();
+    options.echo_console = false;
+    std::string error;
+    const RunResult result = run_image(image, options, error);
+    CHECK(result.halted);
+    CHECK(result.result == 0);
+    std::error_code cleanup;
+    std::filesystem::remove_all(sandbox, cleanup);
+}
+
 TEST_CASE("Host rejects sandbox escapes and read-only writes") {
     const container::Image escape = compile_image(
         "int open(const char *path, int flags);\n"

@@ -4,6 +4,7 @@
 #include <fstream>
 #include <functional>
 #include <map>
+#include <memory>
 #include <set>
 #include <string>
 #include <vector>
@@ -41,6 +42,8 @@ inline constexpr std::uint32_t Stat = 54;
 inline constexpr std::uint32_t Truncate = 55;
 inline constexpr std::uint32_t GetCwd = 56;
 inline constexpr std::uint32_t Chdir = 57;
+inline constexpr std::uint32_t Dup = 58;
+inline constexpr std::uint32_t Dup2 = 59;
 } // namespace syscall
 
 namespace stat_abi {
@@ -110,7 +113,7 @@ private:
     HostOptions options_;
     std::string root_;
     std::string cwd_;
-    std::map<int, File> files_;
+    std::map<int, std::shared_ptr<File>> files_;
     int next_fd_ = 3;
     std::string console_;
     std::string input_;

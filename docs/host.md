@@ -32,6 +32,8 @@ The guest reaches the host through `SYSCALL` vectors 32..51. Arguments are in
 | 55 | truncate | path, length | 0 or error |
 | 56 | getcwd | buffer, capacity | path length or error |
 | 57 | chdir | path | 0 or error |
+| 58 | dup | descriptor | new descriptor or error |
+| 59 | dup2 | source, target | target or error |
 
 Thread services are provided by `vm::ClusterHost`, which maps one guest thread
 per `core::Cluster` core and advances one core turn at a time. A thread handle

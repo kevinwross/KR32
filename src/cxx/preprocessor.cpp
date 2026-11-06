@@ -661,6 +661,8 @@ private:
                     "int fdatasync(int descriptor);\n"
                     "char* getcwd(char* buffer, int size);\n"
                     "int chdir(const char* path);\n"
+                    "int dup(int descriptor);\n"
+                    "int dup2(int source, int target);\n"
                     "}\n");
                 macros_["F_OK"] = Macro{false, {}, "0"};
                 macros_["X_OK"] = Macro{false, {}, "1"};

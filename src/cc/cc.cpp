@@ -435,7 +435,9 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int fsync(int descriptor); "
                         "int fdatasync(int descriptor); "
                         "char *getcwd(char *buffer, int size); "
-                        "int chdir(const char *path);";
+                        "int chdir(const char *path); "
+                        "int dup(int descriptor); "
+                        "int dup2(int source, int target);";
                     macros["F_OK"] = "0";
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
@@ -4050,6 +4052,14 @@ std::string runtime_assembly() {
         ".global kr32_chdir\n"
         "kr32_chdir:\n"
         "    SYSCALL #57\n"
+        "    RET\n"
+        ".global dup\n"
+        "dup:\n"
+        "    SYSCALL #58\n"
+        "    RET\n"
+        ".global dup2\n"
+        "dup2:\n"
+        "    SYSCALL #59\n"
         "    RET\n"
         ".global sys_time\n"
         "sys_time:\n"
