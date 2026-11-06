@@ -220,6 +220,30 @@ TEST_CASE("member operator overloading supports chaining") {
     CHECK(program.result == 3);
 }
 
+TEST_CASE("member index, compound, and unary operators run") {
+    const ProgramResult program = compile_and_run(
+        "class Number {\n"
+        "public:\n"
+        "    int data[2];\n"
+        "    Number(int value) { data[0] = value; data[1] = 0; }\n"
+        "    int& operator[](int index);\n"
+        "    Number& operator+=(int amount);\n"
+        "    bool operator!() const;\n"
+        "};\n"
+        "int& Number::operator[](int index) { return data[index]; }\n"
+        "Number& Number::operator+=(int amount) { data[0] = data[0] + amount; return *this; }\n"
+        "bool Number::operator!() const { return data[0] == 0; }\n"
+        "int main() {\n"
+        "    Number number(1);\n"
+        "    number[1] = 7;\n"
+        "    number += 2;\n"
+        "    if (!number) return 1;\n"
+        "    return number[0] + number[1] - 10;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

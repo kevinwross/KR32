@@ -2073,6 +2073,13 @@ private:
                 return pointer && pointer->element ? pointer->element
                                                    : Type::make_builtin(BuiltinKind::Int);
             }
+            if (expression.text != "&" && expression.text != "*") {
+                if (Function* operation = find_member_operator(
+                        class_of(type_of(*expression.children[0], false)),
+                        "operator" + expression.text, nullptr, true)) {
+                    return operation->result;
+                }
+            }
             if (expression.text == "!") {
                 return Type::make_builtin(BuiltinKind::Bool);
             }
@@ -2107,8 +2114,17 @@ private:
             }
             return arithmetic_type(left, right);
         }
-        case ExprKind::Assign:
-            return type_of(*expression.children[0], false);
+        case ExprKind::Assign: {
+            const TypePtr left = type_of(*expression.children[0], false);
+            if (expression.text != "=") {
+                if (Function* operation = find_member_operator(
+                        class_of(left), "operator" + expression.text,
+                        type_of(*expression.children[1]), false)) {
+                    return operation->result;
+                }
+            }
+            return left;
+        }
         case ExprKind::Conditional: {
             const TypePtr left = type_of(*expression.children[1]);
             const TypePtr right = type_of(*expression.children[2]);
@@ -2183,6 +2199,11 @@ private:
         }
         case ExprKind::Index: {
             const TypePtr base = type_of(*expression.children[0]);
+            if (Function* operation = find_member_operator(
+                    class_of(base), "operator[]",
+                    type_of(*expression.children[1]), false)) {
+                return operation->result;
+            }
             return base && base->element ? base->element
                                          : Type::make_builtin(BuiltinKind::Int);
         }
@@ -2339,13 +2360,15 @@ private:
             if (candidate->parameters.size() != arity) {
                 continue;
             }
+            if (arity == 0) {
+                return candidate;
+            }
             TypePtr parameter = candidate->parameters[0];
             if (parameter && (parameter->kind == TypeKind::LValueRef ||
                               parameter->kind == TypeKind::RValueRef)) {
                 parameter = parameter->element;
             }
-            if (arity == 0 ||
-                same_type(decay(parameter), decay(argument))) {
+            if (same_type(decay(parameter), decay(argument))) {
                 return candidate;
             }
         }
@@ -3191,8 +3214,18 @@ private:
     }
 
     void gen_address(const Expr& expression) {
+        if (expression.kind == ExprKind::Index) {
+            if (Function* operation = find_member_operator(
+                    class_of(type_of(*expression.children[0])), "operator[]",
+                    type_of(*expression.children[1]), false)) {
+                gen_member_operator_call(*expression.children[0],
+                                         *expression.children[1], operation);
+                return;
+            }
+        }
         if (expression.kind == ExprKind::Binary ||
-            expression.kind == ExprKind::Call) {
+            expression.kind == ExprKind::Call ||
+            expression.kind == ExprKind::Index) {
             const TypePtr type = type_of(expression);
             if (type && (type->kind == TypeKind::LValueRef ||
                          type->kind == TypeKind::RValueRef)) {
@@ -4553,6 +4586,32 @@ private:
         case ExprKind::Call:
             return gen_call(expression);
         case ExprKind::Index: {
+            if (Function* operation = find_member_operator(
+                    class_of(type_of(*expression.children[0])), "operator[]",
+                    type_of(*expression.children[1]), false)) {
+                gen_member_operator_call(*expression.children[0],
+                                         *expression.children[1], operation);
+                const TypePtr result = type_of(expression);
+                if (result && (result->kind == TypeKind::LValueRef ||
+                               result->kind == TypeKind::RValueRef)) {
+                    const TypePtr value = result->element;
+                    if (class_of(value) != nullptr) {
+                        return result;
+                    }
+                    if (is_fp(value)) {
+                        load_fp(value);
+                    } else {
+                        load_value(value);
+                    }
+                    return result;
+                }
+                if (is_fp(result)) {
+                    load_fp(result);
+                } else if (class_of(result) == nullptr) {
+                    load_value(result);
+                }
+                return result;
+            }
             gen_address(expression);
             const TypePtr type = type_of(expression);
             if (type && type->kind == TypeKind::Array) {
@@ -4754,6 +4813,13 @@ private:
 
     TypePtr gen_unary(const Expr& expression) {
         const std::string& op = expression.text;
+        if (op != "&" && op != "*") {
+            if (Function* operation = find_member_operator(
+                    class_of(type_of(*expression.children[0], false)),
+                    "operator" + op, nullptr, true)) {
+                return gen_member_unary(*expression.children[0], operation);
+            }
+        }
         if (op == "&") {
             gen_address(*expression.children[0]);
             return Type::make_pointer(type_of(*expression.children[0], false));
@@ -5111,10 +5177,12 @@ private:
                                       : BuiltinKind::LongLong);
     }
 
-    TypePtr gen_member_operator(const Expr& expression, Function* operation) {
+    TypePtr gen_member_operator_call(const Expr& left,
+                                     const Expr& right,
+                                     Function* operation) {
         const int this_temp =
             allocate_local(Type::make_builtin(BuiltinKind::Int));
-        gen_address(*expression.children[0]);
+        gen_address(left);
         emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
         const TypePtr parameter =
             operation->parameters.empty()
@@ -5124,15 +5192,14 @@ private:
         bool floating_argument = false;
         if (parameter && (parameter->kind == TypeKind::LValueRef ||
                           parameter->kind == TypeKind::RValueRef)) {
-            gen_address(*expression.children[1]);
+            gen_address(right);
             argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
         } else if (is_fp(parameter)) {
-            gen_as_fp(*expression.children[1],
-                      Type::make_builtin(BuiltinKind::Double));
+            gen_as_fp(right, Type::make_builtin(BuiltinKind::Double));
             floating_argument = true;
         } else {
-            gen_expr(*expression.children[1]);
+            gen_expr(right);
             argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
         }
@@ -5140,6 +5207,21 @@ private:
         if (!floating_argument && argument_temp >= 0) {
             emit("    LOAD R1, [R7 + " + std::to_string(argument_temp) + "]");
         }
+        emit("    CALL " + operation->symbol);
+        return operation->result;
+    }
+
+    TypePtr gen_member_operator(const Expr& expression, Function* operation) {
+        return gen_member_operator_call(*expression.children[0],
+                                        *expression.children[1], operation);
+    }
+
+    TypePtr gen_member_unary(const Expr& expression, Function* operation) {
+        const int this_temp =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        gen_address(expression);
+        emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+        emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
         emit("    CALL " + operation->symbol);
         return operation->result;
     }
@@ -5300,6 +5382,13 @@ private:
         const TypePtr lhs_type = type_of(*expression.children[0], false);
         if (ClassInfo* info = class_of(lhs_type)) {
             if (expression.text != "=") {
+                if (Function* operation = find_member_operator(
+                        info, "operator" + expression.text,
+                        type_of(*expression.children[1]), false)) {
+                    return gen_member_operator_call(*expression.children[0],
+                                                    *expression.children[1],
+                                                    operation);
+                }
                 diagnose_once(expression,
                               "compound assignment on a class is not supported yet");
                 return lhs_type;

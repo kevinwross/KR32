@@ -190,6 +190,6 @@ include `<iostream>` or `<fstream>` for a compact stream subset:
 `std::cerr`, `operator<<`, `operator>>`, `std::endl`, `read`, `write`, `get`,
 `getline`, `seekg`/`tellg`, and `seekp`/`tellp`. These streams are unbuffered
 wrappers over `FILE`. The compiler currently supports member binary operator
-overloads; free operators, `operator[]`, `operator()`, and compound
-assignment operators are still pending. Full standard iostreams, locales,
-facets, and `std::string` are not implemented.
+overloads, member `operator[]`, compound assignment operators, and simple
+unary operators. Free operators and `operator()` are still pending. Full
+standard iostreams, locales, facets, and `std::string` are not implemented.

@@ -106,9 +106,9 @@ These decisions were confirmed during the 2026-11-02 review.
 - Coroutines, modules, exceptions specifications, reflection.
 - Full STL containers/algorithms. A compact `std::fstream`/`std::iostream`
   subset is available, but full standard iostreams (locales, facets, string
-  streams) remain deferred. Member binary operator overloads are supported;
-  free operators, `operator[]`, `operator()`, and compound assignment are
-  pending.
+  streams) remain deferred. Member binary operators, `operator[]`,
+  compound assignment, and simple unary operators are supported; free
+  operators and `operator()` are pending.
 - Host-compatible C++ ABI or dynamic shared objects.
 - Thread cancellation and full POSIX surface.
 
