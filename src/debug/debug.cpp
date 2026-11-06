@@ -2,7 +2,6 @@
 
 #include <algorithm>
 #include <cctype>
-#include <chrono>
 #include <cstdio>
 #include <map>
 #include <sstream>
@@ -163,6 +162,7 @@ bool Session::load(const container::Image& image, std::string& error) {
         return false;
     }
     install_syscall_handler();
+    host_.reset();
     console_.clear();
     if (!parse_info(image, info_, error)) {
         return false;
@@ -205,6 +205,7 @@ bool Session::load_os(const container::Image& kernel,
         return false;
     }
     install_syscall_handler();
+    host_.reset();
     console_.clear();
     info_ = {};
     std::string info_error;
@@ -233,6 +234,7 @@ bool Session::load_raw(const std::vector<std::uint8_t>& kernel,
         return false;
     }
     install_syscall_handler();
+    host_.reset();
     info_ = {};
     console_.clear();
     breakpoints_.clear();
@@ -284,27 +286,8 @@ void Session::install_syscall_handler() {
             }
             return true;
         }
-        if (vector >= 35 && vector <= 39) {
-            // The standalone debugger has no host filesystem sandbox; keep
-            // file syscalls handled and return a normal error instead of
-            // turning them into a guest fault.
-            current.set_reg(0, kErrorIo);
-            return true;
-        }
-        if (vector == 40) {
-            const auto now = std::chrono::system_clock::now().time_since_epoch();
-            current.set_reg(
-                0, static_cast<std::uint32_t>(
-                       std::chrono::duration_cast<std::chrono::seconds>(now).count() &
-                       0xFFFF'FFFFU));
-            return true;
-        }
-        if (vector == 41) {
-            random_state_ ^= random_state_ << 13U;
-            random_state_ ^= random_state_ >> 17U;
-            random_state_ ^= random_state_ << 5U;
-            current.set_reg(0, random_state_);
-            return true;
+        if (vector >= 35 && vector <= 41) {
+            return host_.handle(current, vector);
         }
         if (vector == 32) {
             current.halt(current.reg(0));
@@ -319,66 +302,7 @@ void Session::install_syscall_handler() {
             return true;
         }
         if (vector == file_dialog::Vector) {
-            const std::uint32_t mode = current.reg(0);
-            const std::uint32_t flags = current.reg(1);
-            const std::uint32_t address = current.reg(2);
-            const std::uint32_t capacity = current.reg(3);
-            if (mode > file_dialog::Save ||
-                (flags & ~(file_dialog::MustExist |
-                           file_dialog::OverwritePrompt)) != 0 ||
-                address == 0 || capacity == 0) {
-                current.set_reg(0, file_dialog::Invalid);
-                return true;
-            }
-            if (!file_dialog_) {
-                current.set_reg(0, file_dialog::Unavailable);
-                return true;
-            }
-            FileDialogOptions dialog;
-            dialog.kind = mode == file_dialog::Save ? FileDialogKind::Save
-                                                    : FileDialogKind::Open;
-            dialog.title = dialog.kind == FileDialogKind::Save ? "Save File"
-                                                               : "Open File";
-            dialog.filter = "*.k32;*.c;*.cpp;*.cc;*.cxx";
-            dialog.default_extension =
-                dialog.kind == FileDialogKind::Save ? "k32" : "";
-            dialog.must_exist = (flags & file_dialog::MustExist) != 0;
-            dialog.overwrite_prompt = (flags & file_dialog::OverwritePrompt) != 0;
-            const FileDialogResult result = file_dialog_(dialog);
-            if (result.status == FileDialogStatus::Canceled) {
-                current.set_reg(0, file_dialog::Canceled);
-                return true;
-            }
-            if (result.status == FileDialogStatus::Unavailable) {
-                current.set_reg(0, file_dialog::Unavailable);
-                return true;
-            }
-            if (result.status != FileDialogStatus::Selected ||
-                result.path.empty()) {
-                current.set_reg(0, file_dialog::Error);
-                return true;
-            }
-            const std::uint32_t length =
-                static_cast<std::uint32_t>(result.path.size());
-            if (capacity <= length) {
-                current.set_reg(1, length + 1U);
-                current.set_reg(0, file_dialog::NoSpace);
-                return true;
-            }
-            for (std::uint32_t index = 0; index < length; ++index) {
-                if (!current.write8(
-                        address + index,
-                        static_cast<std::uint8_t>(result.path[index]))) {
-                    current.set_reg(0, file_dialog::Fault);
-                    return true;
-                }
-            }
-            if (!current.write8(address + length, 0)) {
-                current.set_reg(0, file_dialog::Fault);
-                return true;
-            }
-            current.set_reg(0, length);
-            return true;
+            return host_.handle(current, vector);
         }
         if (vector == 42) {
             current.set_reg(0, static_cast<std::uint32_t>(arguments_.size()));

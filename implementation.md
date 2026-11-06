@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-05 16:03 -08:00
+> **Last updated:** 2026-11-05 16:12 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1833,13 +1833,14 @@ Newest entries at the bottom. Use the local time zone.
       debugger tests covering every advertised `32..43` vector. KR32OS now
       fills unused software-vector slots with a `BRK` stub before installing
       vectors 64..69, so undefined syscalls trap instead of jumping to zero.
-- **2026-11-05 16:03 -08:00** — Added native open/save file dialogs. Platform
+- **2026-11-05 16:12 -08:00** — Added native open/save file dialogs. Platform
       API supports Windows common dialogs and Linux zenity/kdialog; host syscall
       51 returns a UTF-8 path into a guest buffer with cancel, unavailable,
       error, fault, invalid-argument, and buffer-too-small statuses. Selected
       paths are authorized through the host sandbox for subsequent guest
       `open`. Added C/C++ runtime wrappers, CLI/debugger wiring, and fake-dialog
-      tests.
+      tests. The debugger now hosts file I/O through the same `vm::Host`, so
+      selected files can be opened immediately.
 
 ## 10. Updating this file
 

@@ -87,11 +87,14 @@ endif()
 kr32_add_library(kr32_dis src/dis/disassembler.cpp)
 target_link_libraries(kr32_dis PUBLIC kr32_core kr32_container)
 
-kr32_add_library(kr32_debug src/debug/debug.cpp)
-target_link_libraries(kr32_debug PUBLIC kr32_core kr32_container)
+kr32_add_library(kr32_host src/vm/host.cpp)
+target_link_libraries(kr32_host PUBLIC kr32_core)
 
-kr32_add_library(kr32_vm src/vm/vm.cpp src/vm/host.cpp src/vm/threads.cpp)
-target_link_libraries(kr32_vm PUBLIC kr32_core)
+kr32_add_library(kr32_debug src/debug/debug.cpp)
+target_link_libraries(kr32_debug PUBLIC kr32_core kr32_container kr32_host)
+
+kr32_add_library(kr32_vm src/vm/vm.cpp src/vm/threads.cpp)
+target_link_libraries(kr32_vm PUBLIC kr32_core kr32_host)
 
 kr32_add_library(kr32_dap src/dap/dap.cpp)
 target_link_libraries(kr32_dap PUBLIC kr32_debug kr32_vm)

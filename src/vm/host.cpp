@@ -47,6 +47,17 @@ Host::Host(HostOptions options) : options_(std::move(options)) {
     root_ = root.string();
 }
 
+void Host::reset() {
+    files_.clear();
+    next_fd_ = 3;
+    console_.clear();
+    input_ = options_.input;
+    last_error_.clear();
+    authorized_paths_.clear();
+    random_state_ = 0x4B523332U;
+    bytes_written_ = 0;
+}
+
 std::string Host::resolve(const std::string& path, bool write, bool& ok) {
     ok = false;
     last_error_.clear();
@@ -57,6 +68,10 @@ std::string Host::resolve(const std::string& path, bool write, bool& ok) {
     if (write && options_.read_only) {
         last_error_ = "sandbox is read-only";
         return {};
+    }
+    if (authorized_paths_.count(path) != 0) {
+        ok = true;
+        return path;
     }
     std::error_code error;
     std::filesystem::path requested(path);
@@ -427,6 +442,7 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         if (error) {
             canonical = selected.lexically_normal();
         }
+        authorized_paths_.insert(result.path);
         authorized_paths_.insert(canonical.string());
         machine.set_reg(0, length);
         return true;

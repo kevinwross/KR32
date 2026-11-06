@@ -9,6 +9,7 @@
 #include "kr32/container/container.h"
 #include "kr32/core/machine.h"
 #include "kr32/file_dialog.h"
+#include "kr32/vm/host.h"
 
 namespace kr32::debug {
 
@@ -144,7 +145,7 @@ public:
         input_ = std::move(input);
     }
     void set_file_dialog(FileDialogCallback callback) {
-        file_dialog_ = std::move(callback);
+        host_.set_file_dialog(std::move(callback));
     }
 
     void set_breakpoint(std::uint32_t address);
@@ -177,6 +178,7 @@ public:
                                    std::uint32_t size,
                                    std::uint32_t& value) const;
     [[nodiscard]] const std::string& console() const { return console_; }
+    [[nodiscard]] const std::string& host_error() const { return host_.last_error(); }
     void clear_console() { console_.clear(); }
 
     [[nodiscard]] std::string dump() const;
@@ -189,6 +191,7 @@ private:
     [[nodiscard]] std::uint32_t return_address() const;
 
     core::Machine machine_;
+    vm::Host host_;
     Info info_;
     std::set<std::uint32_t> breakpoints_;
     std::vector<ThreadInfo> threads_;
@@ -198,8 +201,6 @@ private:
     std::string program_name_ = "program";
     std::string console_;
     std::string input_;
-    FileDialogCallback file_dialog_;
-    std::uint32_t random_state_ = 0x4B523332U;
 };
 
 } // namespace kr32::debug

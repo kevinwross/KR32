@@ -9,6 +9,8 @@
 #include "kr32/link/linker.h"
 
 #include <cstdint>
+#include <filesystem>
+#include <fstream>
 #include <string>
 
 using namespace kr32;
@@ -120,27 +122,45 @@ TEST_CASE("debug sessions handle the host syscall range") {
 }
 
 TEST_CASE("debug sessions expose the file dialog syscall") {
+    const std::filesystem::path selected =
+        std::filesystem::current_path() / "kr32-debug-dialog.txt";
+    {
+        std::ofstream output(selected, std::ios::binary);
+        output << 'Q';
+    }
+    INFO(selected.string());
+    CHECK(std::filesystem::exists(selected));
     const container::Image image = compile_debug_image(
-        "int sys_save_dialog(char *path, int capacity);\n"
+        "int sys_open_dialog(char *path, int capacity);\n"
+        "int open(const char *path, int flags);\n"
+        "int close(int fd);\n"
+        "int read(int fd, void *buffer, int count);\n"
         "int main(void) {\n"
-        "    char path[64];\n"
-        "    int length = sys_save_dialog(path, 64);\n"
+        "    char path[512];\n"
+        "    int length = sys_open_dialog(path, 512);\n"
         "    if (length <= 0) return 1;\n"
-        "    if (path[0] != '/') return 2;\n"
-        "    if (path[length] != 0) return 3;\n"
-        "    return 0;\n"
+        "    if (path[length] != 0) return 2;\n"
+        "    int fd = open(path, 0);\n"
+        "    if (fd < 0) return 3;\n"
+        "    char value = 0;\n"
+        "    if (read(fd, &value, 1) != 1) return 4;\n"
+        "    close(fd);\n"
+        "    return value == 'Q' ? 0 : 5;\n"
         "}\n");
     debug::Session session;
-    session.set_file_dialog([](const FileDialogOptions& options) {
-        CHECK(options.kind == FileDialogKind::Save);
-        CHECK(options.overwrite_prompt);
-        return FileDialogResult{FileDialogStatus::Selected, "/tmp/out.k32", {}};
+    session.set_file_dialog([&](const FileDialogOptions& options) {
+        CHECK(options.kind == FileDialogKind::Open);
+        CHECK(options.must_exist);
+        return FileDialogResult{FileDialogStatus::Selected, selected.string(), {}};
     });
     std::string error;
     REQUIRE_MESSAGE(session.load(image, error), error.c_str());
     const core::StepResult result = session.run(100000);
+    INFO(session.host_error());
     CHECK(result.kind == core::StepResult::Kind::Halted);
     CHECK(session.machine().exit_code() == 0);
+    std::error_code cleanup;
+    std::filesystem::remove(selected, cleanup);
 }
 
 TEST_CASE("C++ debug sessions expose guest command-line arguments") {

@@ -45,10 +45,10 @@ The C runtime supplies `getchar`, `open`, `close`, `read`, `write`, `seek`,
 remain in the same path. The built-in `<stdio.h>`/`<string.h>`/`<stdlib.h>`
 prototypes expose the console, memory, string, and file helpers.
 
-The standalone debugger `Session` also handles vectors `32..43`; it supports
-`putchar`, `exit`, `getchar`, `time`, `random`, `argc`, and `arg`. Its file
-vectors return an I/O error because the debugger has no host filesystem
-sandbox.
+The standalone debugger `Session` also handles vectors `32..43` and `51`. It
+uses a host instance rooted at the current directory for file I/O, so a file
+selected through the dialog can be opened by the guest. Paths outside that root
+remain blocked unless they came from a native dialog selection.
 
 ## File dialogs
 
@@ -74,11 +74,12 @@ runtime wrappers. The C and C++ `<stdlib.h>` surfaces expose all three
 functions.
 
 The host callback is `HostOptions::file_dialog`. The command-line `kr32`
-wrappers install the platform dialog when the UI is built; tests inject a fake
-callback. A selected absolute path is recorded by the host as an authorized
-path, so a guest `open(path, ...)` can use the returned path without weakening
-the normal sandbox rule for other paths. Save does not create the file: the
-guest still calls `open` with the desired write/create/truncate flags.
+wrappers and the GUI debugger install the platform dialog when the UI is built;
+tests inject a fake callback. A selected absolute path is recorded by the host
+as an authorized path, so a guest `open(path, ...)` can use the returned path
+without weakening the normal sandbox rule for other paths. Save does not create
+the file: the guest still calls `open` with the desired
+write/create/truncate flags.
 
 ## Sandbox
 

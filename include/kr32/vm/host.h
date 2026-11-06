@@ -56,6 +56,10 @@ public:
     explicit Host(HostOptions options = {});
 
     void install(core::Machine& machine);
+    void reset();
+    void set_file_dialog(FileDialogCallback callback) {
+        options_.file_dialog = std::move(callback);
+    }
     [[nodiscard]] bool handle(core::Machine& machine, std::uint32_t vector);
 
     [[nodiscard]] const std::string& console() const { return console_; }
