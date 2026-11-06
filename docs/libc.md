@@ -191,5 +191,5 @@ include `<iostream>` or `<fstream>` for a compact stream subset:
 `getline`, `seekg`/`tellg`, and `seekp`/`tellp`. These streams are unbuffered
 wrappers over `FILE`. The compiler currently supports member binary operator
 overloads, member `operator[]`, compound assignment operators, and simple
-unary operators. Free operators are still pending; member `operator()` supports\nzero or one argument. Full
+unary operators. Free binary operators are supported; member `operator()` supports\nzero or one argument. Full
 standard iostreams, locales, facets, and `std::string` are not implemented.

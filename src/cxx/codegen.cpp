@@ -2095,6 +2095,10 @@ private:
                     class_of(left), "operator" + expression.text, right, false)) {
                 return operation->result;
             }
+            if (Function* operation = find_free_operator(
+                    "operator" + expression.text, left, right)) {
+                return operation->result;
+            }
             if (expression.text == "==" || expression.text == "!=" ||
                 expression.text == "<" || expression.text == "<=" ||
                 expression.text == ">" || expression.text == ">=" ||
@@ -2424,6 +2428,89 @@ private:
             }
         }
         return nullptr;
+    }
+
+    Function* find_free_operator(const std::string& name,
+                                 const TypePtr& left,
+                                 const TypePtr& right) {
+        for (const auto& entry : function_index_) {
+            for (Function* candidate : entry.second) {
+                if (candidate->owner != nullptr ||
+                    candidate->member_name != name ||
+                    candidate->parameters.size() != 2) {
+                    continue;
+                }
+                TypePtr first = candidate->parameters[0];
+                TypePtr second = candidate->parameters[1];
+                if (first && (first->kind == TypeKind::LValueRef ||
+                              first->kind == TypeKind::RValueRef)) {
+                    first = first->element;
+                }
+                if (second && (second->kind == TypeKind::LValueRef ||
+                               second->kind == TypeKind::RValueRef)) {
+                    second = second->element;
+                }
+                TypePtr left_type = decay(left);
+                TypePtr right_type = decay(right);
+                if (left_type && (left_type->kind == TypeKind::LValueRef ||
+                                  left_type->kind == TypeKind::RValueRef)) {
+                    left_type = left_type->element;
+                }
+                if (right_type && (right_type->kind == TypeKind::LValueRef ||
+                                   right_type->kind == TypeKind::RValueRef)) {
+                    right_type = right_type->element;
+                }
+                ClassInfo* first_class = class_of(first);
+                ClassInfo* left_class = class_of(left_type);
+                ClassInfo* second_class = class_of(second);
+                ClassInfo* right_class = class_of(right_type);
+                const bool first_matches =
+                    first_class != nullptr && left_class != nullptr
+                        ? first_class == left_class
+                        : same_type(decay(first), left_type);
+                const bool second_matches =
+                    second_class != nullptr && right_class != nullptr
+                        ? second_class == right_class
+                        : same_type(decay(second), right_type);
+                if (first_matches && second_matches) {
+                    return candidate;
+                }
+            }
+        }
+        return nullptr;
+    }
+
+    TypePtr gen_free_operator_call(const Expr& left,
+                                   const Expr& right,
+                                   Function* operation) {
+        const TypePtr first = operation->parameters[0];
+        const TypePtr second = operation->parameters[1];
+        int first_temp = -1;
+        int second_temp = -1;
+        if (first && (first->kind == TypeKind::LValueRef ||
+                      first->kind == TypeKind::RValueRef)) {
+            gen_address(left);
+            first_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(first_temp) + "]");
+        } else {
+            gen_expr(left);
+            first_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(first_temp) + "]");
+        }
+        if (second && (second->kind == TypeKind::LValueRef ||
+                       second->kind == TypeKind::RValueRef)) {
+            gen_address(right);
+            second_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(second_temp) + "]");
+        } else {
+            gen_expr(right);
+            second_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(second_temp) + "]");
+        }
+        emit("    LOAD R0, [R7 + " + std::to_string(first_temp) + "]");
+        emit("    LOAD R1, [R7 + " + std::to_string(second_temp) + "]");
+        emit("    CALL " + operation->symbol);
+        return operation->result;
     }
 
     bool matrix_intrinsic_name(const Expr& call, std::string& name) {
@@ -5284,6 +5371,12 @@ private:
                 class_of(left_operand), "operator" + op,
                 type_of(*expression.children[1]), false)) {
             return gen_member_operator(expression, operation);
+        }
+        if (Function* operation = find_free_operator(
+                "operator" + op, left_operand,
+                type_of(*expression.children[1]))) {
+            return gen_free_operator_call(*expression.children[0],
+                                          *expression.children[1], operation);
         }
         if (op == "&&" || op == "||") {
             const std::string short_label = new_label(op == "&&" ? "andfalse" : "ortrue");

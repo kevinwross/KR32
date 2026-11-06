@@ -108,7 +108,7 @@ These decisions were confirmed during the 2026-11-02 review.
   subset is available, but full standard iostreams (locales, facets, string
   streams) remain deferred. Member binary operators, `operator[]`,
   compound assignment, and simple unary operators are supported; free
-  operators are pending; member `operator()` supports zero or one argument.
+  operators are supported; member `operator()` supports zero or one argument.
 - Host-compatible C++ ABI or dynamic shared objects.
 - Thread cancellation and full POSIX surface.
 

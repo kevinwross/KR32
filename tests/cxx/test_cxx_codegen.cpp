@@ -267,6 +267,46 @@ TEST_CASE("member operator() supports zero and one argument") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("free binary operators participate in overload resolution") {
+    const ProgramResult program = compile_and_run(
+        "class Point {\n"
+        "public:\n"
+        "    int x;\n"
+        "    Point(int value) : x(value) {}\n"
+        "};\n"
+        "int operator+(const Point& left, const Point& right) {\n"
+        "    return left.x + right.x;\n"
+        "}\n"
+        "int main() {\n"
+        "    Point a(1);\n"
+        "    Point b(2);\n"
+        "    return a + b - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("free stream operators support custom types") {
+    const ProgramResult program = compile_and_run(
+        "#include <iostream>\n"
+        "class Widget {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Widget(int initial) : value(initial) {}\n"
+        "};\n"
+        "std::ostream& operator<<(std::ostream& out, const Widget& widget) {\n"
+        "    return out << widget.value;\n"
+        "}\n"
+        "int main() {\n"
+        "    Widget widget(42);\n"
+        "    std::cout << \"value=\" << widget << std::endl;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+    CHECK(program.output == "value=42\n");
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
