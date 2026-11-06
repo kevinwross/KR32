@@ -2074,6 +2074,15 @@ private:
                                                    : Type::make_builtin(BuiltinKind::Int);
             }
             if (expression.text != "&" && expression.text != "*") {
+                if (!expression.is_prefix &&
+                    (expression.text == "++" || expression.text == "--")) {
+                    if (Function* operation = find_member_operator(
+                            class_of(type_of(*expression.children[0], false)),
+                            "operator" + expression.text,
+                            Type::make_builtin(BuiltinKind::Int), false)) {
+                        return operation->result;
+                    }
+                }
                 if (Function* operation = find_member_operator(
                         class_of(type_of(*expression.children[0], false)),
                         "operator" + expression.text, nullptr, true)) {
@@ -4952,6 +4961,15 @@ private:
     TypePtr gen_unary(const Expr& expression) {
         const std::string& op = expression.text;
         if (op != "&" && op != "*") {
+            if (!expression.is_prefix && (op == "++" || op == "--")) {
+                if (Function* operation = find_member_operator(
+                        class_of(type_of(*expression.children[0], false)),
+                        "operator" + op, Type::make_builtin(BuiltinKind::Int),
+                        false)) {
+                    return gen_member_postfix(*expression.children[0],
+                                              operation);
+                }
+            }
             if (Function* operation = find_member_operator(
                     class_of(type_of(*expression.children[0], false)),
                     "operator" + op, nullptr, true)) {
@@ -5383,6 +5401,17 @@ private:
             emit("    LOAD R" + std::to_string(index + 1) + ", [R7 + " +
                  std::to_string(temporary[index]) + "]");
         }
+        emit("    CALL " + operation->symbol);
+        return operation->result;
+    }
+
+    TypePtr gen_member_postfix(const Expr& expression, Function* operation) {
+        const int this_temp =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        gen_address(expression);
+        emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+        emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
+        emit("    MOV R1, #0");
         emit("    CALL " + operation->symbol);
         return operation->result;
     }

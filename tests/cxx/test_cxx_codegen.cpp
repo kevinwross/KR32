@@ -326,6 +326,33 @@ TEST_CASE("member operator() supports multiple arguments") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("member postfix increment and decrement run") {
+    const ProgramResult program = compile_and_run(
+        "class Counter {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Counter(int initial) : value(initial) {}\n"
+        "    Counter& operator++();\n"
+        "    int operator++(int dummy);\n"
+        "};\n"
+        "Counter& Counter::operator++() { value = value + 1; return *this; }\n"
+        "int Counter::operator++(int dummy) {\n"
+        "    int old = value;\n"
+        "    value = value + 1;\n"
+        "    return old;\n"
+        "}\n"
+        "int main() {\n"
+        "    Counter counter(1);\n"
+        "    int old = counter++;\n"
+        "    if (old != 1) return 1;\n"
+        "    if (counter.value != 2) return 2;\n"
+        "    ++counter;\n"
+        "    return counter.value - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
