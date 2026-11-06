@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 08:35 -08:00
+> **Last updated:** 2026-11-06 08:49 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1867,6 +1867,9 @@ Newest entries at the bottom. Use the local time zone.
       `operator[]`, compound assignment (`+=` and peers), and simple unary
       operators (`!`, `-`, `~`, prefix `++`/`--`). Added runtime tests for
       operator indexing, compound assignment, and unary negation.
+- **2026-11-06 08:49 -08:00** — Added member `operator()` calls with zero
+      or one argument, including overload selection and class result types;
+      added runtime functor tests.
 
 ## 10. Updating this file
 

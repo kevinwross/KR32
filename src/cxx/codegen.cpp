@@ -2139,6 +2139,14 @@ private:
         }
         case ExprKind::Call: {
             if (!expression.children.empty() &&
+                may_be_callable_object(*expression.children[0])) {
+                if (Function* operation = find_call_operator(
+                        class_of(type_of(*expression.children[0], false)),
+                        expression.arguments)) {
+                    return operation->result;
+                }
+            }
+            if (!expression.children.empty() &&
                 expression.children[0]->kind == ExprKind::Name) {
                 const std::string name =
                     expression.children[0]->name.to_string();
@@ -2369,6 +2377,49 @@ private:
                 parameter = parameter->element;
             }
             if (same_type(decay(parameter), decay(argument))) {
+                return candidate;
+            }
+        }
+        return nullptr;
+    }
+
+    bool may_be_callable_object(const Expr& expression) {
+        if (expression.kind == ExprKind::Name) {
+            if (lookup_local(expression.name) != nullptr) {
+                return true;
+            }
+            return lookup_global(expression.name, current_prefix_) != nullptr;
+        }
+        return expression.kind == ExprKind::Index;
+    }
+
+    Function* find_call_operator(ClassInfo* info,
+                                 const std::vector<ExprPtr>& arguments) {
+        if (info == nullptr) {
+            return nullptr;
+        }
+        for (Function* candidate : class_methods(info, "operator()")) {
+            if (candidate->parameters.size() != arguments.size()) {
+                continue;
+            }
+            bool matches = true;
+            for (std::size_t index = 0; index < arguments.size(); ++index) {
+                TypePtr parameter = candidate->parameters[index];
+                if (parameter && (parameter->kind == TypeKind::LValueRef ||
+                                  parameter->kind == TypeKind::RValueRef)) {
+                    parameter = parameter->element;
+                }
+                TypePtr argument = decay(type_of(*arguments[index]));
+                if (argument && (argument->kind == TypeKind::LValueRef ||
+                                 argument->kind == TypeKind::RValueRef)) {
+                    argument = argument->element;
+                }
+                if (!same_type(decay(parameter), argument)) {
+                    matches = false;
+                    break;
+                }
+            }
+            if (matches) {
                 return candidate;
             }
         }
@@ -5603,6 +5654,25 @@ private:
             expression.children[0]->name.to_string() == "std::move" &&
             expression.arguments.size() == 1) {
             return gen_expr(*expression.arguments[0]);
+        }
+        if (!expression.children.empty() &&
+            may_be_callable_object(*expression.children[0])) {
+            if (Function* operation = find_call_operator(
+                    class_of(type_of(*expression.children[0], false)),
+                    expression.arguments)) {
+                if (expression.arguments.empty()) {
+                    return gen_member_unary(*expression.children[0], operation);
+                }
+                if (expression.arguments.size() == 1) {
+                    return gen_member_operator_call(
+                        *expression.children[0], *expression.arguments[0],
+                        operation);
+                }
+                diagnose_once(expression,
+                              "operator() with multiple arguments is not supported yet");
+                emit("    MOV R0, #0");
+                return operation->result;
+            }
         }
         std::string list_method;
         ClassInfo* list_info = nullptr;

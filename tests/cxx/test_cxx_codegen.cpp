@@ -244,6 +244,29 @@ TEST_CASE("member index, compound, and unary operators run") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("member operator() supports zero and one argument") {
+    const ProgramResult program = compile_and_run(
+        "class Adder {\n"
+        "public:\n"
+        "    int base;\n"
+        "    Adder(int value) : base(value) {}\n"
+        "    int operator()(int value);\n"
+        "};\n"
+        "int Adder::operator()(int value) { return base + value; }\n"
+        "class Constant {\n"
+        "public:\n"
+        "    int operator()();\n"
+        "};\n"
+        "int Constant::operator()() { return 9; }\n"
+        "int main() {\n"
+        "    Adder adder(3);\n"
+        "    Constant constant;\n"
+        "    return adder(4) + constant() - 16;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
