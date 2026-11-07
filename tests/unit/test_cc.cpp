@@ -386,6 +386,13 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(strtok_r_result.ok);
     CHECK(strtok_r_result.result == 0);
 
+    const ProgramResult function_name = compile_and_run(
+        "#include <string.h>\n"
+        "int check(void) { return strcmp(__func__, \"check\"); }\n"
+        "int main(void) { return check(); }\n");
+    CHECK(function_name.ok);
+    CHECK(function_name.result == 0);
+
     const ProgramResult bounded_strings = compile_and_run(
         "#include <string.h>\n"
         "#include <stdlib.h>\n"

@@ -3982,6 +3982,20 @@ private:
             }
             return type;
         }
+        if (peek().kind == TokenKind::Identifier && peek().text == "__func__" &&
+            !current_function_.empty()) {
+            take();
+            const std::string label = ".Lstr_" + std::to_string(string_counter_++);
+            rodata_ += label + ":\n    .asciz \"" +
+                       escape_string(current_function_) + "\"\n";
+            emit("    LEA R0, [" + label + "]");
+            bool address = false;
+            TypePtr type = apply_postfix(type_pointer(type_char()), address);
+            if (address) {
+                gen_load(type);
+            }
+            return type;
+        }
         if (match("(")) {
             if (is_type_start()) {
                 TypePtr target = parse_type();

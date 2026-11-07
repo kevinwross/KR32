@@ -67,7 +67,9 @@ sandboxed just like `open`.
 - Function-pointer typedefs (`typedef int (*fn)(int);`) with indirect calls,
   pointer parameters, returns, assignment, global/`&`-address initializers, and
   direct `int (*fn)(int)` declarators, array-element calls, and calls with more than four fixed arguments
-- Aggregate local initializers and assignment from struct-returning calls and\n  string literals
+- Aggregate local initializers and assignment from struct-returning calls and
+  string literals
+- `__func__` as the current function name string
 - `__builtin_heap_start()` and `__builtin_heap_end()` for the linker-provided
   heap bounds
 
@@ -205,9 +207,18 @@ C++ programs can include `<stdio.h>` and use the same `FILE` API. They can also
 include `<iostream>` or `<fstream>` for a compact stream subset:
 `std::ifstream`, `std::ofstream`, `std::fstream`, `std::cin`, `std::cout`,
 `std::cerr`, `operator<<`, `operator>>`, `std::endl`, `read`, `write`, `get`,
-`getline`, `seekg`/`tellg`, `seekp`/`tellp`, `hex`/`dec`/`oct`, `width`, and\n`precision`. Standard `std::hex`, `std::dec`, and `std::oct` manipulators are\navailable. These streams are unbuffered
+`getline`, `seekg`/`tellg`, `seekp`/`tellp`, `hex`/`dec`/`oct`, `width`, and
+`precision`. Standard `std::hex`, `std::dec`, and `std::oct` manipulators are
+available. These streams are unbuffered
 wrappers over `FILE`. The compiler currently supports member binary operator
 overloads (including class-by-value parameters), member `operator[]`, compound assignment operators, and simple
 unary operators, and postfix increment/decrement. Free binary operators are
 supported; member `operator()` supports multiple arguments. Full standard
-iostreams, locales, and facets are not fully implemented; `std::string` is a\ncompact subset with `operator=`, `operator+=` (C string, character, or `std::string`), `operator+` (string/string, string/C string, C string/string), `operator==`,\n`operator!=`, relational operators, `find`/`rfind`/`find_first_of`/`find_last_of`/`compare` (C string or `std::string`), `starts_with`/`ends_with`, `at`, `substr` (with or without count), `front`, `back`, `find`, `rfind`, `compare`, `replace`, `insert`, `erase`, `resize`, `push_back`, `pop_back`, and `std::to_string`.
+iostreams, locales, and facets are not fully implemented; `std::string` is a
+compact subset with `operator=` (C string or `std::string`), `operator+=` (C
+string, character, or `std::string`), `operator+` (string/string, string/C
+string, C string/string), `operator==`, `operator!=`, relational operators,
+`find`/`rfind`/`find_first_of`/`find_last_of`/`compare` (C string or
+`std::string`), `starts_with`/`ends_with`, `at`, `substr` (with or without
+count), `front`, `back`, `replace`, `insert`, `erase`, `resize`, `push_back`,
+`pop_back`, `append`, `swap`, and `std::to_string`.
