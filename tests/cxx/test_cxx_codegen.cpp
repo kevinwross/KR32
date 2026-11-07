@@ -476,6 +476,24 @@ TEST_CASE("class temporary calls and by-value returns run") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("const member overloads are distinct and selectable") {
+    const ProgramResult program = compile_and_run(
+        "class A {\n"
+        "public:\n"
+        "    int value;\n"
+        "    A(int v) : value(v) {}\n"
+        "    int get() { return value; }\n"
+        "    int get() const { return value + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    A a(7);\n"
+        "    const A b(7);\n"
+        "    return (a.get() - 7) + (b.get() - 8);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

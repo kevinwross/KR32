@@ -405,7 +405,7 @@ std::string mangle_function(std::string_view qualified_name,
 
 std::string mangle_member(std::string_view class_name, std::string_view name,
                           const std::vector<TypePtr>& parameter_types, bool constructor,
-                          bool destructor) {
+                          bool destructor, bool is_const = false) {
     const std::vector<std::string> class_parts = split_qualified(class_name);
     std::string result = "_ZN";
     for (const std::string& part : class_parts) {
@@ -420,6 +420,9 @@ std::string mangle_member(std::string_view class_name, std::string_view name,
         result += std::to_string(component.size()) + component;
     }
     result += "E";
+    if (is_const) {
+        result += "K";
+    }
     if (parameter_types.empty()) {
         result += "v";
     } else {
@@ -579,6 +582,7 @@ private:
         bool is_destructor = false;
         bool is_virtual = false;
         bool is_pure = false;
+        bool is_const = false;
         bool weak = false;
         int vtable_index = -1;
         std::string member_name;
@@ -1454,6 +1458,7 @@ private:
         function->is_destructor = destructor;
         function->is_virtual = declaration.is_virtual || declaration.is_override;
         function->is_pure = declaration.is_pure;
+        function->is_const = declaration.is_const;
         function->weak = declaration.is_inline;
         function->member_name = base_name;
         function->result = (constructor || destructor)
@@ -1465,13 +1470,18 @@ private:
         if (owner && (constructor || destructor)) {
             function->symbol = mangle_member(owner->qualified, base_name,
                                              function->parameters, constructor,
-                                             destructor);
+                                             destructor, function->is_const);
         } else {
             function->symbol = mangle_function(function->qualified,
                                                function->parameters,
                                                function->extern_c,
                                                function->variadic);
         }
+        if (owner != nullptr && function->is_const && !constructor &&
+            !destructor && !function->is_static) {
+            function->symbol += "K";
+        }
+
         if (function->is_static) {
             function->symbol = "__cxx_static_" +
                                std::to_string(static_counter_++) + "_" +
@@ -3037,6 +3047,15 @@ private:
             diagnose_once(call, "unknown function");
             return nullptr;
         }
+        bool const_object = false;
+        if (!call.children.empty() &&
+            call.children[0]->kind == ExprKind::Member) {
+            const TypePtr object =
+                type_of(*call.children[0]->children[0], false);
+            const_object = object &&
+                           (object->is_const ||
+                            (object->element && object->element->is_const));
+        }
         Function* best = nullptr;
         int best_cost = 1000000;
         bool ambiguous = false;
@@ -3063,6 +3082,13 @@ private:
             }
             if (!viable) {
                 continue;
+            }
+            if (candidate->owner != nullptr && candidate->is_member) {
+                if (!candidate->is_const && const_object) {
+                    cost += 100;
+                } else if (candidate->is_const && !const_object) {
+                    cost += 1;
+                }
             }
             if (cost < best_cost) {
                 best = candidate;
