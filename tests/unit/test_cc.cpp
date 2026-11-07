@@ -166,6 +166,13 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(string_pointers.ok);
     CHECK(string_pointers.result == 0);
 
+    const ProgramResult address_pointers = compile_and_run(
+        "int a = 1; int b = 2;\n"
+        "int *values[2] = { &a, &b };\n"
+        "int main(void) { return *values[0] + *values[1] - 3; }\n");
+    CHECK(address_pointers.ok);
+    CHECK(address_pointers.result == 0);
+
     const ProgramResult double_pointer = compile_and_run(
         "int main(void) {\n"
         "    int value = 4;\n"

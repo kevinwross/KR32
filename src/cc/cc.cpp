@@ -1803,17 +1803,18 @@ private:
                       bool expect_semicolon = true) {
         TypePtr actual = parse_array_suffix(type);
         if (match("=")) {
-            const bool string_pointer_array =
+            const bool pointer_array =
                 actual->kind == Type::Kind::Array && actual->base &&
-                actual->base->is_pointer() && actual->base->element() &&
-                actual->base->element()->kind == Type::Kind::Char;
-            if (string_pointer_array) {
+                actual->base->kind == Type::Kind::Pointer;
+            if (pointer_array) {
                 data_ += ".align " +
                          std::to_string(std::max(1, actual->alignment())) + "\n";
                 data_ += ".global " + name + "\n" + name + ":\n";
                 expect("{");
                 while (!match("}")) {
-                    if (peek().kind == TokenKind::String) {
+                    if (match("&")) {
+                        data_ += "    .word " + parse_name() + "\n";
+                    } else if (peek().kind == TokenKind::String) {
                         const std::string text = take().text;
                         const std::string label =
                             ".Lstr_" + std::to_string(string_counter_++);
