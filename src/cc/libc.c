@@ -2433,6 +2433,28 @@ int strcspn(const char *text, const char *reject) {
     return count;
 }
 
+int strcoll(const char *left, const char *right) {
+    return strcmp(left, right);
+}
+
+int strxfrm(char *destination, const char *source, int count) {
+    int length = 0;
+    while (source[length] != '\0') {
+        length = length + 1;
+    }
+    if (destination != 0) {
+        int index = 0;
+        while (index < length && index < count - 1) {
+            destination[index] = source[index];
+            index = index + 1;
+        }
+        if (count > 0) {
+            destination[index] = '\0';
+        }
+    }
+    return length;
+}
+
 char *strpbrk(const char *text, const char *accept) {
     int index = 0;
     while (text[index] != '\0') {

@@ -607,6 +607,8 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "char *strstr(const char *text, const char *needle); "
                         "int strspn(const char *text, const char *accept); "
                         "int strcspn(const char *text, const char *reject); "
+                        "int strcoll(const char *left, const char *right); "
+                        "int strxfrm(char *destination, const char *source, int count); "
                         "char *strpbrk(const char *text, const char *accept); "
                         "char *strtok(char *text, const char *delimiters); "
                         "char *strdup(const char *text); "

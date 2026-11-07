@@ -326,6 +326,21 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(static_locals.ok);
     CHECK(static_locals.result == 0);
+
+    const ProgramResult string_collation = compile_and_run(
+        "#include <string.h>\n"
+        "int main(void) {\n"
+        "    if (strcoll(\"abc\", \"abd\") >= 0) return 1;\n"
+        "    char buffer[8];\n"
+        "    int length = strxfrm(buffer, \"hello\", 8);\n"
+        "    if (length != 5) return 2;\n"
+        "    if (buffer[0] != 'h') return 3;\n"
+        "    if (buffer[4] != 'o') return 4;\n"
+        "    if (buffer[5] != 0) return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(string_collation.ok);
+    CHECK(string_collation.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
