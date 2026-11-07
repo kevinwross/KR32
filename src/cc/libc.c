@@ -2536,6 +2536,29 @@ char *strdup(const char *text) {
     return copy;
 }
 
+int strnlen(const char *text, int count) {
+    int length = 0;
+    while (length < count && text[length] != '\0') {
+        length = length + 1;
+    }
+    return length;
+}
+
+char *strndup(const char *text, int count) {
+    const int length = strnlen(text, count);
+    char *copy = (char *)malloc(length + 1);
+    if (copy == 0) {
+        return 0;
+    }
+    int index = 0;
+    while (index < length) {
+        copy[index] = text[index];
+        index = index + 1;
+    }
+    copy[length] = '\0';
+    return copy;
+}
+
 void *memmove(void *destination, const void *source, int count) {
     char *to = (char *)destination;
     const char *from = (const char *)source;

@@ -616,6 +616,8 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "char *strtok(char *text, const char *delimiters); "
                         "char *strtok_r(char *text, const char *delimiters, char **save); "
                         "char *strdup(const char *text); "
+                        "int strnlen(const char *text, int count); "
+                        "char *strndup(const char *text, int count); "
                         "void *memmove(void *destination, const void *source, int count); "
                         "void *memccpy(void *destination, const void *source, int character, int count); "
                         "int memcmp(const void *left, const void *right, int count); "

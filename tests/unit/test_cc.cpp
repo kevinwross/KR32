@@ -386,6 +386,23 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(strtok_r_result.ok);
     CHECK(strtok_r_result.result == 0);
 
+    const ProgramResult bounded_strings = compile_and_run(
+        "#include <string.h>\n"
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    if (strnlen(\"hello\", 3) != 3) return 1;\n"
+        "    if (strnlen(\"hi\", 8) != 2) return 2;\n"
+        "    char *copy = strndup(\"hello\", 3);\n"
+        "    if (copy == 0) return 3;\n"
+        "    if (copy[0] != 'h') return 4;\n"
+        "    if (copy[2] != 'l') return 5;\n"
+        "    if (copy[3] != 0) return 6;\n"
+        "    free(copy);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(bounded_strings.ok);
+    CHECK(bounded_strings.result == 0);
+
     const ProgramResult function_pointers = compile_and_run(
         "typedef int (*binary_fn)(int, int);\n"
         "int add(int a, int b) { return a + b; }\n"
