@@ -2494,6 +2494,27 @@ private:
     void gen_initializer_at(const TypePtr& type, int base_slot, int offset) {
         if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
             type->kind == Type::Kind::Union) {
+            if (peek().text != "{") {
+                gen_expression();
+                const std::string copy = new_label("copyinit");
+                const std::string done = new_label("copyinitdone");
+                emit("    LOAD R1, [R7 + " + std::to_string(base_slot) + "]");
+                if (offset != 0) {
+                    emit("    ADD R1, R1, #" + std::to_string(offset));
+                }
+                emit("    MOV R3, #" + std::to_string(type->size()));
+                emit(copy + ":");
+                emit("    CMP R3, #0");
+                emit("    JZ " + done);
+                emit("    LOAD8U R2, [R0]");
+                emit("    STORE8 R2, [R1]");
+                emit("    ADD R0, R0, #1");
+                emit("    ADD R1, R1, #1");
+                emit("    SUB R3, R3, #1");
+                emit("    JMP " + copy);
+                emit(done + ":");
+                return;
+            }
             expect("{");
             if (type->kind == Type::Kind::Array) {
                 const int element_size = type->base ? type->base->size() : 1;

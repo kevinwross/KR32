@@ -453,6 +453,23 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(stack_arguments.ok);
     CHECK(stack_arguments.result == 0);
+
+    const ProgramResult aggregate_initializers = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "struct P make(int a, int b) {\n"
+        "    struct P p; p.x = a; p.y = b; return p;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    struct P p = make(1, 2);\n"
+        "    if (p.x != 1) return 1;\n"
+        "    if (p.y != 2) return 2;\n"
+        "    char text[4] = \"hey\";\n"
+        "    if (text[0] != 'h') return 3;\n"
+        "    if (text[3] != 0) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(aggregate_initializers.ok);
+    CHECK(aggregate_initializers.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {

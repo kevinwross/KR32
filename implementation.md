@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 12:40 -08:00
+> **Last updated:** 2026-11-07 12:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1983,6 +1983,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-07 12:28 -08:00** — Added callback-based `qsort` to `<stdlib.h>`.
 - **2026-11-07 12:40 -08:00** — Added stack-passed fixed arguments beyond the
       fourth and restored `bsearch`.
+- **2026-11-07 12:50 -08:00** — Allowed aggregate local initializers from
+      struct-returning calls and string literals.
 
 ## 10. Updating this file
 
