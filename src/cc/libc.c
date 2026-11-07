@@ -2527,6 +2527,20 @@ void *memmove(void *destination, const void *source, int count) {
     return destination;
 }
 
+void *memccpy(void *destination, const void *source, int character, int count) {
+    unsigned char *to = (unsigned char *)destination;
+    const unsigned char *from = (const unsigned char *)source;
+    int index = 0;
+    while (index < count) {
+        to[index] = from[index];
+        if (from[index] == (unsigned char)character) {
+            return to + index + 1;
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
 int memcmp(const void *left, const void *right, int count) {
     const char *a = (const char *)left;
     const char *b = (const char *)right;

@@ -353,6 +353,21 @@ TEST_CASE("C local declarations support multiple declarators") {
         "int main(void) { return total() - 16; }\n");
     CHECK(static_aggregates.ok);
     CHECK(static_aggregates.result == 0);
+
+    const ProgramResult memccpy_result = compile_and_run(
+        "#include <string.h>\n"
+        "char source[8] = \"abc:def\";\n"
+        "int main(void) {\n"
+        "    char buffer[8];\n"
+        "    void *end = memccpy(buffer, source, ':', 8);\n"
+        "    if (end == 0) return 1;\n"
+        "    if (buffer[0] != 'a') return 2;\n"
+        "    if (buffer[3] != ':') return 3;\n"
+        "    if (memccpy(buffer, source, 'z', 8) != 0) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(memccpy_result.ok);
+    CHECK(memccpy_result.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {

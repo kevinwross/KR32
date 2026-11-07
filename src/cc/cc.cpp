@@ -613,6 +613,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "char *strtok(char *text, const char *delimiters); "
                         "char *strdup(const char *text); "
                         "void *memmove(void *destination, const void *source, int count); "
+                        "void *memccpy(void *destination, const void *source, int character, int count); "
                         "int memcmp(const void *left, const void *right, int count); "
                         "void *memchr(const void *memory, int character, int count);";
                     macros["EOF"] = "-1";

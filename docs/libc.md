@@ -26,7 +26,7 @@ source line numbers and debugger line mappings are preserved.
 
 | Include | Contents |
 | --- | --- |
-| `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, string, and numeric-conversion prototypes (`atoi`/`atol`/`atof`/`strtol`/`strtoul`), including `strspn`/`strcspn`/`strpbrk`/`strcoll`/`strxfrm`; `<stdlib.h>` also provides `abs`/`labs`/`srand`/`rand` |
+| `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, string, and numeric-conversion prototypes (`atoi`/`atol`/`atof`/`strtol`/`strtoul`), including `strspn`/`strcspn`/`strpbrk`/`strcoll`/`strxfrm` and `memccpy`; `<stdlib.h>` also provides `abs`/`labs`/`srand`/`rand` |
 | `<stdarg.h>` | `va_list` and the `va_start`/`va_arg`/`va_end`/`va_copy` macros |
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
 | `<stdint.h>` | `int8_t` through `uint64_t`, `intptr_t`, `uintptr_t`, and limit macros |
