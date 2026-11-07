@@ -2535,7 +2535,31 @@ private:
         }
         emit("    LOAD R0, [R7 + " + std::to_string(first_temp) + "]");
         emit("    LOAD R1, [R7 + " + std::to_string(second_temp) + "]");
+        const ClassInfo* result_class =
+            operation->result &&
+                    operation->result->kind != TypeKind::LValueRef &&
+                    operation->result->kind != TypeKind::RValueRef
+                ? class_of(operation->result)
+                : nullptr;
+        const bool register_result =
+            result_class != nullptr && is_register_return_class(result_class);
+        int result_temp = -1;
+        if (result_class != nullptr && !register_result) {
+            result_temp = allocate_local(operation->result);
+            emit("    LEA R4, [R7 + " + std::to_string(result_temp) + "]");
+        }
         emit("    CALL " + operation->symbol);
+        if (result_class != nullptr) {
+            if (register_result) {
+                result_temp = allocate_local(operation->result);
+                emit("    LEA R2, [R7 + " + std::to_string(result_temp) + "]");
+                emit("    STORE R0, [R2]");
+                if (result_class->size > 4) {
+                    emit("    STORE R1, [R2 + 4]");
+                }
+            }
+            emit("    LEA R0, [R7 + " + std::to_string(result_temp) + "]");
+        }
         return operation->result;
     }
 
@@ -3409,6 +3433,12 @@ private:
             const TypePtr type = type_of(expression);
             if (type && (type->kind == TypeKind::LValueRef ||
                          type->kind == TypeKind::RValueRef)) {
+                gen_expr(expression);
+                return;
+            }
+            if ((expression.kind == ExprKind::Call ||
+                 expression.kind == ExprKind::Binary) &&
+                class_of(type) != nullptr) {
                 gen_expr(expression);
                 return;
             }

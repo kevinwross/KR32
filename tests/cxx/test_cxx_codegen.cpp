@@ -439,6 +439,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (text[0] != 'w') return 6;\n"
         "    std::string copy(text);\n"
         "    if (!(text == copy)) return 8;\n"
+        "    std::string combined = text + copy;\n"
+        "    if (combined.size() != 10) return 9;\n"
         "    text.clear();\n"
         "    if (!text.empty()) return 7;\n"
         "    return 0;\n"
