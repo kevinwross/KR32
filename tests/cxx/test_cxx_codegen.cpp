@@ -437,6 +437,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    text = \"world\";\n"
         "    if (text.size() != 5) return 5;\n"
         "    if (text[0] != 'w') return 6;\n"
+        "    std::string copy(text);\n"
+        "    if (!(text == copy)) return 8;\n"
         "    text.clear();\n"
         "    if (!text.empty()) return 7;\n"
         "    return 0;\n"
@@ -457,6 +459,18 @@ TEST_CASE("user-defined assignment operators are selected") {
         "    Box box(0);\n"
         "    box = \"A\";\n"
         "    return box.value - 65;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("class temporary calls and by-value returns run") {
+    const ProgramResult program = compile_and_run(
+        "struct A { int value; A(int v) : value(v) {} };\n"
+        "A create() { return A(7); }\n"
+        "int main() {\n"
+        "    A a = create();\n"
+        "    return a.value - 7;\n"
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 0);

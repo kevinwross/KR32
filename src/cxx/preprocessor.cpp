@@ -789,6 +789,15 @@ private:
                     "    }\n"
                     "    void clear() { size_ = 0; if (data_ != 0) data_[0] = 0; }\n"
                     "};\n"
+                    "bool operator==(const string& left, const string& right) {\n"
+                    "    if (left.size() != right.size()) return false;\n"
+                    "    int index = 0;\n"
+                    "    while (index < left.size()) {\n"
+                    "        if (left.c_str()[index] != right.c_str()[index]) return false;\n"
+                    "        index = index + 1;\n"
+                    "    }\n"
+                    "    return true;\n"
+                    "}\n"
                     "}\n");
                 return;
             }

@@ -2150,6 +2150,15 @@ private:
         }
         case ExprKind::Call: {
             if (!expression.children.empty() &&
+                expression.children[0]->kind == ExprKind::Name) {
+                if (ClassInfo* info =
+                        find_class(expression.children[0]->name.to_string())) {
+                    Name name;
+                    name.parts = split_qualified(info->qualified);
+                    return Type::make_named(name);
+                }
+            }
+            if (!expression.children.empty() &&
                 may_be_callable_object(*expression.children[0])) {
                 if (Function* operation = find_call_operator(
                         class_of(type_of(*expression.children[0], false)),
@@ -5818,6 +5827,18 @@ private:
             expression.children[0]->name.to_string() == "std::move" &&
             expression.arguments.size() == 1) {
             return gen_expr(*expression.arguments[0]);
+        }
+        if (!expression.children.empty() &&
+            expression.children[0]->kind == ExprKind::Name) {
+            if (ClassInfo* info =
+                    find_class(expression.children[0]->name.to_string())) {
+                const int offset = allocate_local_bytes(info->size);
+                construct_object(info, offset, expression.arguments);
+                emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+                Name name;
+                name.parts = split_qualified(info->qualified);
+                return Type::make_named(name);
+            }
         }
         if (!expression.children.empty() &&
             may_be_callable_object(*expression.children[0])) {

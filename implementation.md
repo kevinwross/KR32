@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 19:51 -08:00
+> **Last updated:** 2026-11-06 20:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1909,6 +1909,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-06 19:51 -08:00** — User-defined `operator=` is now selected for
       class assignment instead of always emitting a bytewise copy; extended
       the `std::string` subset with assignment and `operator+=`.
+- **2026-11-06 20:09 -08:00** — Added functional class temporaries (`A(7)`)
+      in expression and return contexts, enabled class-by-value returns from
+      those expressions, and added matching `std::string` equality.
 
 ## 10. Updating this file
 
