@@ -2495,6 +2495,34 @@ char *strtok(char *text, const char *delimiters) {
     return result;
 }
 
+char *strtok_r(char *text, const char *delimiters, char **save) {
+    char *cursor = text;
+    if (cursor == 0) {
+        cursor = *save;
+    }
+    if (cursor == 0) {
+        return 0;
+    }
+    while (*cursor != '\0' && is_delimiter(*cursor, delimiters)) {
+        cursor = cursor + 1;
+    }
+    if (*cursor == '\0') {
+        *save = 0;
+        return 0;
+    }
+    char *result = cursor;
+    while (*cursor != '\0' && !is_delimiter(*cursor, delimiters)) {
+        cursor = cursor + 1;
+    }
+    if (*cursor != '\0') {
+        *cursor = '\0';
+        *save = cursor + 1;
+    } else {
+        *save = 0;
+    }
+    return result;
+}
+
 char *strdup(const char *text) {
     const int length = strlen(text);
     char *copy = (char *)malloc(length + 1);

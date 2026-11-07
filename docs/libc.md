@@ -138,7 +138,7 @@ The runtime provides:
 | `memchr` | `void *memchr(const void *memory, int character, int count)` |
 
 `memcpy` requires non-overlapping regions; use `memmove` when they may overlap.
-`strtok` uses a single static cursor and is not reentrant or thread-safe.
+`strtok` uses a single static cursor and has a reentrant `strtok_r` variant and is not reentrant or thread-safe.
 `strdup` allocates with `malloc`; free its result with `free`. All lengths and
 counts are 32-bit `int` values. `<string.h>` exposes the complete set.
 

@@ -611,6 +611,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "int strxfrm(char *destination, const char *source, int count); "
                         "char *strpbrk(const char *text, const char *accept); "
                         "char *strtok(char *text, const char *delimiters); "
+                        "char *strtok_r(char *text, const char *delimiters, char **save); "
                         "char *strdup(const char *text); "
                         "void *memmove(void *destination, const void *source, int count); "
                         "void *memccpy(void *destination, const void *source, int character, int count); "

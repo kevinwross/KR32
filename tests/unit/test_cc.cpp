@@ -368,6 +368,23 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(memccpy_result.ok);
     CHECK(memccpy_result.result == 0);
+
+    const ProgramResult strtok_r_result = compile_and_run(
+        "#include <string.h>\n"
+        "char text[16] = \"one,two,three\";\n"
+        "int main(void) {\n"
+        "    char *save = 0;\n"
+        "    char *first = strtok_r(text, \",\", &save);\n"
+        "    char *second = strtok_r(0, \",\", &save);\n"
+        "    char *third = strtok_r(0, \",\", &save);\n"
+        "    if (first == 0 || first[0] != 'o') return 1;\n"
+        "    if (second == 0 || second[0] != 't') return 2;\n"
+        "    if (third == 0 || third[0] != 't') return 3;\n"
+        "    if (strtok_r(0, \",\", &save) != 0) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(strtok_r_result.ok);
+    CHECK(strtok_r_result.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
