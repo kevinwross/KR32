@@ -531,6 +531,11 @@ TEST_CASE("std::string supports find, substr, front, and back") {
         "    if (text.back() != 'd') return 4;\n"
         "    if (text.rfind(\"l\") != 9) return 5;\n"
         "    if (text.compare(\"hello world\") != 0) return 6;\n"
+        "    text.push_back('!');\n"
+        "    if (text != \"hello world!\") return 7;\n"
+        "    text.pop_back();\n"
+        "    if (text.find('l') != 2) return 8;\n"
+        "    if (text.rfind('l') != 9) return 9;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

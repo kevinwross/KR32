@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 10:27 -08:00
+> **Last updated:** 2026-11-07 10:38 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1962,6 +1962,8 @@ Newest entries at the bottom. Use the local time zone.
       `difftime`.
 - **2026-11-07 10:17 -08:00** — Added `strspn`, `strcspn`, and `strpbrk`.
 - **2026-11-07 10:27 -08:00** — Added `abs`, `labs`, `srand`, and `rand`.
+- **2026-11-07 10:38 -08:00** — Added `std::string::push_back`/`pop_back`
+      and character `find`/`rfind` overloads.
 
 ## 10. Updating this file
 
