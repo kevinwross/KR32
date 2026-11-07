@@ -5,6 +5,8 @@
 long strtol(const char *text, char **end, int base);
 long atol(const char *text);
 int sys_time(void);
+typedef int (*kr32_compare_fn)(const void *, const void *);
+void qsort(void *base, int count, int size, kr32_compare_fn compare);
 
 int putchar(int c);
 int getchar(void);
@@ -3048,4 +3050,24 @@ void srand(unsigned int seed) { rand_state = seed; }
 int rand(void) {
     rand_state = rand_state * 1103515245U + 12345U;
     return (int)((rand_state >> 16) & 0x7FFFU);
+}
+
+void qsort(void *base, int count, int size, kr32_compare_fn compare) {
+    char *bytes = (char *)base;
+    int index = 1;
+    while (index < count) {
+        int position = index;
+        while (position > 0 &&
+               compare(bytes + (position - 1) * size, bytes + position * size) > 0) {
+            int offset = 0;
+            while (offset < size) {
+                char temporary = bytes[(position - 1) * size + offset];
+                bytes[(position - 1) * size + offset] = bytes[position * size + offset];
+                bytes[position * size + offset] = temporary;
+                offset = offset + 1;
+            }
+            position = position - 1;
+        }
+        index = index + 1;
+    }
 }

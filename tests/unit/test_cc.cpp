@@ -412,6 +412,24 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(function_pointers.ok);
     CHECK(function_pointers.result == 0);
+
+    const ProgramResult qsort_result = compile_and_run(
+        "#include <stdlib.h>\n"
+        "int values[5] = {5, 1, 4, 2, 3};\n"
+        "int compare(const void *left, const void *right) {\n"
+        "    int a = *(const int *)left;\n"
+        "    int b = *(const int *)right;\n"
+        "    return a - b;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    qsort(values, 5, sizeof(int), compare);\n"
+        "    if (values[0] != 1) return 1;\n"
+        "    if (values[1] != 2) return 2;\n"
+        "    if (values[4] != 5) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(qsort_result.ok);
+    CHECK(qsort_result.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
