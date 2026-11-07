@@ -114,6 +114,15 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 0);
+
+    const ProgramResult pointers = compile_and_run(
+        "int main(void) {\n"
+        "    int value = 3;\n"
+        "    int *left = &value, *right = &value;\n"
+        "    return *left + *right - 6;\n"
+        "}\n");
+    CHECK(pointers.ok);
+    CHECK(pointers.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {

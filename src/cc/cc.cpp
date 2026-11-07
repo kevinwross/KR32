@@ -2325,9 +2325,19 @@ private:
 
     void parse_local_declaration() {
         const TypePtr type = parse_type();
+        TypePtr base_type = type;
+        while (base_type->kind == Type::Kind::Pointer) {
+            base_type = base_type->element();
+        }
+        bool first_declarator = true;
         while (true) {
+            TypePtr actual = first_declarator ? type : base_type;
+            while (match("*")) {
+                actual = type_pointer(actual);
+            }
+            first_declarator = false;
             const std::string name = parse_name();
-            TypePtr actual = parse_array_suffix(type);
+            actual = parse_array_suffix(actual);
             const int offset = allocate_local(actual);
             locals_[name] = Variable{name, actual, offset, "", false};
             debug_type(actual);
