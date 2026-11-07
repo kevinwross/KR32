@@ -1622,9 +1622,25 @@ private:
             return;
         }
         if (match("typedef")) {
-            TypePtr type = parse_type();
-            const std::string name = parse_name();
-            typedefs_[name] = type;
+            const TypePtr type = parse_type();
+            TypePtr base_type = type;
+            while (base_type->kind == Type::Kind::Pointer) {
+                base_type = base_type->element();
+            }
+            bool first_declarator = true;
+            while (true) {
+                TypePtr actual = first_declarator ? type : base_type;
+                while (match("*")) {
+                    actual = type_pointer(actual);
+                }
+                first_declarator = false;
+                const std::string name = parse_name();
+                actual = parse_array_suffix(actual);
+                typedefs_[name] = actual;
+                if (!match(",")) {
+                    break;
+                }
+            }
             expect(";");
             return;
         }

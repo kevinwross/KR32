@@ -142,6 +142,12 @@ TEST_CASE("C local declarations support multiple declarators") {
         "int main(void) { return message[0] - 'h'; }\n");
     CHECK(string_pointer.ok);
     CHECK(string_pointer.result == 0);
+
+    const ProgramResult typedefs = compile_and_run(
+        "typedef int A, B;\n"
+        "int main(void) { A x = 1; B y = 2; return x + y - 3; }\n");
+    CHECK(typedefs.ok);
+    CHECK(typedefs.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
