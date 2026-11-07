@@ -125,7 +125,13 @@ private:
 
     bool at_end() const { return peek().kind == TokenKind::End; }
 
-    bool at(std::string_view text) const { return peek().text == text; }
+    bool at(std::string_view text) const {
+        if (peek().kind == TokenKind::StringLiteral ||
+            peek().kind == TokenKind::CharacterLiteral) {
+            return false;
+        }
+        return peek().text == text;
+    }
 
     bool at_kind(TokenKind kind) const { return peek().kind == kind; }
 

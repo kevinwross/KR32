@@ -389,6 +389,24 @@ TEST_CASE("iostream formatting state supports base, width, and precision") {
     CHECK(program.output == "ff\n   7\n3.1\n");
 }
 
+TEST_CASE("punctuator-looking string literals do not confuse parsing") {
+    const ProgramResult program = compile_and_run(
+        "class Text {\n"
+        "public:\n"
+        "    const char* data;\n"
+        "    Text(const char* value) { data = value; }\n"
+        "    void append(const Text& other) { (void)other; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Text text(\"hello\");\n"
+        "    Text suffix(\"!\");\n"
+        "    text.append(suffix);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"
