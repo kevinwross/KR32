@@ -2417,6 +2417,33 @@ static int is_delimiter(char character, const char *delimiters) {
     return 0;
 }
 
+int strspn(const char *text, const char *accept) {
+    int count = 0;
+    while (text[count] != '\0' && is_delimiter(text[count], accept)) {
+        count = count + 1;
+    }
+    return count;
+}
+
+int strcspn(const char *text, const char *reject) {
+    int count = 0;
+    while (text[count] != '\0' && !is_delimiter(text[count], reject)) {
+        count = count + 1;
+    }
+    return count;
+}
+
+char *strpbrk(const char *text, const char *accept) {
+    int index = 0;
+    while (text[index] != '\0') {
+        if (is_delimiter(text[index], accept)) {
+            return (char *)text + index;
+        }
+        index = index + 1;
+    }
+    return 0;
+}
+
 static char *token_cursor = 0;
 
 char *strtok(char *text, const char *delimiters) {

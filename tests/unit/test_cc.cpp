@@ -255,6 +255,20 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(time_header.ok);
     CHECK(time_header.result == 0);
+
+    const ProgramResult string_scanning = compile_and_run(
+        "#include <string.h>\n"
+        "int main(void) {\n"
+        "    const char *text = \"abc123\";\n"
+        "    if (strspn(text, \"abc\") != 3) return 1;\n"
+        "    if (strcspn(text, \"123\") != 3) return 2;\n"
+        "    char *found = strpbrk(text, \"23\");\n"
+        "    if (found == 0) return 3;\n"
+        "    if (*found != '2') return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(string_scanning.ok);
+    CHECK(string_scanning.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
