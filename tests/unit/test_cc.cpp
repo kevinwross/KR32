@@ -223,6 +223,21 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(assert_header.ok);
     CHECK(assert_header.result == 0);
+
+    const ProgramResult numeric_conversions = compile_and_run(
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    if (atoi(\"  -42x\") != -42) return 1;\n"
+        "    if (atol(\"123\") != 123) return 2;\n"
+        "    char *end = 0;\n"
+        "    long value = strtol(\"0x1f rest\", &end, 0);\n"
+        "    if (value != 31) return 3;\n"
+        "    if (*end != ' ') return 4;\n"
+        "    if (atof(\"-3.5\") != -3.5) return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(numeric_conversions.ok);
+    CHECK(numeric_conversions.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {

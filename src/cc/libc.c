@@ -2,6 +2,9 @@
 #include <stdarg.h>
 #include <stddef.h>
 
+long strtol(const char *text, char **end, int base);
+long atol(const char *text);
+
 int putchar(int c);
 int getchar(void);
 void exit(int code);
@@ -2845,4 +2848,86 @@ int __kr32_assert_fail(void) {
     write(2, "assertion failed\n", 17);
     exit(1);
     return 1;
+}
+
+int atoi(const char *text) { return (int)atol(text); }
+
+long atol(const char *text) { return strtol(text, 0, 10); }
+
+long strtol(const char *text, char **end, int base) {
+    const char *cursor = text;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n' ||
+           *cursor == '\r' || *cursor == '\v' || *cursor == '\f') {
+        cursor = cursor + 1;
+    }
+    int negative = 0;
+    if (*cursor == '-' || *cursor == '+') {
+        negative = *cursor == '-';
+        cursor = cursor + 1;
+    }
+    if (base == 0) {
+        base = 10;
+        if (cursor[0] == '0' && (cursor[1] == 'x' || cursor[1] == 'X')) {
+            base = 16;
+            cursor = cursor + 2;
+        } else if (cursor[0] == '0') {
+            base = 8;
+        }
+    } else if (base == 16 && cursor[0] == '0' &&
+               (cursor[1] == 'x' || cursor[1] == 'X')) {
+        cursor = cursor + 2;
+    }
+    long value = 0;
+    int digits = 0;
+    while (*cursor != 0) {
+        int digit = -1;
+        if (*cursor >= '0' && *cursor <= '9') {
+            digit = *cursor - '0';
+        } else if (*cursor >= 'a' && *cursor <= 'z') {
+            digit = *cursor - 'a' + 10;
+        } else if (*cursor >= 'A' && *cursor <= 'Z') {
+            digit = *cursor - 'A' + 10;
+        }
+        if (digit < 0 || digit >= base) {
+            break;
+        }
+        value = value * base + digit;
+        digits = digits + 1;
+        cursor = cursor + 1;
+    }
+    if (end != 0) {
+        *end = (char *)(digits > 0 ? cursor : text);
+    }
+    return negative ? -value : value;
+}
+
+unsigned long strtoul(const char *text, char **end, int base) {
+    return (unsigned long)strtol(text, end, base);
+}
+
+double atof(const char *text) {
+    const char *cursor = text;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') {
+        cursor = cursor + 1;
+    }
+    int negative = 0;
+    if (*cursor == '-' || *cursor == '+') {
+        negative = *cursor == '-';
+        cursor = cursor + 1;
+    }
+    double value = 0.0;
+    while (*cursor >= '0' && *cursor <= '9') {
+        value = value * 10.0 + (*cursor - '0');
+        cursor = cursor + 1;
+    }
+    if (*cursor == '.') {
+        cursor = cursor + 1;
+        double scale = 0.1;
+        while (*cursor >= '0' && *cursor <= '9') {
+            value = value + (*cursor - '0') * scale;
+            scale = scale * 0.1;
+            cursor = cursor + 1;
+        }
+    }
+    return negative ? -value : value;
 }
