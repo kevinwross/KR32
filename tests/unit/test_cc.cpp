@@ -284,6 +284,27 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(stdlib_random.ok);
     CHECK(stdlib_random.result == 0);
+
+    const ProgramResult varargs_formatting = compile_and_run(
+        "#include <stdio.h>\n"
+        "#include <stdarg.h>\n"
+        "int format(char *buffer, int size, const char *text, ...) {\n"
+        "    va_list arguments;\n"
+        "    va_start(arguments, text);\n"
+        "    int result = vsnprintf(buffer, size, text, arguments);\n"
+        "    va_end(arguments);\n"
+        "    return result;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    char buffer[32];\n"
+        "    int count = format(buffer, 32, \"%d-%s\", 42, \"ok\");\n"
+        "    if (count != 5) return 1;\n"
+        "    if (buffer[0] != '4') return 2;\n"
+        "    if (buffer[3] != 'o') return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(varargs_formatting.ok);
+    CHECK(varargs_formatting.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
