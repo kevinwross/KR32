@@ -194,4 +194,4 @@ wrappers over `FILE`. The compiler currently supports member binary operator
 overloads (including class-by-value parameters), member `operator[]`, compound assignment operators, and simple
 unary operators, and postfix increment/decrement. Free binary operators are
 supported; member `operator()` supports multiple arguments. Full standard
-iostreams, locales, and facets are not fully implemented; `std::string` is a\ncompact subset with `operator=`, `operator+=`, `operator+`, and `operator==`.
+iostreams, locales, and facets are not fully implemented; `std::string` is a\ncompact subset with `operator=`, `operator+=`, `operator+`, `operator==`,\n`operator!=`, and `std::to_string`.

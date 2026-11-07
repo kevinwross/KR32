@@ -443,6 +443,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (combined.size() != 10) return 9;\n"
         "    const std::string constant(\"hello\");\n"
         "    if (constant[0] != 'h') return 10;\n"
+        "    std::string number = std::to_string(42);\n"
+        "    if (number != \"42\") return 11;\n"
         "    text.clear();\n"
         "    if (!text.empty()) return 7;\n"
         "    return 0;\n"
