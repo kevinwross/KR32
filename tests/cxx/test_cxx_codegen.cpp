@@ -407,6 +407,41 @@ TEST_CASE("punctuator-looking string literals do not confuse parsing") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("operator[] returning a scalar by value is loaded correctly") {
+    const ProgramResult program = compile_and_run(
+        "class Text {\n"
+        "    const char* data_;\n"
+        "public:\n"
+        "    Text(const char* text) { data_ = text; }\n"
+        "    char operator[](int index) const { return data_[index]; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Text text(\"hello\");\n"
+        "    return text[0] == 'h' ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("std::string subset supports construction and append") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    if (text.size() != 5) return 1;\n"
+        "    if (text[0] != 'h') return 2;\n"
+        "    text.append(\"!\");\n"
+        "    if (text.size() != 6) return 3;\n"
+        "    text.set(\"world\");\n"
+        "    if (text.size() != 5) return 4;\n"
+        "    text.clear();\n"
+        "    if (!text.empty()) return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

@@ -4752,11 +4752,6 @@ private:
                     }
                     return result;
                 }
-                if (is_fp(result)) {
-                    load_fp(result);
-                } else if (class_of(result) == nullptr) {
-                    load_value(result);
-                }
                 return result;
             }
             gen_address(expression);

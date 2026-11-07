@@ -26,6 +26,7 @@ source line numbers and debugger line mappings are preserved.
 | `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, and string prototypes |
 | `<stdarg.h>` | `va_list` and the `va_start`/`va_arg`/`va_end`/`va_copy` macros |
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
+| `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append`, `clear` |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
 | `<unistd.h>` | `access`, `isatty`, `truncate`, `fsync`, `fdatasync`, `getcwd`, `chdir`, `dup`, `dup2` |
@@ -193,4 +194,4 @@ wrappers over `FILE`. The compiler currently supports member binary operator
 overloads (including class-by-value parameters), member `operator[]`, compound assignment operators, and simple
 unary operators, and postfix increment/decrement. Free binary operators are
 supported; member `operator()` supports multiple arguments. Full standard
-iostreams, locales, facets, and `std::string` are not implemented.
+iostreams, locales, and facets are not fully implemented; `std::string` is a\ncompact subset without assignment or concatenation operators.
