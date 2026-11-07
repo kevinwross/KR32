@@ -66,7 +66,7 @@ sandboxed just like `open`.
   initializers, including arrays and structs
 - Function-pointer typedefs (`typedef int (*fn)(int);`) with indirect calls,
   pointer parameters, returns, assignment, global/`&`-address initializers, and
-  direct `int (*fn)(int)` declarators and calls with more than four fixed arguments
+  direct `int (*fn)(int)` declarators, array-element calls, and calls with more than four fixed arguments
 - Aggregate local initializers and assignment from struct-returning calls and\n  string literals
 - `__builtin_heap_start()` and `__builtin_heap_end()` for the linker-provided
   heap bounds

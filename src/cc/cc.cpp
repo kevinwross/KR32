@@ -3609,6 +3609,111 @@ private:
         }
     }
 
+    TypePtr gen_indirect_call_from_value(const TypePtr& function_type) {
+        const int pointer_slot = allocate_local(type_int());
+        emit("    STORE R0, [R7 + " + std::to_string(pointer_slot) + "]");
+        std::vector<int> slots;
+        std::vector<TypePtr> target_types;
+        if (!match(")")) {
+            while (true) {
+                TypePtr argument = gen_expression();
+                const std::size_t index = slots.size();
+                TypePtr target = argument;
+                if (index < function_type->parameters.size()) {
+                    target = function_type->parameters[index];
+                } else if (function_type->variadic &&
+                           argument->kind == Type::Kind::Float) {
+                    target = type_double();
+                }
+                convert_value(argument, target);
+                const int slot = allocate_local(
+                    function_type->variadic &&
+                            index >= function_type->parameters.size()
+                        ? type_double()
+                        : target);
+                if (function_type->variadic &&
+                    index >= function_type->parameters.size()) {
+                    if (is_fp_type(target)) {
+                        emit("    FSTORE.D F0, [R7 + " + std::to_string(slot) + "]");
+                    } else if (is_long_long_type(target)) {
+                        emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                        emit("    STORE R1, [R7 + " + std::to_string(slot + 4) + "]");
+                    } else {
+                        emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                        emit("    MOV R1, #0");
+                        emit("    STORE R1, [R7 + " + std::to_string(slot + 4) + "]");
+                    }
+                } else if (is_fp_type(target)) {
+                    emit(std::string("    FSTORE") +
+                         (target->kind == Type::Kind::Double ? ".D" : ".W") +
+                         " F0, [R7 + " + std::to_string(slot) + "]");
+                } else if (is_long_long_type(target)) {
+                    emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                    emit("    STORE R1, [R7 + " + std::to_string(slot + 4) + "]");
+                } else {
+                    emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                }
+                slots.push_back(slot);
+                target_types.push_back(target);
+                if (!match(",")) {
+                    break;
+                }
+            }
+            expect(")");
+        }
+        const std::size_t stack_begin =
+            std::min<std::size_t>(4, slots.size());
+        const std::size_t stack_count = slots.size() - stack_begin;
+        for (std::size_t offset = 0; offset < stack_count; ++offset) {
+            const std::size_t index = slots.size() - 1 - offset;
+            emit("    ADJSP #-8");
+            if (is_fp_type(target_types[index])) {
+                emit("    FLOAD.D F0, [R7 + " + std::to_string(slots[index]) + "]");
+                emit("    FSTORE.D F0, [SP]");
+            } else {
+                emit("    LOAD R0, [R7 + " + std::to_string(slots[index]) + "]");
+                emit("    STORE R0, [SP]");
+                if (is_long_long_type(target_types[index])) {
+                    emit("    LOAD R1, [R7 + " +
+                         std::to_string(slots[index] + 4) + "]");
+                    emit("    STORE R1, [SP + 4]");
+                } else {
+                    emit("    MOV R1, #0");
+                    emit("    STORE R1, [SP + 4]");
+                }
+            }
+        }
+        emit("    LOAD R6, [R7 + " + std::to_string(pointer_slot) + "]");
+        const std::size_t register_count =
+            std::min<std::size_t>(4, slots.size());
+        int integer_register = 0;
+        int fp_register = 0;
+        for (std::size_t index = 0; index < register_count; ++index) {
+            if (is_fp_type(target_types[index])) {
+                emit(std::string("    FLOAD") +
+                     (target_types[index]->kind == Type::Kind::Double ? ".D" : ".W") +
+                     " F" + std::to_string(fp_register) + ", [R7 + " +
+                     std::to_string(slots[index]) + "]");
+                ++fp_register;
+            } else if (is_long_long_type(target_types[index])) {
+                emit("    LOAD R" + std::to_string(integer_register) +
+                     ", [R7 + " + std::to_string(slots[index]) + "]");
+                emit("    LOAD R" + std::to_string(integer_register + 1) +
+                     ", [R7 + " + std::to_string(slots[index] + 4) + "]");
+                integer_register += 2;
+            } else {
+                emit("    LOAD R" + std::to_string(integer_register) +
+                     ", [R7 + " + std::to_string(slots[index]) + "]");
+                ++integer_register;
+            }
+        }
+        emit("    CALL R6");
+        if (stack_count > 0) {
+            emit("    ADJSP #" + std::to_string(stack_count * 8));
+        }
+        return function_type->base;
+    }
+
     TypePtr apply_postfix(TypePtr type, bool& address) {
         while (true) {
             if (match("[")) {
@@ -4288,6 +4393,11 @@ private:
             if (address && result->kind != Type::Kind::Struct &&
                 result->kind != Type::Kind::Union && result->kind != Type::Kind::Array) {
                 gen_load(result);
+            }
+            if (result->kind == Type::Kind::Pointer && result->element() &&
+                result->element()->kind == Type::Kind::Function &&
+                match("(")) {
+                return gen_indirect_call_from_value(result->element());
             }
             return result;
         }
