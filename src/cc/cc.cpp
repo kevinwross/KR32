@@ -951,11 +951,16 @@ struct Member {
 };
 
 struct Type {
-    enum class Kind { Void, Char, Short, Int, Bool, Float, Double, Pointer, Array, Struct, Union };
+    enum class Kind {
+        Void, Char, Short, Int, Bool, Float, Double, Pointer, Array, Struct, Union,
+        Function
+    };
 
     Kind kind = Kind::Int;
     TypePtr base;
     std::weak_ptr<Type> pointer_base;
+    std::vector<TypePtr> parameters;
+    bool variadic = false;
     int count = 0;
     bool is_unsigned = false;
     bool is_long_long = false;
@@ -978,6 +983,7 @@ struct Type {
         case Kind::Float: return 4;
         case Kind::Double: return 8;
         case Kind::Pointer: return 4;
+        case Kind::Function: return 4;
         case Kind::Array: return base ? base->size() * count : 0;
         case Kind::Struct:
         case Kind::Union: return total_size;
@@ -995,6 +1001,7 @@ struct Type {
         case Kind::Float: return 4;
         case Kind::Double: return 8;
         case Kind::Pointer: return 4;
+        case Kind::Function: return 4;
         case Kind::Array: return base ? base->alignment() : 1;
         case Kind::Struct:
         case Kind::Union: return struct_alignment;
@@ -1051,6 +1058,15 @@ TypePtr type_pointer(TypePtr base) {
 }
 TypePtr type_array(TypePtr base, int count) {
     return std::make_shared<Type>(Type{Type::Kind::Array, std::move(base), count});
+}
+TypePtr type_function(TypePtr result, std::vector<TypePtr> parameters,
+                      bool variadic) {
+    auto function = std::make_shared<Type>();
+    function->kind = Type::Kind::Function;
+    function->base = std::move(result);
+    function->parameters = std::move(parameters);
+    function->variadic = variadic;
+    return function;
 }
 
 bool is_fp_type(const TypePtr& type) {
@@ -1231,6 +1247,7 @@ private:
             return type->base ? type_name(type->base) + "[" +
                                     std::to_string(type->count) + "]"
                               : "array";
+        case Type::Kind::Function: return "function";
         case Type::Kind::Struct: return "struct:" + type->tag;
         case Type::Kind::Union: return "union:" + type->tag;
         }
@@ -1707,6 +1724,36 @@ private:
         }
         if (match("typedef")) {
             const TypePtr type = parse_type();
+            if (match("(")) {
+                expect("*");
+                const std::string name = parse_name();
+                expect(")");
+                expect("(");
+                std::vector<TypePtr> parameters;
+                bool variadic = false;
+                if (!match(")")) {
+                    while (true) {
+                        if (match("...")) {
+                            variadic = true;
+                            break;
+                        }
+                        TypePtr parameter = parse_type();
+                        parameter = parse_array_suffix(parameter);
+                        if (peek().text != "," && peek().text != ")") {
+                            parse_name();
+                        }
+                        parameters.push_back(parameter);
+                        if (!match(",")) {
+                            break;
+                        }
+                    }
+                    expect(")");
+                }
+                typedefs_[name] =
+                    type_pointer(type_function(type, std::move(parameters), variadic));
+                expect(";");
+                return;
+            }
             TypePtr base_type = type;
             while (base_type->kind == Type::Kind::Pointer) {
                 base_type = base_type->element();
@@ -3941,17 +3988,34 @@ private:
                 std::vector<int> slots;
                 std::vector<TypePtr> target_types;
                 const auto signature = functions_.find(name);
+                const Variable* call_variable = lookup(name);
+                TypePtr indirect_function;
+                if (call_variable != nullptr && call_variable->type &&
+                    call_variable->type->kind == Type::Kind::Pointer &&
+                    call_variable->type->element() &&
+                    call_variable->type->element()->kind == Type::Kind::Function) {
+                    indirect_function = call_variable->type->element();
+                }
                 const bool variadic =
-                    signature != functions_.end() && signature->second.variadic;
+                    indirect_function != nullptr
+                        ? indirect_function->variadic
+                        : signature != functions_.end() && signature->second.variadic;
                 const std::size_t fixed_count =
-                    signature != functions_.end() ? signature->second.parameters.size() : 0;
+                    indirect_function != nullptr
+                        ? indirect_function->parameters.size()
+                        : signature != functions_.end()
+                              ? signature->second.parameters.size()
+                              : 0;
                 if (!match(")")) {
                     while (true) {
                         TypePtr argument = gen_expression();
                         const std::size_t index = arguments.size();
                         const bool extra = variadic && index >= fixed_count;
                         TypePtr target = argument;
-                        if (signature != functions_.end() && index < fixed_count) {
+                        if (indirect_function != nullptr && index < fixed_count) {
+                            target = indirect_function->parameters[index];
+                        } else if (signature != functions_.end() &&
+                                   index < fixed_count) {
                             target = signature->second.parameters[index];
                         } else if (extra) {
                             if (argument->kind == Type::Kind::Float) {
@@ -4020,6 +4084,10 @@ private:
                         }
                     }
                 }
+                if (indirect_function != nullptr) {
+                    gen_lvalue_address(name);
+                    emit("    LOAD R6, [R0]");
+                }
                 const std::size_t register_count =
                     variadic ? std::min(fixed_count, slots.size()) : slots.size();
                 int integer_register = 0;
@@ -4048,14 +4116,26 @@ private:
                         ++integer_register;
                     }
                 }
-                emit("    CALL " + name);
+                emit(indirect_function != nullptr ? "    CALL R6"
+                                                  : "    CALL " + name);
                 if (extra_count > 0) {
                     emit("    ADJSP #" + std::to_string(extra_count * 8));
+                }
+                if (indirect_function != nullptr) {
+                    return indirect_function->base;
                 }
                 if (signature != functions_.end()) {
                     return signature->second.result;
                 }
                 return type_int();
+            }
+            const auto function_value = functions_.find(name);
+            if (function_value != functions_.end()) {
+                emit("    LEA R0, [" + name + "]");
+                return type_pointer(type_function(
+                    function_value->second.result,
+                    function_value->second.parameters,
+                    function_value->second.variadic));
             }
             const Variable* variable = lookup(name);
             if (variable == nullptr) {

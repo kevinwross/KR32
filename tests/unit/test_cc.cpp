@@ -385,6 +385,27 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(strtok_r_result.ok);
     CHECK(strtok_r_result.result == 0);
+
+    const ProgramResult function_pointers = compile_and_run(
+        "typedef int (*binary_fn)(int, int);\n"
+        "int add(int a, int b) { return a + b; }\n"
+        "int multiply(int a, int b) { return a * b; }\n"
+        "binary_fn choose(int which) { return which == 0 ? add : multiply; }\n"
+        "int apply(binary_fn operation, int a, int b) {\n"
+        "    return operation(a, b);\n"
+        "}\n"
+        "int main(void) {\n"
+        "    binary_fn operation = add;\n"
+        "    if (operation(2, 3) != 5) return 1;\n"
+        "    operation = multiply;\n"
+        "    if (operation(2, 3) != 6) return 2;\n"
+        "    if (apply(add, 4, 5) != 9) return 3;\n"
+        "    operation = choose(1);\n"
+        "    if (operation(3, 4) != 12) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(function_pointers.ok);
+    CHECK(function_pointers.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
