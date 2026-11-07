@@ -6285,7 +6285,11 @@ private:
             }
         }
         const TypePtr call_result = resolve_type(function->result);
-        const ClassInfo* call_result_class = class_of(call_result);
+        const bool reference_call_result =
+            call_result && (call_result->kind == TypeKind::LValueRef ||
+                            call_result->kind == TypeKind::RValueRef);
+        const ClassInfo* call_result_class =
+            reference_call_result ? nullptr : class_of(call_result);
         const bool register_result =
             call_result_class != nullptr &&
             is_register_return_class(call_result_class);
@@ -7767,10 +7771,19 @@ private:
             integer_argument = 1;
         }
         current_sret_slot_ = -1;
-        if (ClassInfo* result_class = class_of(resolve_type(function.result));
-            result_class != nullptr && !is_register_return_class(result_class)) {
-            current_sret_slot_ = allocate_local(Type::make_builtin(BuiltinKind::Int));
-            emit("    STORE R4, [R7 + " + std::to_string(current_sret_slot_) + "]");
+        const TypePtr resolved_result = resolve_type(function.result);
+        const bool reference_result =
+            resolved_result &&
+            (resolved_result->kind == TypeKind::LValueRef ||
+             resolved_result->kind == TypeKind::RValueRef);
+        if (!reference_result) {
+            if (ClassInfo* result_class = class_of(resolved_result);
+                result_class != nullptr && !is_register_return_class(result_class)) {
+                current_sret_slot_ =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R4, [R7 + " +
+                     std::to_string(current_sret_slot_) + "]");
+            }
         }
         bool has_class_parameter = false;
         for (const Param& parameter : function.decl->parameters) {
