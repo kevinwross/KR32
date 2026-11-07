@@ -2840,3 +2840,9 @@ int isgraph(int c) { return c > 32 && c <= 126; }
 int ispunct(int c) { return isprint(c) && c != ' ' && !isalnum(c); }
 int tolower(int c) { return isupper(c) ? c + 32 : c; }
 int toupper(int c) { return islower(c) ? c - 32 : c; }
+
+int __kr32_assert_fail(void) {
+    write(2, "assertion failed\n", 17);
+    exit(1);
+    return 1;
+}

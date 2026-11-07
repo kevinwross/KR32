@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 09:36 -08:00
+> **Last updated:** 2026-11-07 09:46 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1954,6 +1954,8 @@ Newest entries at the bottom. Use the local time zone.
       `<limits.h>` synthetic headers.
 - **2026-11-07 09:36 -08:00** — Added `<ctype.h>` plus `isdigit`, `isalpha`,
       `isspace`, `tolower`, `toupper`, and related character classification.
+- **2026-11-07 09:46 -08:00** — Added `<assert.h>` with the `assert` macro
+      and runtime assertion-failure reporting.
 
 ## 10. Updating this file
 

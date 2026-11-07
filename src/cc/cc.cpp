@@ -442,6 +442,11 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
                     macros["R_OK"] = "4";
+                } else if (directive.find("assert.h") != std::string::npos) {
+                    result += "int __kr32_assert_fail(void); ";
+                    function_macros["assert"] =
+                        FunctionMacro{{"condition"},
+                                      "((condition) ? 0 : __kr32_assert_fail())"};
                 } else if (directive.find("ctype.h") != std::string::npos) {
                     result +=
                         "int isdigit(int c); int isalpha(int c); "

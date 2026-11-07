@@ -213,6 +213,16 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(ctype_header.ok);
     CHECK(ctype_header.result == 0);
+
+    const ProgramResult assert_header = compile_and_run(
+        "#include <assert.h>\n"
+        "int main(void) {\n"
+        "    assert(1 == 1);\n"
+        "    assert(2 > 1);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(assert_header.ok);
+    CHECK(assert_header.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
