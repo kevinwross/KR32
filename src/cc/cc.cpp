@@ -1821,6 +1821,14 @@ private:
                     data_ += high;
                 }
                 if (expect_semicolon) expect(";");
+            } else if (match("&")) {
+                if (!actual->is_pointer()) {
+                    error("address initializer requires a pointer");
+                }
+                const std::string target = parse_name();
+                data_ += ".global " + name + "\n" + name + ":\n";
+                data_ += "    .word " + target + "\n";
+                if (expect_semicolon) expect(";");
             } else {
                 if (peek().kind != TokenKind::Number && peek().kind != TokenKind::Character) {
                     error("global initializer must be a constant");
