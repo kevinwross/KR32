@@ -1790,7 +1790,18 @@ private:
             while (match("*")) {
                 actual = type_pointer(actual);
             }
-            const std::string name = parse_name();
+            std::string name;
+            bool function_pointer_declarator = false;
+            if (first_declarator && peek().text == "(" &&
+                peek(1).text == "*") {
+                TypePtr pointer_type = parse_function_pointer_declarator(
+                    actual, name, function_pointer_declarator);
+                if (pointer_type != nullptr) {
+                    actual = pointer_type;
+                }
+            } else {
+                name = parse_name();
+            }
             if (first_declarator && match("(")) {
                 parse_function(actual, name);
                 return;
@@ -2594,6 +2605,41 @@ private:
                      debug_type_name(type) + " " + std::to_string(type->size()));
     }
 
+    TypePtr parse_function_pointer_declarator(const TypePtr& result,
+                                              std::string& name,
+                                              bool& matched) {
+        matched = false;
+        if (!match("(")) {
+            return nullptr;
+        }
+        expect("*");
+        name = parse_name();
+        expect(")");
+        expect("(");
+        std::vector<TypePtr> parameters;
+        bool variadic = false;
+        if (!match(")")) {
+            while (true) {
+                if (match("...")) {
+                    variadic = true;
+                    break;
+                }
+                TypePtr parameter = parse_type();
+                parameter = parse_array_suffix(parameter);
+                if (peek().text != "," && peek().text != ")") {
+                    parse_name();
+                }
+                parameters.push_back(parameter);
+                if (!match(",")) {
+                    break;
+                }
+            }
+            expect(")");
+        }
+        matched = true;
+        return type_pointer(type_function(result, std::move(parameters), variadic));
+    }
+
     void parse_local_declaration() {
         const bool is_static = peek().text == "static";
         if (is_static) {
@@ -2610,9 +2656,20 @@ private:
             while (match("*")) {
                 actual = type_pointer(actual);
             }
+            std::string name;
+            bool function_pointer_declarator = false;
+            if (first_declarator && peek().text == "(" &&
+                peek(1).text == "*") {
+                TypePtr pointer_type = parse_function_pointer_declarator(
+                    actual, name, function_pointer_declarator);
+                if (pointer_type != nullptr) {
+                    actual = pointer_type;
+                }
+            } else {
+                name = parse_name();
+                actual = parse_array_suffix(actual);
+            }
             first_declarator = false;
-            const std::string name = parse_name();
-            actual = parse_array_suffix(actual);
             if (is_static) {
                 parse_static_local(name, actual);
                 if (!match(",")) {

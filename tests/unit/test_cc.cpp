@@ -395,6 +395,7 @@ TEST_CASE("C local declarations support multiple declarators") {
         "    return operation(a, b);\n"
         "}\n"
         "binary_fn global_operation = add;\n"
+        "int (*direct_global)(int, int) = multiply;\n"
         "int main(void) {\n"
         "    binary_fn operation = add;\n"
         "    if (operation(2, 3) != 5) return 1;\n"
@@ -404,6 +405,9 @@ TEST_CASE("C local declarations support multiple declarators") {
         "    operation = choose(1);\n"
         "    if (operation(3, 4) != 12) return 4;\n"
         "    if (global_operation(1, 2) != 3) return 5;\n"
+        "    int (*direct)(int, int) = add;\n"
+        "    if (direct(5, 6) != 11) return 6;\n"
+        "    if (direct_global(2, 4) != 8) return 7;\n"
         "    return 0;\n"
         "}\n");
     CHECK(function_pointers.ok);

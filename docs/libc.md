@@ -65,8 +65,8 @@ sandboxed just like `open`.
 - Function-scope `static` locals with persistent data/BSS storage and constant
   initializers, including arrays and structs
 - Function-pointer typedefs (`typedef int (*fn)(int);`) with indirect calls,
-  pointer parameters, returns, assignment, and global/`&`-address initializers; direct `int (*fn)(int)`
-  declarators are not yet supported
+  pointer parameters, returns, assignment, global/`&`-address initializers, and
+  direct `int (*fn)(int)` declarators
 - `__builtin_heap_start()` and `__builtin_heap_end()` for the linker-provided
   heap bounds
 
