@@ -26,7 +26,7 @@ source line numbers and debugger line mappings are preserved.
 
 | Include | Contents |
 | --- | --- |
-| `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, string, and numeric-conversion prototypes (`atoi`/`atol`/`atof`/`strtol`/`strtoul`), including `strspn`/`strcspn`/`strpbrk`/`strcoll`/`strxfrm` and `memccpy`; `<stdlib.h>` also provides `abs`/`labs`/`srand`/`rand`/`qsort` |
+| `<kr32.h>`, `<stdio.h>`, `<stdlib.h>`, `<string.h>` | Console, file stream, raw descriptor, argument, memory, string, and numeric-conversion prototypes (`atoi`/`atol`/`atof`/`strtol`/`strtoul`), including `strspn`/`strcspn`/`strpbrk`/`strcoll`/`strxfrm` and `memccpy`; `<stdlib.h>` also provides `abs`/`labs`/`srand`/`rand`/`qsort`/`bsearch` |
 | `<stdarg.h>` | `va_list` and the `va_start`/`va_arg`/`va_end`/`va_copy` macros |
 | `<stddef.h>` | `size_t`, `ptrdiff_t`, `NULL`, `offsetof` |
 | `<stdint.h>` | `int8_t` through `uint64_t`, `intptr_t`, `uintptr_t`, and limit macros |
@@ -66,7 +66,7 @@ sandboxed just like `open`.
   initializers, including arrays and structs
 - Function-pointer typedefs (`typedef int (*fn)(int);`) with indirect calls,
   pointer parameters, returns, assignment, global/`&`-address initializers, and
-  direct `int (*fn)(int)` declarators
+  direct `int (*fn)(int)` declarators and calls with more than four fixed arguments
 - `__builtin_heap_start()` and `__builtin_heap_end()` for the linker-provided
   heap bounds
 

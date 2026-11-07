@@ -7,6 +7,7 @@ long atol(const char *text);
 int sys_time(void);
 typedef int (*kr32_compare_fn)(const void *, const void *);
 void qsort(void *base, int count, int size, kr32_compare_fn compare);
+void *bsearch(const void *key, const void *base, int count, int size, kr32_compare_fn compare);
 
 int putchar(int c);
 int getchar(void);
@@ -3070,4 +3071,24 @@ void qsort(void *base, int count, int size, kr32_compare_fn compare) {
         }
         index = index + 1;
     }
+}
+
+void *bsearch(const void *key, const void *base, int count, int size,
+              kr32_compare_fn compare) {
+    const char *bytes = (const char *)base;
+    int low = 0;
+    int high = count - 1;
+    while (low <= high) {
+        int middle = (low + high) / 2;
+        int result = compare(key, bytes + middle * size);
+        if (result == 0) {
+            return (void *)(bytes + middle * size);
+        }
+        if (result < 0) {
+            high = middle - 1;
+        } else {
+            low = middle + 1;
+        }
+    }
+    return 0;
 }

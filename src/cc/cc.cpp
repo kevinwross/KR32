@@ -588,6 +588,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "void *realloc(void *pointer, int size); "
                         "typedef int (*kr32_compare_fn)(const void *, const void *); "
                         "void qsort(void *base, int count, int size, kr32_compare_fn compare); "
+                        "void *bsearch(const void *key, const void *base, int count, int size, kr32_compare_fn compare); "
                         "int abs(int value); long labs(long value); "
                         "void srand(unsigned int seed); int rand(void); "
                         "int atoi(const char *text); long atol(const char *text); "
@@ -2139,10 +2140,6 @@ private:
         if (!match("{")) {
             error("expected '{' or ';'");
         }
-        if (parameters.size() > 4) {
-            error("more than four parameters are not supported yet");
-        }
-
         functions_[name].defined = true;
         current_function_ = name;
         current_result_type_ = result_type;
@@ -2161,7 +2158,28 @@ private:
             const int offset = allocate_local(parameters[index]);
             locals_.emplace(parameter_names[index],
                             Variable{parameter_names[index], parameters[index], offset, "", false});
-            if (is_fp_type(parameters[index])) {
+            if (index >= 4) {
+                const std::string stack_slot =
+                    "[R7 + __FRAME_" + name + "__ + " +
+                    std::to_string(8 + static_cast<int>(index - 4) * 8) + "]";
+                if (is_fp_type(parameters[index])) {
+                    emit(std::string("    FLOAD") +
+                         (parameters[index]->kind == Type::Kind::Double ? ".D" : ".W") +
+                         " F0, " + stack_slot);
+                    emit(std::string("    FSTORE") +
+                         (parameters[index]->kind == Type::Kind::Double ? ".D" : ".W") +
+                         " F0, [R7 + " + std::to_string(offset) + "]");
+                } else if (is_long_long_type(parameters[index])) {
+                    emit("    LOAD R0, " + stack_slot);
+                    emit("    LOAD R1, [R7 + __FRAME_" + name + "__ + " +
+                         std::to_string(12 + static_cast<int>(index - 4) * 8) + "]");
+                    emit("    STORE R0, [R7 + " + std::to_string(offset) + "]");
+                    emit("    STORE R1, [R7 + " + std::to_string(offset + 4) + "]");
+                } else {
+                    emit("    LOAD R0, " + stack_slot);
+                    emit("    STORE R0, [R7 + " + std::to_string(offset) + "]");
+                }
+            } else if (is_fp_type(parameters[index])) {
                 emit(std::string("    FSTORE") +
                      (parameters[index]->kind == Type::Kind::Double ? ".D" : ".W") +
                      " F" + std::to_string(fp_register) + ", [R7 + " +
@@ -4131,13 +4149,13 @@ private:
                     }
                     expect(")");
                 }
-                if (!variadic && arguments.size() > 4) {
-                    error("more than four arguments are not supported yet");
-                }
-                const std::size_t extra_count =
-                    variadic && slots.size() > fixed_count ? slots.size() - fixed_count : 0;
-                for (std::size_t offset = 0; offset < extra_count; ++offset) {
-                    const std::size_t index = fixed_count + extra_count - 1 - offset;
+                const std::size_t stack_begin =
+                    variadic ? std::min(fixed_count, slots.size())
+                             : std::min<std::size_t>(4, slots.size());
+                const std::size_t stack_count =
+                    slots.size() > stack_begin ? slots.size() - stack_begin : 0;
+                for (std::size_t offset = 0; offset < stack_count; ++offset) {
+                    const std::size_t index = slots.size() - 1 - offset;
                     emit("    ADJSP #-8");
                     if (is_fp_type(target_types[index])) {
                         emit("    FLOAD.D F0, [R7 + " + std::to_string(slots[index]) + "]");
@@ -4160,7 +4178,7 @@ private:
                     emit("    LOAD R6, [R0]");
                 }
                 const std::size_t register_count =
-                    variadic ? std::min(fixed_count, slots.size()) : slots.size();
+                    std::min<std::size_t>(4, stack_begin);
                 int integer_register = 0;
                 int fp_register = 0;
                 for (std::size_t index = 0; index < register_count; ++index) {
@@ -4189,8 +4207,8 @@ private:
                 }
                 emit(indirect_function != nullptr ? "    CALL R6"
                                                   : "    CALL " + name);
-                if (extra_count > 0) {
-                    emit("    ADJSP #" + std::to_string(extra_count * 8));
+                if (stack_count > 0) {
+                    emit("    ADJSP #" + std::to_string(stack_count * 8));
                 }
                 if (indirect_function != nullptr) {
                     return indirect_function->base;

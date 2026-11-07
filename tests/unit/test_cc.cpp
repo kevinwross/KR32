@@ -426,10 +426,33 @@ TEST_CASE("C local declarations support multiple declarators") {
         "    if (values[0] != 1) return 1;\n"
         "    if (values[1] != 2) return 2;\n"
         "    if (values[4] != 5) return 3;\n"
+        "    int key = 4;\n"
+        "    int *found = (int *)bsearch(&key, values, 5, sizeof(int), compare);\n"
+        "    if (found == 0) return 4;\n"
+        "    if (*found != 4) return 5;\n"
         "    return 0;\n"
         "}\n");
     CHECK(qsort_result.ok);
     CHECK(qsort_result.result == 0);
+
+    const ProgramResult stack_arguments = compile_and_run(
+        "int sum5(int a, int b, int c, int d, int e) {\n"
+        "    return a + b + c + d + e;\n"
+        "}\n"
+        "int sum6(int a, int b, int c, int d, int e, int f) {\n"
+        "    return a + b + c + d + e + f;\n"
+        "}\n"
+        "long long wide(int a, int b, int c, int d, long long e) {\n"
+        "    return e + a + b + c + d;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    if (sum5(1, 2, 3, 4, 5) != 15) return 1;\n"
+        "    if (sum6(1, 2, 3, 4, 5, 6) != 21) return 2;\n"
+        "    if (wide(1, 2, 3, 4, 10) != 20) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(stack_arguments.ok);
+    CHECK(stack_arguments.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
