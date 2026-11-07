@@ -442,6 +442,15 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
                     macros["R_OK"] = "4";
+                } else if (directive.find("ctype.h") != std::string::npos) {
+                    result +=
+                        "int isdigit(int c); int isalpha(int c); "
+                        "int isalnum(int c); int isspace(int c); "
+                        "int islower(int c); int isupper(int c); "
+                        "int isxdigit(int c); int iscntrl(int c); "
+                        "int isprint(int c); int isgraph(int c); "
+                        "int ispunct(int c); int tolower(int c); "
+                        "int toupper(int c);";
                 } else if (directive.find("stdint.h") != std::string::npos) {
                     result +=
                         "typedef signed char int8_t; "

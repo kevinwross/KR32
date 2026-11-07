@@ -199,6 +199,20 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(standard_headers.ok);
     CHECK(standard_headers.result == 0);
+
+    const ProgramResult ctype_header = compile_and_run(
+        "#include <ctype.h>\n"
+        "int main(void) {\n"
+        "    if (!isdigit('7')) return 1;\n"
+        "    if (!isalpha('Q')) return 2;\n"
+        "    if (!isspace('\\n')) return 3;\n"
+        "    if (tolower('A') != 'a') return 4;\n"
+        "    if (toupper('b') != 'B') return 5;\n"
+        "    if (isxdigit('G')) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(ctype_header.ok);
+    CHECK(ctype_header.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
