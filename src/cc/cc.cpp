@@ -2324,33 +2324,40 @@ private:
     }
 
     void parse_local_declaration() {
-        TypePtr type = parse_type();
-        const std::string name = parse_name();
-        TypePtr actual = parse_array_suffix(type);
-        const int offset = allocate_local(actual);
-        locals_[name] = Variable{name, actual, offset, "", false};
-        debug_type(actual);
-        debug_record("V " + current_function_ + " " + name + " " + std::to_string(offset) +
-                     " " + debug_type_name(actual) + " " + std::to_string(actual->size()));
-        if (match("=")) {
-            if (actual->kind == Type::Kind::Array ||
-                actual->kind == Type::Kind::Struct ||
-                actual->kind == Type::Kind::Union) {
-                gen_lvalue_address(name);
-                const int base_slot = allocate_local(type_int());
-                emit("    STORE R0, [R7 + " + std::to_string(base_slot) + "]");
-                gen_zero_object(base_slot, 0, actual->size());
-                gen_initializer_at(actual, base_slot, 0);
-            } else {
-                gen_lvalue_address(name);
-                emit("    PUSH R0");
-                TypePtr value_type = gen_expression();
-                convert_value(value_type, actual);
-                if (is_long_long_type(actual)) {
-                    emit("    MOV R2, R1");
+        const TypePtr type = parse_type();
+        while (true) {
+            const std::string name = parse_name();
+            TypePtr actual = parse_array_suffix(type);
+            const int offset = allocate_local(actual);
+            locals_[name] = Variable{name, actual, offset, "", false};
+            debug_type(actual);
+            debug_record("V " + current_function_ + " " + name + " " +
+                         std::to_string(offset) + " " +
+                         debug_type_name(actual) + " " +
+                         std::to_string(actual->size()));
+            if (match("=")) {
+                if (actual->kind == Type::Kind::Array ||
+                    actual->kind == Type::Kind::Struct ||
+                    actual->kind == Type::Kind::Union) {
+                    gen_lvalue_address(name);
+                    const int base_slot = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(base_slot) + "]");
+                    gen_zero_object(base_slot, 0, actual->size());
+                    gen_initializer_at(actual, base_slot, 0);
+                } else {
+                    gen_lvalue_address(name);
+                    emit("    PUSH R0");
+                    TypePtr value_type = gen_expression();
+                    convert_value(value_type, actual);
+                    if (is_long_long_type(actual)) {
+                        emit("    MOV R2, R1");
+                    }
+                    emit("    POP R1");
+                    gen_store(actual);
                 }
-                emit("    POP R1");
-                gen_store(actual);
+            }
+            if (!match(",")) {
+                break;
             }
         }
         expect(";");

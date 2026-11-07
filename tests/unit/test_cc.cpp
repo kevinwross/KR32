@@ -106,6 +106,16 @@ TEST_CASE("the C compiler compiles arithmetic and functions") {
     CHECK(result.assembly.find("CALL add") != std::string::npos);
 }
 
+TEST_CASE("C local declarations support multiple declarators") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int a = 1, b = 2;\n"
+        "    return a + b - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("a compiled C program links, runs, and returns a value") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"
