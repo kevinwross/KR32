@@ -1821,6 +1821,14 @@ private:
                     data_ += high;
                 }
                 if (expect_semicolon) expect(";");
+            } else if (peek().kind == TokenKind::String && actual->is_pointer()) {
+                const std::string text = take().text;
+                const std::string label =
+                    ".Lstr_" + std::to_string(string_counter_++);
+                rodata_ += label + ":\n    .asciz \"" + escape_string(text) + "\"\n";
+                data_ += ".global " + name + "\n" + name + ":\n";
+                data_ += "    .word " + label + "\n";
+                if (expect_semicolon) expect(";");
             } else if (match("&")) {
                 if (!actual->is_pointer()) {
                     error("address initializer requires a pointer");
