@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 11:52 -08:00
+> **Last updated:** 2026-11-07 12:07 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1976,6 +1976,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-07 11:41 -08:00** — Added reentrant `strtok_r`.
 - **2026-11-07 11:52 -08:00** — Added C function-pointer typedefs, indirect
       calls, pointer parameters, and function-pointer returns.
+- **2026-11-07 12:07 -08:00** — Supported global function-pointer
+      initializers from function names and `&function`.
 
 ## 10. Updating this file
 

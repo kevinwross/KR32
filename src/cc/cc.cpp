@@ -1939,6 +1939,9 @@ private:
                 while (!match("}")) {
                     if (match("&")) {
                         data_ += "    .word " + parse_name() + "\n";
+                    } else if (peek().kind == TokenKind::Identifier &&
+                               functions_.find(peek().text) != functions_.end()) {
+                        data_ += "    .word " + take().text + "\n";
                     } else if (peek().kind == TokenKind::String) {
                         const std::string text = take().text;
                         const std::string label =
@@ -2004,6 +2007,15 @@ private:
                 rodata_ += label + ":\n    .asciz \"" + escape_string(text) + "\"\n";
                 data_ += ".global " + name + "\n" + name + ":\n";
                 data_ += "    .word " + label + "\n";
+                if (expect_semicolon) expect(";");
+            } else if (peek().kind == TokenKind::Identifier &&
+                       functions_.find(peek().text) != functions_.end()) {
+                if (!actual->is_pointer()) {
+                    error("function initializer requires a pointer");
+                }
+                const std::string target = take().text;
+                data_ += ".global " + name + "\n" + name + ":\n";
+                data_ += "    .word " + target + "\n";
                 if (expect_semicolon) expect(";");
             } else if (match("&")) {
                 if (!actual->is_pointer()) {
