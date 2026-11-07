@@ -513,6 +513,22 @@ TEST_CASE("standard iostream manipulators set the output base") {
     CHECK(program.output == "ff\n255\n");
 }
 
+TEST_CASE("std::string supports find, substr, front, and back") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello world\");\n"
+        "    if (text.find(\"world\") != 6) return 1;\n"
+        "    std::string part = text.substr(6, 5);\n"
+        "    if (part != \"world\") return 2;\n"
+        "    if (text.front() != 'h') return 3;\n"
+        "    if (text.back() != 'd') return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ can use the C FILE type") {
     const ProgramResult program = compile_and_run(
         "#include <stdio.h>\n"

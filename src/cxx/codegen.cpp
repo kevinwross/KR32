@@ -3433,7 +3433,11 @@ private:
             const TypePtr type = type_of(expression);
             if (type && (type->kind == TypeKind::LValueRef ||
                          type->kind == TypeKind::RValueRef)) {
-                gen_expr(expression);
+                if (expression.kind == ExprKind::Call) {
+                    gen_call(expression);
+                } else {
+                    gen_expr(expression);
+                }
                 return;
             }
             if ((expression.kind == ExprKind::Call ||
@@ -4793,8 +4797,19 @@ private:
             return gen_assignment(expression);
         case ExprKind::Conditional:
             return gen_conditional(expression);
-        case ExprKind::Call:
-            return gen_call(expression);
+        case ExprKind::Call: {
+            const TypePtr result = gen_call(expression);
+            if (result && (result->kind == TypeKind::LValueRef ||
+                           result->kind == TypeKind::RValueRef) &&
+                class_of(result->element) == nullptr) {
+                if (is_fp(result->element)) {
+                    load_fp(result->element);
+                } else {
+                    load_value(result->element);
+                }
+            }
+            return result;
+        }
         case ExprKind::Index: {
             if (Function* operation = find_member_operator(
                     class_of(type_of(*expression.children[0])), "operator[]",
