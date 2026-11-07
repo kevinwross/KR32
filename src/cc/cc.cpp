@@ -2490,30 +2490,37 @@ private:
             if (type->kind == Type::Kind::Array ||
                 type->kind == Type::Kind::Struct ||
                 type->kind == Type::Kind::Union) {
-                error("static local aggregate initializers are not supported");
-                return;
-            }
-            if (peek().kind == TokenKind::Float) {
+                std::vector<std::uint8_t> bytes(
+                    static_cast<std::size_t>(std::max(1, type->size())), 0);
+                parse_global_initializer(type, bytes, 0);
+                data_ += ".align " + std::to_string(std::max(1, type->alignment())) + "\n";
+                data_ += ".global " + label + "\n" + label + ":\n";
+                for (std::uint8_t byte : bytes) {
+                    data_ += "    .byte " + std::to_string(byte) + "\n";
+                }
+            } else if (peek().kind == TokenKind::Float) {
                 error("static local floating initializers are not supported");
                 return;
-            }
-            const std::int64_t value = parse_constant_value();
-            data_ += ".align " + std::to_string(std::max(1, type->alignment())) + "\n";
-            data_ += ".global " + label + "\n" + label + ":\n";
-            if (type->kind == Type::Kind::Char) {
-                data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
-            } else if (type->kind == Type::Kind::Short) {
-                data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
-                data_ += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
-            } else if (type->is_long_long) {
-                const std::uint64_t bits = static_cast<std::uint64_t>(value);
-                data_ += "    .word " +
-                         std::to_string(static_cast<std::uint32_t>(bits)) + "\n";
-                data_ += "    .word " +
-                         std::to_string(static_cast<std::uint32_t>(bits >> 32)) + "\n";
             } else {
-                data_ += "    .word " +
-                         std::to_string(value & 0xFFFF'FFFFU) + "\n";
+                const std::int64_t value = parse_constant_value();
+                data_ += ".align " +
+                         std::to_string(std::max(1, type->alignment())) + "\n";
+                data_ += ".global " + label + "\n" + label + ":\n";
+                if (type->kind == Type::Kind::Char) {
+                    data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                } else if (type->kind == Type::Kind::Short) {
+                    data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                    data_ += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
+                } else if (type->is_long_long) {
+                    const std::uint64_t bits = static_cast<std::uint64_t>(value);
+                    data_ += "    .word " +
+                             std::to_string(static_cast<std::uint32_t>(bits)) + "\n";
+                    data_ += "    .word " +
+                             std::to_string(static_cast<std::uint32_t>(bits >> 32)) + "\n";
+                } else {
+                    data_ += "    .word " +
+                             std::to_string(value & 0xFFFF'FFFFU) + "\n";
+                }
             }
         } else {
             bss_ += ".align " + std::to_string(std::max(1, type->alignment())) + "\n";

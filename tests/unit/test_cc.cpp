@@ -341,6 +341,18 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(string_collation.ok);
     CHECK(string_collation.result == 0);
+
+    const ProgramResult static_aggregates = compile_and_run(
+        "struct P { int x; int y; };\n"
+        "int total(void) {\n"
+        "    static int values[3] = {1, 2, 3};\n"
+        "    static struct P point = {4, 5};\n"
+        "    values[0] = values[0] + 1;\n"
+        "    return values[0] + values[1] + values[2] + point.x + point.y;\n"
+        "}\n"
+        "int main(void) { return total() - 16; }\n");
+    CHECK(static_aggregates.ok);
+    CHECK(static_aggregates.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
