@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 23:05 -08:00
+> **Last updated:** 2026-11-07 09:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1947,6 +1947,8 @@ Newest entries at the bottom. Use the local time zone.
       loaded intermediate pointer values for nested subscripts.
 - **2026-11-06 23:05 -08:00** — Generalized C global pointer-array
       initializers to `&global` entries.
+- **2026-11-07 09:08 -08:00** — Added `std::string::rfind` and
+      `std::string::compare`.
 
 ## 10. Updating this file
 
