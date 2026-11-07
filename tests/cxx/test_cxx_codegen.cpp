@@ -548,6 +548,28 @@ TEST_CASE("const member overloads are distinct and selectable") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("operator arrow forwards member access") {
+    const ProgramResult program = compile_and_run(
+        "struct Point { int x; int y; };\n"
+        "class Box {\n"
+        "public:\n"
+        "    Point* pointer;\n"
+        "    Box(Point* value) : pointer(value) {}\n"
+        "    Point* operator->() { return pointer; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Point point;\n"
+        "    point.x = 7;\n"
+        "    point.y = 8;\n"
+        "    Box box(&point);\n"
+        "    if (box->x != 7) return 1;\n"
+        "    if (box->y != 8) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("this pointer supports compound assignment") {
     const ProgramResult program = compile_and_run(
         "class Counter {\n"

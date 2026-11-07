@@ -2293,6 +2293,19 @@ private:
                                     object_type->kind == TypeKind::LValueRef ||
                                     object_type->kind == TypeKind::RValueRef)) {
                     object_type = object_type->element;
+                } else if (Function* arrow = find_member_operator(
+                               class_of(object_type), "operator->", nullptr,
+                               true)) {
+                    if (arrow->result &&
+                        (arrow->result->kind == TypeKind::Pointer ||
+                         arrow->result->kind == TypeKind::LValueRef ||
+                         arrow->result->kind == TypeKind::RValueRef)) {
+                        object_type = arrow->result->element;
+                    } else {
+                        diagnose_once(expression,
+                                      "'->' operator must return a pointer");
+                        return Type::make_builtin(BuiltinKind::Int);
+                    }
                 } else {
                     diagnose_once(expression, "'->' requires a pointer");
                     return Type::make_builtin(BuiltinKind::Int);
@@ -3600,11 +3613,21 @@ private:
             const std::string member_name = expression.name.to_string();
             const TypePtr base_type = type_of(*expression.children[0], false);
             TypePtr object_type = base_type;
+            Function* arrow_operator = nullptr;
             if (expression.is_arrow && object_type &&
                 (object_type->kind == TypeKind::Pointer ||
                  object_type->kind == TypeKind::LValueRef ||
                  object_type->kind == TypeKind::RValueRef)) {
                 object_type = object_type->element;
+            } else if (expression.is_arrow) {
+                arrow_operator = find_member_operator(
+                    class_of(object_type), "operator->", nullptr, true);
+                if (arrow_operator != nullptr && arrow_operator->result &&
+                    (arrow_operator->result->kind == TypeKind::Pointer ||
+                     arrow_operator->result->kind == TypeKind::LValueRef ||
+                     arrow_operator->result->kind == TypeKind::RValueRef)) {
+                    object_type = arrow_operator->result->element;
+                }
             }
             ClassInfo* info = class_of(object_type);
             if (!info) {
@@ -3618,7 +3641,10 @@ private:
                     emit("    MOV R0, #0");
                     return;
                 }
-                if (expression.is_arrow) {
+                if (arrow_operator != nullptr) {
+                    gen_zero_argument_member_call(*expression.children[0],
+                                                  arrow_operator);
+                } else if (expression.is_arrow) {
                     gen_expr(*expression.children[0]);
                 } else {
                     gen_address(*expression.children[0]);
@@ -5486,6 +5512,17 @@ private:
         } else if (!floating_argument && argument_temp >= 0) {
             emit("    LOAD R1, [R7 + " + std::to_string(argument_temp) + "]");
         }
+        emit("    CALL " + operation->symbol);
+        return operation->result;
+    }
+
+    TypePtr gen_zero_argument_member_call(const Expr& object,
+                                          Function* operation) {
+        const int this_temp =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        gen_address(object);
+        emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+        emit("    LOAD R0, [R7 + " + std::to_string(this_temp) + "]");
         emit("    CALL " + operation->symbol);
         return operation->result;
     }
