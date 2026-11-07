@@ -1519,6 +1519,8 @@ private:
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
                peek().text == "register" || peek().text == "typedef" ||
+               peek().text == "restrict" || peek().text == "inline" ||
+               peek().text == "_Atomic" ||
                peek().text == "long" || peek().text == "short") {
             const std::string qualifier = take().text;
             if (qualifier == "extern") {
@@ -1593,6 +1595,10 @@ private:
     }
 
     std::string parse_name() {
+        while (peek().text == "restrict" || peek().text == "const" ||
+               peek().text == "volatile") {
+            take();
+        }
         const Token& token = expect_identifier();
         return token.text;
     }

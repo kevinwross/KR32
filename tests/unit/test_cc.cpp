@@ -148,6 +148,17 @@ TEST_CASE("C local declarations support multiple declarators") {
         "int main(void) { A x = 1; B y = 2; return x + y - 3; }\n");
     CHECK(typedefs.ok);
     CHECK(typedefs.result == 0);
+
+    const ProgramResult restrict_parameters = compile_and_run(
+        "int add(int * restrict left, int * restrict right) {\n"
+        "    return *left + *right;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    int a = 1; int b = 2;\n"
+        "    return add(&a, &b) - 3;\n"
+        "}\n");
+    CHECK(restrict_parameters.ok);
+    CHECK(restrict_parameters.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
