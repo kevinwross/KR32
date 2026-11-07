@@ -423,7 +423,7 @@ TEST_CASE("operator[] returning a scalar by value is loaded correctly") {
     CHECK(program.result == 0);
 }
 
-TEST_CASE("std::string subset supports construction and append") {
+TEST_CASE("std::string subset supports construction, append, and assignment") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
         "int main() {\n"
@@ -432,11 +432,31 @@ TEST_CASE("std::string subset supports construction and append") {
         "    if (text[0] != 'h') return 2;\n"
         "    text.append(\"!\");\n"
         "    if (text.size() != 6) return 3;\n"
-        "    text.set(\"world\");\n"
-        "    if (text.size() != 5) return 4;\n"
+        "    text += \"?\";\n"
+        "    if (text.size() != 7) return 4;\n"
+        "    text = \"world\";\n"
+        "    if (text.size() != 5) return 5;\n"
+        "    if (text[0] != 'w') return 6;\n"
         "    text.clear();\n"
-        "    if (!text.empty()) return 5;\n"
+        "    if (!text.empty()) return 7;\n"
         "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("user-defined assignment operators are selected") {
+    const ProgramResult program = compile_and_run(
+        "class Box {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Box(int initial) : value(initial) {}\n"
+        "    Box& operator=(const char* text) { value = text[0]; return *this; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Box box(0);\n"
+        "    box = \"A\";\n"
+        "    return box.value - 65;\n"
         "}\n");
     CHECK(program.ok);
     CHECK(program.result == 0);

@@ -2129,12 +2129,10 @@ private:
         }
         case ExprKind::Assign: {
             const TypePtr left = type_of(*expression.children[0], false);
-            if (expression.text != "=") {
-                if (Function* operation = find_member_operator(
-                        class_of(left), "operator" + expression.text,
-                        type_of(*expression.children[1]), false)) {
-                    return operation->result;
-                }
+            if (Function* operation = find_member_operator(
+                    class_of(left), "operator" + expression.text,
+                    type_of(*expression.children[1]), false)) {
+                return operation->result;
             }
             return left;
         }
@@ -5598,14 +5596,14 @@ private:
     TypePtr gen_assignment(const Expr& expression) {
         const TypePtr lhs_type = type_of(*expression.children[0], false);
         if (ClassInfo* info = class_of(lhs_type)) {
+            if (Function* operation = find_member_operator(
+                    info, "operator" + expression.text,
+                    type_of(*expression.children[1]), false)) {
+                return gen_member_operator_call(*expression.children[0],
+                                                *expression.children[1],
+                                                operation);
+            }
             if (expression.text != "=") {
-                if (Function* operation = find_member_operator(
-                        info, "operator" + expression.text,
-                        type_of(*expression.children[1]), false)) {
-                    return gen_member_operator_call(*expression.children[0],
-                                                    *expression.children[1],
-                                                    operation);
-                }
                 diagnose_once(expression,
                               "compound assignment on a class is not supported yet");
                 return lhs_type;
