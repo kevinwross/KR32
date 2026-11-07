@@ -62,6 +62,8 @@ sandboxed just like `open`.
 - `_Alignof(type)` / `alignof(type)`
 - `__builtin_offsetof(type, member)`, normally used through `offsetof`
 - `_Static_assert(expression, "message")`
+- Function-scope `static` locals with persistent data/BSS storage and constant
+  initializers
 - `__builtin_heap_start()` and `__builtin_heap_end()` for the linker-provided
   heap bounds
 

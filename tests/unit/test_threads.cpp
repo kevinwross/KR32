@@ -86,7 +86,9 @@ CxxProgram build_cxx_worker(std::string_view body, std::string_view counter_name
         if (symbol.name.find("worker") != std::string::npos) {
             program.worker = symbol.value;
         }
-        if (symbol.name.find(counter_name) != std::string::npos) {
+        if (symbol.name == counter_name ||
+            symbol.name == "_Z" + std::to_string(counter_name.size()) +
+                                std::string(counter_name)) {
             program.counter = symbol.value;
         }
     }

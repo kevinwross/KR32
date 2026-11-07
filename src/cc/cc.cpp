@@ -2481,7 +2481,54 @@ private:
         gen_store(type);
     }
 
+    void parse_static_local(const std::string& name, const TypePtr& type) {
+        const std::string label =
+            "__c_static_" + std::to_string(label_counter_++) + "_" + name;
+        if (match("=")) {
+            if (type->kind == Type::Kind::Array ||
+                type->kind == Type::Kind::Struct ||
+                type->kind == Type::Kind::Union) {
+                error("static local aggregate initializers are not supported");
+                return;
+            }
+            if (peek().kind == TokenKind::Float) {
+                error("static local floating initializers are not supported");
+                return;
+            }
+            const std::int64_t value = parse_constant_value();
+            data_ += ".align " + std::to_string(std::max(1, type->alignment())) + "\n";
+            data_ += ".global " + label + "\n" + label + ":\n";
+            if (type->kind == Type::Kind::Char) {
+                data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+            } else if (type->kind == Type::Kind::Short) {
+                data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                data_ += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
+            } else if (type->is_long_long) {
+                const std::uint64_t bits = static_cast<std::uint64_t>(value);
+                data_ += "    .word " +
+                         std::to_string(static_cast<std::uint32_t>(bits)) + "\n";
+                data_ += "    .word " +
+                         std::to_string(static_cast<std::uint32_t>(bits >> 32)) + "\n";
+            } else {
+                data_ += "    .word " +
+                         std::to_string(value & 0xFFFF'FFFFU) + "\n";
+            }
+        } else {
+            bss_ += ".align " + std::to_string(std::max(1, type->alignment())) + "\n";
+            bss_ += ".global " + label + "\n" + label + ":\n";
+            bss_ += "    .space " + std::to_string(type->size()) + "\n";
+        }
+        locals_[name] = Variable{name, type, 0, label, true};
+        debug_type(type);
+        debug_record("V " + current_function_ + " " + name + " 0 " +
+                     debug_type_name(type) + " " + std::to_string(type->size()));
+    }
+
     void parse_local_declaration() {
+        const bool is_static = peek().text == "static";
+        if (is_static) {
+            take();
+        }
         const TypePtr type = parse_type();
         TypePtr base_type = type;
         while (base_type->kind == Type::Kind::Pointer) {
@@ -2496,6 +2543,13 @@ private:
             first_declarator = false;
             const std::string name = parse_name();
             actual = parse_array_suffix(actual);
+            if (is_static) {
+                parse_static_local(name, actual);
+                if (!match(",")) {
+                    break;
+                }
+                continue;
+            }
             const int offset = allocate_local(actual);
             locals_[name] = Variable{name, actual, offset, "", false};
             debug_type(actual);

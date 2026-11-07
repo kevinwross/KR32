@@ -2841,11 +2841,12 @@ int sprintf(char *buffer, const char *format, ...) {
     return result;
 }
 
+static int tmpfile_counter = 0;
+
 struct kr32_file *tmpfile(void) {
-    static int counter = 0;
     char path[64];
-    counter = counter + 1;
-    snprintf(path, 64, "kr32-tmp-%d.tmp", counter);
+    tmpfile_counter = tmpfile_counter + 1;
+    snprintf(path, 64, "kr32-tmp-%d.tmp", tmpfile_counter);
     struct kr32_file *stream = fopen(path, "w+");
     if (stream == 0) {
         return 0;

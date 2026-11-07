@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 10:48 -08:00
+> **Last updated:** 2026-11-07 10:59 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1966,6 +1966,9 @@ Newest entries at the bottom. Use the local time zone.
       and character `find`/`rfind` overloads.
 - **2026-11-07 10:48 -08:00** — Declared `vprintf`, `vsnprintf`, `vsprintf`,
       and `vfprintf` in `<stdio.h>`.
+- **2026-11-07 10:59 -08:00** — Fixed the thread test's counter-symbol
+      lookup to avoid matching `tmpfile_counter`, then added function-scope C
+      `static` locals with persistent data/BSS storage.
 
 ## 10. Updating this file
 

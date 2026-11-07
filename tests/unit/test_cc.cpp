@@ -305,6 +305,27 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(varargs_formatting.ok);
     CHECK(varargs_formatting.result == 0);
+
+    const ProgramResult static_locals = compile_and_run(
+        "int next(void) {\n"
+        "    static int value = 0;\n"
+        "    value = value + 1;\n"
+        "    return value;\n"
+        "}\n"
+        "int count(void) {\n"
+        "    static int total;\n"
+        "    total = total + 2;\n"
+        "    return total;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    if (next() != 1) return 1;\n"
+        "    if (next() != 2) return 2;\n"
+        "    if (count() != 2) return 3;\n"
+        "    if (count() != 4) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(static_locals.ok);
+    CHECK(static_locals.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
