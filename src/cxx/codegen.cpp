@@ -3456,6 +3456,11 @@ private:
                 return;
             }
         }
+        if (expression.kind == ExprKind::Unary && expression.text == "*" &&
+            !expression.children.empty()) {
+            gen_expr(*expression.children[0]);
+            return;
+        }
         if (expression.kind == ExprKind::Binary ||
             expression.kind == ExprKind::Call ||
             expression.kind == ExprKind::Index) {

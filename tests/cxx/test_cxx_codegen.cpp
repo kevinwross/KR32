@@ -548,6 +548,31 @@ TEST_CASE("const member overloads are distinct and selectable") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("this pointer supports compound assignment") {
+    const ProgramResult program = compile_and_run(
+        "class Counter {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Counter(int input) : value(input) {}\n"
+        "    Counter& operator+=(const Counter& other) {\n"
+        "        value = value + other.value;\n"
+        "        return *this;\n"
+        "    }\n"
+        "    Counter& add(const Counter& other) {\n"
+        "        (*this) += other;\n"
+        "        return *this;\n"
+        "    }\n"
+        "};\n"
+        "int main() {\n"
+        "    Counter left(1);\n"
+        "    Counter right(2);\n"
+        "    left.add(right);\n"
+        "    return left.value - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("namespace classes resolve unqualified self parameters") {
     const ProgramResult program = compile_and_run(
         "namespace outer {\n"
