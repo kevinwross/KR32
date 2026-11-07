@@ -2971,3 +2971,16 @@ int time(int *result) {
 double difftime(double later, double earlier) {
     return later - earlier;
 }
+
+int abs(int value) { return value < 0 ? -value : value; }
+
+long labs(long value) { return value < 0 ? -value : value; }
+
+static unsigned int rand_state = 1;
+
+void srand(unsigned int seed) { rand_state = seed; }
+
+int rand(void) {
+    rand_state = rand_state * 1103515245U + 12345U;
+    return (int)((rand_state >> 16) & 0x7FFFU);
+}

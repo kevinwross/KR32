@@ -582,6 +582,8 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                         "void *malloc(int size); "
                         "void free(void *pointer); void *calloc(int count, int size); "
                         "void *realloc(void *pointer, int size); "
+                        "int abs(int value); long labs(long value); "
+                        "void srand(unsigned int seed); int rand(void); "
                         "int atoi(const char *text); long atol(const char *text); "
                         "double atof(const char *text); "
                         "long strtol(const char *text, char **end, int base); "

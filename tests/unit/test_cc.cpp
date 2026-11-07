@@ -269,6 +269,21 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(string_scanning.ok);
     CHECK(string_scanning.result == 0);
+
+    const ProgramResult stdlib_random = compile_and_run(
+        "#include <stdlib.h>\n"
+        "int main(void) {\n"
+        "    if (abs(-7) != 7) return 1;\n"
+        "    if (labs(-9) != 9) return 2;\n"
+        "    srand(1);\n"
+        "    int first = rand();\n"
+        "    if (first <= 0) return 3;\n"
+        "    srand(1);\n"
+        "    if (rand() != first) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(stdlib_random.ok);
+    CHECK(stdlib_random.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
