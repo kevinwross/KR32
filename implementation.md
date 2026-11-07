@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 13:56 -08:00
+> **Last updated:** 2026-11-07 14:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1999,6 +1999,8 @@ Newest entries at the bottom. Use the local time zone.
       `find`, `rfind`, and `compare`.
 - **2026-11-07 13:56 -08:00** — Added relational `std::string` operators for
       string and C-string operands.
+- **2026-11-07 14:09 -08:00** — Fixed parenthesized relational expressions
+      being mistaken for template type-ids after a unary `!`.
 
 ## 10. Updating this file
 

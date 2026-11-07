@@ -2096,9 +2096,31 @@ private:
             }
             if (index + 1 < tokens_.size()) {
                 const std::string& next = tokens_[index + 1].text;
-                if (next == "::" || next == "*" || next == "&" || next == "&&" ||
-                    next == "<") {
+                if (next == "::" || next == "*" || next == "&" ||
+                    next == "&&") {
                     return true;
+                }
+                if (next == "<") {
+                    int depth = 0;
+                    for (std::size_t scan = index + 1;
+                         scan < tokens_.size(); ++scan) {
+                        const std::string& text = tokens_[scan].text;
+                        if (text == "<") {
+                            ++depth;
+                        } else if (text == ">") {
+                            --depth;
+                            if (depth == 0) {
+                                return true;
+                            }
+                        } else if (text == ">>") {
+                            depth -= 2;
+                            if (depth <= 0) {
+                                return true;
+                            }
+                        } else if (text == ")") {
+                            return false;
+                        }
+                    }
                 }
             }
         }
@@ -2294,6 +2316,7 @@ private:
         }
         std::size_t index = position_ + 1;
         int depth = 1;
+        int parentheses = 0;
         while (index < tokens_.size() && depth > 0) {
             const std::string& text = tokens_[index].text;
             if (text == "<") {
@@ -2302,7 +2325,16 @@ private:
                 --depth;
             } else if (text == ">>") {
                 depth -= 2;
-            } else if (text == ";" || text == "{" || text == "}") {
+            } else if (text == "(") {
+                ++parentheses;
+            } else if (text == ")") {
+                if (parentheses == 0) {
+                    return false;
+                }
+                --parentheses;
+            } else if (text == ";" || text == "{" || text == "}" ||
+                       (parentheses == 0 && (text == "&&" || text == "||" ||
+                                             text == "?" || text == "="))) {
                 return false;
             }
             ++index;

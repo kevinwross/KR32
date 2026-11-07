@@ -462,6 +462,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    std::string banana(\"banana\");\n"
         "    bool less = apple < banana;\n"
         "    if (!less) return 18;\n"
+        "    if (!(apple < banana)) return 21;\n"
+        "    if (!(banana > apple)) return 22;\n"
         "    bool c_string_less_equal = apple <= \"apple\";\n"
         "    if (!c_string_less_equal) return 19;\n"
         "    bool reverse = \"banana\" <= apple;\n"
