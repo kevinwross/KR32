@@ -1633,12 +1633,28 @@ private:
         if (match(";")) {
             return;
         }
-        const std::string name = parse_name();
-        if (match("(")) {
-            parse_function(type, name);
-            return;
+        TypePtr base_type = type;
+        while (base_type->kind == Type::Kind::Pointer) {
+            base_type = base_type->element();
         }
-        parse_global(type, name, is_extern);
+        bool first_declarator = true;
+        while (true) {
+            TypePtr actual = first_declarator ? type : base_type;
+            while (match("*")) {
+                actual = type_pointer(actual);
+            }
+            const std::string name = parse_name();
+            if (first_declarator && match("(")) {
+                parse_function(actual, name);
+                return;
+            }
+            first_declarator = false;
+            parse_global(actual, name, is_extern, false);
+            if (!match(",")) {
+                break;
+            }
+        }
+        expect(";");
     }
 
     void write_global_scalar(std::vector<std::uint8_t>& bytes, int offset,
@@ -1761,7 +1777,8 @@ private:
         parse_global_scalar(type, bytes, offset);
     }
 
-    void parse_global(const TypePtr& type, const std::string& name, bool is_extern) {
+    void parse_global(const TypePtr& type, const std::string& name, bool is_extern,
+                      bool expect_semicolon = true) {
         TypePtr actual = parse_array_suffix(type);
         if (match("=")) {
             if (actual->kind == Type::Kind::Array ||
@@ -1770,7 +1787,7 @@ private:
                 std::vector<std::uint8_t> bytes(
                     static_cast<std::size_t>(std::max(1, actual->size())), 0);
                 parse_global_initializer(actual, bytes, 0);
-                expect(";");
+                if (expect_semicolon) expect(";");
                 data_ += ".align " + std::to_string(std::max(1, actual->alignment())) + "\n";
                 data_ += ".global " + name + "\n" + name + ":\n";
                 for (std::uint8_t byte : bytes) {
@@ -1803,7 +1820,7 @@ private:
                     data_ += low;
                     data_ += high;
                 }
-                expect(";");
+                if (expect_semicolon) expect(";");
             } else {
                 if (peek().kind != TokenKind::Number && peek().kind != TokenKind::Character) {
                     error("global initializer must be a constant");
@@ -1825,10 +1842,10 @@ private:
                 } else {
                     data_ += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
                 }
-                expect(";");
+                if (expect_semicolon) expect(";");
             }
         } else {
-            expect(";");
+            if (expect_semicolon) expect(";");
             if (!is_extern) {
                 bss_ += ".global " + name + "\n" + name + ":\n";
                 if (actual->kind == Type::Kind::Double) {

@@ -123,6 +123,12 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(pointers.ok);
     CHECK(pointers.result == 0);
+
+    const ProgramResult globals = compile_and_run(
+        "int a = 1, b = 2;\n"
+        "int main(void) { return a + b - 3; }\n");
+    CHECK(globals.ok);
+    CHECK(globals.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
