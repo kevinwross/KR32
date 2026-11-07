@@ -1390,6 +1390,28 @@ private:
         }
     }
 
+    TypePtr qualify_self_type(const TypePtr& type, ClassInfo* owner) {
+        if (!type || type->kind != TypeKind::Named || owner == nullptr ||
+            type->name.parts.size() != 1) {
+            return type;
+        }
+        const std::string& qualified = owner->qualified;
+        const std::string& name = type->name.parts[0];
+        const bool self =
+            qualified == name ||
+            (qualified.size() > name.size() + 2 &&
+             qualified.compare(qualified.size() - name.size(), name.size(),
+                               name) == 0 &&
+             qualified[qualified.size() - name.size() - 2] == ':' &&
+             qualified[qualified.size() - name.size() - 1] == ':');
+        if (!self) {
+            return type;
+        }
+        auto copy = std::make_shared<Type>(*type);
+        copy->name.parts = split_qualified(qualified);
+        return copy;
+    }
+
     Function* collect_function(const Decl& declaration, const std::string& prefix) {
         if (!declaration.owner_template_arguments.empty() &&
             declaration.name.parts.size() > 1) {
@@ -1463,9 +1485,11 @@ private:
         function->member_name = base_name;
         function->result = (constructor || destructor)
                                ? Type::make_builtin(BuiltinKind::Void)
-                               : resolve_type(declaration.type);
+                               : resolve_type(
+                                     qualify_self_type(declaration.type, owner));
         for (const Param& parameter : declaration.parameters) {
-            function->parameters.push_back(decay(resolve_type(parameter.type)));
+            function->parameters.push_back(decay(resolve_type(
+                qualify_self_type(parameter.type, owner))));
         }
         if (owner && (constructor || destructor)) {
             function->symbol = mangle_member(owner->qualified, base_name,
@@ -2407,6 +2431,11 @@ private:
                 parameter = parameter->element;
             }
             if (same_type(decay(parameter), decay(argument))) {
+                return candidate;
+            }
+            ClassInfo* parameter_class = class_of(parameter);
+            if (parameter_class != nullptr &&
+                parameter_class == class_of(argument)) {
                 return candidate;
             }
         }

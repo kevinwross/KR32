@@ -835,7 +835,7 @@ private:
                     "        data_[size_] = 0;\n"
                     "        return *this;\n"
                     "    }\n"
-                    "    string& operator+=(const std::string& other) {\n"
+                    "    string& operator+=(const string& other) {\n"
                     "        int length = other.size_;\n"
                     "        char* next = (char*)realloc(data_, size_ + length + 1);\n"
                     "        if (next == 0) return *this;\n"

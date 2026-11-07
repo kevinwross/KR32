@@ -509,6 +509,29 @@ TEST_CASE("const member overloads are distinct and selectable") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("namespace classes resolve unqualified self parameters") {
+    const ProgramResult program = compile_and_run(
+        "namespace outer {\n"
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Number(int input) : value(input) {}\n"
+        "    Number& operator+=(const Number& other) {\n"
+        "        value = value + other.value;\n"
+        "        return *this;\n"
+        "    }\n"
+        "};\n"
+        "}\n"
+        "int main() {\n"
+        "    outer::Number left(1);\n"
+        "    outer::Number right(2);\n"
+        "    left += right;\n"
+        "    return left.value - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("standard iostream manipulators set the output base") {
     const ProgramResult program = compile_and_run(
         "#include <iostream>\n"
