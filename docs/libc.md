@@ -5,7 +5,8 @@ dynamic linking. Both the C and C++ front ends compile to the same `.k32`
 object/executable model and link the **same** C runtime/libc: C++ `new`/`delete`
 lower to `malloc`/`free`, and C++ code can include the same C headers
 (`<stdio.h>`, `<stdlib.h>`, `<string.h>`, `<math.h>`, `<stddef.h>`,
-`<stdint.h>`, `<stdbool.h>`, `<limits.h>`, `<ctype.h>`, `<assert.h>`) through
+`<stdint.h>`, `<stdbool.h>`, `<limits.h>`, `<ctype.h>`, `<assert.h>`,
+`<time.h>`) through
 the freestanding C++ preprocessor and call the C functions directly. Every C
 executable built with `kr32 build` receives:
 
@@ -31,6 +32,7 @@ source line numbers and debugger line mappings are preserved.
 | `<stdint.h>` | `int8_t` through `uint64_t`, `intptr_t`, `uintptr_t`, and limit macros |
 | `<ctype.h>` | Character classification and `tolower`/`toupper` |
 | `<assert.h>` | `assert` macro and assertion-failure reporting |
+| `<time.h>` | `time_t`, `time`, `difftime` |
 | `<stdbool.h>` | `bool`, `true`, `false` |
 | `<limits.h>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append`, `clear` |

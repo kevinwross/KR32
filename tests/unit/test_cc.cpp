@@ -67,6 +67,10 @@ ProgramResult compile_and_run(std::string_view source) {
             current.halt(current.reg(0));
             return true;
         }
+        if (vector == 40) {
+            current.set_reg(0, 1'700'000'000U);
+            return true;
+        }
         if (vector == 42) {
             current.set_reg(0, 0);
             return true;
@@ -238,6 +242,19 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(numeric_conversions.ok);
     CHECK(numeric_conversions.result == 0);
+
+    const ProgramResult time_header = compile_and_run(
+        "#include <time.h>\n"
+        "int main(void) {\n"
+        "    time_t stored = 0;\n"
+        "    time_t now = time(&stored);\n"
+        "    if (now <= 0) return 1;\n"
+        "    if (stored != now) return 2;\n"
+        "    if (difftime(10.0, 4.0) != 6.0) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(time_header.ok);
+    CHECK(time_header.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {

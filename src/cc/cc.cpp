@@ -442,6 +442,11 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
                     macros["R_OK"] = "4";
+                } else if (directive.find("time.h") != std::string::npos) {
+                    result +=
+                        "typedef int time_t; "
+                        "time_t time(time_t *result); "
+                        "double difftime(double later, double earlier);";
                 } else if (directive.find("assert.h") != std::string::npos) {
                     result += "int __kr32_assert_fail(void); ";
                     function_macros["assert"] =

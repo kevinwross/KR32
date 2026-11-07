@@ -4,6 +4,7 @@
 
 long strtol(const char *text, char **end, int base);
 long atol(const char *text);
+int sys_time(void);
 
 int putchar(int c);
 int getchar(void);
@@ -2930,4 +2931,16 @@ double atof(const char *text) {
         }
     }
     return negative ? -value : value;
+}
+
+int time(int *result) {
+    int value = sys_time();
+    if (result != 0) {
+        *result = value;
+    }
+    return value;
+}
+
+double difftime(double later, double earlier) {
+    return later - earlier;
 }
