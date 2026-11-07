@@ -2861,7 +2861,22 @@ private:
         } else if (type->kind == Type::Kind::Double) {
             emit("    FSTORE.D F0, [R1]");
         } else if (type->kind == Type::Kind::Struct || type->kind == Type::Kind::Union) {
-            error("aggregate assignment is not supported yet");
+            const std::string copy = new_label("copyassign");
+            const std::string done = new_label("copyassigndone");
+            emit("    MOV R2, R0");
+            emit("    MOV R3, #" + std::to_string(type->size()));
+            emit(copy + ":");
+            emit("    CMP R3, #0");
+            emit("    JZ " + done);
+            emit("    LOAD8U R0, [R2]");
+            emit("    STORE8 R0, [R1]");
+            emit("    ADD R2, R2, #1");
+            emit("    ADD R1, R1, #1");
+            emit("    SUB R3, R3, #1");
+            emit("    JMP " + copy);
+            emit(done + ":");
+        } else if (type->kind == Type::Kind::Array) {
+            error("array assignment is not supported");
         } else {
             emit("    STORE R0, [R1]");
         }
