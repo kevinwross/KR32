@@ -744,6 +744,7 @@ private:
                     "    int length() const { return size_; }\n"
                     "    bool empty() const { return size_ == 0; }\n"
                     "    char& operator[](int index) { return data_[index]; }\n"
+                    "    char operator[](int index) const { return data_[index]; }\n"
                     "    string& operator=(const char* text) {\n"
                     "        int length = 0;\n"
                     "        if (text != 0) { while (text[length] != 0) length = length + 1; }\n"

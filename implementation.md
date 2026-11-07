@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-06 21:01 -08:00
+> **Last updated:** 2026-11-06 21:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -1924,6 +1924,8 @@ Newest entries at the bottom. Use the local time zone.
       pointer declarators (`int *a = ..., *b = ...`).
 - **2026-11-06 21:01 -08:00** — Added multiple declarators at global
       scope (`int a = 1, b = 2;`) with a compiler runtime test.
+- **2026-11-06 21:09 -08:00** — Added const `std::string::operator[]` and
+      extended the string runtime test to const objects.
 
 ## 10. Updating this file
 
