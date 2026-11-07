@@ -159,6 +159,22 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(restrict_parameters.ok);
     CHECK(restrict_parameters.result == 0);
+
+    const ProgramResult string_pointers = compile_and_run(
+        "const char *names[2] = { \"one\", \"two\" };\n"
+        "int main(void) { return names[0][0] - 'o'; }\n");
+    CHECK(string_pointers.ok);
+    CHECK(string_pointers.result == 0);
+
+    const ProgramResult double_pointer = compile_and_run(
+        "int main(void) {\n"
+        "    int value = 4;\n"
+        "    int *pointer = &value;\n"
+        "    int **double_pointer = &pointer;\n"
+        "    return **double_pointer - 4;\n"
+        "}\n");
+    CHECK(double_pointer.ok);
+    CHECK(double_pointer.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {

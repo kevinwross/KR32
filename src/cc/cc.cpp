@@ -1803,7 +1803,35 @@ private:
                       bool expect_semicolon = true) {
         TypePtr actual = parse_array_suffix(type);
         if (match("=")) {
-            if (actual->kind == Type::Kind::Array ||
+            const bool string_pointer_array =
+                actual->kind == Type::Kind::Array && actual->base &&
+                actual->base->is_pointer() && actual->base->element() &&
+                actual->base->element()->kind == Type::Kind::Char;
+            if (string_pointer_array) {
+                data_ += ".align " +
+                         std::to_string(std::max(1, actual->alignment())) + "\n";
+                data_ += ".global " + name + "\n" + name + ":\n";
+                expect("{");
+                while (!match("}")) {
+                    if (peek().kind == TokenKind::String) {
+                        const std::string text = take().text;
+                        const std::string label =
+                            ".Lstr_" + std::to_string(string_counter_++);
+                        rodata_ += label + ":\n    .asciz \"" +
+                                   escape_string(text) + "\"\n";
+                        data_ += "    .word " + label + "\n";
+                    } else {
+                        const std::int64_t value = parse_constant_value();
+                        data_ += "    .word " +
+                                 std::to_string(value & 0xFFFF'FFFFU) + "\n";
+                    }
+                    if (!match(",")) {
+                        expect("}");
+                        break;
+                    }
+                }
+                if (expect_semicolon) expect(";");
+            } else if (actual->kind == Type::Kind::Array ||
                 actual->kind == Type::Kind::Struct ||
                 actual->kind == Type::Kind::Union) {
                 std::vector<std::uint8_t> bytes(
@@ -3286,6 +3314,10 @@ private:
                 emit("    ADD R0, R1, R0");
                 type = type->element();
                 address = true;
+                if (type->kind == Type::Kind::Pointer &&
+                    (peek().text == "[" || peek().text == "->")) {
+                    emit("    LOAD R0, [R0]");
+                }
                 continue;
             }
             if (match(".")) {
