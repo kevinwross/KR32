@@ -442,6 +442,48 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     macros["X_OK"] = "1";
                     macros["W_OK"] = "2";
                     macros["R_OK"] = "4";
+                } else if (directive.find("stdint.h") != std::string::npos) {
+                    result +=
+                        "typedef signed char int8_t; "
+                        "typedef unsigned char uint8_t; "
+                        "typedef short int16_t; "
+                        "typedef unsigned short uint16_t; "
+                        "typedef int int32_t; "
+                        "typedef unsigned int uint32_t; "
+                        "typedef long long int64_t; "
+                        "typedef unsigned long long uint64_t; "
+                        "typedef int intptr_t; "
+                        "typedef unsigned int uintptr_t;";
+                    macros["INT8_MIN"] = "(-128)";
+                    macros["INT8_MAX"] = "127";
+                    macros["UINT8_MAX"] = "255";
+                    macros["INT16_MIN"] = "(-32768)";
+                    macros["INT16_MAX"] = "32767";
+                    macros["UINT16_MAX"] = "65535";
+                    macros["INT32_MIN"] = "(-2147483647 - 1)";
+                    macros["INT32_MAX"] = "2147483647";
+                    macros["UINT32_MAX"] = "0xFFFFFFFFU";
+                    macros["INTPTR_MIN"] = "(-2147483647 - 1)";
+                    macros["INTPTR_MAX"] = "2147483647";
+                    macros["UINTPTR_MAX"] = "0xFFFFFFFFU";
+                } else if (directive.find("stdbool.h") != std::string::npos) {
+                    result += "typedef _Bool bool; ";
+                    macros["true"] = "1";
+                    macros["false"] = "0";
+                } else if (directive.find("limits.h") != std::string::npos) {
+                    macros["CHAR_BIT"] = "8";
+                    macros["SCHAR_MIN"] = "(-128)";
+                    macros["SCHAR_MAX"] = "127";
+                    macros["UCHAR_MAX"] = "255";
+                    macros["SHRT_MIN"] = "(-32768)";
+                    macros["SHRT_MAX"] = "32767";
+                    macros["USHRT_MAX"] = "65535";
+                    macros["INT_MIN"] = "(-2147483647 - 1)";
+                    macros["INT_MAX"] = "2147483647";
+                    macros["UINT_MAX"] = "0xFFFFFFFFU";
+                    macros["LONG_MIN"] = "(-2147483647 - 1)";
+                    macros["LONG_MAX"] = "2147483647";
+                    macros["ULONG_MAX"] = "0xFFFFFFFFU";
                 } else if (directive.find("sys/stat.h") != std::string::npos) {
                     result +=
                         "struct stat { unsigned int st_size; unsigned int st_mode; "

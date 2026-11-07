@@ -182,6 +182,23 @@ TEST_CASE("C local declarations support multiple declarators") {
         "}\n");
     CHECK(double_pointer.ok);
     CHECK(double_pointer.result == 0);
+
+    const ProgramResult standard_headers = compile_and_run(
+        "#include <stdint.h>\n"
+        "#include <stdbool.h>\n"
+        "#include <limits.h>\n"
+        "int main(void) {\n"
+        "    uint32_t value = UINT32_MAX;\n"
+        "    int8_t small = INT8_MAX;\n"
+        "    bool flag = true;\n"
+        "    if (value != 0xFFFFFFFFU) return 1;\n"
+        "    if (small != 127) return 2;\n"
+        "    if (!flag) return 3;\n"
+        "    if (INT_MAX != 2147483647) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(standard_headers.ok);
+    CHECK(standard_headers.result == 0);
 }
 
 TEST_CASE("a compiled C program links, runs, and returns a value") {
