@@ -138,6 +138,21 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("global unsized arrays infer length and initialize") {
+    const ProgramResult program = compile_and_run(
+        "char text[] = \"abc\";\n"
+        "int values[] = {5, 6, 7};\n"
+        "int main() {\n"
+        "    if (sizeof(text) != 4) return 1;\n"
+        "    if (text[2] != 'c' || text[3] != 0) return 2;\n"
+        "    if (sizeof(values) != 12) return 3;\n"
+        "    if (values[0] != 5 || values[2] != 7) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("unsized arrays infer length from initializer lists") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"

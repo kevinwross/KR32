@@ -1712,6 +1712,25 @@ private:
             error(declaration, "variable templates are not supported");
             return;
         }
+        TypePtr global_type = resolve_type(declaration.type);
+        if (global_type && global_type->kind == TypeKind::Array &&
+            global_type->array_size == 0 && declaration.initializer) {
+            if (declaration.initializer->kind == ExprKind::InitializerList) {
+                auto sized = std::make_shared<Type>(*global_type);
+                sized->array_size = static_cast<std::uint32_t>(
+                    declaration.initializer->children.size());
+                global_type = sized;
+            } else if (declaration.initializer->kind ==
+                           ExprKind::StringLiteral &&
+                       global_type->element &&
+                       global_type->element->kind == TypeKind::Builtin &&
+                       global_type->element->builtin == BuiltinKind::Char) {
+                auto sized = std::make_shared<Type>(*global_type);
+                sized->array_size = static_cast<std::uint32_t>(
+                    declaration.initializer->text.size() + 1);
+                global_type = sized;
+            }
+        }
         auto global = std::make_unique<Global>();
         global->template_static_member = in_template_instantiation_;
         global->decl = &declaration;
@@ -1720,14 +1739,14 @@ private:
         global->is_static = declaration.is_static;
         global->is_thread_local = declaration.is_thread_local;
         if (global->is_thread_local) {
-            const int alignment = std::max(1, type_align(resolve_type(declaration.type)));
+            const int alignment = std::max(1, type_align(global_type));
             tls_cursor_ = (tls_cursor_ + alignment - 1) / alignment * alignment;
             global->tls_offset = tls_cursor_;
-            tls_cursor_ += std::max(1, type_size(resolve_type(declaration.type)));
+            tls_cursor_ += std::max(1, type_size(global_type));
             global->tls_slot_symbol =
                 ".Ltls_slot_" + std::to_string(tls_slot_counter_++);
         }
-        global->type = resolve_type(declaration.type);
+        global->type = global_type;
         if (declaration.name.parts.size() > 1) {
             Name class_name;
             class_name.parts.assign(declaration.name.parts.begin(),
@@ -9909,7 +9928,8 @@ private:
             }
             if (global->initializer && global->type &&
                 global->type->kind == TypeKind::Array &&
-                global->initializer->kind == ExprKind::InitializerList) {
+                (global->initializer->kind == ExprKind::InitializerList ||
+                 global->initializer->kind == ExprKind::StringLiteral)) {
                 std::vector<std::uint8_t> bytes(
                     static_cast<std::size_t>(std::max(1, size)), 0);
                 emit_constant_object(global->type, *global->initializer, bytes, 0);
