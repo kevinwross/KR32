@@ -652,6 +652,7 @@ private:
                         "unsigned long long strtoull(const char* text, char** end, int base);\n"
                         "double strtod(const char* text, char** end);\n"
                         "long labs(long value);\n"
+                        "long long llabs(long long value);\n"
                         "void qsort(void* base, int count, int size,\n"
                         "           int (*compare)(const void*, const void*));\n"
                         "void* bsearch(const void* key, const void* base, int count,\n"
@@ -672,6 +673,7 @@ private:
                         "using ::strtoull;\n"
                         "using ::strtod;\n"
                         "using ::labs;\n"
+                        "using ::llabs;\n"
                         "using ::qsort;\n"
                         "using ::bsearch;\n"
 

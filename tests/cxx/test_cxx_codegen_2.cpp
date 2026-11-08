@@ -196,6 +196,7 @@ TEST_CASE("<cstdlib> converts C strings") {
         "    if (std::atof(\"1e2\") != 100.0) return 11;\n"
         "    if (std::strtoll(\"-123z\", &end, 10) != -123) return 12;\n"
         "    if (std::strtoull(\"123z\", &end, 10) != 123) return 13;\n"
+        "    if (std::llabs(-1234567890123LL) != 1234567890123LL) return 14;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

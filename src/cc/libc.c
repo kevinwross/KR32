@@ -3154,6 +3154,8 @@ int abs(int value) { return value < 0 ? -value : value; }
 
 long labs(long value) { return value < 0 ? -value : value; }
 
+long long llabs(long long value) { return value < 0 ? -value : value; }
+
 static unsigned int rand_state = 1;
 
 void srand(unsigned int seed) { rand_state = seed; }
