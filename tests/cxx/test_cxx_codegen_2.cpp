@@ -289,7 +289,9 @@ TEST_CASE("string constructs from substrings") {
         "    std::string part(text, 1, 3);\n"
         "    if (part != \"ell\") return 1;\n"
         "    std::string tail(text, 3, 100);\n"
-        "    return tail == \"lo\" ? 0 : 2;\n"
+        "    if (tail != \"lo\") return 2;\n"
+        "    std::string direct(\"hello\", 1, 3);\n"
+        "    return direct == \"ell\" ? 0 : 3;\n"
         "}\n");
     INFO(program.diagnostics);
     CHECK(program.ok);
