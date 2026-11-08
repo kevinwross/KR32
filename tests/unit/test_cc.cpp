@@ -1464,6 +1464,17 @@ TEST_CASE("_Alignas may follow the type") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("one-argument static assertions work") {
+    const ProgramResult program = compile_and_run(
+        "_Static_assert(sizeof(int) == 4);\n"
+        "int main(void) {\n"
+        "    _Static_assert(1);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("packed attributes remove struct padding") {
     const ProgramResult program = compile_and_run(
         "struct __attribute__((packed)) Packed { char tag; int value; };\n"

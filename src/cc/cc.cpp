@@ -1814,15 +1814,18 @@ private:
     void parse_static_assert() {
         expect("(");
         const std::int64_t value = constant_expression();
-        expect(",");
-        if (peek().kind != TokenKind::String) {
-            error("expected a static assertion message");
+        std::string message;
+        if (match(",")) {
+            if (peek().kind != TokenKind::String) {
+                error("expected a static assertion message");
+            }
+            message = take().text;
         }
-        const std::string message = take().text;
         expect(")");
         expect(";");
         if (value == 0) {
-            error("static assertion failed: " + message);
+            error(message.empty() ? "static assertion failed"
+                                  : "static assertion failed: " + message);
         }
     }
 

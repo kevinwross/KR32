@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 06:04 -08:00
+> **Last updated:** 2026-11-08 06:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2143,6 +2143,8 @@ Newest entries at the bottom. Use the local time zone.
       `reserve` capacity hint.
 - **2026-11-08 06:04 -08:00** — Accepted `_Alignas` after the declaration
       type for globals, locals, and struct members.
+- **2026-11-08 06:15 -08:00** — Accepted one-argument `_Static_assert`
+      without a message.
 
 ## 10. Updating this file
 
