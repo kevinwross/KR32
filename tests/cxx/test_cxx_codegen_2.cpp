@@ -138,6 +138,20 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string reverse-finds counted C-string ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello world world\");\n"
+        "    if (text.rfind(\"worldXX\", 16, 5) != 12) return 1;\n"
+        "    if (text.rfind(\"worldXX\", 11, 5) != 6) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string finds counted C-string ranges") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
