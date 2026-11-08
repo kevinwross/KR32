@@ -458,6 +458,7 @@ frozen in phase M9.9.
 ### Variadic functions
 
 - Named arguments keep the normal register ABI (`R0..R3` and `F0..F7`).
+  Fixed integer-class arguments beyond `R3` use stack slots before variadic extras.
 - Default argument promotions apply: `float` promotes to `double`, and integer
   types smaller than `int` promote to `int`.
 - Variadic arguments are passed on the stack, in declaration order at

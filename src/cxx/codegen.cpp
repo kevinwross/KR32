@@ -6626,18 +6626,39 @@ private:
             }
             slots.push_back(std::move(slot));
         }
-        if (integer_argument > 4 || fp_argument > 8) {
-            diagnose_once(expression, "too many register arguments");
+        if (fp_argument > 8) {
+            diagnose_once(expression, "too many FP register arguments");
             emit("    MOV R0, #0");
             return resolve_type(function->result);
         }
+        int fixed_stack_slots = 0;
+        int integer_cursor =
+            (member_call ? 1 : 0) + (lambda_closure_offset >= 0 ? 1 : 0);
+        for (const ArgumentSlot& slot : slots) {
+            if (slot.fp) {
+                continue;
+            }
+            int width = 1;
+            if (is_long_long(slot.type) ||
+                (class_of(slot.type) != nullptr &&
+                 is_register_class(class_of(slot.type)) &&
+                 class_of(slot.type)->size > 4)) {
+                width = 2;
+            }
+            if (integer_cursor + width > 4) {
+                ++fixed_stack_slots;
+            }
+            integer_cursor += width;
+        }
+        const int total_stack_slots =
+            fixed_stack_slots + static_cast<int>(stack_temps.size());
         int stack_bytes = 0;
-        if (!stack_temps.empty()) {
-            stack_bytes =
-                static_cast<int>((stack_temps.size() * 8U + 15U) / 16U * 16U);
+        if (total_stack_slots > 0) {
+            stack_bytes = (total_stack_slots * 8 + 15) / 16 * 16;
             emit("    ADJSP #-" + std::to_string(stack_bytes));
             for (std::size_t index = 0; index < stack_temps.size(); ++index) {
-                const int offset = static_cast<int>(index) * 8;
+                const int offset =
+                    (fixed_stack_slots + static_cast<int>(index)) * 8;
                 emit("    LOAD R4, [R7 + " + std::to_string(stack_temps[index]) + "]");
                 emit("    STORE R4, [SP + " + std::to_string(offset) + "]");
                 emit("    LOAD R4, [R7 + " +
@@ -6645,6 +6666,7 @@ private:
                 emit("    STORE R4, [SP + " + std::to_string(offset + 4) + "]");
             }
         }
+        int fixed_stack_index = 0;
         int integer_register = member_call ? 1 : 0;
         int fp_register = 0;
         if (member_call) {
@@ -6692,9 +6714,17 @@ private:
                      ", [R7 + " + std::to_string(slot.offset + 4) + "]");
                 integer_register += 2;
             } else {
-                emit("    LOAD R" + std::to_string(integer_register) + ", [R7 + " +
-                     std::to_string(slot.offset) + "]");
-                ++integer_register;
+                if (integer_register < 4) {
+                    emit("    LOAD R" + std::to_string(integer_register) +
+                         ", [R7 + " + std::to_string(slot.offset) + "]");
+                    ++integer_register;
+                } else {
+                    emit("    LOAD R4, [R7 + " +
+                         std::to_string(slot.offset) + "]");
+                    emit("    STORE R4, [SP + " +
+                         std::to_string(fixed_stack_index * 8) + "]");
+                    ++fixed_stack_index;
+                }
             }
         }
         const TypePtr call_result = resolve_type(function->result);
@@ -8584,8 +8614,15 @@ private:
                     emit("    CALL memcpy");
                     ++integer_argument;
                 } else {
-                    error(parameter.location,
-                          "more than four integer parameters are not supported yet");
+                    const ClassInfo* parameter_class = class_of(local.type);
+                    const int slot = 8 + (integer_argument - 4) * 8;
+                    emit("    LOAD R1, [R7 + " + placeholder + " + " +
+                         std::to_string(slot) + "]");
+                    emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
+                    emit("    MOV R2, #" +
+                         std::to_string(parameter_class->size));
+                    emit("    CALL memcpy");
+                    ++integer_argument;
                 }
             } else if (integer_argument < 4) {
                 if (!saved_integer_arguments.empty()) {
@@ -8600,8 +8637,12 @@ private:
                 }
                 ++integer_argument;
             } else {
-                error(parameter.location,
-                      "more than four integer parameters are not supported yet");
+                const int slot = 8 + (integer_argument - 4) * 8;
+                emit("    LOAD R0, [R7 + " + placeholder + " + " +
+                     std::to_string(slot) + "]");
+                emit("    STORE R0, [R7 + " + std::to_string(local.offset) +
+                     "]");
+                ++integer_argument;
             }
         }
 

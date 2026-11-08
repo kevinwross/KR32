@@ -565,6 +565,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    std::string prefixed_string(\"a\");\n"
         "    prefixed_string.append(other_prefix, 3);\n"
         "    if (prefixed_string != \"abcd\") return 67;\n"
+        "    std::string replaced_prefix(\"abcd\");\n"
+        "    replaced_prefix.replace(1, 2, \"XYZ\", 2);\n"
+        "    if (replaced_prefix != \"aXYd\") return 68;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
@@ -1090,6 +1093,24 @@ TEST_CASE("float return values and float arithmetic run") {
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);
+}
+
+TEST_CASE("fixed stack-passed integer arguments run") {
+    const ProgramResult program = compile_and_run(
+        "int sum5(int a, int b, int c, int d, int e) {\n"
+        "    return a + b + c + d + e;\n"
+        "}\n"
+        "int sum6(int a, int b, int c, int d, int e, int f) {\n"
+        "    return a + b + c + d + e + f;\n"
+        "}\n"
+        "int main() {\n"
+        "    if (sum5(1, 2, 3, 4, 5) != 15) return 1;\n"
+        "    if (sum6(1, 2, 3, 4, 5, 6) != 21) return 2;\n"
+        "    int a = 1; int b = 2; int c = 3; int d = 4; int e = 5;\n"
+        "    return sum5(a, b, c, d, e) - 15;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
 }
 
 TEST_CASE("stack-passed integer varargs and va_list run") {
