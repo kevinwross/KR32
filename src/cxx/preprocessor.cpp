@@ -547,6 +547,31 @@ private:
         }
         if (directive == "include") {
             const std::string header(trim(rest));
+            if (header.find("<utility>") != std::string::npos) {
+                if (!utility_header_injected_) {
+                    utility_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "inline void swap(int& left, int& right) {\n"
+                        "    int temporary = left; left = right; right = temporary;\n"
+                        "}\n"
+                        "inline void swap(unsigned int& left, unsigned int& right) {\n"
+                        "    unsigned int temporary = left;\n"
+                        "    left = right; right = temporary;\n"
+                        "}\n"
+                        "inline void swap(char& left, char& right) {\n"
+                        "    char temporary = left; left = right; right = temporary;\n"
+                        "}\n"
+                        "inline void swap(float& left, float& right) {\n"
+                        "    float temporary = left; left = right; right = temporary;\n"
+                        "}\n"
+                        "inline void swap(double& left, double& right) {\n"
+                        "    double temporary = left; left = right; right = temporary;\n"
+                        "}\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<initializer_list>") != std::string::npos ||
                 header.find("initializer_list") != std::string::npos) {
                 if (!initializer_list_header_injected_) {
@@ -2171,6 +2196,7 @@ private:
     std::vector<Conditional> conditions_;
     bool thread_header_injected_ = false;
     bool initializer_list_header_injected_ = false;
+    bool utility_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;
     std::string logical_file_;

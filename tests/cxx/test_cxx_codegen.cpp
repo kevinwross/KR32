@@ -753,6 +753,25 @@ TEST_CASE("predefined source macros expand") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<utility> provides std::swap") {
+    const ProgramResult program = compile_and_run(
+        "#include <utility>\n"
+        "#include <utility>\n"
+        "int main() {\n"
+        "    int a = 1, b = 2;\n"
+        "    std::swap(a, b);\n"
+        "    if (a != 2 || b != 1) return 1;\n"
+        "    double x = 1.5, y = 2.5;\n"
+        "    std::swap(x, y);\n"
+        "    if (x != 2.5 || y != 1.5) return 2;\n"
+        "    char c = 'a', d = 'b';\n"
+        "    std::swap(c, d);\n"
+        "    return c == 'b' && d == 'a' ? 0 : 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ #line updates source identity") {
     const ProgramResult program = compile_and_run(
         "#line 10 \"custom.cpp\"\n"
