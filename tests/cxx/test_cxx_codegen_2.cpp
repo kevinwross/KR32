@@ -281,6 +281,27 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm unique compacts duplicates") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[6] = { 1, 1, 2, 3, 3, 3 };\n"
+        "    int* end = std::unique(values, values + 6);\n"
+        "    if (end != values + 3) return 1;\n"
+        "    if (values[0] != 1 || values[1] != 2 || values[2] != 3) return 2;\n"
+        "    char text[7] = \"aabbcc\";\n"
+        "    char* tail = std::unique(text, text + 6);\n"
+        "    if (tail != text + 3) return 3;\n"
+        "    if (text[0] != 'a' || text[1] != 'b' || text[2] != 'c') return 4;\n"
+        "    double reals[4] = { 1.5, 1.5, 2.5, 2.5 };\n"
+        "    if (std::unique(reals, reals + 4) != reals + 2) return 5;\n"
+        "    return std::unique(values, values) == values ? 0 : 6;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm binary searches sorted ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
