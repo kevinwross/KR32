@@ -605,6 +605,32 @@ TEST_CASE("conversion operators work in conditions and casts") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("explicit constructors reject implicit conversions") {
+    const cxx::Result implicit = cxx::compile(
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    explicit Number(int input) : value(input) {}\n"
+        "};\n"
+        "int main() { Number value = 5; return value.value; }\n");
+    CHECK_FALSE(implicit.ok);
+
+    const ProgramResult direct = compile_and_run(
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    explicit Number(int input) : value(input) {}\n"
+        "};\n"
+        "int take(Number value) { return value.value; }\n"
+        "int main() {\n"
+        "    Number direct(5);\n"
+        "    if (direct.value != 5) return 1;\n"
+        "    return take(Number(6)) - 6;\n"
+        "}\n");
+    CHECK(direct.ok);
+    CHECK(direct.result == 0);
+}
+
 TEST_CASE("default arguments fill missing call parameters") {
     const ProgramResult program = compile_and_run(
         "int sum(int a, int b = 2, int c = 3) { return a + b + c; }\n"

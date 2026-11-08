@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 21:40 -08:00
+> **Last updated:** 2026-11-07 21:53 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2064,6 +2064,8 @@ Newest entries at the bottom. Use the local time zone.
       type, using an unevaluated control expression.
 - **2026-11-07 21:40 -08:00** — Added C `typeof`/`__typeof__` for type names,
       arrays, and unevaluated expressions.
+- **2026-11-07 21:53 -08:00** — Enforced `explicit` constructors for implicit
+      copy initialization and argument conversions.
 
 ## 10. Updating this file
 

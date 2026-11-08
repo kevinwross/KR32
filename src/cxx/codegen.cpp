@@ -595,6 +595,7 @@ private:
         bool is_static = false;
         bool is_member = false;
         bool is_constructor = false;
+        bool is_explicit = false;
         bool is_destructor = false;
         bool is_virtual = false;
         bool is_pure = false;
@@ -1493,6 +1494,7 @@ private:
         function->owner = owner;
         function->is_member = owner != nullptr && !declaration.is_static;
         function->is_constructor = constructor;
+        function->is_explicit = declaration.is_explicit;
         function->is_destructor = destructor;
         function->is_virtual = declaration.is_virtual || declaration.is_override;
         function->is_pure = declaration.is_pure;
@@ -2437,7 +2439,8 @@ private:
         if (ClassInfo* parameter_class = class_of(param)) {
             if (class_of(arg) == nullptr) {
                 for (Function* constructor : parameter_class->constructors) {
-                    if (constructor->parameters.size() != 1) {
+                    if (constructor->parameters.size() != 1 ||
+                        constructor->is_explicit) {
                         continue;
                     }
                     const int inner = conversion_cost(
@@ -7444,7 +7447,7 @@ private:
         int best_score = -100000;
         const TypePtr argument_type = resolve_type(type_of(argument));
         for (Function* candidate : info->constructors) {
-            if (candidate->parameters.empty()) {
+            if (candidate->parameters.empty() || candidate->is_explicit) {
                 continue;
             }
             bool defaults_ok = true;
