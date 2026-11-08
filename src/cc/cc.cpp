@@ -1427,7 +1427,7 @@ private:
                text == "register" || text == "long" ||
                text == "typeof" || text == "__typeof__" ||
                text == "_Alignas" || text == "_Atomic" || text == "_Noreturn" ||
-               text == "_Thread_local" ||
+               text == "_Thread_local" || text == "_Complex" ||
                typedefs_.find(text) != typedefs_.end();
     }
 
@@ -1920,7 +1920,7 @@ private:
                peek().text == "register" || peek().text == "typedef" ||
                peek().text == "restrict" || peek().text == "inline" ||
                peek().text == "_Atomic" || peek().text == "_Noreturn" ||
-               peek().text == "_Thread_local" ||
+               peek().text == "_Thread_local" || peek().text == "_Complex" ||
                peek().text == "long" || peek().text == "short") {
             const std::string qualifier = take().text;
             if (qualifier == "extern") {

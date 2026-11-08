@@ -169,3 +169,13 @@ TEST_CASE("C accepts _Thread_local declarations") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("C accepts _Complex scalar declarations") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    _Complex double value = 1.0;\n"
+        "    return value == 1.0 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
