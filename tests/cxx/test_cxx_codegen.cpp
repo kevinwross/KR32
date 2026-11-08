@@ -571,6 +571,14 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (repeated.compare(1, 2, \"bcde\", 2) != 0) return 69;\n"
         "    std::string bcde(\"bcde\");\n"
         "    if (repeated.compare(4, 2, bcde, 2) != 0) return 70;\n"
+        "    std::string copy_source(\"y\");\n"
+        "    std::string copy_target(\"x\");\n"
+        "    copy_target = copy_source;\n"
+        "    if (copy_target != \"y\") return 71;\n"
+        "    copy_target.append(\"z\");\n"
+        "    if (copy_source != \"y\") return 72;\n"
+        "    copy_target = copy_target;\n"
+        "    if (copy_target != \"yz\") return 73;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

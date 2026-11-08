@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 03:28 -08:00
+> **Last updated:** 2026-11-08 03:41 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2119,6 +2119,8 @@ Newest entries at the bottom. Use the local time zone.
       `std::string::replace` overloads.
 - **2026-11-08 03:28 -08:00** — Added four-argument `std::string::compare`
       overloads with source counts.
+- **2026-11-08 03:41 -08:00** — Added deep-copy `std::string` copy assignment
+      with self-assignment protection.
 
 ## 10. Updating this file
 
