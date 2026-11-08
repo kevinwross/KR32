@@ -772,6 +772,25 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cctype> exposes character classification") {
+    const ProgramResult program = compile_and_run(
+        "#include <cctype>\n"
+        "#include <cctype>\n"
+        "int main() {\n"
+        "    if (!std::isdigit('5')) return 1;\n"
+        "    if (!std::isalpha('a')) return 2;\n"
+        "    if (!std::isalnum('7')) return 3;\n"
+        "    if (!std::isspace(' ')) return 4;\n"
+        "    if (!std::isupper('A')) return 5;\n"
+        "    if (!std::islower('a')) return 6;\n"
+        "    if (std::toupper('a') != 'A') return 7;\n"
+        "    if (std::tolower('A') != 'a') return 8;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstring> exposes C string helpers") {
     const ProgramResult program = compile_and_run(
         "#include <cstring>\n"

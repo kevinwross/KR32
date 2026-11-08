@@ -654,6 +654,33 @@ private:
                 }
                 return;
             }
+            if (header.find("<cctype>") != std::string::npos) {
+                if (!cctype_header_injected_) {
+                    cctype_header_injected_ = true;
+                    append_line(
+                        "extern \"C\" {\n"
+                        "int isdigit(int character);\n"
+                        "int isalpha(int character);\n"
+                        "int isalnum(int character);\n"
+                        "int isspace(int character);\n"
+                        "int isupper(int character);\n"
+                        "int islower(int character);\n"
+                        "int toupper(int character);\n"
+                        "int tolower(int character);\n"
+                        "}\n"
+                        "namespace std {\n"
+                        "inline int isdigit(int character) { return ::isdigit(character); }\n"
+                        "inline int isalpha(int character) { return ::isalpha(character); }\n"
+                        "inline int isalnum(int character) { return ::isalnum(character); }\n"
+                        "inline int isspace(int character) { return ::isspace(character); }\n"
+                        "inline int isupper(int character) { return ::isupper(character); }\n"
+                        "inline int islower(int character) { return ::islower(character); }\n"
+                        "inline int toupper(int character) { return ::toupper(character); }\n"
+                        "inline int tolower(int character) { return ::tolower(character); }\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<cstring>") != std::string::npos) {
                 if (!cstring_header_injected_) {
                     cstring_header_injected_ = true;
@@ -2335,6 +2362,7 @@ private:
     bool algorithm_header_injected_ = false;
     bool cstdlib_header_injected_ = false;
     bool cstring_header_injected_ = false;
+    bool cctype_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;
