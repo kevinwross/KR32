@@ -1816,7 +1816,34 @@ private:
         if (directive == "warning") {
             return;
         }
-        if (directive == "pragma" || directive == "line") {
+        if (directive == "line") {
+            std::string_view text = trim(rest);
+            int line = 0;
+            std::size_t position = 0;
+            while (position < text.size() &&
+                   std::isdigit(static_cast<unsigned char>(text[position])) != 0) {
+                line = line * 10 + (text[position] - '0');
+                ++position;
+            }
+            if (line > 0) {
+                line_delta_ = line - (line_number + 1);
+            }
+            while (position < text.size() &&
+                   std::isspace(static_cast<unsigned char>(text[position])) != 0) {
+                ++position;
+            }
+            if (position < text.size() && text[position] == '"') {
+                ++position;
+                std::string file;
+                while (position < text.size() && text[position] != '"') {
+                    file.push_back(text[position]);
+                    ++position;
+                }
+                logical_file_ = std::move(file);
+            }
+            return;
+        }
+        if (directive == "pragma") {
             return;
         }
         if (directive.empty()) {
@@ -1972,7 +1999,7 @@ private:
             }
             const std::string name = text.substr(start, index - start);
             if (name == "__LINE__") {
-                result += std::to_string(line_number);
+                result += std::to_string(line_number + line_delta_);
                 continue;
             }
             if (name == "__COUNTER__") {
@@ -1980,7 +2007,10 @@ private:
                 continue;
             }
             if (name == "__FILE__") {
-                result += "\"" + std::string(source_name_) + "\"";
+                result += "\"" +
+                          (logical_file_.empty() ? std::string(source_name_)
+                                                 : logical_file_) +
+                          "\"";
                 continue;
             }
             if (name == "__DATE__") {
@@ -2106,6 +2136,8 @@ private:
     bool thread_header_injected_ = false;
     bool initializer_list_header_injected_ = false;
     int counter_ = 0;
+    int line_delta_ = 0;
+    std::string logical_file_;
 };
 
 } // namespace

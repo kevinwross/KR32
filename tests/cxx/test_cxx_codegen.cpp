@@ -747,6 +747,17 @@ TEST_CASE("predefined source macros expand") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("C++ #line updates source identity") {
+    const ProgramResult program = compile_and_run(
+        "#line 10 \"custom.cpp\"\n"
+        "int main() {\n"
+        "    if (__LINE__ != 11) return 1;\n"
+        "    return __FILE__[0] == 'c' ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ #warning directives are accepted") {
     const ProgramResult program = compile_and_run(
         "#warning this should not stop compilation\n"
