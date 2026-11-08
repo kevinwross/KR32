@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 16:07 -08:00
+> **Last updated:** 2026-11-07 16:23 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2019,6 +2019,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-07 15:56 -08:00** — Added C `__LINE__` and `__FILE__`.
 - **2026-11-07 16:07 -08:00** — Added `__STDC__`, `__STDC_HOSTED__`,
       `__STDC_VERSION__`, `__DATE__`, and `__TIME__`.
+- **2026-11-07 16:23 -08:00** — Added C compound literals and fixed struct/union
+      parameters by using an internal by-reference ABI.
 
 ## 10. Updating this file
 

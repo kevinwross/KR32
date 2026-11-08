@@ -526,6 +526,28 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(aggregate_initializers.result == 0);
 }
 
+TEST_CASE("C supports compound literals and struct parameters") {
+    const ProgramResult compound = compile_and_run(
+        "struct Point { int x; int y; };\n"
+        "int sum(struct Point p) { return p.x + p.y; }\n"
+        "int main(void) {\n"
+        "    struct Point p = (struct Point){2, 3};\n"
+        "    if (sum(p) != 5) return 1;\n"
+        "    if (sum((struct Point){4, 5}) != 9) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(compound.ok);
+    CHECK(compound.result == 0);
+
+    const ProgramResult scalar = compile_and_run(
+        "int main(void) {\n"
+        "    int value = (int){7};\n"
+        "    return value - 7;\n"
+        "}\n");
+    CHECK(scalar.ok);
+    CHECK(scalar.result == 0);
+}
+
 TEST_CASE("a compiled C program links, runs, and returns a value") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"

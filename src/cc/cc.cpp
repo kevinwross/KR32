@@ -1105,6 +1105,7 @@ struct Variable {
     int offset = 0;
     std::string label;
     bool global = false;
+    bool by_reference = false;
 };
 
 struct FunctionSignature {
@@ -2179,9 +2180,14 @@ private:
         int integer_register = 0;
         int fp_register = 0;
         for (std::size_t index = 0; index < parameters.size(); ++index) {
-            const int offset = allocate_local(parameters[index]);
+            const bool aggregate =
+                parameters[index]->kind == Type::Kind::Struct ||
+                parameters[index]->kind == Type::Kind::Union;
+            const int offset =
+                allocate_local(aggregate ? type_int() : parameters[index]);
             locals_.emplace(parameter_names[index],
-                            Variable{parameter_names[index], parameters[index], offset, "", false});
+                            Variable{parameter_names[index], parameters[index],
+                                     offset, "", false, aggregate});
             if (index >= 4) {
                 const std::string stack_slot =
                     "[R7 + __FRAME_" + name + "__ + " +
@@ -2820,6 +2826,8 @@ private:
         }
         if (variable->global) {
             emit("    LEA R0, [" + variable->label + "]");
+        } else if (variable->by_reference) {
+            emit("    LOAD R0, [R7 + " + std::to_string(variable->offset) + "]");
         } else {
             emit("    LEA R0, [R7 + " + std::to_string(variable->offset) + "]");
         }
@@ -4022,6 +4030,25 @@ private:
             if (is_type_start()) {
                 TypePtr target = parse_type();
                 expect(")");
+                if (peek().text == "{") {
+                    if (target->kind == Type::Kind::Struct ||
+                        target->kind == Type::Kind::Union ||
+                        target->kind == Type::Kind::Array) {
+                        const int slot = allocate_local(target);
+                        const int base = allocate_local(type_int());
+                        emit("    LEA R0, [R7 + " + std::to_string(slot) + "]");
+                        emit("    STORE R0, [R7 + " + std::to_string(base) + "]");
+                        gen_zero_object(base, 0, target->size());
+                        gen_initializer_at(target, base, 0);
+                        emit("    LEA R0, [R7 + " + std::to_string(slot) + "]");
+                        return target;
+                    }
+                    expect("{");
+                    TypePtr source = gen_expression();
+                    convert_value(source, target);
+                    expect("}");
+                    return target;
+                }
                 TypePtr source = parse_unary();
                 convert_value(source, target);
                 return target;
