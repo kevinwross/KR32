@@ -654,6 +654,31 @@ private:
                 }
                 return;
             }
+            if (header.find("<climits>") != std::string::npos) {
+                if (!climits_header_injected_) {
+                    climits_header_injected_ = true;
+                    auto define_constant = [this](const char* name,
+                                                  const char* value) {
+                        Macro macro;
+                        macro.body = value;
+                        macros_[name] = std::move(macro);
+                    };
+                    define_constant("CHAR_BIT", "8");
+                    define_constant("SCHAR_MIN", "-128");
+                    define_constant("SCHAR_MAX", "127");
+                    define_constant("UCHAR_MAX", "255");
+                    define_constant("SHRT_MIN", "-32768");
+                    define_constant("SHRT_MAX", "32767");
+                    define_constant("USHRT_MAX", "65535");
+                    define_constant("INT_MIN", "(-2147483647 - 1)");
+                    define_constant("INT_MAX", "2147483647");
+                    define_constant("UINT_MAX", "4294967295");
+                    define_constant("LONG_MIN", "(-2147483647 - 1)");
+                    define_constant("LONG_MAX", "2147483647");
+                    define_constant("ULONG_MAX", "4294967295");
+                }
+                return;
+            }
             if (header.find("<cstdint>") != std::string::npos) {
                 if (!cstdint_header_injected_) {
                     cstdint_header_injected_ = true;
@@ -2395,6 +2420,7 @@ private:
     bool cctype_header_injected_ = false;
     bool cstddef_header_injected_ = false;
     bool cstdint_header_injected_ = false;
+    bool climits_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;

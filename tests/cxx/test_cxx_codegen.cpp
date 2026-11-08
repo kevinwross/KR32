@@ -772,6 +772,25 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<climits> provides integer limits") {
+    const ProgramResult program = compile_and_run(
+        "#include <climits>\n"
+        "#include <climits>\n"
+        "int main() {\n"
+        "    if (CHAR_BIT != 8) return 1;\n"
+        "    if (SCHAR_MIN != -128 || SCHAR_MAX != 127) return 2;\n"
+        "    if (UCHAR_MAX != 255) return 3;\n"
+        "    if (SHRT_MIN != -32768 || SHRT_MAX != 32767) return 4;\n"
+        "    if (USHRT_MAX != 65535) return 5;\n"
+        "    if (INT_MIN != -2147483647 - 1) return 6;\n"
+        "    if (INT_MAX != 2147483647) return 7;\n"
+        "    if (UINT_MAX != 4294967295) return 8;\n"
+        "    return LONG_MAX == 2147483647 ? 0 : 9;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("short types have two-byte layout") {
     const ProgramResult program = compile_and_run(
         "struct Pair { char tag; short value; int next; };\n"
