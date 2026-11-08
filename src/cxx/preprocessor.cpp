@@ -728,6 +728,7 @@ private:
                     "        size_ = length;\n"
                     "    }\n"
                     "public:\n"
+                    "    static const int npos = -1;\n"
                     "    string() { data_ = (char*)malloc(1); size_ = 0; if (data_ != 0) data_[0] = 0; }\n"
                     "    string(const char* text) {\n"
                     "        data_ = 0; size_ = 0;\n"

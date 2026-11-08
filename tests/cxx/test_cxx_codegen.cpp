@@ -515,6 +515,7 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (repeated.rfind(needle, 3) != -1) return 45;\n"
         "    if (repeated.find_first_of(\"cb\", 2) != 2) return 46;\n"
         "    if (repeated.find_last_of(\"cb\", 3) != 2) return 47;\n"
+        "    if (repeated.find(\"zz\") != std::string::npos) return 48;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
