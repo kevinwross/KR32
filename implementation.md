@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 21:16 -08:00
+> **Last updated:** 2026-11-07 21:29 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -412,6 +412,7 @@ M9 C++ work.
 - [x] Preprocessor: object/function macros, `#include`, conditionals, `#error`,
       `#warning`; built-in headers.
 - [x] Lexer, parser, type checker for the M4 subset.
+- [x] C11 `_Static_assert` and `_Generic` type selection.
 - [x] Code generation to KR32 assembly; ILP32 frames (R7 frame pointer) and
       callee-saved frame handling.
 - [x] `crt0`, `putchar`, `exit`, `memcpy`/`memset`/`strlen`; bump allocator.
@@ -2058,6 +2059,8 @@ Newest entries at the bottom. Use the local time zone.
       skipping in declarations, types, and function declarators.
 - **2026-11-07 21:16 -08:00** — Added `std::string::find` overloads with a
       start position for C strings, characters, and strings.
+- **2026-11-07 21:29 -08:00** — Added C11 `_Generic` selection by expression
+      type, using an unevaluated control expression.
 
 ## 10. Updating this file
 

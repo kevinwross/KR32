@@ -4141,7 +4141,81 @@ private:
         return type_int();
     }
 
+    TypePtr parse_generic() {
+        expect("(");
+        const TypePtr control = parse_unevaluated_expression();
+        expect(",");
+        bool selected = false;
+        TypePtr result = type_int();
+        const std::string control_name = type_name(control);
+        while (!at_end()) {
+            bool is_default = false;
+            TypePtr association_type;
+            if (peek().text == "default") {
+                take();
+                is_default = true;
+            } else {
+                association_type = parse_type();
+            }
+            expect(":");
+            if (!selected &&
+                (is_default ||
+                 type_name(association_type) == control_name)) {
+                result = gen_expression();
+                selected = true;
+                int depth = 0;
+                while (!at_end()) {
+                    if (peek().text == "(" || peek().text == "[" ||
+                        peek().text == "{") {
+                        ++depth;
+                    } else if (peek().text == ")") {
+                        if (depth == 0) {
+                            take();
+                            break;
+                        }
+                        --depth;
+                    } else if (peek().text == "]" || peek().text == "}") {
+                        if (depth > 0) {
+                            --depth;
+                        }
+                    }
+                    take();
+                }
+                return result;
+            }
+            int depth = 0;
+            while (!at_end()) {
+                if (depth == 0 &&
+                    (peek().text == "," || peek().text == ")")) {
+                    break;
+                }
+                if (peek().text == "(" || peek().text == "[" ||
+                    peek().text == "{") {
+                    ++depth;
+                } else if (peek().text == ")" || peek().text == "]" ||
+                           peek().text == "}") {
+                    if (depth > 0) {
+                        --depth;
+                    }
+                }
+                take();
+            }
+            if (match(")")) {
+                break;
+            }
+            expect(",");
+        }
+        if (!selected) {
+            error("no matching generic association");
+        }
+        return result;
+    }
+
     TypePtr parse_unary() {
+        if (peek().text == "_Generic") {
+            take();
+            return parse_generic();
+        }
         if (peek().text == "sizeof") {
             take();
             return parse_sizeof(false);
