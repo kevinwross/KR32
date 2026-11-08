@@ -1473,6 +1473,17 @@ TEST_CASE("_Alignas may follow the type") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("#line updates source identity") {
+    const ProgramResult program = compile_and_run(
+        "#line 10 \"custom.c\"\n"
+        "int main(void) {\n"
+        "    if (__LINE__ != 11) return 1;\n"
+        "    return __FILE__[0] == 'c' ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("one-argument static assertions work") {
     const ProgramResult program = compile_and_run(
         "_Static_assert(sizeof(int) == 4);\n"

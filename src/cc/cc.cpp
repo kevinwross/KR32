@@ -743,11 +743,13 @@ struct Token {
     bool is_unsigned = false;
     int line = 1;
     int column = 1;
+    std::string file;
 };
 
 class Lexer {
 public:
-    explicit Lexer(std::string_view source) : source_(source) {}
+    Lexer(std::string_view source, std::string_view file)
+        : source_(source), file_(file) {}
 
     std::vector<Token> tokenize() {
         std::vector<Token> tokens;
@@ -818,6 +820,20 @@ private:
                 line = line * 10 + (directive[position] - '0');
                 ++position;
             }
+            while (position < directive.size() &&
+                   std::isspace(static_cast<unsigned char>(directive[position])) != 0) {
+                ++position;
+            }
+            if (position < directive.size() && directive[position] == '"') {
+                ++position;
+                std::string file;
+                while (position < directive.size() &&
+                       directive[position] != '"') {
+                    file.push_back(directive[position]);
+                    ++position;
+                }
+                file_ = std::move(file);
+            }
             if (line > 0) {
                 line_ = line;
                 column_ = 1;
@@ -830,6 +846,7 @@ private:
         Token token;
         token.line = line_;
         token.column = column_;
+        token.file = file_;
         if (position_ >= source_.size()) {
             token.kind = TokenKind::End;
             return token;
@@ -1001,6 +1018,7 @@ private:
     std::size_t position_ = 0;
     int line_ = 1;
     int column_ = 1;
+    std::string file_;
 };
 
 struct Type;
@@ -1209,7 +1227,8 @@ public:
     Compiler(std::string_view source, std::string_view name, int source_id = 0)
         : source_name_(name), source_id_(source_id),
           tokens_(Lexer(preprocess(source, std::string(name),
-                                    preprocessor_messages_))
+                                    preprocessor_messages_),
+                         name)
                       .tokenize()) {}
 
     Result run() {
@@ -4799,10 +4818,12 @@ private:
             return type_int();
         }
         if (peek().kind == TokenKind::Identifier && peek().text == "__FILE__") {
-            take();
+            const Token token = take();
+            const std::string& file =
+                token.file.empty() ? source_name_ : token.file;
             const std::string label = ".Lstr_" + std::to_string(string_counter_++);
             rodata_ += label + ":\n    .asciz \"" +
-                       escape_string(source_name_) + "\"\n";
+                       escape_string(file) + "\"\n";
             emit("    LEA R0, [" + label + "]");
             bool address = false;
             TypePtr type = apply_postfix(type_pointer(type_char()), address);
