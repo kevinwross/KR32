@@ -281,6 +281,27 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm compares ranges lexicographically") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    char left[3] = \"abc\";\n"
+        "    char right[3] = \"abd\";\n"
+        "    if (!std::lexicographical_compare(left, left + 3, right, right + 3)) return 1;\n"
+        "    if (std::lexicographical_compare(right, right + 3, left, left + 3)) return 2;\n"
+        "    if (std::lexicographical_compare(left, left + 3, left, left + 3)) return 3;\n"
+        "    int shorter[2] = { 1, 2 };\n"
+        "    int longer[3] = { 1, 2, 3 };\n"
+        "    if (!std::lexicographical_compare(shorter, shorter + 2, longer, longer + 3)) return 4;\n"
+        "    double a[2] = { 1.5, 2.5 };\n"
+        "    double b[2] = { 1.5, 3.5 };\n"
+        "    return std::lexicographical_compare(a, a + 2, b, b + 2) ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm finds first matching element") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
