@@ -4227,6 +4227,24 @@ private:
             emit("    LEA R0, [__heap_end]");
             return type_pointer(type_char());
         }
+        if (peek().kind == TokenKind::Identifier && peek().text == "__LINE__") {
+            const Token token = take();
+            emit("    MOV R0, #" + std::to_string(token.line));
+            return type_int();
+        }
+        if (peek().kind == TokenKind::Identifier && peek().text == "__FILE__") {
+            take();
+            const std::string label = ".Lstr_" + std::to_string(string_counter_++);
+            rodata_ += label + ":\n    .asciz \"" +
+                       escape_string(source_name_) + "\"\n";
+            emit("    LEA R0, [" + label + "]");
+            bool address = false;
+            TypePtr type = apply_postfix(type_pointer(type_char()), address);
+            if (address) {
+                gen_load(type);
+            }
+            return type;
+        }
         if (peek().kind == TokenKind::Identifier) {
             const std::string name = take().text;
             if (match("(")) {

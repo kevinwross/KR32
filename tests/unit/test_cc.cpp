@@ -393,6 +393,16 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(function_name.ok);
     CHECK(function_name.result == 0);
 
+    const ProgramResult source_identity = compile_and_run(
+        "int main(void) {\n"
+        "    int line = __LINE__;\n"
+        "    if (line != 2) return 1;\n"
+        "    if (__FILE__[0] == 0) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(source_identity.ok);
+    CHECK(source_identity.result == 0);
+
     const ProgramResult bounded_strings = compile_and_run(
         "#include <string.h>\n"
         "#include <stdlib.h>\n"
