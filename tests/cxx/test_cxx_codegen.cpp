@@ -867,6 +867,32 @@ TEST_CASE("<cstddef> provides size types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cstring> exposes extended helpers") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstring>\n"
+        "int main() {\n"
+        "    char buffer[32];\n"
+        "    std::memset(buffer, 0, 32);\n"
+        "    std::strcpy(buffer, \"hello\");\n"
+        "    std::strncat(buffer, \" world\", 3);\n"
+        "    if (std::strcmp(buffer, \"hello wo\") != 0) return 1;\n"
+        "    if (std::strrchr(buffer, 'o') == 0) return 2;\n"
+        "    char copy[32];\n"
+        "    std::memmove(copy, buffer, 9);\n"
+        "    if (std::memcmp(copy, buffer, 9) != 0) return 3;\n"
+        "    if (std::memchr(buffer, 'w', 9) == 0) return 4;\n"
+        "    char text[16];\n"
+        "    std::strcpy(text, \"a,b,c\");\n"
+        "    char* token = std::strtok(text, \",\");\n"
+        "    if (token == 0 || token[0] != 'a') return 5;\n"
+        "    char* duplicate = std::strdup(\"copy\");\n"
+        "    if (std::strcmp(duplicate, \"copy\") != 0) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cctype> exposes character classification") {
     const ProgramResult program = compile_and_run(
         "#include <cctype>\n"

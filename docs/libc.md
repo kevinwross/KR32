@@ -40,7 +40,7 @@ source line numbers and debugger line mappings are preserved.
 | `<algorithm>` | `std::min`/`std::max` for integer, character, and floating-point types |
 | `<cmath>` | `std::abs`, `std::sqrt`, `std::fabs` (including `float` forms) |
 | `<cstdlib>` | `std::atoi`, `std::atof` |
-| `<cstring>` | `std::strlen`, `strcpy`, `strncpy`, `strcat`, `strcmp`, `strncmp`, `strchr`, `strstr`, `memcpy`, `memset`, `memcmp` |
+| `<cstring>` | `std::strlen`, `strcpy`, `strncpy`, `strcat`, `strncat`, `strcmp`, `strncmp`, `strchr`, `strrchr`, `strstr`, `strtok`, `strdup`, `memcpy`, `memmove`, `memset`, `memcmp`, `memchr` |
 | `<cctype>` | `std::isdigit`, `isalpha`, `isalnum`, `isspace`, `isupper`, `islower`, `toupper`, `tolower` |
 | `<cstddef>` | `std::size_t`, `std::ptrdiff_t` |
 | `<cstdint>` | `std::int8_t` through `std::uint64_t`, `intptr_t`, `uintptr_t` |
