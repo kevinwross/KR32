@@ -579,6 +579,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (copy_source != \"y\") return 72;\n"
         "    copy_target = copy_target;\n"
         "    if (copy_target != \"yz\") return 73;\n"
+        "    if (repeated.compare(1, 2, \"XXbcde\", 2, 2) != 0) return 74;\n"
+        "    std::string deep_compare(\"XXbcde\");\n"
+        "    if (repeated.compare(4, 2, deep_compare, 2, 2) != 0) return 75;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
