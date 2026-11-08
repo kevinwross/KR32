@@ -152,3 +152,12 @@ TEST_CASE("C accepts _Atomic(type) declarations") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("C accepts _Noreturn function declarations") {
+    const ProgramResult program = compile_and_run(
+        "_Noreturn void stop(void);\n"
+        "void stop(void) { for (;;) { } }\n"
+        "int main() { return 0; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
