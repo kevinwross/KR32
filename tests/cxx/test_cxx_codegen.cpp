@@ -586,6 +586,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (spaced.find_last_not_of(' ', 4) != 4) return 77;\n"
         "    if (spaced.find_first_not_of(spaces, 1) != 2) return 78;\n"
         "    if (spaced.find_last_not_of(spaces, 4) != 4) return 79;\n"
+        "    std::string prefix_ctor(\"abcdef\", 3);\n"
+        "    if (prefix_ctor != \"abc\") return 80;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
