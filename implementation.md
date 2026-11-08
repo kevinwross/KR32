@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 22:56 -08:00
+> **Last updated:** 2026-11-07 23:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2076,6 +2076,8 @@ Newest entries at the bottom. Use the local time zone.
       variables, permitting in-place element updates.
 - **2026-11-07 22:56 -08:00** — Added `std::string` concatenation with
       characters on either side.
+- **2026-11-07 23:09 -08:00** — Added start-position overloads for string
+      `rfind`, `find_first_of`, and `find_last_of`.
 
 ## 10. Updating this file
 
