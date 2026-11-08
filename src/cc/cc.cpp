@@ -1105,7 +1105,6 @@ struct Variable {
     int offset = 0;
     std::string label;
     bool global = false;
-    bool by_reference = false;
 };
 
 struct FunctionSignature {
@@ -2183,11 +2182,10 @@ private:
             const bool aggregate =
                 parameters[index]->kind == Type::Kind::Struct ||
                 parameters[index]->kind == Type::Kind::Union;
-            const int offset =
-                allocate_local(aggregate ? type_int() : parameters[index]);
+            const int offset = allocate_local(parameters[index]);
             locals_.emplace(parameter_names[index],
                             Variable{parameter_names[index], parameters[index],
-                                     offset, "", false, aggregate});
+                                     offset, "", false});
             if (index >= 4) {
                 const std::string stack_slot =
                     "[R7 + __FRAME_" + name + "__ + " +
@@ -2207,7 +2205,11 @@ private:
                     emit("    STORE R1, [R7 + " + std::to_string(offset + 4) + "]");
                 } else {
                     emit("    LOAD R0, " + stack_slot);
-                    emit("    STORE R0, [R7 + " + std::to_string(offset) + "]");
+                    if (aggregate) {
+                        gen_copy_to_local(offset, parameters[index]->size());
+                    } else {
+                        emit("    STORE R0, [R7 + " + std::to_string(offset) + "]");
+                    }
                 }
             } else if (is_fp_type(parameters[index])) {
                 emit(std::string("    FSTORE") +
@@ -2225,6 +2227,9 @@ private:
                 } else {
                     error("long long parameter needs two integer registers");
                 }
+            } else if (aggregate) {
+                gen_copy_to_local(offset, parameters[index]->size());
+                ++integer_register;
             } else {
                 emit("    STORE R" + std::to_string(integer_register) +
                      ", [R7 + " + std::to_string(offset) + "]");
@@ -2519,6 +2524,24 @@ private:
             emit("    STORE8 R0, [R1]");
             ++cursor;
         }
+    }
+
+    void gen_copy_to_local(int offset, int size) {
+        const std::string copy = new_label("paramcopy");
+        const std::string done = new_label("paramcopydone");
+        emit("    MOV R2, R0");
+        emit("    LEA R1, [R7 + " + std::to_string(offset) + "]");
+        emit("    MOV R3, #" + std::to_string(size));
+        emit(copy + ":");
+        emit("    CMP R3, #0");
+        emit("    JZ " + done);
+        emit("    LOAD8U R0, [R2]");
+        emit("    STORE8 R0, [R1]");
+        emit("    ADD R2, R2, #1");
+        emit("    ADD R1, R1, #1");
+        emit("    SUB R3, R3, #1");
+        emit("    JMP " + copy);
+        emit(done + ":");
     }
 
     void gen_initializer_at(const TypePtr& type, int base_slot, int offset) {
@@ -2826,8 +2849,6 @@ private:
         }
         if (variable->global) {
             emit("    LEA R0, [" + variable->label + "]");
-        } else if (variable->by_reference) {
-            emit("    LOAD R0, [R7 + " + std::to_string(variable->offset) + "]");
         } else {
             emit("    LEA R0, [R7 + " + std::to_string(variable->offset) + "]");
         }

@@ -530,10 +530,13 @@ TEST_CASE("C supports compound literals and struct parameters") {
     const ProgramResult compound = compile_and_run(
         "struct Point { int x; int y; };\n"
         "int sum(struct Point p) { return p.x + p.y; }\n"
+        "int mutate(struct Point p) { p.x = 99; return p.x; }\n"
         "int main(void) {\n"
         "    struct Point p = (struct Point){2, 3};\n"
         "    if (sum(p) != 5) return 1;\n"
         "    if (sum((struct Point){4, 5}) != 9) return 2;\n"
+        "    if (mutate(p) != 99) return 3;\n"
+        "    if (p.x != 2) return 4;\n"
         "    return 0;\n"
         "}\n");
     CHECK(compound.ok);
