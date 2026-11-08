@@ -666,6 +666,23 @@ private:
                 }
                 return;
             }
+            if (header.find("<ctime>") != std::string::npos) {
+                if (!ctime_header_injected_) {
+                    ctime_header_injected_ = true;
+                    append_line(
+                        "typedef int time_t;\n"
+                        "extern \"C\" {\n"
+                        "time_t time(time_t* result);\n"
+                        "double difftime(double later, double earlier);\n"
+                        "}\n"
+                        "namespace std {\n"
+                        "typedef ::time_t time_t;\n"
+                        "using ::time;\n"
+                        "using ::difftime;\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<cstdio>") != std::string::npos) {
                 if (!cstdio_header_injected_) {
                     cstdio_header_injected_ = true;
@@ -2502,6 +2519,7 @@ private:
     bool climits_header_injected_ = false;
     bool cfloat_header_injected_ = false;
     bool cstdio_header_injected_ = false;
+    bool ctime_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;

@@ -47,6 +47,7 @@ source line numbers and debugger line mappings are preserved.
 | `<climits>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<cfloat>` | `FLT_`/`DBL_` limits, epsilon, digits, and mantissa bits |
 | `<cstdio>` | `std::printf`, `sprintf`, `snprintf`, `puts`, `putchar`, `getchar` |
+| `<ctime>` | `std::time_t`, `std::time`, `std::difftime` |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
 | `<unistd.h>` | `access`, `isatty`, `truncate`, `fsync`, `fdatasync`, `getcwd`, `chdir`, `dup`, `dup2` |

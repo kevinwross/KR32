@@ -867,6 +867,17 @@ TEST_CASE("<cstddef> provides size types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<ctime> provides time functions") {
+    const ProgramResult program = compile_and_run(
+        "#include <ctime>\n"
+        "#include <ctime>\n"
+        "int main() {\n"
+        "    return sizeof(std::time_t) == 4 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstdlib> allocates memory") {
     const ProgramResult program = compile_and_run(
         "#include <cstdlib>\n"
