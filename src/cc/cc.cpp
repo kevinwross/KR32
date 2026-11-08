@@ -1426,7 +1426,7 @@ private:
                text == "static" || text == "extern" || text == "volatile" ||
                text == "register" || text == "long" ||
                text == "typeof" || text == "__typeof__" ||
-               text == "_Alignas" ||
+               text == "_Alignas" || text == "_Atomic" ||
                typedefs_.find(text) != typedefs_.end();
     }
 

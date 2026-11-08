@@ -131,3 +131,14 @@ TEST_CASE("C supports long double as a double-width type") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("C accepts _Atomic scalar declarations") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    _Atomic int value = 1;\n"
+        "    value = value + 1;\n"
+        "    return value == 2 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
