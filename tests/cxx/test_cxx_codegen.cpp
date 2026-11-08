@@ -547,6 +547,11 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (assigned_text != \"xy\") return 59;\n"
         "    assigned_text.assign(\"hello\", 3);\n"
         "    if (assigned_text != \"hel\") return 60;\n"
+        "    std::string spaced(\"  abc  \");\n"
+        "    if (spaced.find_first_not_of(' ') != 2) return 61;\n"
+        "    if (spaced.find_last_not_of(' ') != 4) return 62;\n"
+        "    std::string spaces(\" \");\n"
+        "    if (spaced.find_first_not_of(spaces) != 2) return 63;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
