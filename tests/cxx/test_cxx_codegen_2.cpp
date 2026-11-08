@@ -138,6 +138,18 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("64-bit unary minus carries into the high word") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 1234567890123LL;\n"
+        "    if (-value != -1234567890123LL) return 1;\n"
+        "    if ((int)((-value) >> 32) != -288) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("64-bit returns preserve the high word") {
     const ProgramResult program = compile_and_run(
         "long long make() { return -123; }\n"

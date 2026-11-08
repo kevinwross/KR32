@@ -5424,6 +5424,16 @@ private:
                 emit(borrow_done + ":");
                 emit("    SUB R1, R1, R5");
                 emit("    SUB R1, R1, R6");
+            } else if (is_long_long(operand_type)) {
+                const std::string skip = new_label("llneg");
+                emit("    NEG R0, R0");
+                emit("    MOV R2, #0");
+                emit("    CMP R0, #0");
+                emit("    JNZ " + skip);
+                emit("    MOV R2, #1");
+                emit(skip + ":");
+                emit("    NOT R1, R1");
+                emit("    ADD R1, R1, R2");
             } else {
                 emit("    NEG R0, R0");
             }
