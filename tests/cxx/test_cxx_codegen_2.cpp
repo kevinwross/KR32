@@ -138,6 +138,26 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("enums expose integer constants and scoped names") {
+    const ProgramResult program = compile_and_run(
+        "enum Color { Red, Green = 4, Blue };\n"
+        "enum class Mode { Off, On };\n"
+        "int main() {\n"
+        "    if (Red != 0 || Green != 4 || Blue != 5) return 1;\n"
+        "    Color color = Blue;\n"
+        "    if (color != Blue) return 2;\n"
+        "    Mode mode = Mode::On;\n"
+        "    switch (mode) {\n"
+        "    case Mode::Off: return 3;\n"
+        "    case Mode::On: break;\n"
+        "    default: return 4;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("global unsized arrays infer length and initialize") {
     const ProgramResult program = compile_and_run(
         "char text[] = \"abc\";\n"

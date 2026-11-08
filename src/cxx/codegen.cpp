@@ -1417,8 +1417,7 @@ private:
                                       qualify(prefix, declaration->name));
                 break;
             case DeclKind::Enum:
-                error(*declaration,
-                      "enums are not supported until a later M9 phase");
+                collect_enum(*declaration, prefix);
                 break;
             case DeclKind::Parameter:
             case DeclKind::Access:
@@ -1695,6 +1694,31 @@ private:
         }
     }
 
+    void collect_enum(const Decl& declaration, const std::string& prefix) {
+        std::int64_t next = 0;
+        const std::string enum_name = qualify(prefix, declaration.name);
+        for (const EnumMember& member : declaration.enum_members) {
+            std::int64_t value = next;
+            if (member.value) {
+                std::int64_t evaluated = 0;
+                if (eval_const(*member.value, evaluated)) {
+                    value = evaluated;
+                }
+            }
+            next = value + 1;
+            const std::string member_name = qualify(prefix, member.name);
+            enum_constants_[member_name] = value;
+            if (!enum_name.empty()) {
+                enum_constants_[enum_name + "::" +
+                                member.name.to_string()] = value;
+            }
+        }
+        if (!declaration.name.parts.empty()) {
+            type_aliases_[enum_name] =
+                Type::make_builtin(BuiltinKind::Int);
+        }
+    }
+
     void collect_global(const Decl& declaration, const std::string& prefix) {
         if (declaration.is_template) {            if (!declaration.owner_template_arguments.empty() &&
                 declaration.name.parts.size() > 1) {
@@ -1816,6 +1840,23 @@ private:
             local_destructors_.pop_back();
         }
         local_scopes_.pop_back();
+    }
+
+    bool lookup_enum_constant(const Name& name, std::int64_t& value) const {
+        const std::string plain = name.to_string();
+        auto found = enum_constants_.find(plain);
+        if (found != enum_constants_.end()) {
+            value = found->second;
+            return true;
+        }
+        if (!current_prefix_.empty()) {
+            found = enum_constants_.find(current_prefix_ + "::" + plain);
+            if (found != enum_constants_.end()) {
+                value = found->second;
+                return true;
+            }
+        }
+        return false;
     }
 
     Local* lookup_local(const Name& name) {
@@ -2175,6 +2216,10 @@ private:
                         find_member(current_class_, expression.name.parts[0])) {
                     return member->type;
                 }
+            }
+            std::int64_t enum_value = 0;
+            if (lookup_enum_constant(expression.name, enum_value)) {
+                return Type::make_builtin(BuiltinKind::Int);
             }
             if (const std::vector<Function*> functions =
                     lookup_functions(expression.name, current_prefix_);
@@ -3410,6 +3455,8 @@ private:
             }
             return false;
         }
+        case ExprKind::Name:
+            return lookup_enum_constant(expression.name, value);
         default:
             return false;
         }
@@ -5044,6 +5091,11 @@ private:
                     }
                     return member->type;
                 }
+            }
+            std::int64_t enum_value = 0;
+            if (lookup_enum_constant(expression.name, enum_value)) {
+                emit("    MOV R0, #" + std::to_string(enum_value));
+                return Type::make_builtin(BuiltinKind::Int);
             }
             if (const std::vector<Function*> functions =
                     lookup_functions(expression.name, current_prefix_);
@@ -10061,6 +10113,7 @@ private:
     std::vector<std::shared_ptr<Decl>> template_instantiation_decls_;
     std::vector<std::unique_ptr<Global>> global_storage_;
     std::map<std::string, Global*> global_index_;
+    std::map<std::string, std::int64_t> enum_constants_;
     int tls_cursor_ = 0;
     std::vector<std::uint8_t> tls_image_;
     struct TlsSymbol {
