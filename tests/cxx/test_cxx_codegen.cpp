@@ -558,6 +558,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    std::string prefix_append(\"a\");\n"
         "    prefix_append.append(\"bcdef\", 3);\n"
         "    if (prefix_append != \"abcd\") return 65;\n"
+        "    std::string inserted_prefix(\"abcd\");\n"
+        "    inserted_prefix.insert(1, \"XYZ\", 2);\n"
+        "    if (inserted_prefix != \"aXYbcd\") return 66;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
