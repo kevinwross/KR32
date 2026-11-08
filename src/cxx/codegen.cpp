@@ -2462,10 +2462,13 @@ private:
         }
         if (param->kind == TypeKind::LValueRef ||
             param->kind == TypeKind::RValueRef) {
-            if (!argument_is_lvalue && param->kind == TypeKind::LValueRef) {
+            const TypePtr element = resolve_type(param->element);
+            const bool binds_temporary =
+                element != nullptr && element->is_const;
+            if (!argument_is_lvalue && param->kind == TypeKind::LValueRef &&
+                !binds_temporary) {
                 return 100;
             }
-            const TypePtr element = resolve_type(param->element);
             if (same_type(arg, element)) {
                 return 0;
             }

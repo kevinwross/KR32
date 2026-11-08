@@ -248,6 +248,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (std::stod(\"2.5y\") != 2.5) return 53;\n"
         "    if (std::stof(\"1.5\") != 1.5f) return 54;\n"
         "    if (std::stold(\"2.5\") != 2.5L) return 55;\n"
+        "    std::string phrase(\"hello world\");\n"
+        "    if (phrase.compare(6, 5, std::string(\"world\")) != 0) return 56;\n"
         "    std::string resized(\"hello\");\n"
         "    resized.resize(3);\n"
         "    if (resized != \"hel\") return 12;\n"
