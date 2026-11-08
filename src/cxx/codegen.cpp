@@ -1304,6 +1304,15 @@ private:
             type->kind == TypeKind::RValueRef || type->kind == TypeKind::Array) {
             auto copy = std::make_shared<Type>(*type);
             copy->element = resolve_type(type->element);
+            if (type->kind == TypeKind::Array && type->array_size == 0 &&
+                type->array_bound_expression) {
+                std::int64_t value = 0;
+                const std::map<std::string, TypePtr> no_bindings;
+                if (eval_array_bound_expression(type->array_bound_expression,
+                                                no_bindings, value)) {
+                    copy->array_size = static_cast<std::uint32_t>(value);
+                }
+            }
             return copy;
         }
         return type;

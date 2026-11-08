@@ -5,6 +5,7 @@
 
 #include <algorithm>
 #include <cstdint>
+#include <map>
 #include <memory>
 #include <string>
 #include <string_view>
@@ -941,9 +942,26 @@ private:
             return node;
         }
         if (peek().kind == TokenKind::Identifier) {
-            node->op = ArrayBoundExpr::Op::Name;
-            node->name = peek().text;
+            std::string name = peek().text;
             advance();
+            while (consume("::")) {
+                name += "::" + peek().text;
+                advance();
+            }
+            auto constant = enum_values_.find(name);
+            if (constant == enum_values_.end()) {
+                const std::size_t separator = name.rfind("::");
+                if (separator != std::string::npos) {
+                    constant = enum_values_.find(name.substr(separator + 2));
+                }
+            }
+            if (constant != enum_values_.end()) {
+                node->op = ArrayBoundExpr::Op::Value;
+                node->value = constant->second;
+            } else {
+                node->op = ArrayBoundExpr::Op::Name;
+                node->name = name;
+            }
             return node;
         }
         error(peek(), "expected array bound expression");
@@ -1704,10 +1722,20 @@ private:
         expect("}", "to close enum body");
         if (!declaration->name.parts.empty()) {
             const std::string enum_name = declaration->name.to_string();
+            std::int64_t next = 0;
             for (const EnumMember& member : declaration->enum_members) {
+                std::int64_t value = next;
+                if (member.value &&
+                    member.value->kind == ExprKind::IntegerLiteral) {
+                    value = member.value->integer;
+                }
+                next = value + 1;
                 enum_constants_.insert(enum_name + "::" +
                                        member.name.to_string());
                 enum_constants_.insert(member.name.to_string());
+                enum_values_[enum_name + "::" + member.name.to_string()] =
+                    value;
+                enum_values_[member.name.to_string()] = value;
             }
         }
         return declaration;
@@ -2595,6 +2623,7 @@ private:
     std::vector<Name> current_bases_;
     std::unordered_set<std::string> known_types_;
     std::unordered_set<std::string> enum_constants_;
+    std::map<std::string, std::int64_t> enum_values_;
     std::vector<DeclPtr> pending_definitions_;
 };
 
