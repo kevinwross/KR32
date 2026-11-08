@@ -4988,9 +4988,9 @@ private:
                 const int object = allocate_local(target);
                 if (ClassInfo* source_info = class_of(source)) {
                     if (source_info != target_info) {
-                        error(expression.location,
-                              "cast between different class types is not supported");
-                        zero_object(object, target_info->size);
+                        construct_object_from_expression(
+                            target_info, object, *expression.children[0],
+                            false, true);
                     } else {
                         gen_expr(*expression.children[0]);
                         emit("    MOV R1, R0");

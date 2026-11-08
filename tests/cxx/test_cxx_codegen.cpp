@@ -706,6 +706,23 @@ TEST_CASE("alignas raises class size and alignment") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("C-style casts convert between class types") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int value;\n"
+        "    Target(const Source& source) : value(source.value + 1) {}\n"
+        "};\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target target = (Target)source;\n"
+        "    return target.value - 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C-style casts construct class temporaries") {
     const ProgramResult program = compile_and_run(
         "class Number {\n"
