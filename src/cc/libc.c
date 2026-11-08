@@ -3134,6 +3134,14 @@ double strtod(const char *text, char **end) {
     return negative ? -value : value;
 }
 
+float strtof(const char *text, char **end) {
+    return (float)strtod(text, end);
+}
+
+double strtold(const char *text, char **end) {
+    return strtod(text, end);
+}
+
 double atof(const char *text) {
     return strtod(text, (char **)0);
 }
