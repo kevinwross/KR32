@@ -1270,7 +1270,9 @@ private:
                     "    }\n"
 
                     "    char& front() { return data_[0]; }\n"
+                    "    const char& front() const { return data_[0]; }\n"
                     "    char& back() { return data_[size_ - 1]; }\n"
+                    "    const char& back() const { return data_[size_ - 1]; }\n"
                     "    char* begin() { return data_; }\n"
                     "    char* end() { return data_ + size_; }\n"
                     "    const char* begin() const { return data_; }\n"

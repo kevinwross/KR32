@@ -281,6 +281,20 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("const strings expose front and back") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    const std::string text(\"abc\");\n"
+        "    if (text.front() != 'a') return 1;\n"
+        "    if (text.back() != 'c') return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string assigns repeated characters") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
