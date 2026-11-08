@@ -281,6 +281,31 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm computes symmetric difference") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int left[3] = { 1, 3, 5 };\n"
+        "    int right[3] = { 2, 3, 6 };\n"
+        "    int output[4] = { 0, 0, 0, 0 };\n"
+        "    int* end = std::set_symmetric_difference(left, left + 3, right, right + 3, output);\n"
+        "    if (end != output + 4) return 1;\n"
+        "    if (output[0] != 1 || output[1] != 2 || output[2] != 5 || output[3] != 6) return 2;\n"
+        "    char a[3] = \"ace\";\n"
+        "    char b[3] = \"bcd\";\n"
+        "    char letters[6] = { 0, 0, 0, 0, 0, 0 };\n"
+        "    if (std::set_symmetric_difference(a, a + 3, b, b + 3, letters) != letters + 4) return 3;\n"
+        "    if (letters[0] != 'a' || letters[1] != 'b' || letters[2] != 'd' || letters[3] != 'e') return 4;\n"
+        "    double x[2] = { 1.5, 3.5 };\n"
+        "    double y[2] = { 2.5, 3.5 };\n"
+        "    double z[4] = { 0.0, 0.0, 0.0, 0.0 };\n"
+        "    return std::set_symmetric_difference(x, x + 2, y, y + 2, z) == z + 2 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm computes sorted difference") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
