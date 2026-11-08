@@ -772,6 +772,25 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cfloat> provides floating limits") {
+    const ProgramResult program = compile_and_run(
+        "#include <cfloat>\n"
+        "#include <cfloat>\n"
+        "int main() {\n"
+        "    if (FLT_DIG != 6 || DBL_DIG != 15) return 1;\n"
+        "    if (FLT_MANT_DIG != 24 || DBL_MANT_DIG != 53) return 2;\n"
+        "    float max = FLT_MAX;\n"
+        "    double dmax = DBL_MAX;\n"
+        "    if (!(max > 0.0f)) return 3;\n"
+        "    if (!(dmax > 1.0)) return 4;\n"
+        "    if (!(FLT_MIN > 0.0f)) return 5;\n"
+        "    if (!(DBL_MIN > 0.0)) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<climits> provides integer limits") {
     const ProgramResult program = compile_and_run(
         "#include <climits>\n"

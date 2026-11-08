@@ -654,6 +654,28 @@ private:
                 }
                 return;
             }
+            if (header.find("<cfloat>") != std::string::npos) {
+                if (!cfloat_header_injected_) {
+                    cfloat_header_injected_ = true;
+                    auto define_constant = [this](const char* name,
+                                                  const char* value) {
+                        Macro macro;
+                        macro.body = value;
+                        macros_[name] = std::move(macro);
+                    };
+                    define_constant("FLT_MAX", "3.402823466e+38");
+                    define_constant("FLT_MIN", "1.175494351e-38");
+                    define_constant("FLT_EPSILON", "1.192092896e-07");
+                    define_constant("FLT_DIG", "6");
+                    define_constant("FLT_MANT_DIG", "24");
+                    define_constant("DBL_MAX", "1.7976931348623158e+308");
+                    define_constant("DBL_MIN", "2.2250738585072014e-308");
+                    define_constant("DBL_EPSILON", "2.2204460492503131e-16");
+                    define_constant("DBL_DIG", "15");
+                    define_constant("DBL_MANT_DIG", "53");
+                }
+                return;
+            }
             if (header.find("<climits>") != std::string::npos) {
                 if (!climits_header_injected_) {
                     climits_header_injected_ = true;
@@ -2421,6 +2443,7 @@ private:
     bool cstddef_header_injected_ = false;
     bool cstdint_header_injected_ = false;
     bool climits_header_injected_ = false;
+    bool cfloat_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;
