@@ -89,6 +89,8 @@ ctest --preset linux-asan
 ```
 
 `KR32_BUILD_UI=OFF` removes SDL2 from the build; the CLI and tests still run.
+`KR32_EMBED_OS=OFF` builds without the embedded KR32OS images and requires
+explicit `--os`/`--bios` paths.
 
 ## Commands
 
@@ -116,7 +118,7 @@ kr32 build examples/balanced-tree.cpp -o build/balanced-tree.k32 --run
 kr32 build examples/FileOpen.cpp -o build/FileOpen.k32 --run
 kr32 gui examples/libc-test.c
 kr32 os
-kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+kr32 os kr32os/build/windows/kernel.bin --bios kr32os/build/windows/bios.bin
 kr32 gui --os
 kr32 dis demo.bin
 kr32 run examples/demo.asm
@@ -144,8 +146,14 @@ assembly or an object. `build` runs compile/assemble, link, and optional
 `.debug_info` records. `gui` opens the source/disassembly debugger or renders
 headless PPM
 screenshots. `os` boots a flat KR32OS kernel at `0x00020000` with a BIOS and
-resolves the default artifacts from `KR32OS_BIN`, `KR32OS_BIOS`, or the
-`kr32os/build` directory. `shell` runs tool commands interactively or from
+resolves the default artifacts from `KR32OS_BIN`, `KR32OS_BIOS`, the
+platform-specific `kr32os/build/<platform>` directory, or the embedded
+BIOS/kernel pair. Windows and Linux builds keep separate OS outputs so their
+debug source paths do not overwrite each other. After changing KR32OS, run
+`scripts/update-os.ps1` (Windows) or `scripts/update-os.sh` (Linux) to rebuild
+the OS, refresh the checked-in `.k32` pair under `src/resources/os/<platform>`,
+and incrementally relink `kr32`. `shell` runs tool commands interactively or
+from
 piped input, and
 `dap` exposes the debugger to DAP clients. `cxx` compiles a C++ source to
 assembly or an object, and `build file.cpp` compiles, links the shared

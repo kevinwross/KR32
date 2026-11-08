@@ -376,7 +376,7 @@ void print_help() {
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
         "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n"
-        "Options for os:  --bios <rom> --max-steps <n> --ram-size <n> --trace --stats "
+        "Options for os:  --embedded --bios <rom> --max-steps <n> --ram-size <n> --trace --stats "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n");
 }
 
@@ -389,7 +389,7 @@ void print_dis_usage() {
 }
 
 void print_vm_usage() {
-    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--os [kernel.bin]] [--base <addr>] "
+    std::printf("Usage: kr32 vm <file> [--bios <rom>] [--os [kernel.bin]] [--embedded] [--base <addr>] "
                 "[--max-steps <n>] [--ram-size <n>] [--trace] [--stats] "
                 "[--fs-root <dir>] [--read-only] [--quota <bytes>] [--arg <value>] "
                 "[--input <text>]\n");
@@ -1208,6 +1208,7 @@ int command_vm(int argc, char** argv) {
     bool trace = false;
     bool stats = false;
     bool os_mode = false;
+    bool embedded_images = false;
     std::string serial_input;
     vm::HostOptions host_options;
 #ifdef KR32_HAS_UI
@@ -1261,6 +1262,10 @@ int command_vm(int argc, char** argv) {
             }
             continue;
         }
+        if (argument == "--embedded") {
+            embedded_images = true;
+            continue;
+        }
         if (argument == "--bios") {
             if (index + 1 >= argc) {
                 std::fprintf(stderr, "kr32 vm: --bios needs a path\n");
@@ -1294,6 +1299,11 @@ int command_vm(int argc, char** argv) {
         program = std::string(argument);
     }
 
+    if (embedded_images && !os_mode) {
+        std::fprintf(stderr, "kr32 vm: --embedded requires --os\n");
+        return 2;
+    }
+
     if (os_mode) {
         if (os_path.empty() && !program.empty()) {
             os_path = program;
@@ -1305,20 +1315,27 @@ int command_vm(int argc, char** argv) {
         }
         os::ImagePaths paths;
         std::string resolve_error;
-        if (!os::resolve(argv[0], os_path, bios, paths, resolve_error)) {
+        if (!os::resolve(argv[0], os_path, bios, paths, resolve_error,
+                         embedded_images)) {
             std::fprintf(stderr, "kr32 os: %s\n", resolve_error.c_str());
             return 1;
         }
         std::vector<std::uint8_t> kernel;
         std::vector<std::uint8_t> rom;
         std::string error;
-        if (!read_file(paths.kernel, kernel, error)) {
-            std::fprintf(stderr, "kr32 os: %s\n", error.c_str());
-            return 1;
-        }
-        if (!read_file(paths.bios, rom, error)) {
-            std::fprintf(stderr, "kr32 os: %s\n", error.c_str());
-            return 1;
+        if (paths.embedded) {
+            const os::EmbeddedOs& images = os::embedded_os();
+            kernel.assign(images.kernel.begin(), images.kernel.end());
+            rom.assign(images.bios.begin(), images.bios.end());
+        } else {
+            if (!read_file(paths.kernel, kernel, error)) {
+                std::fprintf(stderr, "kr32 os: %s\n", error.c_str());
+                return 1;
+            }
+            if (!read_file(paths.bios, rom, error)) {
+                std::fprintf(stderr, "kr32 os: %s\n", error.c_str());
+                return 1;
+            }
         }
         core::Machine machine(core::Machine::Options{ram_size});
         const auto is_container = [](const std::vector<std::uint8_t>& bytes) {
@@ -1411,7 +1428,15 @@ int command_vm(int argc, char** argv) {
         devices.attach_machine(machine);
         machine.attach_devices(&devices);
         devices.serial().push_input(serial_input);
-        std::printf("os: %s\nbios: %s\n", paths.kernel.c_str(), paths.bios.c_str());
+        if (paths.embedded) {
+            std::printf("os: embedded kernel (%.*s)\nbios: embedded (%.*s)\n",
+                        static_cast<int>(os::embedded_os().build_id.size()),
+                        os::embedded_os().build_id.data(),
+                        static_cast<int>(os::embedded_os().build_id.size()),
+                        os::embedded_os().build_id.data());
+        } else {
+            std::printf("os: %s\nbios: %s\n", paths.kernel.c_str(), paths.bios.c_str());
+        }
         return run_machine(machine, max_steps, trace, stats, host_options, true,
                            &devices);
     }

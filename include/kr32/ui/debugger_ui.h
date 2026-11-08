@@ -19,6 +19,11 @@ public:
     [[nodiscard]] bool load_os(const std::string& kernel_path,
                                const std::string& bios_path,
                                std::string& error);
+    [[nodiscard]] bool load_os_memory(const std::vector<std::uint8_t>& kernel,
+                                      const std::vector<std::uint8_t>& bios,
+                                      const std::string& kernel_name,
+                                      const std::string& bios_name,
+                                      std::string& error);
     void show_error(std::string message);
     void restart();
     void run();
@@ -120,6 +125,7 @@ private:
     [[nodiscard]] int current_source_line() const;
     [[nodiscard]] bool source_line_to_address(int line, std::uint32_t& address) const;
     void load_source_files();
+    [[nodiscard]] bool reload_os(std::string& error);
     void ensure_source_for_current();
     [[nodiscard]] std::string source_path_for(int source_id) const;
 
@@ -242,6 +248,7 @@ private:
     std::uint64_t continuous_remaining_ = 0;
     int hover_settings_control_ = -1;
     bool os_mode_ = false;
+    bool os_embedded_ = false;
     std::string bios_path_;
     core::DeviceBus devices_;
     std::string serial_text_;

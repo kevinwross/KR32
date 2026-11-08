@@ -4,13 +4,13 @@ Build KR32OS. The default tool path is the debug host build; pass -Kr32 to
 select another kr32 executable.
 #>
 param(
-    [string]$Kr32 = ""
+    [string]$Kr32 = "",
+    [string]$Out = ""
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
 $root = Split-Path -Parent $here
-$build = Join-Path $here 'build'
 
 if (-not $Kr32) {
     $Kr32 = $env:KR32
@@ -38,7 +38,9 @@ if (-not $Kr32 -or -not (Test-Path -LiteralPath $Kr32)) {
     throw 'kr32 was not found; pass -Kr32 <path> or set KR32.'
 }
 $Kr32 = (Resolve-Path -LiteralPath $Kr32).Path
-$build = Join-Path $here 'build'
+if (-not $Out) { $Out = $env:KR32OS_BUILD_DIR }
+if (-not $Out) { $Out = Join-Path $here 'build\windows' }
+$build = $Out
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
 function Invoke-Kr32 {

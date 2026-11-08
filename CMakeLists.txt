@@ -5,6 +5,7 @@ project(KR32 VERSION 0.1.0 LANGUAGES CXX)
 option(KR32_BUILD_UI "Build the SDL2 windowed debugger" ON)
 option(KR32_BUILD_TESTS "Build tests" ON)
 option(KR32_BUILD_CXX_TOOL "Build the standalone kr32-cxx C++ driver" ON)
+option(KR32_EMBED_OS "Embed the default KR32OS BIOS and kernel" ON)
 option(KR32_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 option(KR32_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
@@ -102,6 +103,47 @@ if(WIN32)
     target_link_libraries(kr32_dap PUBLIC ws2_32)
 endif()
 
+if(WIN32)
+    set(KR32_OS_PLATFORM "windows")
+elseif(APPLE)
+    set(KR32_OS_PLATFORM "macos")
+else()
+    set(KR32_OS_PLATFORM "linux")
+endif()
+set(KR32_OS_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/os/${KR32_OS_PLATFORM}")
+if(KR32_EMBED_OS AND NOT EXISTS "${KR32_OS_RESOURCE_DIR}/kernel.k32")
+    message(FATAL_ERROR
+        "No embedded KR32OS images for ${KR32_OS_PLATFORM}: "
+        "${KR32_OS_RESOURCE_DIR}/kernel.k32 is missing. "
+        "Run scripts/update-os.ps1 or scripts/update-os.sh.")
+endif()
+set(KR32_EMBEDDED_OS_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/os")
+set(KR32_EMBEDDED_OS_SOURCE "${KR32_EMBEDDED_OS_DIR}/embedded_os.cpp")
+file(MAKE_DIRECTORY "${KR32_EMBEDDED_OS_DIR}")
+
+add_executable(kr32_embed_os tools/embed_os/main.cpp)
+target_compile_features(kr32_embed_os PRIVATE cxx_std_20)
+
+set(KR32_EMBED_OS_ARGS --output "${KR32_EMBEDDED_OS_SOURCE}")
+set(KR32_EMBED_OS_DEPENDS kr32_embed_os)
+if(KR32_EMBED_OS)
+    list(APPEND KR32_EMBED_OS_ARGS
+        --bios "${KR32_OS_RESOURCE_DIR}/bios.k32"
+        --kernel "${KR32_OS_RESOURCE_DIR}/kernel.k32")
+    list(APPEND KR32_EMBED_OS_DEPENDS
+        "${KR32_OS_RESOURCE_DIR}/bios.k32"
+        "${KR32_OS_RESOURCE_DIR}/kernel.k32")
+else()
+    list(APPEND KR32_EMBED_OS_ARGS --empty)
+endif()
+add_custom_command(
+    OUTPUT "${KR32_EMBEDDED_OS_SOURCE}"
+    COMMAND kr32_embed_os ${KR32_EMBED_OS_ARGS}
+    DEPENDS ${KR32_EMBED_OS_DEPENDS}
+    COMMENT "Generating embedded KR32OS images"
+    VERBATIM)
+kr32_add_library(kr32_os_images "${KR32_EMBEDDED_OS_SOURCE}")
+
 if(KR32_BUILD_UI)
     find_package(SDL2 CONFIG QUIET)
     if(SDL2_FOUND AND TARGET SDL2::SDL2)
@@ -126,7 +168,7 @@ if(KR32_BUILD_UI)
         src/ui/help.cpp src/resources/embedded_fonts.cpp)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
-        kr32_core kr32_cc kr32_cxx kr32_asm kr32_link)
+        kr32_core kr32_cc kr32_cxx kr32_asm kr32_link kr32_os_images)
 endif()
 
 kr32_add_library(kr32_cli src/cli/cli.cpp)
@@ -140,7 +182,8 @@ target_link_libraries(kr32_cli PUBLIC
     kr32_dis
     kr32_debug
     kr32_vm
-    kr32_dap)
+    kr32_dap
+    kr32_os_images)
 
 if(KR32_BUILD_UI)
     target_link_libraries(kr32_cli PUBLIC kr32_ui)

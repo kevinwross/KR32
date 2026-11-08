@@ -13,14 +13,20 @@ else()
                 bash "${SOURCE_DIR}/kr32os/build.sh"
         RESULT_VARIABLE _build_result)
 endif()
+if(WIN32)
+    set(_osdir "${SOURCE_DIR}/kr32os/build/windows")
+else()
+    set(_osdir "${SOURCE_DIR}/kr32os/build/linux")
+endif()
+
 if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR "KR32OS M3 build failed")
 endif()
 
 set(_fault_input "crash\n")
 execute_process(
-    COMMAND "${KR32}" os "${SOURCE_DIR}/kr32os/build/kernel.bin"
-            --bios "${SOURCE_DIR}/kr32os/build/bios.bin"
+    COMMAND "${KR32}" os "${_osdir}/kernel.bin"
+            --bios "${_osdir}/bios.bin"
             --serial-input "${_fault_input}"
     OUTPUT_VARIABLE _fault_output
     RESULT_VARIABLE _fault_result)
@@ -37,8 +43,8 @@ foreach(_index RANGE 1 100)
 endforeach()
 string(APPEND _timer_input "mem\nexit\n")
 execute_process(
-    COMMAND "${KR32}" os "${SOURCE_DIR}/kr32os/build/kernel.bin"
-            --bios "${SOURCE_DIR}/kr32os/build/bios.bin"
+    COMMAND "${KR32}" os "${_osdir}/kernel.bin"
+            --bios "${_osdir}/bios.bin"
             --serial-input "${_timer_input}"
     OUTPUT_VARIABLE _timer_output
     RESULT_VARIABLE _timer_result)

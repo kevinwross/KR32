@@ -217,7 +217,7 @@ Acceptance:
 
 ```text
 kr32os/build.ps1
-kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+kr32 os kr32os/build/windows/kernel.bin --bios kr32os/build/windows/bios.bin
 HALTED exit=0
 ```
 

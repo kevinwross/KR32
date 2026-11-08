@@ -33,6 +33,12 @@ bash kr32os/build.sh
 Both scripts accept `KR32` through the environment; `build.ps1` also accepts
 `-Kr32 <path>`. The default is the host Debug build.
 
+Windows writes to `kr32os/build/windows`; WSL/Linux writes to
+`kr32os/build/linux`. Keeping them separate prevents a Linux test build from
+overwriting Windows `.k32` files and their Windows debug source paths. Both
+scripts also accept `KR32OS_BUILD_DIR`; `build.ps1` additionally accepts
+`-Out <dir>`.
+
 The build emits:
 
 - `bios.bin` / `kernel.bin` — boot images loaded at `0xFFFF_0000` and
@@ -52,25 +58,25 @@ the assembly source pane.
 The `.k32` images are also accepted:
 
 ```text
-kr32 gui --os kr32os/build/kernel.k32 --bios kr32os/build/bios.k32
+kr32 gui --os kr32os/build/windows/kernel.k32 --bios kr32os/build/windows/bios.k32
 ```
 
 Run:
 
 ```text
-kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin
+kr32 os kr32os/build/windows/kernel.bin --bios kr32os/build/windows/bios.bin
 ```
 
 The `.k32` pair is accepted by `os` as well:
 
 ```text
-kr32 os kr32os/build/kernel.k32 --bios kr32os/build/bios.k32
+kr32 os kr32os/build/windows/kernel.k32 --bios kr32os/build/windows/bios.k32
 ```
 
 For a scripted session:
 
 ```text
-kr32 os kr32os/build/kernel.bin --bios kr32os/build/bios.bin \
+kr32 os kr32os/build/windows/kernel.bin --bios kr32os/build/windows/bios.bin \
     --serial-input "ls
 run init
 exit

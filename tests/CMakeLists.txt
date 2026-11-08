@@ -13,6 +13,7 @@ add_executable(kr32_tests
     unit/test_linker.cpp
     unit/test_cc.cpp
     unit/test_debug.cpp
+    unit/test_embedded_os.cpp
     unit/test_host.cpp
     unit/test_threads.cpp
     unit/test_assembler.cpp
@@ -32,7 +33,10 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_cxx
     kr32_debug
     kr32_vm
+    kr32_os_images
     kr32_warnings)
+target_compile_definitions(kr32_tests PRIVATE
+    KR32_HAS_EMBEDDED_OS=$<BOOL:${KR32_EMBED_OS}>)
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_include_directories(kr32_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
@@ -149,6 +153,14 @@ add_test(NAME run_os_smoke
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsSmoke.cmake)
+
+if(KR32_EMBED_OS)
+    add_test(NAME run_os_embedded
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunOsEmbedded.cmake)
+endif()
 
 add_test(NAME run_os_boot
     COMMAND ${CMAKE_COMMAND}

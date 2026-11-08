@@ -602,9 +602,11 @@ kr32 gui --os
 ```
 
 The default kernel is resolved from `KR32OS_BIN`, then `kr32os.bin` next to the
-executable, then `kr32os/build/kernel.bin` or `kr32os/build/kr32os.bin` in the
-current directory, then an installed `share/kr32` directory. The BIOS defaults
-to `KR32OS_BIOS`, the kernel's sibling `bios.bin`, or the same locations.
+executable, then `kr32os/build/<platform>/kernel.k32` or `kernel.bin` in the
+current directory, then an installed `share/kr32` directory, and finally the
+embedded kernel/BIOS pair compiled into `kr32`. The BIOS defaults to
+`KR32OS_BIOS`, the kernel's sibling `bios.k32`/`bios.bin`, or the same
+locations.
 
 ## Follow-up design questions
 

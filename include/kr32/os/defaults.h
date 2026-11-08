@@ -1,5 +1,7 @@
 #pragma once
 
+#include "kr32/os/embedded_os.h"
+
 #include <cstdlib>
 #include <filesystem>
 #include <string>
@@ -12,6 +14,7 @@ namespace kr32::os {
 struct ImagePaths {
     std::string kernel;
     std::string bios;
+    bool embedded = false;
 };
 
 namespace detail {
@@ -29,6 +32,16 @@ inline std::string environment(const char* name) {
 #else
     const char* value = std::getenv(name);
     return value == nullptr ? std::string() : std::string(value);
+#endif
+}
+
+inline const char* platform_directory() {
+#if defined(_WIN32)
+    return "windows";
+#elif defined(__APPLE__)
+    return "macos";
+#else
+    return "linux";
 #endif
 }
 
@@ -69,16 +82,34 @@ inline std::string find_existing(
 } // namespace detail
 
 // Resolves an explicit OS image, or searches the conventional development and
-// installation locations. BIOS defaults to the kernel's sibling bios.bin.
+// installation locations. BIOS defaults to a sibling matching the kernel's
+// format, or to the embedded image pair when no files are available.
 inline bool resolve(std::string_view argv0,
                     const std::string& explicit_kernel,
                     const std::string& explicit_bios,
                     ImagePaths& paths,
-                    std::string& error) {
+                    std::string& error,
+                    bool force_embedded = false) {
     paths = {};
     error.clear();
     const std::filesystem::path executable = detail::executable_directory(argv0);
     const std::filesystem::path current = std::filesystem::current_path();
+    const bool embedded_available = embedded_os_available();
+
+    if (force_embedded) {
+        if (!explicit_kernel.empty() || !explicit_bios.empty()) {
+            error = "--embedded cannot be combined with --os or --bios";
+            return false;
+        }
+        if (!embedded_available) {
+            error = "this kr32 build has no embedded KR32OS images";
+            return false;
+        }
+        paths.kernel = "<embedded>";
+        paths.bios = "<embedded>";
+        paths.embedded = true;
+        return true;
+    }
 
     if (!explicit_kernel.empty()) {
         if (!detail::is_file(explicit_kernel)) {
@@ -90,13 +121,25 @@ inline bool resolve(std::string_view argv0,
         std::vector<std::filesystem::path> candidates;
         detail::add_candidate(candidates, detail::environment("KR32OS_BIN"));
         detail::add_candidate(candidates, executable / "kr32os.bin");
+        detail::add_candidate(candidates, current / "kr32os" / "build" /
+                                              detail::platform_directory() /
+                                              "kernel.k32");
+        detail::add_candidate(candidates, current / "kr32os" / "build" /
+                                              detail::platform_directory() /
+                                              "kernel.bin");
         detail::add_candidate(candidates, current / "kr32os" / "build" / "kernel.bin");
         detail::add_candidate(candidates, current / "kr32os" / "build" / "kr32os.bin");
         detail::add_candidate(candidates, executable / ".." / "share" / "kr32" / "kr32os.bin");
         paths.kernel = detail::find_existing(candidates);
         if (paths.kernel.empty()) {
-            error = "cannot find a default KR32OS image; pass --os <kernel.bin> "
-                    "or set KR32OS_BIN";
+            if (embedded_available && explicit_bios.empty()) {
+                paths.kernel = "<embedded>";
+                paths.bios = "<embedded>";
+                paths.embedded = true;
+                return true;
+            }
+            error = "cannot find a default KR32OS image; pass --os <kernel.bin>, "
+                    "set KR32OS_BIN, or use --embedded";
             return false;
         }
     }
@@ -112,15 +155,29 @@ inline bool resolve(std::string_view argv0,
 
     std::vector<std::filesystem::path> bios_candidates;
     detail::add_candidate(bios_candidates, detail::environment("KR32OS_BIOS"));
+    const std::filesystem::path kernel_path(paths.kernel);
+    const bool kernel_is_container = kernel_path.extension() == ".k32";
     detail::add_candidate(
         bios_candidates,
-        std::filesystem::path(paths.kernel).parent_path() / "bios.bin");
+        kernel_path.parent_path() /
+            (kernel_is_container ? "bios.k32" : "bios.bin"));
+    detail::add_candidate(
+        bios_candidates,
+        kernel_path.parent_path() /
+            (kernel_is_container ? "bios.bin" : "bios.k32"));
     detail::add_candidate(bios_candidates, executable / "bios.bin");
+    detail::add_candidate(bios_candidates, current / "kr32os" / "build" /
+                                               detail::platform_directory() /
+                                               "bios.k32");
+    detail::add_candidate(bios_candidates, current / "kr32os" / "build" /
+                                               detail::platform_directory() /
+                                               "bios.bin");
     detail::add_candidate(bios_candidates, current / "kr32os" / "build" / "bios.bin");
     detail::add_candidate(bios_candidates, executable / ".." / "share" / "kr32" / "bios.bin");
     paths.bios = detail::find_existing(bios_candidates);
     if (paths.bios.empty()) {
-        error = "cannot find the KR32OS BIOS; pass --bios <bios.bin> or set KR32OS_BIOS";
+        error = "cannot find the KR32OS BIOS; pass --bios <bios.bin>, set "
+                "KR32OS_BIOS, or use --embedded";
         return false;
     }
     return true;

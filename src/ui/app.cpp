@@ -20,12 +20,25 @@ bool smoke_test() {
     return kr32::platform::smoke_test();
 }
 
+bool load_os_images(DebuggerUI& debugger, const kr32::os::ImagePaths& paths,
+                    std::string& error) {
+    if (!paths.embedded) {
+        return debugger.load_os(paths.kernel, paths.bios, error);
+    }
+    const kr32::os::EmbeddedOs& images = kr32::os::embedded_os();
+    std::vector<std::uint8_t> kernel(images.kernel.begin(), images.kernel.end());
+    std::vector<std::uint8_t> bios(images.bios.begin(), images.bios.end());
+    return debugger.load_os_memory(kernel, bios, "<embedded>", "<embedded>",
+                                   error);
+}
+
 int run(int argc, char** argv) {
     std::string image_path;
     std::string ppm_path;
     std::string os_path;
     std::string bios_path;
     bool os_mode = false;
+    bool embedded_images = false;
     bool headless = false;
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -38,6 +51,10 @@ int run(int argc, char** argv) {
             if (index + 1 < argc && argv[index + 1][0] != '-') {
                 os_path = argv[++index];
             }
+            continue;
+        }
+        if (argument == "--embedded") {
+            embedded_images = true;
             continue;
         }
         if (argument == "--bios") {
@@ -57,7 +74,7 @@ int run(int argc, char** argv) {
         if (argument == "--help" || argument == "-h") {
             std::printf("Usage: kr32 gui <image.k32> [--headless] [--screenshot out.ppm]\n"
                         "       kr32 gui --os [kernel.bin] [--bios bios.bin] "
-                        "[--headless] [--screenshot out.ppm]\n");
+                        "[--embedded] [--headless] [--screenshot out.ppm]\n");
             return 0;
         }
         if (!argument.empty() && argument[0] == '-') {
@@ -70,10 +87,15 @@ int run(int argc, char** argv) {
         std::fprintf(stderr, "kr32 gui: use either --os or an image path\n");
         return 2;
     }
+    if (embedded_images && !os_mode) {
+        std::fprintf(stderr, "kr32 gui: --embedded requires --os\n");
+        return 2;
+    }
     os::ImagePaths paths;
     if (os_mode) {
         std::string error;
-        if (!os::resolve(argv[0], os_path, bios_path, paths, error)) {
+        if (!os::resolve(argv[0], os_path, bios_path, paths, error,
+                         embedded_images)) {
             std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
             return 1;
         }
@@ -87,7 +109,7 @@ int run(int argc, char** argv) {
         DebuggerUI debugger;
         std::string error;
         const bool loaded =
-            os_mode ? debugger.load_os(paths.kernel, paths.bios, error)
+            os_mode ? load_os_images(debugger, paths, error)
                     : debugger.load(image_path, error);
         if (!loaded) {
             std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
@@ -104,7 +126,7 @@ int run(int argc, char** argv) {
     DebuggerUI debugger;
     if (os_mode) {
         std::string error;
-        if (!debugger.load_os(paths.kernel, paths.bios, error)) {
+        if (!load_os_images(debugger, paths, error)) {
             std::fprintf(stderr, "kr32 gui: %s\n", error.c_str());
             debugger.show_error(error);
         }

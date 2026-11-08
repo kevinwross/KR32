@@ -26,6 +26,7 @@
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
 #include "kr32/os/bootinfo.h"
+#include "kr32/os/embedded_os.h"
 #include "kr32/os/kernel_meta.h"
 #include "kr32/os/symbols.h"
 #include "kr32/platform/window.h"
@@ -552,8 +553,7 @@ void DebuggerUI::apply_settings() {
         return;
     }
     std::string error;
-    const bool reloaded = os_mode_ ? load_os(path_, bios_path_, error)
-                                   : load(path_, error);
+    const bool reloaded = os_mode_ ? reload_os(error) : load(path_, error);
     if (!reloaded) {
         settings_error_ = error;
         error_ = error;
@@ -773,20 +773,28 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
 bool DebuggerUI::load_os(const std::string& kernel_path,
                          const std::string& bios_path,
                          std::string& error) {
-    const ParsedArguments parsed = parse_arguments(settings_arguments_);
-    if (!parsed.ok) {
-        error = "command line arguments: " + parsed.error;
-        return false;
-    }
     std::vector<std::uint8_t> kernel;
     std::vector<std::uint8_t> bios;
     if (!read_binary(kernel_path, kernel, error) ||
         !read_binary(bios_path, bios, error)) {
         return false;
     }
+    return load_os_memory(kernel, bios, kernel_path, bios_path, error);
+}
+
+bool DebuggerUI::load_os_memory(const std::vector<std::uint8_t>& kernel,
+                                const std::vector<std::uint8_t>& bios,
+                                const std::string& kernel_name,
+                                const std::string& bios_name,
+                                std::string& error) {
+    const ParsedArguments parsed = parse_arguments(settings_arguments_);
+    if (!parsed.ok) {
+        error = "command line arguments: " + parsed.error;
+        return false;
+    }
     session_.set_arguments(parsed.arguments);
     session_.set_program_name(
-        std::filesystem::path(kernel_path).filename().string());
+        std::filesystem::path(kernel_name).filename().string());
     const auto is_container = [](const std::vector<std::uint8_t>& bytes) {
         return bytes.size() >= 4 && bytes[0] == 'K' && bytes[1] == '3' &&
                bytes[2] == '2' && bytes[3] == 0;
@@ -822,7 +830,7 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     } else {
         container::Image debug_image;
         std::string sym_error;
-        if (os::load_symbol_file(kernel_path, kernel, debug_image, sym_error)) {
+        if (os::load_symbol_file(kernel_name, kernel, debug_image, sym_error)) {
             if (!session_.set_debug_info(debug_image, error)) {
                 return false;
             }
@@ -832,7 +840,7 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
         }
         container::Image bios_debug_image;
         sym_error.clear();
-        if (os::load_symbol_file(bios_path, bios, bios_debug_image, sym_error)) {
+        if (os::load_symbol_file(bios_name, bios, bios_debug_image, sym_error)) {
             if (!session_.set_debug_info(bios_debug_image, error)) {
                 return false;
             }
@@ -855,7 +863,7 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     boot.framebuffer_stride = core::kFramebufferStride;
     boot.framebuffer_format = 1;
     os::KernelMeta meta{};
-    if (!kernel_container && os::load_kernel_meta(kernel_path, meta, error)) {
+    if (!kernel_container && os::load_kernel_meta(kernel_name, meta, error)) {
         boot.initrd_base = 0x0002'0000U + meta.initrd_offset;
         boot.initrd_size = meta.initrd_size;
     } else if (!kernel_container && !error.empty()) {
@@ -870,9 +878,10 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     serial_text_.clear();
     console_scroll_ = 0;
     console_line_count_ = 0;
-    path_ = kernel_path;
-    bios_path_ = bios_path;
+    path_ = kernel_name;
+    bios_path_ = bios_name;
     os_mode_ = true;
+    os_embedded_ = kernel_name == "<embedded>";
     source_lines_.clear();
     source_cache_.clear();
     source_view_id_ = -1;
@@ -901,8 +910,18 @@ bool DebuggerUI::load_os(const std::string& kernel_path,
     error_.clear();
     memory_address_ = session_.machine().sp() & ~0xFU;
     hover_memory_byte_ = -1;
-    status_ = "OS loaded: " + kernel_path;
+    status_ = "OS loaded: " + kernel_name;
     return true;
+}
+
+bool DebuggerUI::reload_os(std::string& error) {
+    if (!os_embedded_) {
+        return load_os(path_, bios_path_, error);
+    }
+    const os::EmbeddedOs& images = os::embedded_os();
+    std::vector<std::uint8_t> kernel(images.kernel.begin(), images.kernel.end());
+    std::vector<std::uint8_t> bios(images.bios.begin(), images.bios.end());
+    return load_os_memory(kernel, bios, "<embedded>", "<embedded>", error);
 }
 
 void DebuggerUI::show_error(std::string message) {
@@ -943,8 +962,7 @@ void DebuggerUI::restart() {
         return;
     }
     std::string error;
-    const bool reloaded = os_mode_ ? load_os(path_, bios_path_, error)
-                                   : load(path_, error);
+    const bool reloaded = os_mode_ ? reload_os(error) : load(path_, error);
     if (!reloaded) {
         error_ = error;
         return;

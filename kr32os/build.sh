@@ -3,7 +3,7 @@ set -euo pipefail
 
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(dirname "$here")"
-build="$here/build"
+build="${KR32OS_BUILD_DIR:-$here/build/linux}"
 
 if [[ -z "${KR32:-}" ]]; then
     for candidate in \

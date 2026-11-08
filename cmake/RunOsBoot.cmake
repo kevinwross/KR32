@@ -13,13 +13,19 @@ else()
                 bash "${SOURCE_DIR}/kr32os/build.sh"
         RESULT_VARIABLE _build_result)
 endif()
+if(WIN32)
+    set(_osdir "${SOURCE_DIR}/kr32os/build/windows")
+else()
+    set(_osdir "${SOURCE_DIR}/kr32os/build/linux")
+endif()
+
 if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR "KR32OS M build failed")
 endif()
 
 execute_process(
-    COMMAND "${KR32}" os "${SOURCE_DIR}/kr32os/build/kernel.bin"
-            --bios "${SOURCE_DIR}/kr32os/build/bios.bin"
+    COMMAND "${KR32}" os "${_osdir}/kernel.bin"
+            --bios "${_osdir}/bios.bin"
             --serial-input "exit\n"
     OUTPUT_VARIABLE _output
     RESULT_VARIABLE _result)
