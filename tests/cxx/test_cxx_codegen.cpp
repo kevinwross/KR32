@@ -3328,6 +3328,20 @@ TEST_CASE("initializer_list parameters accept braced arguments") {
     CHECK(program.result == 10);
 }
 
+TEST_CASE("range-for binds reference loop variables") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int values[3] = {1, 2, 3};\n"
+        "    for (int& value : values) value = value + 1;\n"
+        "    if (values[0] != 2) return 1;\n"
+        "    if (values[1] != 3) return 2;\n"
+        "    if (values[2] != 4) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("range-for iterates classes with begin and end") {
     const ProgramResult program = compile_and_run(
         "struct Range {\n"

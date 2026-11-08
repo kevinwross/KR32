@@ -7273,7 +7273,9 @@ private:
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    MOV R0, #0");
             emit("    STORE R0, [R7 + " + std::to_string(index_temp) + "]");
+            allow_uninitialized_reference_ = true;
             declare_local(*statement.declaration);
+            allow_uninitialized_reference_ = false;
             Local* variable = lookup_local(statement.declaration->name);
             if (variable == nullptr) {
                 error(statement.location, "range-for loop variable was not declared");
@@ -7281,6 +7283,7 @@ private:
                 return;
             }
             const int variable_offset = variable->offset;
+            const bool reference_element = variable->is_reference;
             const int element_size = type_size(range_type->element);
             const bool fp_element = is_fp(range_type->element);
             const std::string start = new_label("rangefor");
@@ -7304,7 +7307,9 @@ private:
             }
             emit("    ADD R2, R0, R1");
             emit("    LEA R1, [R7 + " + std::to_string(variable_offset) + "]");
-            if (fp_element) {
+            if (reference_element) {
+                emit("    STORE R2, [R1]");
+            } else if (fp_element) {
                 emit(std::string("    FLOAD.") +
                      (is_float32(range_type->element) ? "W" : "D") + " F0, [R2]");
                 emit(std::string("    FSTORE.") +
@@ -8256,7 +8261,10 @@ private:
         }
         if (local.is_reference) {
             if (!declaration.initializer) {
-                error(declaration, "reference declaration needs an initializer");
+                if (!allow_uninitialized_reference_) {
+                    error(declaration,
+                          "reference declaration needs an initializer");
+                }
                 return;
             }
             gen_address(*declaration.initializer);
@@ -9688,6 +9696,7 @@ private:
     int active_catch_count_ = 0;
     std::map<std::string, int> exception_type_ids_;
     bool uses_exceptions_ = false;
+    bool allow_uninitialized_reference_ = false;
     std::string current_prefix_;
     ClassInfo* current_class_ = nullptr;
     int this_offset_ = -1;
