@@ -5561,14 +5561,14 @@ private:
         return operation->result;
     }
 
-    bool gen_scalar_conversion(const Expr& expression,
-                               const TypePtr& target) {
+    Function* find_scalar_conversion(const Expr& expression,
+                                     const TypePtr& target) {
         if (!target || target->kind != TypeKind::Builtin) {
-            return false;
+            return nullptr;
         }
         ClassInfo* info = class_of(type_of(expression));
         if (info == nullptr) {
-            return false;
+            return nullptr;
         }
         Function* conversion = find_member_operator(
             info, "operator " + target->to_string(), nullptr, true);
@@ -5577,6 +5577,12 @@ private:
             conversion =
                 find_member_operator(info, "operator bool", nullptr, true);
         }
+        return conversion;
+    }
+
+    bool gen_scalar_conversion(const Expr& expression,
+                               const TypePtr& target) {
+        Function* conversion = find_scalar_conversion(expression, target);
         if (conversion == nullptr) {
             return false;
         }
@@ -5654,6 +5660,56 @@ private:
         return operation->result;
     }
 
+    bool gen_conversion_comparison(const Expr& converted,
+                                   const Expr& other,
+                                   const TypePtr& other_type,
+                                   bool converted_is_left,
+                                   const std::string& op) {
+        const TypePtr target =
+            other_type != nullptr && other_type->kind == TypeKind::Builtin
+                ? other_type
+                : Type::make_builtin(BuiltinKind::Bool);
+        if (find_scalar_conversion(converted, target) == nullptr) {
+            return false;
+        }
+        if (converted_is_left) {
+            if (!gen_scalar_conversion(converted, target)) {
+                return false;
+            }
+            const int left_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+            gen_expr(other);
+            emit("    MOV R1, R0");
+            emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+        } else {
+            gen_expr(other);
+            const int left_temp =
+                allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+            if (!gen_scalar_conversion(converted, target)) {
+                return false;
+            }
+            emit("    MOV R1, R0");
+            emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+        }
+        const std::string true_label = new_label("true");
+        const std::string end_label = new_label("cmpend");
+        emit("    CMP R0, R1");
+        if (op == "==") emit("    JZ " + true_label);
+        if (op == "!=") emit("    JNZ " + true_label);
+        if (op == "<") emit("    JLT " + true_label);
+        if (op == "<=") emit("    JLE " + true_label);
+        if (op == ">") emit("    JGT " + true_label);
+        if (op == ">=") emit("    JGE " + true_label);
+        emit("    MOV R0, #0");
+        emit("    JMP " + end_label);
+        emit(true_label + ":");
+        emit("    MOV R0, #1");
+        emit(end_label + ":");
+        return true;
+    }
+
     TypePtr gen_binary(const Expr& expression) {
         const std::string& op = expression.text;
         const TypePtr left_operand = type_of(*expression.children[0]);
@@ -5698,34 +5754,22 @@ private:
         if (is_long_long(left_type) || is_long_long(right_type)) {
             return gen_long_long_binary(expression, left_type, right_type);
         }
-        if ((op == "==" || op == "!=") && class_of(left_type) != nullptr &&
-            class_of(right_type) == nullptr) {
-            const TypePtr target =
-                right_type != nullptr &&
-                        right_type->kind == TypeKind::Builtin
-                    ? right_type
-                    : Type::make_builtin(BuiltinKind::Bool);
-            if (gen_scalar_conversion(*expression.children[0], target)) {
-                const int left_temp =
-                    allocate_local(Type::make_builtin(BuiltinKind::Int));
-                emit("    STORE R0, [R7 + " +
-                     std::to_string(left_temp) + "]");
-                gen_expr(*expression.children[1]);
-                emit("    MOV R1, R0");
-                emit("    LOAD R0, [R7 + " +
-                     std::to_string(left_temp) + "]");
-                const std::string true_label = new_label("true");
-                const std::string end_label = new_label("cmpend");
-                emit("    CMP R0, R1");
-                emit(std::string("    ") + (op == "==" ? "JZ " : "JNZ ") +
-                     true_label);
-                emit("    MOV R0, #0");
-                emit("    JMP " + end_label);
-                emit(true_label + ":");
-                emit("    MOV R0, #1");
-                emit(end_label + ":");
-                return Type::make_builtin(BuiltinKind::Bool);
-            }
+        const bool comparison =
+            op == "==" || op == "!=" || op == "<" || op == "<=" ||
+            op == ">" || op == ">=";
+        if (comparison && class_of(left_type) != nullptr &&
+            class_of(right_type) == nullptr &&
+            gen_conversion_comparison(*expression.children[0],
+                                      *expression.children[1], right_type,
+                                      true, op)) {
+            return Type::make_builtin(BuiltinKind::Bool);
+        }
+        if (comparison && class_of(right_type) != nullptr &&
+            class_of(left_type) == nullptr &&
+            gen_conversion_comparison(*expression.children[1],
+                                      *expression.children[0], left_type,
+                                      false, op)) {
+            return Type::make_builtin(BuiltinKind::Bool);
         }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
