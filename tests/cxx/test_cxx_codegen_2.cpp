@@ -281,6 +281,21 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm clamp bounds values") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    if (std::clamp(9, 1, 4) != 4) return 1;\n"
+        "    if (std::clamp(-2, 0, 5) != 0) return 2;\n"
+        "    if (std::clamp(3, 1, 4) != 3) return 3;\n"
+        "    if (std::clamp(2.5, 1.0, 2.0) != 2.0) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string starts and ends with strings") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
