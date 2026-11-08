@@ -522,6 +522,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (char_total != 'a' + 'b') return 49;\n"
         "    for (char& value : iterated) value = value - 32;\n"
         "    if (iterated != \"AB\") return 50;\n"
+        "    const std::string data_text(\"abc\");\n"
+        "    const char* raw = data_text.data();\n"
+        "    if (raw[1] != 'b') return 51;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

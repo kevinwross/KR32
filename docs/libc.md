@@ -237,4 +237,4 @@ character, or `std::string`), with `find`/`rfind`/`find_first_of`/
 `at`, `substr` (with or without
 count), `front`, `back`, `replace`/`insert` (C string or `std::string`),
 `erase`, `resize`, `push_back`,
-`pop_back`, `append`, `swap`, `begin`/`end`, and `std::to_string`.
+`pop_back`, `append`, `swap`, `begin`/`end`, `data`, and `std::to_string`.

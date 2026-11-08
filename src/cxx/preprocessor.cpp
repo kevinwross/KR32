@@ -742,6 +742,8 @@ private:
                     "    }\n"
                     "    ~string() { if (data_ != 0) free(data_); }\n"
                     "    const char* c_str() const { return data_ != 0 ? data_ : \"\"; }\n"
+                    "    char* data() { return data_; }\n"
+                    "    const char* data() const { return data_ != 0 ? data_ : \"\"; }\n"
                     "    int size() const { return size_; }\n"
                     "    int length() const { return size_; }\n"
                     "    bool empty() const { return size_ == 0; }\n"
