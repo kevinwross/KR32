@@ -138,6 +138,22 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string counted character-set searches") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello world\");\n"
+        "    if (text.find_first_of(\"XXoYY\", 4, 5) != 4) return 1;\n"
+        "    if (text.find_last_of(\"XXoYY\", 9, 5) != 7) return 2;\n"
+        "    if (text.find_first_not_of(\"XXhYY\", 0, 5) != 1) return 3;\n"
+        "    if (text.find_last_not_of(\"XXdYY\", 10, 5) != 9) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string reverse-finds counted C-string ranges") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
