@@ -281,6 +281,21 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string reserves capacity") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"ab\");\n"
+        "    text.reserve(100);\n"
+        "    if (text.capacity() < 100) return 1;\n"
+        "    if (text != \"ab\") return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string shrinks to fit") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
