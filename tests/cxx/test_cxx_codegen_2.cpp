@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm finds the last subsequence") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int text[7] = { 1, 2, 3, 1, 2, 3, 4 };\n"
+        "    int needle[2] = { 1, 2 };\n"
+        "    if (std::find_end(text, text + 7, needle, needle + 2) != text + 3) return 1;\n"
+        "    char letters[8] = \"abcabcx\";\n"
+        "    char part[3] = \"abc\";\n"
+        "    if (std::find_end(letters, letters + 7, part, part + 3) != letters + 3) return 2;\n"
+        "    char missing[2] = \"zz\";\n"
+        "    if (std::find_end(letters, letters + 7, missing, missing + 2) != letters + 7) return 3;\n"
+        "    double reals[4] = { 1.5, 2.5, 1.5, 2.5 };\n"
+        "    double pair[2] = { 1.5, 2.5 };\n"
+        "    if (std::find_end(reals, reals + 4, pair, pair + 2) != reals + 2) return 4;\n"
+        "    return std::find_end(letters, letters + 7, part, part) == letters + 7 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm searches repeated values") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

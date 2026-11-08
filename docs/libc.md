@@ -37,7 +37,7 @@ source line numbers and debugger line mappings are preserved.
 | `<limits.h>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append` (C string or `std::string`), `swap`, `clear` |
 | `<utility>` | `std::swap` for integer, character, and floating-point types |
-| `<algorithm>` | `std::min`/`std::max`/`std::clamp`, `std::sort`, `std::reverse`, `std::fill`, `std::fill_n`, `std::find`, `std::copy`, `std::copy_n`, `std::count`, `std::equal`, `std::replace`, `std::remove`, `std::min_element`, `std::max_element`, `std::binary_search`, `std::lower_bound`, and `std::upper_bound`, `std::unique`, `std::swap_ranges`, `std::rotate`, `std::search`, `std::adjacent_find`, and `std::search_n` for integer, character, and floating-point arrays |
+| `<algorithm>` | `std::min`/`std::max`/`std::clamp`, `std::sort`, `std::reverse`, `std::fill`, `std::fill_n`, `std::find`, `std::copy`, `std::copy_n`, `std::count`, `std::equal`, `std::replace`, `std::remove`, `std::min_element`, `std::max_element`, `std::binary_search`, `std::lower_bound`, and `std::upper_bound`, `std::unique`, `std::swap_ranges`, `std::rotate`, `std::search`, `std::adjacent_find`, `std::search_n`, and `std::find_end` for integer, character, and floating-point arrays |
 | `<numeric>` | `std::accumulate` for integer/character/floating-point arrays and `std::iota` for integer arrays |
 | `<cmath>` | `std::abs`, `std::sqrt`, `std::fabs` (including `float` forms) |
 | `<cstdlib>` | `std::atoi`, `atof`, `strtol`, `strtoul`, `strtoll`, `strtoull`, `strtod`/`strtof`/`strtold` (decimal/exponent), `labs`, `llabs`, `qsort`, `bsearch`, `malloc`, `calloc`, `realloc`, `free`, `exit`, `abort` |
