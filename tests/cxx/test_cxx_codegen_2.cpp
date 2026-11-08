@@ -281,6 +281,24 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm finds minimum and maximum elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 3, 9, 2, 7 };\n"
+        "    if (std::min_element(values, values + 4) != values + 2) return 1;\n"
+        "    if (std::max_element(values, values + 4) != values + 1) return 2;\n"
+        "    char text[4] = \"dcba\";\n"
+        "    if (std::min_element(text, text + 4) != text + 3) return 3;\n"
+        "    double reals[3] = { 1.5, 0.5, 2.5 };\n"
+        "    if (std::max_element(reals, reals + 3) != reals + 2) return 4;\n"
+        "    return std::max_element(values, values) == values ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("pointer differences count elements") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"
