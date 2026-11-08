@@ -260,4 +260,4 @@ character, count+character, or prefix count), `erase` (position or range), `resi
 `pop_back`, `assign` (C string or prefix count), `append` (string, C string,
 prefix count, or count+character), `swap`, `begin`/`end`, `data`, `capacity`,
 `reserve` (capacity hint), `std::to_string` (including `long long` and
-`unsigned long long`), `std::stoi`, and `std::stol` (C string or `std::string`).
+`unsigned long long`), `std::stoi`, `std::stol`, `std::stod`, `std::stof`, and `std::stold` (C string or `std::string`).
