@@ -281,6 +281,19 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string assigns repeated characters") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    text.assign(3, 'x');\n"
+        "    return text == \"xxx\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string constructor overloads rank by conversion") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"

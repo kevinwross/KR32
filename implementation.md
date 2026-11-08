@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 13:50 -08:00
+> **Last updated:** 2026-11-08 13:53 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2301,6 +2301,7 @@ Newest entries at the bottom. Use the local time zone.
       conversion costs instead of declaration order, fixing
       `string(count, char)` versus `string(const char*, int)`; added
       `string::replace(position, count, new_count, char)`.
+- **2026-11-08 13:53 -08:00** — Added `std::string::assign(count, char)`.
 
 ## 10. Updating this file
 
