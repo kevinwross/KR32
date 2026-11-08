@@ -717,6 +717,8 @@ TEST_CASE("C-style casts convert between class types") {
         "    Source source;\n"
         "    source.value = 4;\n"
         "    Target target = (Target)source;\n"
+        "    Target copied = source;\n"
+        "    if (copied.value != 5) return 1;\n"
         "    return target.value - 5;\n"
         "}\n");
     CHECK(program.ok);

@@ -8204,6 +8204,17 @@ private:
                         }
                         return;
                     }
+                    if (ClassInfo* source_info =
+                            class_of(type_of(*declaration.initializer));
+                        source_info != nullptr && source_info != info) {
+                        construct_object_from_expression(
+                            info, local.offset, *declaration.initializer);
+                        if (Function* destructor = find_destructor(info)) {
+                            local_destructors_.back().push_back(
+                                {local.offset, destructor});
+                        }
+                        return;
+                    }
                     if (is_lvalue(*declaration.initializer)) {
                         gen_address(*declaration.initializer);
                     } else {

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 04:21 -08:00
+> **Last updated:** 2026-11-08 04:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2126,6 +2126,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 04:07 -08:00** — Added start-position overloads for
       `find_first_not_of` and `find_last_not_of`.
 - **2026-11-08 04:21 -08:00** — Added C-style class-to-class casts through
+      converting constructors.
+- **2026-11-08 04:33 -08:00** — Added class copy initialization through
       converting constructors.
 
 ## 10. Updating this file
