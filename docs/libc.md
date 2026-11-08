@@ -259,5 +259,5 @@ count), `copy`, `front`, `back`, `replace`/`insert` (C string, `std::string`,
 character, count+character, or prefix count), `erase` (position or range), `resize` (count or count+character), `push_back`,
 `pop_back`, `assign` (C string or prefix count), `append` (string, C string,
 prefix count, or count+character), `swap`, `begin`/`end`, `data`, `capacity`,
-`reserve` (capacity hint), and `std::to_string` (including
-`long long` and `unsigned long long`).
+`reserve` (capacity hint), `std::to_string` (including `long long` and
+`unsigned long long`), `std::stoi`, and `std::stol`.
