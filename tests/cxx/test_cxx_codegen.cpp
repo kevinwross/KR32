@@ -495,6 +495,10 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (reverse) return 20;\n"
         "    text.clear();\n"
         "    if (!text.empty()) return 7;\n"
+        "    std::string repeated(\"abcabc\");\n"
+        "    if (repeated.find(\"bc\", 2) != 4) return 36;\n"
+        "    if (repeated.find('b', 2) != 4) return 37;\n"
+        "    if (repeated.find(needle, 2) != -1) return 38;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

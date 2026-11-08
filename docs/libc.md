@@ -231,7 +231,8 @@ iostreams, locales, and facets are not fully implemented; `std::string` is a
 compact subset with `operator=` (C string or `std::string`), `operator+=` (C
 string, character, or `std::string`), `operator+` (string/string, string/C
 string, C string/string), `operator==`, `operator!=`, relational operators,
-`find`/`rfind`/`find_first_of`/`find_last_of`/`compare` (C string or
-`std::string`), `starts_with`/`ends_with`, `at`, `substr` (with or without
+`find`/`rfind`/`find_first_of`/`find_last_of`/`compare` (C string,
+character, or `std::string`), with `find` accepting an optional start
+position, `starts_with`/`ends_with`, `at`, `substr` (with or without
 count), `front`, `back`, `replace`, `insert`, `erase`, `resize`, `push_back`,
 `pop_back`, `append`, `swap`, and `std::to_string`.

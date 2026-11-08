@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 21:03 -08:00
+> **Last updated:** 2026-11-07 21:16 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2056,6 +2056,8 @@ Newest entries at the bottom. Use the local time zone.
       surfaced diagnostics on successful compiles.
 - **2026-11-07 21:03 -08:00** — Added C `__attribute__`/`__declspec`
       skipping in declarations, types, and function declarators.
+- **2026-11-07 21:16 -08:00** — Added `std::string::find` overloads with a
+      start position for C strings, characters, and strings.
 
 ## 10. Updating this file
 
