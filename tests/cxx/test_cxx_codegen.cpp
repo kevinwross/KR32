@@ -772,6 +772,21 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cstddef> provides size types") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstddef>\n"
+        "#include <cstddef>\n"
+        "int main() {\n"
+        "    if (sizeof(std::size_t) != 4) return 1;\n"
+        "    if (sizeof(std::ptrdiff_t) != 4) return 2;\n"
+        "    std::size_t size = 9;\n"
+        "    std::ptrdiff_t delta = -4;\n"
+        "    return size + delta == 5 ? 0 : 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cctype> exposes character classification") {
     const ProgramResult program = compile_and_run(
         "#include <cctype>\n"

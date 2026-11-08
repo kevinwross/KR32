@@ -654,6 +654,17 @@ private:
                 }
                 return;
             }
+            if (header.find("<cstddef>") != std::string::npos) {
+                if (!cstddef_header_injected_) {
+                    cstddef_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "typedef unsigned int size_t;\n"
+                        "typedef int ptrdiff_t;\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<cctype>") != std::string::npos) {
                 if (!cctype_header_injected_) {
                     cctype_header_injected_ = true;
@@ -2363,6 +2374,7 @@ private:
     bool cstdlib_header_injected_ = false;
     bool cstring_header_injected_ = false;
     bool cctype_header_injected_ = false;
+    bool cstddef_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;
