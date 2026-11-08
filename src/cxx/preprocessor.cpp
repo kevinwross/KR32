@@ -666,6 +666,20 @@ private:
                 }
                 return;
             }
+            if (header.find("<cassert>") != std::string::npos) {
+                if (!cassert_header_injected_) {
+                    cassert_header_injected_ = true;
+                    append_line(
+                        "extern \"C\" int __kr32_assert_fail(void);\n");
+                    Macro macro;
+                    macro.function_like = true;
+                    macro.parameters = {"condition"};
+                    macro.body =
+                        "((condition) ? 0 : __kr32_assert_fail())";
+                    macros_["assert"] = std::move(macro);
+                }
+                return;
+            }
             if (header.find("<ctime>") != std::string::npos) {
                 if (!ctime_header_injected_) {
                     ctime_header_injected_ = true;
@@ -2525,6 +2539,7 @@ private:
     bool cfloat_header_injected_ = false;
     bool cstdio_header_injected_ = false;
     bool ctime_header_injected_ = false;
+    bool cassert_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;

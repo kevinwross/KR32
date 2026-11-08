@@ -867,6 +867,19 @@ TEST_CASE("<cstddef> provides size types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cassert> provides assert") {
+    const ProgramResult program = compile_and_run(
+        "#include <cassert>\n"
+        "int main() {\n"
+        "    assert(1 == 1);\n"
+        "    int value = 3;\n"
+        "    assert(value == 3);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cerrno> exposes errno") {
     const ProgramResult program = compile_and_run(
         "#include <cerrno>\n"

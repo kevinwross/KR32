@@ -49,6 +49,7 @@ source line numbers and debugger line mappings are preserved.
 | `<cstdio>` | `std::printf`, `sprintf`, `snprintf`, `puts`, `putchar`, `getchar` |
 | `<ctime>` | `std::time_t`, `std::time`, `std::difftime` |
 | `<cerrno>` | `std::errno`, `strerror`, `perror`, and `E*` constants |
+| `<cassert>` | `assert(condition)` backed by `__kr32_assert_fail` |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
 | `<unistd.h>` | `access`, `isatty`, `truncate`, `fsync`, `fdatasync`, `getcwd`, `chdir`, `dup`, `dup2` |
