@@ -588,6 +588,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (spaced.find_last_not_of(spaces, 4) != 4) return 79;\n"
         "    std::string prefix_ctor(\"abcdef\", 3);\n"
         "    if (prefix_ctor != \"abc\") return 80;\n"
+        "    std::string reserved(\"abc\");\n"
+        "    reserved.reserve(16);\n"
+        "    if (reserved.size() != 3 || reserved.capacity() < 3) return 81;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

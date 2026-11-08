@@ -1368,6 +1368,8 @@ private:
                     "        }\n"
                     "    }\n"
                     "    void clear() { size_ = 0; if (data_ != 0) data_[0] = 0; }\n"
+                    "    int capacity() const { return size_; }\n"
+                    "    void reserve(int amount) { if (amount < 0) amount = 0; }\n"
                     "};\n"
                     "string operator+(const string& left, const string& right) {\n"
                     "    string result(left);\n"
