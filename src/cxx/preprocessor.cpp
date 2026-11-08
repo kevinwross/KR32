@@ -697,29 +697,6 @@ private:
                 }
                 return;
             }
-            if (header.find("<cstdio>") != std::string::npos) {
-                if (!cstdio_header_injected_) {
-                    cstdio_header_injected_ = true;
-                    append_line(
-                        "extern \"C\" {\n"
-                        "int printf(const char* format, ...);\n"
-                        "int sprintf(char* buffer, const char* format, ...);\n"
-                        "int snprintf(char* buffer, int capacity, const char* format, ...);\n"
-                        "int puts(const char* text);\n"
-                        "int putchar(int character);\n"
-                        "int getchar();\n"
-                        "}\n"
-                        "namespace std {\n"
-                        "using ::printf;\n"
-                        "using ::sprintf;\n"
-                        "using ::snprintf;\n"
-                        "using ::puts;\n"
-                        "using ::putchar;\n"
-                        "using ::getchar;\n"
-                        "}\n");
-                }
-                return;
-            }
             if (header.find("<cfloat>") != std::string::npos) {
                 if (!cfloat_header_injected_) {
                     cfloat_header_injected_ = true;
@@ -2084,6 +2061,10 @@ private:
             }
             if (header.find("stdio.h") != std::string::npos ||
                 header.find("cstdio") != std::string::npos) {
+                if (stdio_header_injected_) {
+                    return;
+                }
+                stdio_header_injected_ = true;
                 append_line(
                     "struct kr32_file { int descriptor; int flags; int ungot; int owns_descriptor; const char* memory; int memory_position; int memory_mode; unsigned char* buffer; int buffer_capacity; int buffer_length; int buffer_mode; int buffer_owned; unsigned char* input_buffer; int input_capacity; int input_begin; int input_end; int input_owned; };\n"
                     "typedef struct kr32_file FILE;\n"
@@ -2130,6 +2111,35 @@ private:
                     "FILE* tmpfile();\n"
                     "int snprintf(char* buffer, int size, const char* format, ...);\n"
                     "int sprintf(char* buffer, const char* format, ...);\n"
+                    "}\n"
+                    "namespace std {\n"
+                    "using FILE = kr32_file;\n"
+                    "using fpos_t = int;\n"
+                    "using ::stdin;\n"
+                    "using ::stdout;\n"
+                    "using ::stderr;\n"
+                    "using ::printf;\n"
+                    "using ::sprintf;\n"
+                    "using ::snprintf;\n"
+                    "using ::puts;\n"
+                    "using ::putchar;\n"
+                    "using ::getchar;\n"
+                    "using ::fopen;\n"
+                    "using ::fclose;\n"
+                    "using ::fflush;\n"
+                    "using ::fgetc;\n"
+                    "using ::fputc;\n"
+                    "using ::fgets;\n"
+                    "using ::fputs;\n"
+                    "using ::fread;\n"
+                    "using ::fwrite;\n"
+                    "using ::fseek;\n"
+                    "using ::ftell;\n"
+                    "using ::rewind;\n"
+                    "using ::feof;\n"
+                    "using ::ferror;\n"
+                    "using ::remove;\n"
+                    "using ::rename;\n"
                     "}\n");
                 macros_["EOF"] = Macro{false, {}, "-1"};
                 macros_["SEEK_SET"] = Macro{false, {}, "0"};
@@ -2537,7 +2547,7 @@ private:
     bool cstdint_header_injected_ = false;
     bool climits_header_injected_ = false;
     bool cfloat_header_injected_ = false;
-    bool cstdio_header_injected_ = false;
+    bool stdio_header_injected_ = false;
     bool ctime_header_injected_ = false;
     bool cassert_header_injected_ = false;
     bool cmath_header_injected_ = false;

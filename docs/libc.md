@@ -46,7 +46,7 @@ source line numbers and debugger line mappings are preserved.
 | `<cstdint>` | `std::int8_t` through `std::uint64_t`, `intptr_t`, `uintptr_t` |
 | `<climits>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<cfloat>` | `FLT_`/`DBL_` limits, epsilon, digits, and mantissa bits |
-| `<cstdio>` | `std::printf`, `sprintf`, `snprintf`, `puts`, `putchar`, `getchar` |
+| `<cstdio>` | `std::FILE`, `fopen`/`fclose`, `fread`/`fwrite`, `fgets`/`fputs`, `printf`/`sprintf`/`snprintf`, `puts`, `putchar`, `getchar` |
 | `<ctime>` | `std::time_t`, `std::time`, `std::difftime` |
 | `<cerrno>` | `std::errno`, `strerror`, `perror`, and `E*` constants |
 | `<cassert>` | `assert(condition)` backed by `__kr32_assert_fail` |

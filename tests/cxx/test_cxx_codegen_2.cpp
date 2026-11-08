@@ -59,6 +59,7 @@ TEST_CASE("<cstdio> provides formatted output") {
         "    int written = std::snprintf(other, 4, \"%s\", \"abcdef\");\n"
         "    if (written != 6) return 2;\n"
         "    if (other[0] != 'a' || other[2] != 'c' || other[3] != 0) return 3;\n"
+        "    if (sizeof(std::FILE) == 0) return 4;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
