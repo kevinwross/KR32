@@ -582,6 +582,10 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (repeated.compare(1, 2, \"XXbcde\", 2, 2) != 0) return 74;\n"
         "    std::string deep_compare(\"XXbcde\");\n"
         "    if (repeated.compare(4, 2, deep_compare, 2, 2) != 0) return 75;\n"
+        "    if (spaced.find_first_not_of(' ', 1) != 2) return 76;\n"
+        "    if (spaced.find_last_not_of(' ', 4) != 4) return 77;\n"
+        "    if (spaced.find_first_not_of(spaces, 1) != 2) return 78;\n"
+        "    if (spaced.find_last_not_of(spaces, 4) != 4) return 79;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

@@ -235,7 +235,8 @@ string, C string/string, string/character, character/string), `operator==`, `ope
 `find`/`rfind`/`find_first_of`/`find_last_of`/`find_first_not_of`/
 `find_last_not_of`/`compare` (C string,
 character, or `std::string`), with `find`/`rfind`/`find_first_of`/
-`find_last_of` accepting an optional start position and `compare` accepting
+`find_last_of`/`find_first_not_of`/`find_last_not_of` accepting an optional
+start position and `compare` accepting
 a substring position/count and optional source position/count; `std::string::npos` is available. `starts_with`/`ends_with`,
 `at`, `substr` (with or without
 count), `front`, `back`, `replace`/`insert` (C string, `std::string`,
