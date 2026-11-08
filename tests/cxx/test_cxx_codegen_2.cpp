@@ -138,6 +138,24 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("function-local class statics initialize once") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int check() {\n"
+        "    static std::string text(\"hello\");\n"
+        "    text.push_back('!');\n"
+        "    return text.size();\n"
+        "}\n"
+        "int main() {\n"
+        "    if (check() != 6) return 1;\n"
+        "    if (check() != 7) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("function statics support scalar widths") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"

@@ -8509,13 +8509,13 @@ private:
             if (template_owner) {
                 bss_ += ".section .bss." + raw->symbol + "\n";
             }
-            bss_ += linkage + raw->symbol + "\n" + raw->symbol +
+            bss_ += ".align 4\n" + linkage + raw->symbol + "\n" + raw->symbol +
                     ":\n    .space " + std::to_string(std::max(1, type_size(type))) +
                     "\n";
             const bool guarded = declaration.initializer != nullptr || info != nullptr;
             if (guarded) {
                 const std::string guard = raw->symbol + "_guard";
-                bss_ += linkage + guard + "\n" + guard +
+                bss_ += ".align 4\n" + linkage + guard + "\n" + guard +
                         ":\n    .space 4\n";
                 emit("    LEA R0, [" + guard + "]");
                 emit("    CALL __cxa_guard_acquire");
