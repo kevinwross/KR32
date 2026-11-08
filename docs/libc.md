@@ -236,6 +236,6 @@ string, C string/string, string/character, character/string), `operator==`, `ope
 character, or `std::string`), with `find`/`rfind`/`find_first_of`/
 `find_last_of` accepting an optional start position; `std::string::npos` is available. `starts_with`/`ends_with`,
 `at`, `substr` (with or without
-count), `front`, `back`, `replace`/`insert` (C string or `std::string`),
-`erase`, `resize`, `push_back`,
+count), `front`, `back`, `replace`/`insert` (C string, `std::string`, or
+character), `erase` (position or range), `resize`, `push_back`,
 `pop_back`, `append`, `swap`, `begin`/`end`, `data`, and `std::to_string`.

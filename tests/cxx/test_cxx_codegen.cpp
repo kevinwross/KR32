@@ -525,6 +525,11 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    const std::string data_text(\"abc\");\n"
         "    const char* raw = data_text.data();\n"
         "    if (raw[1] != 'b') return 51;\n"
+        "    std::string erased(\"abc\");\n"
+        "    erased.erase(1);\n"
+        "    if (erased != \"a\") return 52;\n"
+        "    erased.insert(1, 'b');\n"
+        "    if (erased != \"ab\") return 53;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
