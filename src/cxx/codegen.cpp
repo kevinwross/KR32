@@ -3881,25 +3881,40 @@ private:
             construct_default_subobjects(*info, address_temp);
             return;
         }
+        std::vector<const Expr*> effective_arguments;
+        for (const ExprPtr& argument : arguments) {
+            effective_arguments.push_back(argument.get());
+        }
+        for (std::size_t index = arguments.size();
+             index < constructor->parameters.size(); ++index) {
+            const Expr* default_argument =
+                index < constructor->default_arguments.size()
+                    ? constructor->default_arguments[index]
+                    : nullptr;
+            if (default_argument == nullptr) {
+                break;
+            }
+            effective_arguments.push_back(default_argument);
+        }
         std::vector<int> integer_temps;
         std::vector<std::pair<int, TypePtr>> fp_temps;
-        for (std::size_t index = 0; index < arguments.size(); ++index) {
+        for (std::size_t index = 0; index < effective_arguments.size(); ++index) {
             const TypePtr parameter = resolve_type(constructor->parameters[index]);
             if (parameter && (parameter->kind == TypeKind::LValueRef ||
                               parameter->kind == TypeKind::RValueRef)) {
-                gen_address(*arguments[index]);
+                gen_address(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
                 integer_temps.push_back(temp);
             } else if (is_fp(parameter)) {
-                gen_as_fp(*arguments[index], parameter);
+                gen_as_fp(*effective_arguments[index], parameter);
                 const int temp = allocate_local(parameter);
                 emit(std::string("    FSTORE.") +
                      (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
                      std::to_string(temp) + "]");
                 fp_temps.emplace_back(temp, parameter);
             } else {
-                gen_expr(*arguments[index]);
+                gen_expr(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
                 integer_temps.push_back(temp);
@@ -7286,7 +7301,14 @@ private:
         Function* best = nullptr;
         int best_score = -100000;
         for (Function* constructor : info->constructors) {
-            if (constructor->parameters.size() != arguments.size()) {
+            std::size_t required = constructor->parameters.size();
+            while (required > 0 &&
+                   required <= constructor->default_arguments.size() &&
+                   constructor->default_arguments[required - 1] != nullptr) {
+                --required;
+            }
+            if (arguments.size() < required ||
+                arguments.size() > constructor->parameters.size()) {
                 continue;
             }
             int score = 0;
@@ -7356,25 +7378,40 @@ private:
             error(*info->decl, "no matching constructor for " + info->qualified);
             return;
         }
+        std::vector<const Expr*> effective_arguments;
+        for (const ExprPtr& argument : arguments) {
+            effective_arguments.push_back(argument.get());
+        }
+        for (std::size_t index = arguments.size();
+             index < constructor->parameters.size(); ++index) {
+            const Expr* default_argument =
+                index < constructor->default_arguments.size()
+                    ? constructor->default_arguments[index]
+                    : nullptr;
+            if (default_argument == nullptr) {
+                break;
+            }
+            effective_arguments.push_back(default_argument);
+        }
         std::vector<int> integer_temps;
         std::vector<std::pair<int, TypePtr>> fp_temps;
-        for (std::size_t index = 0; index < arguments.size(); ++index) {
+        for (std::size_t index = 0; index < effective_arguments.size(); ++index) {
             const TypePtr parameter = resolve_type(constructor->parameters[index]);
             if (parameter && (parameter->kind == TypeKind::LValueRef ||
                               parameter->kind == TypeKind::RValueRef)) {
-                gen_address(*arguments[index]);
+                gen_address(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
                 integer_temps.push_back(temp);
             } else if (is_fp(parameter)) {
-                gen_as_fp(*arguments[index], parameter);
+                gen_as_fp(*effective_arguments[index], parameter);
                 const int temp = allocate_local(parameter);
                 emit(std::string("    FSTORE.") +
                      (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
                      std::to_string(temp) + "]");
                 fp_temps.emplace_back(temp, parameter);
             } else {
-                gen_expr(*arguments[index]);
+                gen_expr(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
                 integer_temps.push_back(temp);
@@ -7407,7 +7444,19 @@ private:
         int best_score = -100000;
         const TypePtr argument_type = resolve_type(type_of(argument));
         for (Function* candidate : info->constructors) {
-            if (candidate->parameters.size() != 1) {
+            if (candidate->parameters.empty()) {
+                continue;
+            }
+            bool defaults_ok = true;
+            for (std::size_t index = 1;
+                 index < candidate->parameters.size(); ++index) {
+                if (index >= candidate->default_arguments.size() ||
+                    candidate->default_arguments[index] == nullptr) {
+                    defaults_ok = false;
+                    break;
+                }
+            }
+            if (!defaults_ok) {
                 continue;
             }
             const TypePtr parameter =
@@ -7439,39 +7488,55 @@ private:
             error(*info->decl, "constructor is not accessible");
             return;
         }
-        const TypePtr parameter =
-            resolve_type(constructor->parameters[0]);
-        int value_temp = -1;
-        bool fp_value = false;
-        if (parameter &&
-            (parameter->kind == TypeKind::LValueRef ||
-             parameter->kind == TypeKind::RValueRef)) {
-            gen_address(argument);
-            value_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-            emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
-        } else if (is_fp(parameter)) {
-            gen_as_fp(argument, parameter);
-            value_temp = allocate_local(parameter);
-            fp_value = true;
-            emit(std::string("    FSTORE.") +
-                 (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
-                 std::to_string(value_temp) + "]");
-        } else {
-            gen_expr(argument);
-            value_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-            emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+        std::vector<const Expr*> effective_arguments{&argument};
+        for (std::size_t index = 1; index < constructor->parameters.size();
+             ++index) {
+            effective_arguments.push_back(
+                constructor->default_arguments[index]);
+        }
+        std::vector<int> integer_temps;
+        std::vector<std::pair<int, TypePtr>> fp_temps;
+        for (std::size_t index = 0; index < effective_arguments.size();
+             ++index) {
+            const TypePtr parameter =
+                resolve_type(constructor->parameters[index]);
+            if (parameter &&
+                (parameter->kind == TypeKind::LValueRef ||
+                 parameter->kind == TypeKind::RValueRef)) {
+                gen_address(*effective_arguments[index]);
+                const int temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
+            } else if (is_fp(parameter)) {
+                gen_as_fp(*effective_arguments[index], parameter);
+                const int temp = allocate_local(parameter);
+                emit(std::string("    FSTORE.") +
+                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                     std::to_string(temp) + "]");
+                fp_temps.emplace_back(temp, parameter);
+            } else {
+                gen_expr(*effective_arguments[index]);
+                const int temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
+            }
         }
         if (address_in_slot) {
             emit("    LOAD R0, [R7 + " + std::to_string(offset) + "]");
         } else {
             emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
         }
-        if (fp_value) {
+        for (std::size_t index = 0; index < integer_temps.size(); ++index) {
+            emit("    LOAD R" + std::to_string(index + 1) + ", [R7 + " +
+                 std::to_string(integer_temps[index]) + "]");
+        }
+        for (std::size_t index = 0; index < fp_temps.size(); ++index) {
             emit(std::string("    FLOAD.") +
-                 (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
-                 std::to_string(value_temp) + "]");
-        } else {
-            emit("    LOAD R1, [R7 + " + std::to_string(value_temp) + "]");
+                 (is_float32(fp_temps[index].second) ? "W" : "D") + " F" +
+                 std::to_string(index) + ", [R7 + " +
+                 std::to_string(fp_temps[index].first) + "]");
         }
         emit("    CALL " + constructor->symbol);
         emit_pending_check();
@@ -9254,7 +9319,7 @@ private:
                         std::memcpy(tls_image_.data() + global->tls_offset,
                                     bytes.data(), bytes.size());
                     } else if (global->initializer ||
-                               find_constructor(info, 0) != nullptr) {
+                               !info->constructors.empty()) {
                         global->needs_init = true;
                     }
                     if (find_destructor(info) != nullptr) {
@@ -9328,7 +9393,7 @@ private:
                 if (find_destructor(info) != nullptr) {
                     static_destructors_.push_back(global.get());
                 }
-                if (global->initializer || find_constructor(info, 0) != nullptr) {
+                if (global->initializer || !info->constructors.empty()) {
                     global->needs_init = true;
                     output += "    .space " + std::to_string(size) + "\n";
                     append_bss(global.get(), output);
