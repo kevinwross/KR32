@@ -179,3 +179,13 @@ TEST_CASE("C accepts _Complex scalar declarations") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("C accepts _Imaginary scalar declarations") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    _Imaginary double value = 0.0;\n"
+        "    return value == 0.0 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
