@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm rotates ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 1, 2, 3, 4, 5 };\n"
+        "    int* middle = std::rotate(values, values + 2, values + 5);\n"
+        "    if (middle != values + 3) return 1;\n"
+        "    if (values[0] != 3 || values[2] != 5 || values[3] != 1) return 2;\n"
+        "    char text[5] = \"abcde\";\n"
+        "    if (std::rotate(text, text + 1, text + 5) != text + 4) return 3;\n"
+        "    if (text[0] != 'b' || text[4] != 'a') return 4;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    std::rotate(reals, reals + 2, reals + 3);\n"
+        "    if (reals[0] != 3.5 || reals[1] != 1.5) return 5;\n"
+        "    if (std::rotate(values, values, values + 3) != values + 3) return 6;\n"
+        "    return std::rotate(values, values + 3, values + 3) == values ? 0 : 7;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm swaps ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
