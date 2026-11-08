@@ -7363,7 +7363,8 @@ private:
     }
 
     void construct_object_from_expression(ClassInfo* info, int offset,
-                                          const Expr& argument) {
+                                          const Expr& argument,
+                                          bool address_in_slot = false) {
         if (info->abstract) {
             error(*info->decl,
                   "cannot instantiate abstract class: " + info->qualified);
@@ -7427,7 +7428,11 @@ private:
             value_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
         }
-        emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+        if (address_in_slot) {
+            emit("    LOAD R0, [R7 + " + std::to_string(offset) + "]");
+        } else {
+            emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+        }
         if (fp_value) {
             emit(std::string("    FLOAD.") +
                  (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
@@ -8597,6 +8602,13 @@ private:
                     emit("    LEA R0, [" + global->symbol + "]");
                 }
                 emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                if (global->initializer &&
+                    global->initializer->kind != ExprKind::Call &&
+                    global->initializer->kind != ExprKind::InitializerList) {
+                    construct_object_from_expression(
+                        info, address, *global->initializer, true);
+                    continue;
+                }
                 std::vector<ExprPtr> empty;
                 const std::vector<ExprPtr>* arguments = &empty;
                 if (global->initializer &&

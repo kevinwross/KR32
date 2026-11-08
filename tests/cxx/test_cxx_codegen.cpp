@@ -562,6 +562,7 @@ TEST_CASE("conversion operators work in conditions and casts") {
         "    Number(int input) : value(input) {}\n"
         "    operator int() const { return value; }\n"
         "};\n"
+        "Number global_number = 9;\n"
         "int take(int input) { return input; }\n"
         "bool truth(Flag flag) { return flag; }\n"
         "int main() {\n"
@@ -593,6 +594,7 @@ TEST_CASE("conversion operators work in conditions and casts") {
         "    Number implicit = 5;\n"
         "    if (implicit.value != 5) return 22;\n"
         "    if (take(8) != 8) return 23;\n"
+        "    if (global_number.value != 9) return 24;\n"
         "    return (int)number - 7;\n"
         "}\n");
     CHECK(program.ok);
