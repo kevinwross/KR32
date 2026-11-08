@@ -243,6 +243,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (wide != \"-1234567890123\") return 40;\n"
         "    if (std::stoi(\"-42\") != -42) return 50;\n"
         "    if (std::stol(\"123\") != 123) return 51;\n"
+        "    std::string numeric(\"-42\");\n"
+        "    if (std::stoi(numeric) != -42) return 52;\n"
         "    std::string resized(\"hello\");\n"
         "    resized.resize(3);\n"
         "    if (resized != \"hel\") return 12;\n"

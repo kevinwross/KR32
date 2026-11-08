@@ -1935,6 +1935,12 @@ private:
                     "    return negative ? -value : value;\n"
                     "}\n"
                     "inline long stol(const char* text) { return (long)stoi(text); }\n"
+                    "inline int stoi(const string& text) {\n"
+                    "    return stoi(text.c_str());\n"
+                    "}\n"
+                    "inline long stol(const string& text) {\n"
+                    "    return stol(text.c_str());\n"
+                    "}\n"
                     "}\n");
                 return;
             }

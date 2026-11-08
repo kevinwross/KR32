@@ -288,8 +288,12 @@ bool same_type(const TypePtr& left, const TypePtr& right) {
     switch (left->kind) {
     case TypeKind::Builtin:
         return left->builtin == right->builtin;
-    case TypeKind::Named:
+    case TypeKind::Named: {
+        if (left->name.parts.size() == 1 || right->name.parts.size() == 1) {
+            return left->name.parts.back() == right->name.parts.back();
+        }
         return left->name.to_string() == right->name.to_string();
+    }
     case TypeKind::Pointer:
     case TypeKind::LValueRef:
     case TypeKind::RValueRef:

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 12:25 -08:00
+> **Last updated:** 2026-11-08 12:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2231,6 +2231,9 @@ Newest entries at the bottom. Use the local time zone.
       borrow; added a regression test for `-1234567890123LL`.
 - **2026-11-08 12:25 -08:00** — Added `<string>` `std::stoi` and
       `std::stol` for C-string input.
+- **2026-11-08 12:27 -08:00** — Fixed named-type matching for unqualified
+      namespace class types, and added `std::string` overloads of
+      `std::stoi`/`std::stol`.
 
 ## 10. Updating this file
 

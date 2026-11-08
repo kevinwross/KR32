@@ -138,6 +138,21 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("namespace class references match unqualified parameter types") {
+    const ProgramResult program = compile_and_run(
+        "namespace N {\n"
+        "class A { public: int x; };\n"
+        "int read(A& value) { return value.x; }\n"
+        "}\n"
+        "int main() {\n"
+        "    N::A a;\n"
+        "    a.x = 7;\n"
+        "    return N::read(a) == 7 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("64-bit unary minus carries into the high word") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"
