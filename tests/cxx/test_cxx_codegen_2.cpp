@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm orders partial and nth elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 5, 1, 4, 2, 3 };\n"
+        "    std::nth_element(values, values + 2, values + 5);\n"
+        "    if (values[2] != 3) return 1;\n"
+        "    int sorted[5] = { 5, 1, 4, 2, 3 };\n"
+        "    std::partial_sort(sorted, sorted + 3, sorted + 5);\n"
+        "    if (sorted[0] != 1 || sorted[1] != 2 || sorted[2] != 3) return 2;\n"
+        "    char text[4] = \"dcba\";\n"
+        "    std::nth_element(text, text + 2, text + 4);\n"
+        "    if (text[2] != 'c') return 3;\n"
+        "    double reals[3] = { 2.5, 0.5, 1.5 };\n"
+        "    std::nth_element(reals, reals + 1, reals + 3);\n"
+        "    return reals[1] == 1.5 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm stable sorts arrays") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
