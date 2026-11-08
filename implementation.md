@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 12:18 -08:00
+> **Last updated:** 2026-11-08 12:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2225,6 +2225,8 @@ Newest entries at the bottom. Use the local time zone.
       wrappers plus `std::strtof`/`std::strtold` aliases.
 - **2026-11-08 12:18 -08:00** — Enabled C `long double` as a double-width
       type; `long double` values, casts, and comparisons now compile.
+- **2026-11-08 12:20 -08:00** — Added `std::to_string(long long)` and
+      `std::to_string(unsigned long long)`.
 
 ## 10. Updating this file
 

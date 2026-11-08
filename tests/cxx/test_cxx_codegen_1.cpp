@@ -239,6 +239,8 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (constant[0] != 'h') return 10;\n"
         "    std::string number = std::to_string(42);\n"
         "    if (number != \"42\") return 11;\n"
+        "    std::string wide = std::to_string(-1234567890123LL);\n"
+        "    if (wide != \"-1234567890123\") return 40;\n"
         "    std::string resized(\"hello\");\n"
         "    resized.resize(3);\n"
         "    if (resized != \"hel\") return 12;\n"
