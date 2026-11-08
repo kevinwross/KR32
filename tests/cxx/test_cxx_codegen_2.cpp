@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm merges ranges in place") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[6] = { 1, 3, 5, 2, 4, 6 };\n"
+        "    std::inplace_merge(values, values + 3, values + 6);\n"
+        "    if (values[0] != 1 || values[1] != 2 || values[2] != 3 || values[5] != 6) return 1;\n"
+        "    char text[6] = \"acebdf\";\n"
+        "    std::inplace_merge(text, text + 3, text + 6);\n"
+        "    if (text[0] != 'a' || text[1] != 'b' || text[5] != 'f') return 2;\n"
+        "    double reals[4] = { 1.5, 3.5, 2.5, 4.5 };\n"
+        "    std::inplace_merge(reals, reals + 2, reals + 4);\n"
+        "    return reals[0] == 1.5 && reals[1] == 2.5 && reals[3] == 4.5 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm merges sorted ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
