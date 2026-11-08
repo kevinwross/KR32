@@ -3024,6 +3024,36 @@ unsigned long strtoul(const char *text, char **end, int base) {
     return (unsigned long)strtol(text, end, base);
 }
 
+double strtod(const char *text, char **end) {
+    const char *cursor = text;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') {
+        cursor = cursor + 1;
+    }
+    int negative = 0;
+    if (*cursor == '-' || *cursor == '+') {
+        negative = *cursor == '-';
+        cursor = cursor + 1;
+    }
+    double value = 0.0;
+    while (*cursor >= '0' && *cursor <= '9') {
+        value = value * 10.0 + (*cursor - '0');
+        cursor = cursor + 1;
+    }
+    if (*cursor == '.') {
+        cursor = cursor + 1;
+        double scale = 0.1;
+        while (*cursor >= '0' && *cursor <= '9') {
+            value = value + (*cursor - '0') * scale;
+            scale = scale * 0.1;
+            cursor = cursor + 1;
+        }
+    }
+    if (end != 0) {
+        *end = (char *)cursor;
+    }
+    return negative ? -value : value;
+}
+
 double atof(const char *text) {
     const char *cursor = text;
     while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') {

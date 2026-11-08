@@ -39,7 +39,7 @@ source line numbers and debugger line mappings are preserved.
 | `<utility>` | `std::swap` for integer, character, and floating-point types |
 | `<algorithm>` | `std::min`/`std::max` for integer, character, and floating-point types |
 | `<cmath>` | `std::abs`, `std::sqrt`, `std::fabs` (including `float` forms) |
-| `<cstdlib>` | `std::atoi`, `atof`, `strtol`, `strtoul`, `labs`, `qsort`, `bsearch`, `malloc`, `calloc`, `realloc`, `free`, `exit`, `abort` |
+| `<cstdlib>` | `std::atoi`, `atof`, `strtol`, `strtoul`, `strtod`, `labs`, `qsort`, `bsearch`, `malloc`, `calloc`, `realloc`, `free`, `exit`, `abort` |
 | `<cstring>` | `std::strlen`, `strcpy`, `strncpy`, `strcat`, `strncat`, `strcmp`, `strncmp`, `strchr`, `strrchr`, `strstr`, `strtok`, `strdup`, `memcpy`, `memmove`, `memset`, `memcmp`, `memchr` |
 | `<cctype>` | `std::isdigit`, `isalpha`, `isalnum`, `isspace`, `isupper`, `islower`, `toupper`, `tolower` |
 | `<cstddef>` | `std::size_t`, `std::ptrdiff_t` |
