@@ -551,6 +551,31 @@ TEST_CASE("C supports compound literals and struct parameters") {
     CHECK(scalar.result == 0);
 }
 
+TEST_CASE("C supports bit-fields") {
+    const ProgramResult program = compile_and_run(
+        "struct Flags { unsigned int a : 1; unsigned int b : 3; };\n"
+        "struct S { unsigned int a : 3; unsigned int b : 5; int c : 4; };\n"
+        "struct T { unsigned int a : 30; unsigned int b : 5; };\n"
+        "int main(void) {\n"
+        "    struct Flags flags;\n"
+        "    flags.a = 1;\n"
+        "    flags.b = 5;\n"
+        "    if (flags.a + flags.b != 6) return 1;\n"
+        "    struct S value;\n"
+        "    value.a = 7;\n"
+        "    value.b = 31;\n"
+        "    value.c = -1;\n"
+        "    if (value.a != 7) return 2;\n"
+        "    if (value.b != 31) return 3;\n"
+        "    if (value.c != -1) return 4;\n"
+        "    if (sizeof(struct S) != 4) return 5;\n"
+        "    if (sizeof(struct T) != 8) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C supports anonymous struct and union members") {
     const ProgramResult program = compile_and_run(
         "struct Variant { int tag; union { int integer; float real; }; };\n"

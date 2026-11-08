@@ -1009,6 +1009,9 @@ struct Type {
     std::string tag;
     int total_size = 0;
     int struct_alignment = 1;
+    int bit_width = 0;
+    int bit_offset = 0;
+    bool is_bitfield = false;
 
     Type() = default;
     Type(Kind type_kind, TypePtr type_base, int type_count)
@@ -1394,7 +1397,10 @@ private:
                     type->members.push_back(anonymous);
                     continue;
                 }
-                const std::string member_name = parse_name();
+                std::string member_name;
+                if (peek().text != ":") {
+                    member_name = parse_name();
+                }
                 if (match("[")) {
                     std::int64_t count = 0;
                     if (peek().kind == TokenKind::Number) {
@@ -1403,23 +1409,65 @@ private:
                     expect("]");
                     member_type = type_array(member_type, static_cast<int>(count));
                 }
+                if (match(":")) {
+                    const int width = static_cast<int>(parse_constant_value());
+                    if (width < 0) {
+                        error("bit-field width must not be negative");
+                    }
+                    member_type = std::make_shared<Type>(*member_type);
+                    member_type->bit_width = width;
+                    member_type->is_bitfield = true;
+                }
                 expect(";");
                 type->members.push_back(Member{member_name, member_type, 0});
             }
             int offset = 0;
             int max_alignment = 1;
             int max_size = 0;
+            int bit_cursor = 0;
+            int bit_unit_start = -1;
+            int bit_unit_size = 0;
             for (Member& member : type->members) {
                 const int alignment = std::max(1, member.type->alignment());
+                const int member_size = std::max(1, member.type->size());
                 max_alignment = std::max(max_alignment, alignment);
                 if (is_union) {
                     member.offset = 0;
-                    max_size = std::max(max_size, member.type->size());
-                } else {
+                    member.type->bit_offset = 0;
+                    max_size = std::max(max_size, member_size);
+                    continue;
+                }
+                if (!member.type->is_bitfield) {
+                    bit_cursor = 0;
+                    bit_unit_start = -1;
                     offset = align_up(offset, alignment);
                     member.offset = offset;
-                    offset += member.type->size();
+                    offset += member_size;
+                    continue;
                 }
+                const int unit_bits = member_size * 8;
+                const int width = member.type->bit_width;
+                if (width == 0) {
+                    offset = align_up(offset, alignment);
+                    bit_cursor = 0;
+                    bit_unit_start = -1;
+                    member.offset = offset;
+                    continue;
+                }
+                if (width > unit_bits) {
+                    error("bit-field is wider than its base type");
+                }
+                if (bit_unit_start < 0 || bit_cursor + width > unit_bits) {
+                    offset = align_up(offset, alignment);
+                    bit_unit_start = offset;
+                    bit_unit_size = member_size;
+                    offset += member_size;
+                    bit_cursor = 0;
+                }
+                (void)bit_unit_size;
+                member.offset = bit_unit_start;
+                member.type->bit_offset = bit_cursor;
+                bit_cursor += width;
             }
             type->struct_alignment = max_alignment;
             type->total_size = align_up(is_union ? max_size : offset, max_alignment);
@@ -2933,6 +2981,24 @@ private:
     }
 
     void gen_load(const TypePtr& type) {
+        if (type->is_bitfield) {
+            emit("    LOAD R0, [R0]");
+            if (type->bit_offset > 0) {
+                emit("    SHR R0, R0, #" + std::to_string(type->bit_offset));
+            }
+            if (type->bit_width < 32) {
+                const std::uint32_t value_mask =
+                    (std::uint32_t{1} << type->bit_width) - 1;
+                emit("    MOV R1, #" + std::to_string(value_mask));
+                emit("    AND R0, R0, R1");
+                if (!type->is_unsigned) {
+                    const int shift = 32 - type->bit_width;
+                    emit("    SHL R0, R0, #" + std::to_string(shift));
+                    emit("    SAR R0, R0, #" + std::to_string(shift));
+                }
+            }
+            return;
+        }
         if (is_long_long_type(type)) {
             emit("    MOV R2, R0");
             emit("    LOAD R0, [R2]");
@@ -2968,6 +3034,25 @@ private:
     }
 
     void gen_store(const TypePtr& type) {
+        if (type->is_bitfield) {
+            const std::uint32_t value_mask =
+                type->bit_width >= 32
+                    ? 0xFFFFFFFFu
+                    : ((std::uint32_t{1} << type->bit_width) - 1);
+            const std::uint32_t field_mask =
+                value_mask << type->bit_offset;
+            emit("    LOAD R2, [R1]");
+            emit("    MOV R3, #" + std::to_string(~field_mask));
+            emit("    AND R2, R2, R3");
+            emit("    MOV R3, #" + std::to_string(value_mask));
+            emit("    AND R0, R0, R3");
+            if (type->bit_offset > 0) {
+                emit("    SHL R0, R0, #" + std::to_string(type->bit_offset));
+            }
+            emit("    OR R2, R2, R0");
+            emit("    STORE R2, [R1]");
+            return;
+        }
         if (is_long_long_type(type)) {
             emit("    STORE R0, [R1]");
             emit("    STORE R2, [R1 + 4]");
