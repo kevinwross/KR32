@@ -43,6 +43,7 @@ source line numbers and debugger line mappings are preserved.
 | `<cstring>` | `std::strlen`, `strcpy`, `strncpy`, `strcat`, `strcmp`, `strncmp`, `strchr`, `strstr`, `memcpy`, `memset`, `memcmp` |
 | `<cctype>` | `std::isdigit`, `isalpha`, `isalnum`, `isspace`, `isupper`, `islower`, `toupper`, `tolower` |
 | `<cstddef>` | `std::size_t`, `std::ptrdiff_t` |
+| `<cstdint>` | `std::int8_t` through `std::uint64_t`, `intptr_t`, `uintptr_t` |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
 | `<unistd.h>` | `access`, `isatty`, `truncate`, `fsync`, `fdatasync`, `getcwd`, `chdir`, `dup`, `dup2` |

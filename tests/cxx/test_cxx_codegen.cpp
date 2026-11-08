@@ -772,6 +772,48 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("short types have two-byte layout") {
+    const ProgramResult program = compile_and_run(
+        "struct Pair { char tag; short value; int next; };\n"
+        "int sum(short* values, int count) {\n"
+        "    int total = 0;\n"
+        "    for (int index = 0; index < count; ++index) total += values[index];\n"
+        "    return total;\n"
+        "}\n"
+        "int main() {\n"
+        "    if (sizeof(short) != 2) return 1;\n"
+        "    if (sizeof(unsigned short) != 2) return 2;\n"
+        "    if (sizeof(struct Pair) != 8) return 3;\n"
+        "    short values[3];\n"
+        "    values[0] = 10; values[1] = 20; values[2] = 30;\n"
+        "    if (sum(values, 3) != 60) return 4;\n"
+        "    struct Pair pair;\n"
+        "    pair.tag = 'a'; pair.value = -5; pair.next = 9;\n"
+        "    if (pair.value != -5) return 5;\n"
+        "    unsigned short wrapped = 70000;\n"
+        "    return wrapped == 4464 ? 0 : 6;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("<cstdint> provides fixed-width types") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstdint>\n"
+        "#include <cstdint>\n"
+        "int main() {\n"
+        "    if (sizeof(std::uint8_t) != 1) return 1;\n"
+        "    if (sizeof(std::uint16_t) != 2) return 2;\n"
+        "    if (sizeof(std::uint32_t) != 4) return 3;\n"
+        "    if (sizeof(std::uint64_t) != 8) return 4;\n"
+        "    std::int64_t value = 123456789;\n"
+        "    std::uint64_t wide = 987654321;\n"
+        "    return value + (std::int64_t)wide == 1111111110 ? 0 : 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstddef> provides size types") {
     const ProgramResult program = compile_and_run(
         "#include <cstddef>\n"

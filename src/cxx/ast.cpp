@@ -36,6 +36,8 @@ bool Type::is_integral() const {
     switch (builtin) {
     case BuiltinKind::Bool:
     case BuiltinKind::Char:
+    case BuiltinKind::Short:
+    case BuiltinKind::UnsignedShort:
     case BuiltinKind::Int:
     case BuiltinKind::UnsignedInt:
     case BuiltinKind::LongLong:
@@ -260,6 +262,8 @@ std::string_view builtin_kind_name(BuiltinKind kind) {
     case BuiltinKind::Void: return "void";
     case BuiltinKind::Bool: return "bool";
     case BuiltinKind::Char: return "char";
+    case BuiltinKind::Short: return "short";
+    case BuiltinKind::UnsignedShort: return "unsigned short";
     case BuiltinKind::Int: return "int";
     case BuiltinKind::UnsignedInt: return "unsigned int";
     case BuiltinKind::LongLong: return "long long";

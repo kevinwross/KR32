@@ -636,18 +636,26 @@ private:
             break;
         }
         if (!specifiers.type) {
-            if (have_unsigned) {
+            if (have_short) {
+                specifiers.type = Type::make_builtin(
+                    have_unsigned ? BuiltinKind::UnsignedShort
+                                  : BuiltinKind::Short);
+            } else if (have_unsigned) {
                 specifiers.type = Type::make_builtin(BuiltinKind::UnsignedInt);
             } else if (have_long) {
-                specifiers.type = Type::make_builtin(BuiltinKind::Int);
-            } else if (have_short) {
                 specifiers.type = Type::make_builtin(BuiltinKind::Int);
             } else {
                 specifiers.type = Type::make_builtin(BuiltinKind::Int);
             }
         } else if (specifiers.type->kind == TypeKind::Builtin &&
-                   specifiers.type->builtin == BuiltinKind::Int && have_unsigned) {
-            specifiers.type->builtin = BuiltinKind::UnsignedInt;
+                   specifiers.type->builtin == BuiltinKind::Int) {
+            if (have_short) {
+                specifiers.type->builtin =
+                    have_unsigned ? BuiltinKind::UnsignedShort
+                                  : BuiltinKind::Short;
+            } else if (have_unsigned) {
+                specifiers.type->builtin = BuiltinKind::UnsignedInt;
+            }
         }
         if (have_long_long && specifiers.type->kind == TypeKind::Builtin) {
             if (specifiers.type->builtin == BuiltinKind::Int) {

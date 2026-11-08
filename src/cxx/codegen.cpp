@@ -115,6 +115,8 @@ std::string mangle_builtin(BuiltinKind kind) {
     case BuiltinKind::Void: return "v";
     case BuiltinKind::Bool: return "b";
     case BuiltinKind::Char: return "c";
+    case BuiltinKind::Short: return "s";
+    case BuiltinKind::UnsignedShort: return "t";
     case BuiltinKind::Int: return "i";
     case BuiltinKind::UnsignedInt: return "j";
     case BuiltinKind::LongLong: return "l";
@@ -232,7 +234,8 @@ bool is_integer(const TypePtr& type) {
 
 bool is_unsigned_integer(const TypePtr& type) {
     return type && type->kind == TypeKind::Builtin &&
-           (type->builtin == BuiltinKind::UnsignedInt ||
+           (type->builtin == BuiltinKind::UnsignedShort ||
+            type->builtin == BuiltinKind::UnsignedInt ||
             type->builtin == BuiltinKind::UnsignedLongLong);
 }
 
@@ -303,7 +306,10 @@ bool same_type(const TypePtr& left, const TypePtr& right) {
 
 TypePtr promote(const TypePtr& type) {
     if (type && type->kind == TypeKind::Builtin &&
-        (type->builtin == BuiltinKind::Bool || type->builtin == BuiltinKind::Char)) {
+        (type->builtin == BuiltinKind::Bool ||
+         type->builtin == BuiltinKind::Char ||
+         type->builtin == BuiltinKind::Short ||
+         type->builtin == BuiltinKind::UnsignedShort)) {
         return Type::make_builtin(BuiltinKind::Int);
     }
     return type;
@@ -1310,6 +1316,8 @@ private:
             case BuiltinKind::Void: return 0;
             case BuiltinKind::Bool:
             case BuiltinKind::Char: return 1;
+            case BuiltinKind::Short:
+            case BuiltinKind::UnsignedShort: return 2;
             case BuiltinKind::Int:
             case BuiltinKind::UnsignedInt:
             case BuiltinKind::Float: return 4;
@@ -1339,6 +1347,11 @@ private:
     }
 
     int type_align(const TypePtr& type) {
+        if (type && type->kind == TypeKind::Builtin &&
+            (type->builtin == BuiltinKind::Short ||
+             type->builtin == BuiltinKind::UnsignedShort)) {
+            return 2;
+        }
         if (type && type->kind == TypeKind::Named) {
             if (ClassInfo* info = find_class(type->name)) {
                 return info->align;
@@ -3509,6 +3522,12 @@ private:
             (resolved->builtin == BuiltinKind::Char ||
              resolved->builtin == BuiltinKind::Bool)) {
             emit("    LOAD8S R0, [R0]");
+        } else if (resolved && resolved->kind == TypeKind::Builtin &&
+                   resolved->builtin == BuiltinKind::Short) {
+            emit("    LOAD16S R0, [R0]");
+        } else if (resolved && resolved->kind == TypeKind::Builtin &&
+                   resolved->builtin == BuiltinKind::UnsignedShort) {
+            emit("    LOAD16U R0, [R0]");
         } else {
             emit("    LOAD R0, [R0]");
         }
@@ -3523,6 +3542,10 @@ private:
             (resolved->builtin == BuiltinKind::Char ||
              resolved->builtin == BuiltinKind::Bool)) {
             emit("    STORE8 R0, [R1]");
+        } else if (resolved && resolved->kind == TypeKind::Builtin &&
+                   (resolved->builtin == BuiltinKind::Short ||
+                    resolved->builtin == BuiltinKind::UnsignedShort)) {
+            emit("    STORE16 R0, [R1]");
         } else {
             emit("    STORE R0, [R1]");
         }
