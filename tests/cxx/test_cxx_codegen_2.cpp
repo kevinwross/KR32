@@ -281,6 +281,29 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm copy duplicates arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[3] = { 1, 2, 3 };\n"
+        "    int target[3] = { 0, 0, 0 };\n"
+        "    int* end = std::copy(source, source + 3, target);\n"
+        "    if (end != target + 3) return 1;\n"
+        "    if (target[0] != 1 || target[2] != 3) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    char output[4] = \"xxx\";\n"
+        "    std::copy(text, text + 3, output);\n"
+        "    if (output[0] != 'a' || output[2] != 'c') return 3;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    double copied[2] = { 0.0, 0.0 };\n"
+        "    std::copy(reals, reals + 2, copied);\n"
+        "    return copied[0] == 1.5 && copied[1] == 2.5 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm find locates elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
