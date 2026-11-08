@@ -142,8 +142,11 @@ TEST_CASE("enums expose integer constants and scoped names") {
     const ProgramResult program = compile_and_run(
         "enum Color { Red, Green = 4, Blue };\n"
         "enum class Mode { Off, On };\n"
+        "namespace N { enum Flags { None = 0, One = 1 }; }\n"
+        "class Box { public: enum Kind { Small = 1, Large = 2 }; };\n"
         "int main() {\n"
         "    if (Red != 0 || Green != 4 || Blue != 5) return 1;\n"
+        "    if (N::One != 1 || Box::Large != 2) return 5;\n"
         "    Color color = Blue;\n"
         "    if (color != Blue) return 2;\n"
         "    Mode mode = Mode::On;\n"

@@ -1687,6 +1687,8 @@ private:
                 } else {
                     collect_class_members(*child, qualify(prefix, child->name));
                 }
+            } else if (child->kind == DeclKind::Enum) {
+                collect_enum(*child, prefix);
             } else if (child->kind == DeclKind::TypeAlias ||
                        child->kind == DeclKind::Using) {
                 collect_using(*child, prefix);

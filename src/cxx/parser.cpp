@@ -1702,6 +1702,14 @@ private:
             }
         }
         expect("}", "to close enum body");
+        if (!declaration->name.parts.empty()) {
+            const std::string enum_name = declaration->name.to_string();
+            for (const EnumMember& member : declaration->enum_members) {
+                enum_constants_.insert(enum_name + "::" +
+                                       member.name.to_string());
+                enum_constants_.insert(member.name.to_string());
+            }
+        }
         return declaration;
     }
 
@@ -1717,6 +1725,13 @@ private:
         }
         const std::string& name = peek().text;
         if (is_known_type(name)) {
+            if (peek(1).text == "::" &&
+                (enum_constants_.find(name + "::" + peek(2).text) !=
+                     enum_constants_.end() ||
+                 enum_constants_.find(peek(2).text) !=
+                     enum_constants_.end())) {
+                return false;
+            }
             const std::string_view next = peek(1).text;
             return next == "::" || next == "*" || next == "&" ||
                    next == "&&" || next == "<" ||
@@ -2579,6 +2594,7 @@ private:
     std::vector<Access> access_stack_;
     std::vector<Name> current_bases_;
     std::unordered_set<std::string> known_types_;
+    std::unordered_set<std::string> enum_constants_;
     std::vector<DeclPtr> pending_definitions_;
 };
 
