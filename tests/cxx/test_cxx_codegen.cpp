@@ -555,6 +555,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    std::string resized_fill(\"ab\");\n"
         "    resized_fill.resize(5, 'x');\n"
         "    if (resized_fill != \"abxxx\") return 64;\n"
+        "    std::string prefix_append(\"a\");\n"
+        "    prefix_append.append(\"bcdef\", 3);\n"
+        "    if (prefix_append != \"abcd\") return 65;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

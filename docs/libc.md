@@ -241,4 +241,4 @@ a substring position/count; `std::string::npos` is available. `starts_with`/`end
 count), `front`, `back`, `replace`/`insert` (C string, `std::string`,
 character, or count+character), `erase` (position or range), `resize` (count or count+character), `push_back`,
 `pop_back`, `assign` (C string or prefix count), `append` (string, C string,
-or count+character), `swap`, `begin`/`end`, `data`, and `std::to_string`.
+prefix count, or count+character), `swap`, `begin`/`end`, `data`, and `std::to_string`.
