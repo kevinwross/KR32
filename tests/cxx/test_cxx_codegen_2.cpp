@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm finds adjacent duplicates") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 1, 2, 2, 3, 3 };\n"
+        "    if (std::adjacent_find(values, values + 5) != values + 1) return 1;\n"
+        "    char text[6] = \"abcde\";\n"
+        "    if (std::adjacent_find(text, text + 5) != text + 5) return 2;\n"
+        "    char doubled[6] = \"abbcd\";\n"
+        "    if (std::adjacent_find(doubled, doubled + 5) != doubled + 1) return 3;\n"
+        "    double reals[3] = { 1.5, 2.5, 2.5 };\n"
+        "    if (std::adjacent_find(reals, reals + 3) != reals + 1) return 4;\n"
+        "    return std::adjacent_find(text, text) == text ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm searches subsequences") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
