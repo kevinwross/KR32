@@ -926,6 +926,11 @@ private:
         } else {
             info.size = (info.size + info.align - 1) / info.align * info.align;
         }
+        if (info.decl != nullptr && info.decl->alignment > 0) {
+            info.align = std::max(info.align, info.decl->alignment);
+            info.size =
+                (info.size + info.align - 1) / info.align * info.align;
+        }
         if (info.qualified == "kr32::vec4") {
             info.size = 16;
             info.align = 16;
@@ -5105,9 +5110,16 @@ private:
             emit("    MOV R0, #" + std::to_string(value));
             return Type::make_builtin(BuiltinKind::Int);
         }
-        case ExprKind::Alignof:
-            emit("    MOV R0, #4");
+        case ExprKind::Alignof: {
+            TypePtr target = expression.type
+                                 ? resolve_type(expression.type)
+                                 : (!expression.children.empty()
+                                        ? type_of(*expression.children[0])
+                                        : nullptr);
+            const int alignment = target ? type_align(target) : 4;
+            emit("    MOV R0, #" + std::to_string(alignment));
             return Type::make_builtin(BuiltinKind::Int);
+        }
         case ExprKind::Typeid: {
             if (expression.type) {
                 TypePtr type = resolve_type(expression.type);

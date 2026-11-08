@@ -276,6 +276,7 @@ struct Decl {
     bool is_virtual = false;
     bool is_inline = false;
     bool is_explicit = false;
+    int alignment = 0;
     bool is_friend = false;
     bool is_pure = false;
     bool is_defaulted = false;

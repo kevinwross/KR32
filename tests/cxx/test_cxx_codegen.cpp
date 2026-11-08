@@ -631,6 +631,20 @@ TEST_CASE("conversion operators work in conditions and casts") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("alignas raises class size and alignment") {
+    const ProgramResult program = compile_and_run(
+        "struct alignas(16) First { char value; };\n"
+        "alignas(32) struct Second { char value; };\n"
+        "int main() {\n"
+        "    if (sizeof(First) != 16) return 1;\n"
+        "    if (sizeof(Second) != 32) return 2;\n"
+        "    if (alignof(First) != 16) return 3;\n"
+        "    return alignof(Second) == 32 ? 0 : 4;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C-style casts construct class temporaries") {
     const ProgramResult program = compile_and_run(
         "class Number {\n"

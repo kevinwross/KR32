@@ -43,6 +43,7 @@ struct Specifiers {
     bool is_typename = false;
     bool is_auto = false;
     bool is_extern = false;
+    int alignment = 0;
 };
 
 struct Declarator {
@@ -485,6 +486,16 @@ private:
                 advance();
                 continue;
             }
+            if (at("alignas")) {
+                advance();
+                expect("(", "after alignas");
+                if (peek().kind == TokenKind::IntegerLiteral) {
+                    specifiers.alignment =
+                        static_cast<int>(advance().integer);
+                }
+                expect(")", "after alignas argument");
+                continue;
+            }
             if (at("constexpr") || at("consteval") || at("constinit")) {
                 specifiers.is_constexpr = true;
                 advance();
@@ -658,6 +669,20 @@ private:
         std::size_t index = 1; // skip class/struct/union/enum
         if (peek(index).text == "class" || peek(index).text == "struct") {
             ++index;
+        }
+        if (peek(index).text == "alignas") {
+            ++index;
+            if (peek(index).text == "(") {
+                int depth = 0;
+                do {
+                    if (peek(index).text == "(") {
+                        ++depth;
+                    } else if (peek(index).text == ")") {
+                        --depth;
+                    }
+                    ++index;
+                } while (depth > 0 && index < tokens_.size());
+            }
         }
         if (peek(index).kind == TokenKind::Identifier) {
             ++index;
@@ -1023,6 +1048,25 @@ private:
 
     void parse_declaration(Context context, std::vector<DeclPtr>& output) {
         skip_attributes();
+        if (at("alignas")) {
+            const std::size_t saved = position_;
+            advance();
+            expect("(", "after alignas");
+            int alignment = 0;
+            if (peek().kind == TokenKind::IntegerLiteral) {
+                alignment = static_cast<int>(advance().integer);
+            }
+            expect(")", "after alignas argument");
+            if (at("class") || at("struct") || at("union")) {
+                DeclPtr definition = parse_class_definition();
+                definition->alignment = alignment;
+                add_known_type(definition->name);
+                output.push_back(std::move(definition));
+                consume(";");
+                return;
+            }
+            position_ = saved;
+        }
         if (at("template")) {
             parse_template_declaration(context, output);
             return;
@@ -1152,6 +1196,7 @@ private:
             declaration->is_virtual = specifiers.is_virtual;
             declaration->is_inline = specifiers.is_inline;
             declaration->is_explicit = specifiers.is_explicit;
+            declaration->alignment = specifiers.alignment;
             declaration->is_constexpr = specifiers.is_constexpr;
             declaration->is_friend = specifiers.is_friend;
             declaration->is_mutable = specifiers.is_mutable;
@@ -1482,8 +1527,18 @@ private:
         const bool is_union = at("union");
         const bool is_class = at("class");
         advance(); // class/struct/union
+        int alignment = 0;
+        if (at("alignas")) {
+            advance();
+            expect("(", "after alignas");
+            if (peek().kind == TokenKind::IntegerLiteral) {
+                alignment = static_cast<int>(advance().integer);
+            }
+            expect(")", "after alignas argument");
+        }
         auto declaration = std::make_shared<Decl>();
         declaration->kind = DeclKind::Class;
+        declaration->alignment = alignment;
         declaration->location = {peek().line, peek().column};
         if (at_identifier()) {
             declaration->name.parts.push_back(peek().text);
