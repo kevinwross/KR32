@@ -8345,14 +8345,22 @@ private:
             }
         }
         if (type && type->kind == TypeKind::Array && type->array_size == 0 &&
-            type->element && type->element->kind == TypeKind::Builtin &&
-            type->element->builtin == BuiltinKind::Char &&
-            declaration.initializer &&
-            declaration.initializer->kind == ExprKind::StringLiteral) {
-            auto sized = std::make_shared<Type>(*type);
-            sized->array_size = static_cast<std::uint32_t>(
-                declaration.initializer->text.size() + 1);
-            type = sized;
+            declaration.initializer) {
+            if (declaration.initializer->kind == ExprKind::InitializerList) {
+                auto sized = std::make_shared<Type>(*type);
+                sized->array_size = static_cast<std::uint32_t>(
+                    declaration.initializer->children.size());
+                type = sized;
+            } else if (declaration.initializer->kind ==
+                           ExprKind::StringLiteral &&
+                       type->element &&
+                       type->element->kind == TypeKind::Builtin &&
+                       type->element->builtin == BuiltinKind::Char) {
+                auto sized = std::make_shared<Type>(*type);
+                sized->array_size = static_cast<std::uint32_t>(
+                    declaration.initializer->text.size() + 1);
+                type = sized;
+            }
         }
         Function* lambda_target = nullptr;
         if (declaration.initializer &&

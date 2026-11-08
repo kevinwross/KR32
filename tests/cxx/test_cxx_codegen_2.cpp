@@ -138,6 +138,17 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("unsized arrays infer length from initializer lists") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int values[] = {1, 2, 3, 4};\n"
+        "    if (sizeof(values) != 16) return 1;\n"
+        "    return values[3] == 4 ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("local char arrays initialize from string literals") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"
