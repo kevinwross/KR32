@@ -3935,6 +3935,18 @@ private:
                      (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
                      std::to_string(temp) + "]");
                 fp_temps.emplace_back(temp, parameter);
+            } else if (ClassInfo* parameter_class = class_of(parameter);
+                       parameter_class != nullptr &&
+                       is_register_class(parameter_class) &&
+                       parameter_class->size <= 4 &&
+                       class_of(type_of(*effective_arguments[index])) !=
+                           nullptr) {
+                gen_expr(*effective_arguments[index]);
+                const int temp = allocate_local(parameter);
+                emit("    MOV R1, R0");
+                emit("    LOAD R0, [R1]");
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
             } else {
                 gen_expr(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -7561,6 +7573,18 @@ private:
                      (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
                      std::to_string(temp) + "]");
                 fp_temps.emplace_back(temp, parameter);
+            } else if (ClassInfo* parameter_class = class_of(parameter);
+                       parameter_class != nullptr &&
+                       is_register_class(parameter_class) &&
+                       parameter_class->size <= 4 &&
+                       class_of(type_of(*effective_arguments[index])) !=
+                           nullptr) {
+                gen_expr(*effective_arguments[index]);
+                const int temp = allocate_local(parameter);
+                emit("    MOV R1, R0");
+                emit("    LOAD R0, [R1]");
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
             } else {
                 gen_expr(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -7668,6 +7692,18 @@ private:
                      (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
                      std::to_string(temp) + "]");
                 fp_temps.emplace_back(temp, parameter);
+            } else if (ClassInfo* parameter_class = class_of(parameter);
+                       parameter_class != nullptr &&
+                       is_register_class(parameter_class) &&
+                       parameter_class->size <= 4 &&
+                       class_of(type_of(*effective_arguments[index])) !=
+                           nullptr) {
+                gen_expr(*effective_arguments[index]);
+                const int temp = allocate_local(parameter);
+                emit("    MOV R1, R0");
+                emit("    LOAD R0, [R1]");
+                emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                integer_temps.push_back(temp);
             } else {
                 gen_expr(*effective_arguments[index]);
                 const int temp =

@@ -727,6 +727,27 @@ TEST_CASE("C-style casts convert between class types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("constructors accept class arguments by value") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int value;\n"
+        "    Target(Source source) : value(source.value + 1) {}\n"
+        "};\n"
+        "int take(Target target) { return target.value; }\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target direct(source);\n"
+        "    if (direct.value != 5) return 1;\n"
+        "    Target copied = source;\n"
+        "    if (copied.value != 5) return 2;\n"
+        "    return take(source) - 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C-style casts construct class temporaries") {
     const ProgramResult program = compile_and_run(
         "class Number {\n"
