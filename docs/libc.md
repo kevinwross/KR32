@@ -70,6 +70,7 @@ sandboxed just like `open`.
 - Aggregate local initializers and assignment from struct-returning calls and
   string literals
 - Compound literals such as `(struct Point){1, 2}`
+- Anonymous struct and union members promoted into the enclosing type
 - Struct/union parameters copied into callee locals, preserving by-value semantics
 - `__func__`, `__LINE__`, `__FILE__`, `__DATE__`, `__TIME__`, `__STDC__`,
   `__STDC_HOSTED__`, and `__STDC_VERSION__`

@@ -551,6 +551,27 @@ TEST_CASE("C supports compound literals and struct parameters") {
     CHECK(scalar.result == 0);
 }
 
+TEST_CASE("C supports anonymous struct and union members") {
+    const ProgramResult program = compile_and_run(
+        "struct Variant { int tag; union { int integer; float real; }; };\n"
+        "struct Nested { int a; struct { int b; int c; }; };\n"
+        "int main(void) {\n"
+        "    struct Variant value;\n"
+        "    value.tag = 1;\n"
+        "    value.integer = 7;\n"
+        "    if (value.tag != 1) return 1;\n"
+        "    if (value.integer != 7) return 2;\n"
+        "    struct Nested nested;\n"
+        "    nested.a = 1;\n"
+        "    nested.b = 2;\n"
+        "    nested.c = 3;\n"
+        "    if (nested.a + nested.b + nested.c != 6) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("a compiled C program links, runs, and returns a value") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"

@@ -954,6 +954,7 @@ struct Member {
     std::string name;
     TypePtr type;
     int offset = 0;
+    bool promoted = false;
 };
 
 struct Type {
@@ -1348,6 +1349,17 @@ private:
             }
             while (!match("}")) {
                 TypePtr member_type = parse_type();
+                if (peek().text == ";") {
+                    take();
+                    if (member_type->kind != Type::Kind::Struct &&
+                        member_type->kind != Type::Kind::Union) {
+                        error("anonymous member must be a struct or union");
+                    }
+                    Member anonymous;
+                    anonymous.type = member_type;
+                    type->members.push_back(anonymous);
+                    continue;
+                }
                 const std::string member_name = parse_name();
                 if (match("[")) {
                     std::int64_t count = 0;
@@ -1380,6 +1392,26 @@ private:
             if (type->total_size == 0) {
                 type->total_size = 1;
             }
+            std::vector<Member> promoted;
+            for (const Member& member : type->members) {
+                if (!member.name.empty() || member.type == nullptr ||
+                    (member.type->kind != Type::Kind::Struct &&
+                     member.type->kind != Type::Kind::Union)) {
+                    continue;
+                }
+                for (const Member& inner : member.type->members) {
+                    if (!inner.name.empty()) {
+                        Member entry;
+                        entry.name = inner.name;
+                        entry.type = inner.type;
+                        entry.offset = member.offset + inner.offset;
+                        entry.promoted = true;
+                        promoted.push_back(entry);
+                    }
+                }
+            }
+            type->members.insert(type->members.end(), promoted.begin(),
+                                 promoted.end());
             if (!tag.empty()) {
                 tags_[tag] = type;
             }
