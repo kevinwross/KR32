@@ -1932,6 +1932,10 @@ private:
                 result += std::to_string(line_number);
                 continue;
             }
+            if (name == "__COUNTER__") {
+                result += std::to_string(counter_++);
+                continue;
+            }
             if (name == "__FILE__") {
                 result += "\"" + std::string(source_name_) + "\"";
                 continue;
@@ -2050,6 +2054,7 @@ private:
     std::vector<Conditional> conditions_;
     bool thread_header_injected_ = false;
     bool initializer_list_header_injected_ = false;
+    int counter_ = 0;
 };
 
 } // namespace

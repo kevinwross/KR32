@@ -732,6 +732,19 @@ TEST_CASE("C-style casts convert between class types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("predefined source macros expand") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int line = __LINE__;\n"
+        "    if (line != 2) return 1;\n"
+        "    int first = __COUNTER__;\n"
+        "    int second = __COUNTER__;\n"
+        "    return first == 0 && second == 1 ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("assignments convert between class types") {
     const ProgramResult program = compile_and_run(
         "struct Source { int value; };\n"
