@@ -404,6 +404,7 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (repeated.find_first_of('a', 1) != 3) return 86;\n"
         "    return 0;\n"
         "}\n");
+    INFO(program.diagnostics);
     CHECK(program.ok);
     CHECK(program.result == 0);
 }

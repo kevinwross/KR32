@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 12:49 -08:00
+> **Last updated:** 2026-11-08 12:54 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2255,6 +2255,8 @@ Newest entries at the bottom. Use the local time zone.
       class scopes, including `Box::Kind::Value` expression parsing.
 - **2026-11-08 12:49 -08:00** — Evaluated enum constants in array bounds;
       `int values[N::Two]` now sizes the array correctly.
+- **2026-11-08 12:54 -08:00** — Added `std::string(int count, char)`
+      constructor for repeated-character strings.
 
 ## 10. Updating this file
 

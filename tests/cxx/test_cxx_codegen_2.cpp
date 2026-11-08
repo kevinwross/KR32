@@ -138,6 +138,16 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string repeated-character constructor compiles") {
+    const cxx::Result compiled = cxx::compile(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(3, 'x');\n"
+        "    return text.size() == 3 ? 0 : 1;\n"
+        "}\n");
+    CHECK(compiled.ok);
+}
+
 TEST_CASE("enums expose integer constants and scoped names") {
     const ProgramResult program = compile_and_run(
         "enum Color { Red, Green = 4, Blue };\n"
