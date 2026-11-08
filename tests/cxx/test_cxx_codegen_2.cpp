@@ -146,6 +146,9 @@ TEST_CASE("local char arrays initialize from string literals") {
         "        return 1;\n"
         "    }\n"
         "    if (buffer[3] != 0) return 2;\n"
+        "    char inferred[] = \"abc\";\n"
+        "    if (sizeof(inferred) != 4) return 3;\n"
+        "    if (inferred[2] != 'c') return 4;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
