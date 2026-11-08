@@ -770,6 +770,10 @@ private:
 
                     "    char& front() { return data_[0]; }\n"
                     "    char& back() { return data_[size_ - 1]; }\n"
+                    "    char* begin() { return data_; }\n"
+                    "    char* end() { return data_ + size_; }\n"
+                    "    const char* begin() const { return data_; }\n"
+                    "    const char* end() const { return data_ + size_; }\n"
                     "    int find(const char* text) const {\n"
                     "        int length = 0;\n"
                     "        if (text != 0) { while (text[length] != 0) length = length + 1; }\n"
