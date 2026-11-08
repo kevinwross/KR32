@@ -234,5 +234,6 @@ string, C string/string), `operator==`, `operator!=`, relational operators,
 `find`/`rfind`/`find_first_of`/`find_last_of`/`compare` (C string,
 character, or `std::string`), with `find` accepting an optional start
 position, `starts_with`/`ends_with`, `at`, `substr` (with or without
-count), `front`, `back`, `replace`, `insert`, `erase`, `resize`, `push_back`,
+count), `front`, `back`, `replace`/`insert` (C string or `std::string`),
+`erase`, `resize`, `push_back`,
 `pop_back`, `append`, `swap`, and `std::to_string`.

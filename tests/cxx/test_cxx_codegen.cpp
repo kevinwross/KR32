@@ -499,6 +499,12 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (repeated.find(\"bc\", 2) != 4) return 36;\n"
         "    if (repeated.find('b', 2) != 4) return 37;\n"
         "    if (repeated.find(needle, 2) != -1) return 38;\n"
+        "    std::string replaced_with_string(\"abc\");\n"
+        "    std::string replacement(\"XY\");\n"
+        "    replaced_with_string.replace(1, 1, replacement);\n"
+        "    if (replaced_with_string != \"aXYc\") return 39;\n"
+        "    replaced_with_string.insert(1, replacement);\n"
+        "    if (replaced_with_string != \"aXYXYc\") return 40;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 22:05 -08:00
+> **Last updated:** 2026-11-07 22:18 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2068,6 +2068,8 @@ Newest entries at the bottom. Use the local time zone.
       copy initialization and argument conversions.
 - **2026-11-07 22:05 -08:00** — Added C-style casts that construct class
       temporaries, including explicit constructors and same-class copies.
+- **2026-11-07 22:18 -08:00** — Added `std::string::replace` and `insert`
+      overloads accepting another string.
 
 ## 10. Updating this file
 
