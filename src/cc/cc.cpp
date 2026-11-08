@@ -1972,9 +1972,6 @@ private:
             pending_packed_ = false;
             pending_alignment_ = 0;
         }
-        if (long_flag && base->kind == Type::Kind::Double) {
-            error("long double is not supported");
-        }
         if (long_long_flag) {
             if (base->kind != Type::Kind::Int) {
                 error("long long requires an integer type");

@@ -120,3 +120,14 @@ TEST_CASE("quoted user headers are expanded into the translation unit") {
     CHECK(result.diagnostics.empty());
     std::filesystem::remove_all(directory);
 }
+
+TEST_CASE("C supports long double as a double-width type") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long double value = 2.5L;\n"
+        "    if (sizeof(long double) != 8) return 1;\n"
+        "    return value == 2.5L ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
