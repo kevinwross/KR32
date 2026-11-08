@@ -281,6 +281,30 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm computes sorted intersection") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int left[3] = { 1, 3, 5 };\n"
+        "    int right[3] = { 2, 3, 6 };\n"
+        "    int output[3] = { 0, 0, 0 };\n"
+        "    int* end = std::set_intersection(left, left + 3, right, right + 3, output);\n"
+        "    if (end != output + 1 || output[0] != 3) return 1;\n"
+        "    char a[3] = \"ace\";\n"
+        "    char b[3] = \"bcd\";\n"
+        "    char letters[3] = { 0, 0, 0 };\n"
+        "    if (std::set_intersection(a, a + 3, b, b + 3, letters) != letters + 1) return 2;\n"
+        "    if (letters[0] != 'c') return 3;\n"
+        "    double x[2] = { 1.5, 3.5 };\n"
+        "    double y[2] = { 2.5, 3.5 };\n"
+        "    double z[2] = { 0.0, 0.0 };\n"
+        "    return std::set_intersection(x, x + 2, y, y + 2, z) == z + 1 && z[0] == 3.5 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm computes sorted union") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
