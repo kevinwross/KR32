@@ -739,6 +739,8 @@ TEST_CASE("predefined source macros expand") {
         "    if (line != 2) return 1;\n"
         "    int first = __COUNTER__;\n"
         "    int second = __COUNTER__;\n"
+        "    if (__DATE__[0] == 0) return 3;\n"
+        "    if (__TIME__[2] != ':') return 4;\n"
         "    return first == 0 && second == 1 ? 0 : 2;\n"
         "}\n");
     CHECK(program.ok);

@@ -3,6 +3,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
+#include <ctime>
 #include <map>
 #include <set>
 #include <sstream>
@@ -30,6 +31,45 @@ std::string_view trim(std::string_view text) {
         text.remove_suffix(1);
     }
     return text;
+}
+
+std::string two_digit(int value) {
+    std::string text = std::to_string(value);
+    if (text.size() < 2) {
+        text.insert(text.begin(), '0');
+    }
+    return text;
+}
+
+std::tm local_time_now() {
+    const std::time_t now = std::time(nullptr);
+    std::tm local{};
+#if defined(_WIN32)
+    localtime_s(&local, &now);
+#else
+    localtime_r(&now, &local);
+#endif
+    return local;
+}
+
+std::string compile_date_text() {
+    static const char* const months[] = {"Jan", "Feb", "Mar", "Apr",
+                                         "May", "Jun", "Jul", "Aug",
+                                         "Sep", "Oct", "Nov", "Dec"};
+    const std::tm local = local_time_now();
+    const int month = local.tm_mon >= 0 && local.tm_mon < 12 ? local.tm_mon : 0;
+    std::string day = std::to_string(local.tm_mday);
+    if (day.size() < 2) {
+        day.insert(day.begin(), ' ');
+    }
+    return std::string(months[month]) + " " + day + " " +
+           std::to_string(local.tm_year + 1900);
+}
+
+std::string compile_time_text() {
+    const std::tm local = local_time_now();
+    return two_digit(local.tm_hour) + ":" + two_digit(local.tm_min) + ":" +
+           two_digit(local.tm_sec);
 }
 
 bool identifier_start(char c) {
@@ -1938,6 +1978,14 @@ private:
             }
             if (name == "__FILE__") {
                 result += "\"" + std::string(source_name_) + "\"";
+                continue;
+            }
+            if (name == "__DATE__") {
+                result += "\"" + compile_date_text() + "\"";
+                continue;
+            }
+            if (name == "__TIME__") {
+                result += "\"" + compile_time_text() + "\"";
                 continue;
             }
             const auto macro = macros_.find(name);
