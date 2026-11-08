@@ -867,6 +867,24 @@ TEST_CASE("<cstddef> provides size types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cstdio> provides formatted output") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstdio>\n"
+        "#include <cstdio>\n"
+        "int main() {\n"
+        "    char buffer[32];\n"
+        "    std::sprintf(buffer, \"%d-%s\", 5, \"x\");\n"
+        "    if (buffer[0] != '5') return 1;\n"
+        "    char other[8];\n"
+        "    int written = std::snprintf(other, 4, \"%s\", \"abcdef\");\n"
+        "    if (written != 6) return 2;\n"
+        "    if (other[0] != 'a' || other[2] != 'c' || other[3] != 0) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstring> exposes extended helpers") {
     const ProgramResult program = compile_and_run(
         "#include <cstring>\n"

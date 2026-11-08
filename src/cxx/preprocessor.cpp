@@ -654,6 +654,29 @@ private:
                 }
                 return;
             }
+            if (header.find("<cstdio>") != std::string::npos) {
+                if (!cstdio_header_injected_) {
+                    cstdio_header_injected_ = true;
+                    append_line(
+                        "extern \"C\" {\n"
+                        "int printf(const char* format, ...);\n"
+                        "int sprintf(char* buffer, const char* format, ...);\n"
+                        "int snprintf(char* buffer, int capacity, const char* format, ...);\n"
+                        "int puts(const char* text);\n"
+                        "int putchar(int character);\n"
+                        "int getchar();\n"
+                        "}\n"
+                        "namespace std {\n"
+                        "using ::printf;\n"
+                        "using ::sprintf;\n"
+                        "using ::snprintf;\n"
+                        "using ::puts;\n"
+                        "using ::putchar;\n"
+                        "using ::getchar;\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<cfloat>") != std::string::npos) {
                 if (!cfloat_header_injected_) {
                     cfloat_header_injected_ = true;
@@ -2466,6 +2489,7 @@ private:
     bool cstdint_header_injected_ = false;
     bool climits_header_injected_ = false;
     bool cfloat_header_injected_ = false;
+    bool cstdio_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;

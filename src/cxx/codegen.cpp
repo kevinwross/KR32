@@ -1772,7 +1772,11 @@ private:
             return;
         }
         const std::string alias = declaration.name.parts.back();
-        using_aliases_[prefix][alias] = declaration.name.to_string();
+        std::string target = declaration.name.to_string();
+        if (target.rfind("::", 0) == 0) {
+            target.erase(0, 2);
+        }
+        using_aliases_[prefix][alias] = std::move(target);
     }
 
     void push_scope() {
@@ -1859,6 +1863,20 @@ private:
             keys.push_back(name.to_string());
             if (name.to_string().rfind("::", 0) == 0) {
                 keys.back().erase(0, 2);
+            }
+            const std::string& qualified = keys.back();
+            const std::size_t separator = qualified.rfind("::");
+            const std::string scope_name =
+                separator == std::string::npos ? "" : qualified.substr(0, separator);
+            const std::string base = separator == std::string::npos
+                                         ? qualified
+                                         : qualified.substr(separator + 2);
+            const auto alias_scope = using_aliases_.find(scope_name);
+            if (alias_scope != using_aliases_.end()) {
+                const auto alias = alias_scope->second.find(base);
+                if (alias != alias_scope->second.end()) {
+                    keys.push_back(alias->second);
+                }
             }
             return keys;
         }
