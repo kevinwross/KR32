@@ -281,6 +281,29 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm swaps ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int left[3] = { 1, 2, 3 };\n"
+        "    int right[3] = { 4, 5, 6 };\n"
+        "    int* end = std::swap_ranges(left, left + 3, right);\n"
+        "    if (end != right + 3) return 1;\n"
+        "    if (left[0] != 4 || right[2] != 3) return 2;\n"
+        "    char a[3] = \"abc\";\n"
+        "    char b[3] = \"xyz\";\n"
+        "    std::swap_ranges(a, a + 3, b);\n"
+        "    if (a[0] != 'x' || b[2] != 'c') return 3;\n"
+        "    double x[2] = { 1.5, 2.5 };\n"
+        "    double y[2] = { 3.5, 4.5 };\n"
+        "    std::swap_ranges(x, x + 2, y);\n"
+        "    return x[0] == 3.5 && y[1] == 2.5 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm unique compacts duplicates") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
