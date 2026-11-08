@@ -594,6 +594,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    char copied_buffer[4] = {0, 0, 0, 0};\n"
         "    if (repeated.copy(copied_buffer, 2, 1) != 2) return 82;\n"
         "    if (copied_buffer[0] != 'b' || copied_buffer[1] != 'c') return 83;\n"
+        "    if (repeated.find_first_of('a') != 0) return 84;\n"
+        "    if (repeated.find_last_of('c') != 5) return 85;\n"
+        "    if (repeated.find_first_of('a', 1) != 3) return 86;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
