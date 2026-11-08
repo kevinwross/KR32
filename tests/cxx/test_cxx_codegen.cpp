@@ -605,6 +605,26 @@ TEST_CASE("conversion operators work in conditions and casts") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("C-style casts construct class temporaries") {
+    const ProgramResult program = compile_and_run(
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    explicit Number(int input) : value(input) {}\n"
+        "};\n"
+        "int take(Number value) { return value.value; }\n"
+        "int main() {\n"
+        "    if (take((Number)5) != 5) return 1;\n"
+        "    Number source(3);\n"
+        "    Number copy = (Number)source;\n"
+        "    if (copy.value != 3) return 2;\n"
+        "    Number direct = (Number)6;\n"
+        "    return direct.value - 6;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("explicit constructors reject implicit conversions") {
     const cxx::Result implicit = cxx::compile(
         "class Number {\n"

@@ -4979,6 +4979,30 @@ private:
                 return gen_dynamic_cast(expression, target);
             }
             const TypePtr source = type_of(*expression.children[0]);
+            if (ClassInfo* target_info = class_of(target)) {
+                const int object = allocate_local(target);
+                if (ClassInfo* source_info = class_of(source)) {
+                    if (source_info != target_info) {
+                        error(expression.location,
+                              "cast between different class types is not supported");
+                        zero_object(object, target_info->size);
+                    } else {
+                        gen_expr(*expression.children[0]);
+                        emit("    MOV R1, R0");
+                        emit("    LEA R0, [R7 + " +
+                             std::to_string(object) + "]");
+                        emit("    MOV R2, #" +
+                             std::to_string(target_info->size));
+                        emit("    CALL memcpy");
+                    }
+                } else {
+                    construct_object_from_expression(
+                        target_info, object, *expression.children[0], false,
+                        true);
+                }
+                emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
+                return target;
+            }
             if (ClassInfo* info = class_of(source)) {
                 const std::string conversion_name =
                     "operator " + target->to_string();
@@ -7437,7 +7461,8 @@ private:
 
     void construct_object_from_expression(ClassInfo* info, int offset,
                                           const Expr& argument,
-                                          bool address_in_slot = false) {
+                                          bool address_in_slot = false,
+                                          bool allow_explicit = false) {
         if (info->abstract) {
             error(*info->decl,
                   "cannot instantiate abstract class: " + info->qualified);
@@ -7447,7 +7472,8 @@ private:
         int best_score = -100000;
         const TypePtr argument_type = resolve_type(type_of(argument));
         for (Function* candidate : info->constructors) {
-            if (candidate->parameters.empty() || candidate->is_explicit) {
+            if (candidate->parameters.empty() ||
+                (candidate->is_explicit && !allow_explicit)) {
                 continue;
             }
             bool defaults_ok = true;
@@ -8073,7 +8099,11 @@ private:
                         }
                         return;
                     }
-                    gen_address(*declaration.initializer);
+                    if (is_lvalue(*declaration.initializer)) {
+                        gen_address(*declaration.initializer);
+                    } else {
+                        gen_expr(*declaration.initializer);
+                    }
                     emit("    MOV R1, R0");
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                     emit("    MOV R2, #" + std::to_string(info->size));
