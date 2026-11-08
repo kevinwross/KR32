@@ -8459,7 +8459,7 @@ private:
             const std::string owner_symbol =
                 current_function_ != nullptr ? current_function_->symbol : "global";
             global->qualified = "__cxx_local_static_" + owner_symbol + "_" +
-                                std::to_string(static_counter_);
+                                std::to_string(static_counter_++);
             global->symbol = global->qualified;
             global->type = type;
             global->defined = true;
@@ -8478,13 +8478,31 @@ private:
             }
             ClassInfo* info = class_of(type);
             if (!template_owner && info == nullptr &&
-                declaration.initializer && type_size(type) == 4) {
-                std::int64_t constant = 0;
-                if (eval_const(*declaration.initializer, constant)) {
-                    data_ += ".align 4\n" + raw->symbol + ":\n    .word " +
-                             std::to_string(
-                                 static_cast<std::uint32_t>(constant)) +
-                             "\n";
+                declaration.initializer) {
+                const int size = std::max(1, type_size(type));
+                std::uint64_t bits = 0;
+                bool constant = false;
+                if (is_fp(type) && size == 8) {
+                    double value = 0.0;
+                    if (eval_const_fp(*declaration.initializer, value)) {
+                        std::memcpy(&bits, &value, sizeof(value));
+                        constant = true;
+                    }
+                } else {
+                    std::int64_t value = 0;
+                    if (eval_const(*declaration.initializer, value)) {
+                        bits = static_cast<std::uint64_t>(value);
+                        constant = true;
+                    }
+                }
+                if (constant) {
+                    data_ += ".align " + std::to_string(size) + "\n" +
+                             raw->symbol + ":\n";
+                    for (int index = 0; index < size; ++index) {
+                        data_ += "    .byte " +
+                                 std::to_string((bits >> (index * 8)) & 0xFFU) +
+                                 "\n";
+                    }
                     return;
                 }
             }

@@ -138,6 +138,22 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("function statics support scalar widths") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    static double real = 2.5;\n"
+        "    static char letter = 'x';\n"
+        "    static long long big = 1234567890123LL;\n"
+        "    if (real != 2.5) return 1;\n"
+        "    if (letter != 'x') return 2;\n"
+        "    if (big != 1234567890123LL) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("scalar function statics initialize once") {
     const ProgramResult program = compile_and_run(
         "int next() {\n"
