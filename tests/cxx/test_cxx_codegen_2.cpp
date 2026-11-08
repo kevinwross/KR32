@@ -281,6 +281,26 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm remove compacts ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 1, 2, 1, 3, 1 };\n"
+        "    int* end = std::remove(values, values + 5, 1);\n"
+        "    if (end != values + 2) return 1;\n"
+        "    if (values[0] != 2 || values[1] != 3) return 2;\n"
+        "    char text[6] = \"abaca\";\n"
+        "    char* tail = std::remove(text, text + 5, 'a');\n"
+        "    if (tail != text + 2) return 3;\n"
+        "    if (text[0] != 'b' || text[1] != 'c') return 4;\n"
+        "    double reals[3] = { 1.5, 2.5, 1.5 };\n"
+        "    return std::remove(reals, reals + 3, 1.5) == reals + 1 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm replace substitutes values") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
