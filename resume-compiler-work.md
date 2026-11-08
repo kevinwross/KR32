@@ -1,27 +1,28 @@
 # Resume notes: C/C++ compiler work
 
-**Updated:** 2026-11-08 04:22 America/Los_Angeles
+**Updated:** 2026-11-08 07:14 America/Los_Angeles
 **Repository:** `C:\Users\kevin\source\repos\KR32`
-**Last feature commit:** `ff90f10` (`cxx: add not-of search positions`).
+**Last feature commit:** `449a814` (`cxx: add __func__`).
 **Goal:** “Continue to improve the C and C++ compilers to support the system”
-**Goal status:** active. Rounds 69–110 continued the goal; latest verification is
+**Goal status:** active. Rounds 69–125 continued the goal; latest verification is
 below.
 
 ## Last verified state
 
 - Windows Debug CTest: **43/43 passed**
 - Linux GCC CTest (WSL): **43/43 passed**
-- Unit suite: **437 test cases, 7,202 assertions**, all passing
+- Unit suite: **445 test cases, 7,256 assertions**, all passing
 - Working tree clean except pre-existing untracked `node_modules/`,
   `package.json`, and `package-lock.json` (not part of compiler work; leave
   untracked)
 
-## Recent feature areas (rounds 69–110)
+## Recent feature areas (rounds 69–125)
 
 - Conversion operators now apply to scalar returns, equality/relational
   comparisons, and integer arithmetic, including reversed operands.
-- Converting constructors work for copy initialization, scalar arguments,
-  globals/TLS, explicit-constructor rejection, and C-style class casts.
+- Converting constructors work for copy initialization, scalar and class
+  arguments (by value as well as by reference), returns, assignments, and
+  C-style class-to-class casts.
 - Default arguments cover functions, members, and constructors, including
   global and copy-initialized objects.
 - C: `#error`/`#warning`, attribute skipping, `__attribute__((packed/aligned))`,
@@ -34,6 +35,10 @@ below.
   operations.
 - C++ ABI: fixed integer arguments beyond `R3` are stack-passed, enabling
   four- and five-argument member calls such as `std::string::replace/compare`.
+- Predefined macros in both front ends include `__COUNTER__`; C++ also supports
+  `__DATE__`, `__TIME__`, `__FILE__`, `__LINE__`, and `__func__`.
+- C alignment/static assertion support covers both `_Alignas` positions and
+  message-less `_Static_assert`.
 
 ## Earlier conversion-operator foundation (rounds 67–68)
 
@@ -60,6 +65,21 @@ if (zero == 0) { ... }
 
 Approximate order, newest first:
 
+- `449a814` — cxx: add __func__
+- `a63db6c` — cxx: add date and time macros
+- `9e650cb` — cxx: add __COUNTER__
+- `b1e8837` — cc: add __COUNTER__
+- `d237c94` — cc: allow message-less static assertions
+- `b24139f` — cc: accept _Alignas after the type
+- `0212d66` — cxx: add string capacity and reserve
+- `1a30922` — cxx: convert class assignments through constructors
+- `d2ce9ad` — cxx: convert class returns through constructors
+- `4179cd3` — cxx: construct strings from prefixes
+- `bbeb0da` — cxx: pass by-value class constructor arguments
+- `e61cb17` — cxx: convert class arguments through constructors
+- `6a77f7f` — cxx: copy-initialize classes through constructors
+- `07fc0c6` — cxx: cast between class types
+- `c9f3ea7` — docs: refresh compiler resume checkpoint
 - `ff90f10` — cxx: add not-of search positions
 - `c2b9842` — cxx: compare string subranges
 - `e934ecb` — cxx: deep-copy string assignment
@@ -170,7 +190,7 @@ Approximate order, newest first:
 ## Current known gaps / good next targets
 
 1. **Remaining conversion contexts**
-   - class-to-class casts/conversions
+   - conversion operators returning classes used implicitly
    - conversion operators returning references/pointers
    - further constructor-overload ranking cases
 
@@ -178,7 +198,7 @@ Approximate order, newest first:
    - `_Atomic` / `<stdatomic.h>` semantics beyond plain qualifiers
    - `#line` file-name tracking in diagnostics
    - designated initializer edge cases
-   - `_Alignas` after the type and on parameters
+   - `_Alignas` on parameters (if needed)
    - richer initializer/declarator combinations
 
 3. **C++ library surface**
