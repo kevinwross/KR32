@@ -7141,6 +7141,9 @@ private:
             TypePtr range_type;
             int list_array_offset = -1;
             bool list_range = false;
+            bool class_range = false;
+            Function* begin_method = nullptr;
+            Function* end_method = nullptr;
             MemberInfo* list_data_member = nullptr;
             MemberInfo* list_size_member = nullptr;
             if (statement.expression->kind == ExprKind::InitializerList) {
@@ -7162,6 +7165,38 @@ private:
             } else {
                 range_type = type_of(*statement.expression, false);
                 ClassInfo* list_info = class_of(range_type);
+                if (list_info != nullptr &&
+                    !is_initializer_list_class(list_info)) {
+                    for (Function* method : class_methods(list_info, "begin")) {
+                        if (method->parameters.empty()) {
+                            begin_method = method;
+                            break;
+                        }
+                    }
+                    for (Function* method : class_methods(list_info, "end")) {
+                        if (method->parameters.empty()) {
+                            end_method = method;
+                            break;
+                        }
+                    }
+                    const TypePtr begin_result =
+                        begin_method != nullptr
+                            ? resolve_type(begin_method->result)
+                            : nullptr;
+                    const TypePtr end_result =
+                        end_method != nullptr
+                            ? resolve_type(end_method->result)
+                            : nullptr;
+                    if (begin_result != nullptr &&
+                        begin_result->kind == TypeKind::Pointer &&
+                        begin_result->element != nullptr &&
+                        end_result != nullptr &&
+                        same_type(begin_result, end_result)) {
+                        class_range = true;
+                        range_type =
+                            Type::make_array(begin_result->element, 0);
+                    }
+                }
                 if (is_initializer_list_class(list_info)) {
                     list_data_member = find_member(list_info, "data_");
                     list_size_member = find_member(list_info, "size_");
@@ -7189,7 +7224,30 @@ private:
             const int base_temp =
                 allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
             int count_temp = -1;
-            if (list_range) {
+            if (class_range) {
+                gen_expr(*statement.expression);
+                const int object_temp = allocate_local(
+                    Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
+                emit("    STORE R0, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    LOAD R0, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    CALL " + begin_method->symbol);
+                emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+                const int end_temp = allocate_local(
+                    Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));
+                emit("    LOAD R0, [R7 + " + std::to_string(object_temp) + "]");
+                emit("    CALL " + end_method->symbol);
+                emit("    STORE R0, [R7 + " + std::to_string(end_temp) + "]");
+                emit("    LOAD R1, [R7 + " + std::to_string(base_temp) + "]");
+                emit("    SUB R0, R0, R1");
+                const int element_size = type_size(range_type->element);
+                if (element_size != 1) {
+                    emit("    MOV R1, #" + std::to_string(element_size));
+                    emit("    DIVS R0, R0, R1");
+                }
+                count_temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(count_temp) + "]");
+            } else if (list_range) {
                 gen_expr(*statement.expression);
                 const int object_temp =
                     allocate_local(Type::make_pointer(Type::make_builtin(BuiltinKind::Int)));

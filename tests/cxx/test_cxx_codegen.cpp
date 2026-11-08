@@ -3328,6 +3328,26 @@ TEST_CASE("initializer_list parameters accept braced arguments") {
     CHECK(program.result == 10);
 }
 
+TEST_CASE("range-for iterates classes with begin and end") {
+    const ProgramResult program = compile_and_run(
+        "struct Range {\n"
+        "    int values[3];\n"
+        "    int* begin() { return values; }\n"
+        "    int* end() { return values + 3; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Range range;\n"
+        "    range.values[0] = 1;\n"
+        "    range.values[1] = 2;\n"
+        "    range.values[2] = 3;\n"
+        "    int sum = 0;\n"
+        "    for (int value : range) sum += value;\n"
+        "    return sum == 6 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("range-for iterates braced initializer lists") {
     const ProgramResult program = compile_and_run(
         "int main() {\n"
