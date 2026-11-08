@@ -548,6 +548,32 @@ TEST_CASE("const member overloads are distinct and selectable") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("conversion operators work in conditions and casts") {
+    const ProgramResult program = compile_and_run(
+        "class Flag {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Flag(int input) : value(input) {}\n"
+        "    operator bool() const { return value != 0; }\n"
+        "};\n"
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Number(int input) : value(input) {}\n"
+        "    operator int() const { return value; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Flag zero(0);\n"
+        "    if (zero) return 1;\n"
+        "    Flag one(1);\n"
+        "    if (!(bool)one) return 2;\n"
+        "    Number number(7);\n"
+        "    return (int)number - 7;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("operator arrow forwards member access") {
     const ProgramResult program = compile_and_run(
         "struct Point { int x; int y; };\n"

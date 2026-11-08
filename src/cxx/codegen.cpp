@@ -76,7 +76,22 @@ std::string mangle_component(const std::string& name) {
         {"operator,", "operator_comma"},
     };
     const auto found = operators.find(name);
-    return found == operators.end() ? name : found->second;
+    if (found != operators.end()) {
+        return found->second;
+    }
+    if (name.rfind("operator ", 0) == 0) {
+        std::string result = "operator_cast";
+        for (std::size_t index = 9; index < name.size(); ++index) {
+            const unsigned char character =
+                static_cast<unsigned char>(name[index]);
+            if (std::isalnum(character) != 0) {
+                result.push_back('_');
+                result.push_back(static_cast<char>(character));
+            }
+        }
+        return result;
+    }
+    return name;
 }
 
 std::string mangle_qualified(std::vector<std::string> parts) {
@@ -4910,6 +4925,16 @@ private:
                 return gen_dynamic_cast(expression, target);
             }
             const TypePtr source = type_of(*expression.children[0]);
+            if (ClassInfo* info = class_of(source)) {
+                const std::string conversion_name =
+                    "operator " + target->to_string();
+                if (Function* conversion = find_member_operator(
+                        info, conversion_name, nullptr, true)) {
+                    gen_zero_argument_member_call(*expression.children[0],
+                                                  conversion);
+                    return target;
+                }
+            }
             gen_expr(*expression.children[0]);
             if (is_fp(target) && is_long_long(source)) {
                 const std::string two32 = intern_fp_constant(4294967296.0, false);
@@ -5226,6 +5251,18 @@ private:
 
     void gen_condition(const Expr& expression) {
         const TypePtr type = type_of(expression);
+        if (ClassInfo* info = class_of(type)) {
+            if (Function* conversion = find_member_operator(
+                    info, "operator bool", nullptr, true)) {
+                gen_zero_argument_member_call(expression, conversion);
+                return;
+            }
+            if (Function* conversion = find_member_operator(
+                    info, "operator int", nullptr, true)) {
+                gen_zero_argument_member_call(expression, conversion);
+                return;
+            }
+        }
         if (is_fp(type)) {
             gen_expr(expression);
             const std::string zero = intern_fp_constant(0.0, is_float32(type));
