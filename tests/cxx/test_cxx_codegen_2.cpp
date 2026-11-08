@@ -138,6 +138,23 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("scalar function statics initialize once") {
+    const ProgramResult program = compile_and_run(
+        "int next() {\n"
+        "    static int value = 40;\n"
+        "    value = value + 1;\n"
+        "    return value;\n"
+        "}\n"
+        "int main() {\n"
+        "    if (next() != 41) return 1;\n"
+        "    if (next() != 42) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string counted character-set searches") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"

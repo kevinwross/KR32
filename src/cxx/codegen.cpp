@@ -8470,12 +8470,6 @@ private:
             const std::string linkage = template_owner ? ".weak " : ".global ";
             Global* raw = global.get();
             global_storage_.push_back(std::move(global));
-            if (template_owner) {
-                bss_ += ".section .bss." + raw->symbol + "\n";
-            }
-            bss_ += linkage + raw->symbol + "\n" + raw->symbol +
-                    ":\n    .space " + std::to_string(std::max(1, type_size(type))) +
-                    "\n";
             Local local;
             local.type = type;
             local.static_global = raw;
@@ -8483,6 +8477,23 @@ private:
                 local_scopes_.back()[declaration.name.parts.back()] = local;
             }
             ClassInfo* info = class_of(type);
+            if (!template_owner && info == nullptr &&
+                declaration.initializer && type_size(type) == 4) {
+                std::int64_t constant = 0;
+                if (eval_const(*declaration.initializer, constant)) {
+                    data_ += ".align 4\n" + raw->symbol + ":\n    .word " +
+                             std::to_string(
+                                 static_cast<std::uint32_t>(constant)) +
+                             "\n";
+                    return;
+                }
+            }
+            if (template_owner) {
+                bss_ += ".section .bss." + raw->symbol + "\n";
+            }
+            bss_ += linkage + raw->symbol + "\n" + raw->symbol +
+                    ":\n    .space " + std::to_string(std::max(1, type_size(type))) +
+                    "\n";
             const bool guarded = declaration.initializer != nullptr || info != nullptr;
             if (guarded) {
                 const std::string guard = raw->symbol + "_guard";
