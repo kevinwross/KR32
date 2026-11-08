@@ -281,6 +281,23 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("numeric accumulates and fills sequences") {
+    const ProgramResult program = compile_and_run(
+        "#include <numeric>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    if (std::accumulate(values, values + 4, 0) != 10) return 1;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.0 };\n"
+        "    if (std::accumulate(reals, reals + 3, 0.0) != 7.0) return 2;\n"
+        "    int sequence[4] = { 0, 0, 0, 0 };\n"
+        "    std::iota(sequence, sequence + 4, 5);\n"
+        "    return sequence[0] == 5 && sequence[3] == 8 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm equal compares ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

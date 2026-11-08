@@ -940,6 +940,54 @@ private:
                 }
                 return;
             }
+            if (header.find("<numeric>") != std::string::npos) {
+                if (!numeric_header_injected_) {
+                    numeric_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "inline int accumulate(int* first, int* last, int initial) {\n"
+                        "    while (first < last) {\n"
+                        "        initial = initial + *first;\n"
+                        "        first = first + 1;\n"
+                        "    }\n"
+                        "    return initial;\n"
+                        "}\n"
+                        "inline unsigned int accumulate(unsigned int* first,\n"
+                        "                               unsigned int* last,\n"
+                        "                               unsigned int initial) {\n"
+                        "    while (first < last) {\n"
+                        "        initial = initial + *first;\n"
+                        "        first = first + 1;\n"
+                        "    }\n"
+                        "    return initial;\n"
+                        "}\n"
+                        "inline double accumulate(double* first, double* last,\n"
+                        "                         double initial) {\n"
+                        "    while (first < last) {\n"
+                        "        initial = initial + *first;\n"
+                        "        first = first + 1;\n"
+                        "    }\n"
+                        "    return initial;\n"
+                        "}\n"
+                        "inline float accumulate(float* first, float* last,\n"
+                        "                        float initial) {\n"
+                        "    while (first < last) {\n"
+                        "        initial = initial + *first;\n"
+                        "        first = first + 1;\n"
+                        "    }\n"
+                        "    return initial;\n"
+                        "}\n"
+                        "inline void iota(int* first, int* last, int value) {\n"
+                        "    while (first < last) {\n"
+                        "        *first = value;\n"
+                        "        first = first + 1;\n"
+                        "        value = value + 1;\n"
+                        "    }\n"
+                        "}\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<cstdlib>") != std::string::npos) {
                 if (!cstdlib_header_injected_) {
                     cstdlib_header_injected_ = true;
@@ -3102,6 +3150,7 @@ private:
     bool utility_header_injected_ = false;
     bool algorithm_header_injected_ = false;
     bool cstdlib_header_injected_ = false;
+    bool numeric_header_injected_ = false;
     bool cstring_header_injected_ = false;
     bool cctype_header_injected_ = false;
     bool cstddef_header_injected_ = false;
