@@ -142,3 +142,13 @@ TEST_CASE("C accepts _Atomic scalar declarations") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("C accepts _Atomic(type) declarations") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    _Atomic(int) value = 3;\n"
+        "    return value == 3 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}

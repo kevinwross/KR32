@@ -1891,6 +1891,13 @@ private:
 
     TypePtr parse_type() {
         skip_attributes();
+        if (peek().text == "_Atomic" && peek(1).text == "(") {
+            take();
+            expect("(");
+            TypePtr base = parse_type();
+            expect(")");
+            return base;
+        }
         if (match("_Alignas")) {
             expect("(");
             const std::int64_t alignment = constant_expression();
