@@ -639,6 +639,21 @@ private:
                 }
                 return;
             }
+            if (header.find("<cstdlib>") != std::string::npos) {
+                if (!cstdlib_header_injected_) {
+                    cstdlib_header_injected_ = true;
+                    append_line(
+                        "extern \"C\" {\n"
+                        "int atoi(const char* text);\n"
+                        "double atof(const char* text);\n"
+                        "}\n"
+                        "namespace std {\n"
+                        "inline int atoi(const char* text) { return ::atoi(text); }\n"
+                        "inline double atof(const char* text) { return ::atof(text); }\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<initializer_list>") != std::string::npos ||
                 header.find("initializer_list") != std::string::npos) {
                 if (!initializer_list_header_injected_) {
@@ -2265,6 +2280,7 @@ private:
     bool initializer_list_header_injected_ = false;
     bool utility_header_injected_ = false;
     bool algorithm_header_injected_ = false;
+    bool cstdlib_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;

@@ -772,6 +772,20 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cstdlib> converts C strings") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstdlib>\n"
+        "#include <cstdlib>\n"
+        "int main() {\n"
+        "    if (std::atoi(\"42\") != 42) return 1;\n"
+        "    if (std::atoi(\"-7\") != -7) return 2;\n"
+        "    if (std::atof(\"2.5\") != 2.5) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cmath> provides scalar math") {
     const ProgramResult program = compile_and_run(
         "#include <cmath>\n"
