@@ -747,6 +747,26 @@ TEST_CASE("predefined source macros expand") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("__func__ names the current function") {
+    const ProgramResult program = compile_and_run(
+        "const char* name() { return __func__; }\n"
+        "struct Widget {\n"
+        "    const char* method() const { return __func__; }\n"
+        "};\n"
+        "namespace tools { const char* helper() { return __func__; } }\n"
+        "int main() {\n"
+        "    const char* function = name();\n"
+        "    if (function[0] != 'n' || function[3] != 'e') return 1;\n"
+        "    Widget widget;\n"
+        "    const char* method = widget.method();\n"
+        "    if (method[0] != 'm' || method[5] != 'd') return 2;\n"
+        "    const char* helper = tools::helper();\n"
+        "    return helper[0] == 'h' ? 0 : 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("assignments convert between class types") {
     const ProgramResult program = compile_and_run(
         "struct Source { int value; };\n"

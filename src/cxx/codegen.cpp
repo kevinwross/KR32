@@ -2073,6 +2073,11 @@ private:
         case ExprKind::NullptrLiteral:
             return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
         case ExprKind::Name: {
+            if (expression.name.parts.size() == 1 &&
+                expression.name.parts[0] == "__func__" &&
+                current_function_ != nullptr) {
+                return Type::make_pointer(Type::make_builtin(BuiltinKind::Char));
+            }
             TypePtr capture_type;
             int capture_offset = 0;
             if (lambda_capture(expression.name, capture_type, capture_offset)) {
@@ -4831,6 +4836,25 @@ private:
             emit("    MOV R0, #0");
             return Type::make_pointer(Type::make_builtin(BuiltinKind::Void));
         case ExprKind::Name: {
+            if (expression.name.parts.size() == 1 &&
+                expression.name.parts[0] == "__func__" &&
+                current_function_ != nullptr) {
+                std::string display = current_function_->member_name;
+                if (display.empty()) {
+                    const std::size_t separator =
+                        current_function_->qualified.rfind("::");
+                    display = separator == std::string::npos
+                                  ? current_function_->qualified
+                                  : current_function_->qualified.substr(
+                                        separator + 2);
+                }
+                const std::string label =
+                    ".Lstr_" + std::to_string(string_counter_++);
+                rodata_ += label + ":\n    .asciz \"" +
+                           escape_asm(display) + "\"\n";
+                emit("    LEA R0, [" + label + "]");
+                return Type::make_pointer(Type::make_builtin(BuiltinKind::Char));
+            }
             TypePtr capture_type;
             int capture_offset = 0;
             if (lambda_capture(expression.name, capture_type, capture_offset)) {
