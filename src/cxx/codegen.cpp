@@ -7060,6 +7060,71 @@ private:
                     emit("    JMP " + return_label_);
                     return;
                 }
+                if (ClassInfo* declared_class = class_of(declared_result);
+                    declared_class != nullptr &&
+                    class_of(type_of(*statement.expression)) != nullptr &&
+                    class_of(type_of(*statement.expression)) !=
+                        declared_class) {
+                    const int object = allocate_local(declared_result);
+                    construct_object_from_expression(
+                        declared_class, object, *statement.expression);
+                    if (aggregate_abi(declared_class) ==
+                        AggregateAbi::Floating) {
+                        emit("    LEA R1, [R7 + " + std::to_string(object) +
+                             "]");
+                        emit("    FLOAD.D F0, [R1]");
+                        if (declared_class->size > 8) {
+                            const bool word = declared_class->size - 8 <= 4;
+                            emit(std::string("    FLOAD.") + (word ? "W" : "D") +
+                                 " F1, [R1 + 8]");
+                        }
+                        emit_all_local_destructors();
+                        emit("    JMP " + return_label_);
+                        return;
+                    }
+                    if (is_register_return_class(declared_class)) {
+                        emit("    LEA R1, [R7 + " + std::to_string(object) +
+                             "]");
+                        emit("    LOAD R0, [R1]");
+                        const int value_temp =
+                            allocate_local(Type::make_builtin(BuiltinKind::Int));
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(value_temp) + "]");
+                        int high_temp = -1;
+                        if (declared_class->size > 4) {
+                            emit("    LOAD R1, [R1 + 4]");
+                            high_temp =
+                                allocate_local(Type::make_builtin(BuiltinKind::Int));
+                            emit("    STORE R1, [R7 + " +
+                                 std::to_string(high_temp) + "]");
+                        }
+                        emit_all_local_destructors();
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(value_temp) + "]");
+                        if (high_temp >= 0) {
+                            emit("    LOAD R1, [R7 + " +
+                                 std::to_string(high_temp) + "]");
+                        }
+                        emit("    JMP " + return_label_);
+                        return;
+                    }
+                    if (current_sret_slot_ < 0) {
+                        error(statement.location,
+                              "class return requires a destination object");
+                    } else {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(current_sret_slot_) + "]");
+                        emit("    LEA R1, [R7 + " + std::to_string(object) +
+                             "]");
+                        emit("    MOV R2, #" +
+                             std::to_string(declared_class->size));
+                        emit("    CALL memcpy");
+                    }
+                    emit_all_local_destructors();
+                    emit("    MOV R0, #0");
+                    emit("    JMP " + return_label_);
+                    return;
+                }
                 const TypePtr result_type = type_of(*statement.expression);
                 if (ClassInfo* result_class = class_of(result_type)) {
                     gen_expr(*statement.expression);

@@ -729,6 +729,27 @@ TEST_CASE("C-style casts convert between class types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("returns convert between class types") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int first;\n"
+        "    int second;\n"
+        "    Target(const Source& source)\n"
+        "        : first(source.value + 1), second(7) {}\n"
+        "};\n"
+        "Target make(Source source) { return source; }\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target target = make(source);\n"
+        "    if (target.first != 5) return 1;\n"
+        "    return target.second - 7;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("constructors accept class arguments by value") {
     const ProgramResult program = compile_and_run(
         "struct Source { int value; };\n"
