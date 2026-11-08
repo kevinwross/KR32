@@ -576,6 +576,20 @@ TEST_CASE("C supports bit-fields") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("C supports common compiler builtins") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int value = 5;\n"
+        "    if (__builtin_expect(value, 5) != 5) return 1;\n"
+        "    if (__builtin_constant_p(value) != 0) return 2;\n"
+        "    __extension__ value = 6;\n"
+        "    if (value == 0) __builtin_unreachable();\n"
+        "    return value - 6;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C supports anonymous struct and union members") {
     const ProgramResult program = compile_and_run(
         "struct Variant { int tag; union { int integer; float real; }; };\n"

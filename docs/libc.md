@@ -74,6 +74,7 @@ sandboxed just like `open`.
 - Variadic function-like macros using `__VA_ARGS__`
 - Parenthesized comma expressions
 - Bit-fields with packed layout, masking, and sign extension
+- `__builtin_expect`, `__builtin_constant_p`, `__builtin_unreachable`, and `__extension__`
 - Struct/union parameters copied into callee locals, preserving by-value semantics
 - `__func__`, `__LINE__`, `__FILE__`, `__DATE__`, `__TIME__`, `__STDC__`,
   `__STDC_HOSTED__`, and `__STDC_VERSION__`

@@ -3158,6 +3158,10 @@ private:
     }
 
     TypePtr gen_expression() {
+        if (peek().text == "__extension__") {
+            take();
+            return gen_expression();
+        }
         return gen_assignment_expression();
     }
 
@@ -4090,6 +4094,33 @@ private:
         if (peek().text == "__builtin_offsetof") {
             take();
             return parse_offsetof();
+        }
+        if (peek().text == "__builtin_expect") {
+            take();
+            expect("(");
+            TypePtr value = gen_expression();
+            expect(",");
+            gen_expression();
+            expect(")");
+            return value;
+        }
+        if (peek().text == "__builtin_constant_p") {
+            take();
+            expect("(");
+            parse_unevaluated_expression();
+            expect(")");
+            emit("    MOV R0, #0");
+            return type_int();
+        }
+        if (peek().text == "__builtin_unreachable") {
+            take();
+            expect("(");
+            expect(")");
+            return type_int();
+        }
+        if (peek().text == "__extension__") {
+            take();
+            return parse_unary();
         }
         if (peek().text == "++" || peek().text == "--") {
             const std::string op = take().text;
