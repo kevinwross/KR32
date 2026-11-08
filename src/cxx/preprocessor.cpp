@@ -646,10 +646,22 @@ private:
                         "extern \"C\" {\n"
                         "int atoi(const char* text);\n"
                         "double atof(const char* text);\n"
+                        "void* malloc(int size);\n"
+                        "void* calloc(int count, int size);\n"
+                        "void* realloc(void* memory, int size);\n"
+                        "void free(void* memory);\n"
+                        "void exit(int status);\n"
+                        "void abort();\n"
                         "}\n"
                         "namespace std {\n"
                         "inline int atoi(const char* text) { return ::atoi(text); }\n"
                         "inline double atof(const char* text) { return ::atof(text); }\n"
+                        "using ::malloc;\n"
+                        "using ::calloc;\n"
+                        "using ::realloc;\n"
+                        "using ::free;\n"
+                        "using ::exit;\n"
+                        "using ::abort;\n"
                         "}\n");
                 }
                 return;

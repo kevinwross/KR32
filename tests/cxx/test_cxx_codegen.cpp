@@ -867,6 +867,27 @@ TEST_CASE("<cstddef> provides size types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cstdlib> allocates memory") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstdlib>\n"
+        "int main() {\n"
+        "    int* values = (int*)std::calloc(4, sizeof(int));\n"
+        "    if (values == 0) return 1;\n"
+        "    for (int index = 0; index < 4; ++index) {\n"
+        "        if (values[index] != 0) return 2;\n"
+        "    }\n"
+        "    values[0] = 5;\n"
+        "    values = (int*)std::realloc(values, 8 * sizeof(int));\n"
+        "    if (values == 0 || values[0] != 5) return 3;\n"
+        "    std::free(values);\n"
+        "    void* memory = std::malloc(16);\n"
+        "    std::free(memory);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstdio> provides formatted output") {
     const ProgramResult program = compile_and_run(
         "#include <cstdio>\n"
