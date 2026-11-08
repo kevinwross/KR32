@@ -1780,6 +1780,7 @@ private:
     }
 
     TypePtr parse_type() {
+        skip_attributes();
         bool unsigned_flag = false;
         bool signed_flag = false;
         bool long_flag = false;
@@ -1865,7 +1866,27 @@ private:
         return base;
     }
 
+    void skip_attributes() {
+        while (peek().text == "__attribute__" ||
+               peek().text == "__declspec") {
+            take();
+            if (match("(")) {
+                int depth = 1;
+                while (depth > 0 && !at_end()) {
+                    if (match("(")) {
+                        ++depth;
+                    } else if (match(")")) {
+                        --depth;
+                    } else {
+                        take();
+                    }
+                }
+            }
+        }
+    }
+
     std::string parse_name() {
+        skip_attributes();
         while (peek().text == "restrict" || peek().text == "const" ||
                peek().text == "volatile") {
             take();
@@ -2114,6 +2135,7 @@ private:
     void parse_global(const TypePtr& type, const std::string& name, bool is_extern,
                       bool expect_semicolon = true) {
         TypePtr actual = parse_array_suffix(type);
+        skip_attributes();
         if (match("=")) {
             const bool pointer_array =
                 actual->kind == Type::Kind::Array && actual->base &&
@@ -2307,6 +2329,7 @@ private:
             found->second.variadic = variadic;
         }
 
+        skip_attributes();
         if (match(";")) {
             return;
         }
@@ -2911,6 +2934,7 @@ private:
             } else {
                 name = parse_name();
                 actual = parse_array_suffix(actual);
+                skip_attributes();
             }
             first_declarator = false;
             if (is_static) {

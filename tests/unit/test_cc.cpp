@@ -1378,6 +1378,21 @@ TEST_CASE("a compiled C program calls putchar and exits") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("attribute specifiers are skipped") {
+    const ProgramResult program = compile_and_run(
+        "int value __attribute__((unused)) = 3;\n"
+        "int add(int a, int b) __attribute__((unused));\n"
+        "int add(int a, int b) { return a + b; }\n"
+        "int main(void) {\n"
+        "    int other __attribute__((unused)) = 4;\n"
+        "    int declared __attribute__((unused));\n"
+        "    declared = 2;\n"
+        "    return value + other + add(1, 2) + declared - 12;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("the preprocessor reports error and warning directives") {
     const cc::Result warning = cc::compile(
         "#warning check this\n"
