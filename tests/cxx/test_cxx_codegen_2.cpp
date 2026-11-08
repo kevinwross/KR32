@@ -281,6 +281,19 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string erases all characters") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    text.erase();\n"
+        "    return text.empty() ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string constructs from substrings") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
