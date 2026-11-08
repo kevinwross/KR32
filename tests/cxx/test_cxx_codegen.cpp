@@ -772,6 +772,22 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<algorithm> provides std::min and std::max") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    if (std::min(3, 5) != 3) return 1;\n"
+        "    if (std::max(3, 5) != 5) return 2;\n"
+        "    if (std::min(2.5, 1.5) != 1.5) return 3;\n"
+        "    if (std::max(2.5, 1.5) != 2.5) return 4;\n"
+        "    if (std::min('b', 'a') != 'a') return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C++ #line updates source identity") {
     const ProgramResult program = compile_and_run(
         "#line 10 \"custom.cpp\"\n"

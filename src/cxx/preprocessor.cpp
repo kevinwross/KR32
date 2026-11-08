@@ -572,6 +572,45 @@ private:
                 }
                 return;
             }
+            if (header.find("<algorithm>") != std::string::npos) {
+                if (!algorithm_header_injected_) {
+                    algorithm_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "inline int min(int left, int right) {\n"
+                        "    return right < left ? right : left;\n"
+                        "}\n"
+                        "inline int max(int left, int right) {\n"
+                        "    return left < right ? right : left;\n"
+                        "}\n"
+                        "inline unsigned int min(unsigned int left, unsigned int right) {\n"
+                        "    return right < left ? right : left;\n"
+                        "}\n"
+                        "inline unsigned int max(unsigned int left, unsigned int right) {\n"
+                        "    return left < right ? right : left;\n"
+                        "}\n"
+                        "inline char min(char left, char right) {\n"
+                        "    return right < left ? right : left;\n"
+                        "}\n"
+                        "inline char max(char left, char right) {\n"
+                        "    return left < right ? right : left;\n"
+                        "}\n"
+                        "inline float min(float left, float right) {\n"
+                        "    return right < left ? right : left;\n"
+                        "}\n"
+                        "inline float max(float left, float right) {\n"
+                        "    return left < right ? right : left;\n"
+                        "}\n"
+                        "inline double min(double left, double right) {\n"
+                        "    return right < left ? right : left;\n"
+                        "}\n"
+                        "inline double max(double left, double right) {\n"
+                        "    return left < right ? right : left;\n"
+                        "}\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<initializer_list>") != std::string::npos ||
                 header.find("initializer_list") != std::string::npos) {
                 if (!initializer_list_header_injected_) {
@@ -2197,6 +2236,7 @@ private:
     bool thread_header_injected_ = false;
     bool initializer_list_header_injected_ = false;
     bool utility_header_injected_ = false;
+    bool algorithm_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;
     std::string logical_file_;
