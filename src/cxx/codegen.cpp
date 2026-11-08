@@ -6071,6 +6071,19 @@ private:
             const int destination =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(destination) + "]");
+            if (ClassInfo* source_info =
+                    class_of(type_of(*expression.children[1]));
+                source_info != nullptr && source_info != info) {
+                const int converted = allocate_local(lhs_type);
+                construct_object_from_expression(
+                    info, converted, *expression.children[1]);
+                emit("    LOAD R0, [R7 + " + std::to_string(destination) +
+                     "]");
+                emit("    LEA R1, [R7 + " + std::to_string(converted) + "]");
+                emit("    MOV R2, #" + std::to_string(info->size));
+                emit("    CALL memcpy");
+                return lhs_type;
+            }
             if (expression.children[1]->kind == ExprKind::Call) {
                 gen_expr(*expression.children[1]);
             } else {

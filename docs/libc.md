@@ -224,7 +224,7 @@ unary operators, postfix increment/decrement, `operator->`, and conversion
 operators such as `operator bool` and `operator int`, and converting
 constructors (with `explicit` respected), including conditions, casts
 (including class temporary construction and class-to-class constructor
-conversions), copy initialization, scalar and class arguments, returns, scalar
+conversions), copy initialization, scalar and class arguments, returns, assignments, scalar
 equality/relational comparisons, and integer arithmetic, including reversed
 operands. Free binary operators are
 supported; member `operator()` supports multiple arguments, and functions and

@@ -729,6 +729,25 @@ TEST_CASE("C-style casts convert between class types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("assignments convert between class types") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int value;\n"
+        "    Target() : value(0) {}\n"
+        "    Target(const Source& source) : value(source.value + 1) {}\n"
+        "};\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target target;\n"
+        "    target = source;\n"
+        "    return target.value - 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("returns convert between class types") {
     const ProgramResult program = compile_and_run(
         "struct Source { int value; };\n"
