@@ -713,12 +713,14 @@ TEST_CASE("C-style casts convert between class types") {
         "    int value;\n"
         "    Target(const Source& source) : value(source.value + 1) {}\n"
         "};\n"
+        "int take(Target target) { return target.value; }\n"
         "int main() {\n"
         "    Source source;\n"
         "    source.value = 4;\n"
         "    Target target = (Target)source;\n"
         "    Target copied = source;\n"
         "    if (copied.value != 5) return 1;\n"
+        "    if (take(source) != 5) return 2;\n"
         "    return target.value - 5;\n"
         "}\n");
     CHECK(program.ok);

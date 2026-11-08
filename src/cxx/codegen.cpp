@@ -2439,6 +2439,20 @@ private:
                                      nullptr, true) != nullptr) {
                 return 3;
             }
+            if (ClassInfo* parameter_class = class_of(param);
+                parameter_class != nullptr && parameter_class != info) {
+                for (Function* constructor : parameter_class->constructors) {
+                    if (constructor->parameters.size() != 1 ||
+                        constructor->is_explicit) {
+                        continue;
+                    }
+                    const int inner = conversion_cost(
+                        argument, constructor->parameters[0], true, false);
+                    if (inner < 100) {
+                        return 5 + inner;
+                    }
+                }
+            }
             return 100;
         }
         if (ClassInfo* parameter_class = class_of(param)) {
@@ -6505,20 +6519,25 @@ private:
                 ++integer_argument;
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
                 if (effective_arguments[index]->kind !=
-                        ExprKind::InitializerList &&
-                    class_of(type_of(*effective_arguments[index])) == nullptr) {
-                    const int object = allocate_local(parameter);
-                    construct_object_from_expression(
-                        parameter_class, object,
-                        *effective_arguments[index]);
-                    slot.offset =
-                        allocate_local(Type::make_builtin(BuiltinKind::Int));
-                    emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
-                    emit("    STORE R0, [R7 + " +
-                         std::to_string(slot.offset) + "]");
-                    ++integer_argument;
-                    slots.push_back(std::move(slot));
-                    continue;
+                    ExprKind::InitializerList) {
+                    ClassInfo* argument_class = class_of(
+                        type_of(*effective_arguments[index]));
+                    if (argument_class == nullptr ||
+                        argument_class != parameter_class) {
+                        const int object = allocate_local(parameter);
+                        construct_object_from_expression(
+                            parameter_class, object,
+                            *effective_arguments[index]);
+                        slot.offset =
+                            allocate_local(Type::make_builtin(BuiltinKind::Int));
+                        emit("    LEA R0, [R7 + " +
+                             std::to_string(object) + "]");
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(slot.offset) + "]");
+                        ++integer_argument;
+                        slots.push_back(std::move(slot));
+                        continue;
+                    }
                 }
                 if (aggregate_abi(parameter_class) == AggregateAbi::Floating) {
                     gen_expr(*effective_arguments[index]);
