@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm searches subsequences") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int text[6] = { 1, 2, 3, 4, 5, 6 };\n"
+        "    int needle[2] = { 3, 4 };\n"
+        "    if (std::search(text, text + 6, needle, needle + 2) != text + 2) return 1;\n"
+        "    int missing[2] = { 8, 9 };\n"
+        "    if (std::search(text, text + 6, missing, missing + 2) != text + 6) return 2;\n"
+        "    char letters[7] = \"abcdef\";\n"
+        "    char pair[2] = \"cd\";\n"
+        "    if (std::search(letters, letters + 6, pair, pair + 2) != letters + 2) return 3;\n"
+        "    double reals[4] = { 1.5, 2.5, 3.5, 4.5 };\n"
+        "    double tail[2] = { 3.5, 4.5 };\n"
+        "    if (std::search(reals, reals + 4, tail, tail + 2) != reals + 2) return 4;\n"
+        "    return std::search(letters, letters + 6, pair, pair) == letters ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm rotates ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
