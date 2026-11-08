@@ -3048,6 +3048,33 @@ double strtod(const char *text, char **end) {
             cursor = cursor + 1;
         }
     }
+    if (*cursor == 'e' || *cursor == 'E') {
+        const char *exponent_cursor = cursor + 1;
+        int exponent_negative = 0;
+        if (*exponent_cursor == '-' || *exponent_cursor == '+') {
+            exponent_negative = *exponent_cursor == '-';
+            exponent_cursor = exponent_cursor + 1;
+        }
+        if (*exponent_cursor >= '0' && *exponent_cursor <= '9') {
+            int exponent = 0;
+            while (*exponent_cursor >= '0' && *exponent_cursor <= '9') {
+                exponent = exponent * 10 + (*exponent_cursor - '0');
+                exponent_cursor = exponent_cursor + 1;
+            }
+            double scale = 1.0;
+            int index = 0;
+            while (index < exponent) {
+                scale = scale * 10.0;
+                index = index + 1;
+            }
+            if (exponent_negative) {
+                value = value / scale;
+            } else {
+                value = value * scale;
+            }
+            cursor = exponent_cursor;
+        }
+    }
     if (end != 0) {
         *end = (char *)cursor;
     }
@@ -3055,30 +3082,7 @@ double strtod(const char *text, char **end) {
 }
 
 double atof(const char *text) {
-    const char *cursor = text;
-    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') {
-        cursor = cursor + 1;
-    }
-    int negative = 0;
-    if (*cursor == '-' || *cursor == '+') {
-        negative = *cursor == '-';
-        cursor = cursor + 1;
-    }
-    double value = 0.0;
-    while (*cursor >= '0' && *cursor <= '9') {
-        value = value * 10.0 + (*cursor - '0');
-        cursor = cursor + 1;
-    }
-    if (*cursor == '.') {
-        cursor = cursor + 1;
-        double scale = 0.1;
-        while (*cursor >= '0' && *cursor <= '9') {
-            value = value + (*cursor - '0') * scale;
-            scale = scale * 0.1;
-            cursor = cursor + 1;
-        }
-    }
-    return negative ? -value : value;
+    return strtod(text, (char **)0);
 }
 
 int time(int *result) {

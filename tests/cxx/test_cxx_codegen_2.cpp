@@ -179,6 +179,8 @@ TEST_CASE("<cstdlib> converts C strings") {
         "    int* found = (int*)std::bsearch(&key, values, 5, sizeof(int), compare_ints);\n"
         "    if (found == 0 || *found != 3) return 8;\n"
         "    if (std::strtod(\"2.5x\", &end) != 2.5 || end[0] != 'x') return 9;\n"
+        "    if (std::strtod(\"1.5e2x\", &end) != 150.0 || end[0] != 'x') return 10;\n"
+        "    if (std::atof(\"1e2\") != 100.0) return 11;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
