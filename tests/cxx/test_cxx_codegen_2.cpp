@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm stable sorts arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 3, 1, 4, 2 };\n"
+        "    std::stable_sort(values, values + 4);\n"
+        "    if (values[0] != 1 || values[3] != 4) return 1;\n"
+        "    char text[5] = \"dcba\";\n"
+        "    std::stable_sort(text, text + 4);\n"
+        "    if (text[0] != 'a' || text[3] != 'd') return 2;\n"
+        "    double reals[3] = { 2.5, 0.5, 1.5 };\n"
+        "    std::stable_sort(reals, reals + 3);\n"
+        "    return reals[0] == 0.5 && reals[2] == 2.5 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm merges ranges in place") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
