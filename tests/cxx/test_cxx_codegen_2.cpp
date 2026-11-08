@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm reports sorted prefixes") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 1, 2, 4, 3, 5 };\n"
+        "    if (std::is_sorted_until(values, values + 5) != values + 3) return 1;\n"
+        "    char text[5] = \"abdc\";\n"
+        "    if (std::is_sorted_until(text, text + 4) != text + 3) return 2;\n"
+        "    double reals[3] = { 1.5, 3.5, 2.5 };\n"
+        "    if (std::is_sorted_until(reals, reals + 3) != reals + 2) return 3;\n"
+        "    int sorted[3] = { 1, 2, 3 };\n"
+        "    if (std::is_sorted_until(sorted, sorted + 3) != sorted + 3) return 4;\n"
+        "    return std::is_sorted_until(sorted, sorted) == sorted ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm detects sorted ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
