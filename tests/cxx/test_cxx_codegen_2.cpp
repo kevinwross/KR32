@@ -281,6 +281,21 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string constructs from substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    std::string part(text, 1, 3);\n"
+        "    if (part != \"ell\") return 1;\n"
+        "    std::string tail(text, 3, 100);\n"
+        "    return tail == \"lo\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("reference-returning calls are lvalues") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
