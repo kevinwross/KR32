@@ -138,6 +138,22 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string assigns substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    std::string part(\"xxworldyy\");\n"
+        "    text.assign(part, 2, 5);\n"
+        "    if (text != \"world\") return 1;\n"
+        "    text.assign(\"QQdoneRR\", 2, 4);\n"
+        "    return text == \"done\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string appends substrings") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"

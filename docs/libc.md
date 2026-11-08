@@ -257,7 +257,7 @@ a substring position/count and optional source position/count; `std::string::npo
 `at`, `substr` (with or without
 count), `copy`, `front`, `back`, `replace`/`insert` (C string, `std::string`,
 character, count+character, or prefix count), `erase` (position or range), `resize` (count or count+character), `push_back`,
-`pop_back`, `assign` (C string or prefix count), `append` (string, C string,
+`pop_back`, `assign` (C string, prefix count, or substring), `append` (string, C string,
 prefix count, or count+character), `swap`, `begin`/`end`, `data`, `capacity`,
 `reserve` (capacity hint), `std::to_string` (including `long long` and
 `unsigned long long`), `std::stoi`, `std::stol`, `std::stod`, `std::stof`, and `std::stold` (C string or `std::string`).
