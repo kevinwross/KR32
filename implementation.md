@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 13:06 -08:00
+> **Last updated:** 2026-11-08 13:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2265,6 +2265,8 @@ Newest entries at the bottom. Use the local time zone.
       inserting string and C-string substrings at a position.
 - **2026-11-08 13:06 -08:00** — Added `std::string::replace` overloads that
       take a source position and count.
+- **2026-11-08 13:08 -08:00** — Added `std::string::find(const char*,
+      position, count)` for counted C-string ranges.
 
 ## 10. Updating this file
 

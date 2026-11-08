@@ -138,6 +138,20 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string finds counted C-string ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello world\");\n"
+        "    if (text.find(\"worldYY\", 0, 5) != 6) return 1;\n"
+        "    if (text.find(\"worldYY\", 7, 5) != -1) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string replaces substrings") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
