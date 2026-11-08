@@ -3024,6 +3024,59 @@ unsigned long strtoul(const char *text, char **end, int base) {
     return (unsigned long)strtol(text, end, base);
 }
 
+long long strtoll(const char *text, char **end, int base) {
+    const char *cursor = text;
+    while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') {
+        cursor = cursor + 1;
+    }
+    int negative = 0;
+    if (*cursor == '-' || *cursor == '+') {
+        negative = *cursor == '-';
+        cursor = cursor + 1;
+    }
+    if (base == 0) {
+        base = 10;
+        if (cursor[0] == '0' && (cursor[1] == 'x' || cursor[1] == 'X')) {
+            base = 16;
+            cursor = cursor + 2;
+        } else if (cursor[0] == '0') {
+            base = 8;
+        }
+    } else if (base == 16 && cursor[0] == '0' &&
+               (cursor[1] == 'x' || cursor[1] == 'X')) {
+        cursor = cursor + 2;
+    }
+    unsigned long long value = 0;
+    int digits = 0;
+    while (*cursor != 0) {
+        int digit = -1;
+        if (*cursor >= '0' && *cursor <= '9') {
+            digit = *cursor - '0';
+        } else if (*cursor >= 'a' && *cursor <= 'z') {
+            digit = *cursor - 'a' + 10;
+        } else if (*cursor >= 'A' && *cursor <= 'Z') {
+            digit = *cursor - 'A' + 10;
+        }
+        if (digit < 0 || digit >= base) {
+            break;
+        }
+        value = value * (unsigned long long)base + (unsigned long long)digit;
+        digits = digits + 1;
+        cursor = cursor + 1;
+    }
+    if (end != 0) {
+        *end = (char *)(digits > 0 ? cursor : text);
+    }
+    if (negative) {
+        return -(long long)value;
+    }
+    return (long long)value;
+}
+
+unsigned long long strtoull(const char *text, char **end, int base) {
+    return (unsigned long long)strtoll(text, end, base);
+}
+
 double strtod(const char *text, char **end) {
     const char *cursor = text;
     while (*cursor == ' ' || *cursor == '\t' || *cursor == '\n') {

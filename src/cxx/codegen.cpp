@@ -7331,14 +7331,34 @@ private:
             int value_temp = -1;
             if (statement.expression) {
                 result_type = type_of(*statement.expression);
+                const TypePtr declared =
+                    current_function_ != nullptr
+                        ? resolve_type(current_function_->result)
+                        : nullptr;
+                const bool target_long_long =
+                    is_long_long(declared) || is_long_long(result_type);
                 gen_expr(*statement.expression);
-                value_temp = allocate_local(result_type);
+                if (target_long_long && !is_long_long(result_type)) {
+                    if (!is_unsigned_integer(result_type)) {
+                        emit("    MOV R1, R0");
+                        emit("    SAR R1, R1, #31");
+                    } else {
+                        emit("    MOV R1, #0");
+                    }
+                }
+                value_temp = allocate_local(target_long_long && declared
+                                                ? declared
+                                                : result_type);
                 if (is_fp(result_type)) {
                     emit(std::string("    FSTORE.") +
                          (is_float32(result_type) ? "W" : "D") + " F0, [R7 + " +
                          std::to_string(value_temp) + "]");
                 } else {
                     emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+                    if (target_long_long) {
+                        emit("    STORE R1, [R7 + " +
+                             std::to_string(value_temp + 4) + "]");
+                    }
                 }
             } else {
                 emit("    MOV R0, #0");
@@ -7355,6 +7375,12 @@ private:
                          std::to_string(value_temp) + "]");
                 } else {
                     emit("    LOAD R0, [R7 + " + std::to_string(value_temp) + "]");
+                    if (is_long_long(result_type) ||
+                        (current_function_ != nullptr &&
+                         is_long_long(resolve_type(current_function_->result)))) {
+                        emit("    LOAD R1, [R7 + " +
+                             std::to_string(value_temp + 4) + "]");
+                    }
                 }
             }
             emit("    JMP " + return_label_);

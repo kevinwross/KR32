@@ -138,6 +138,19 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("64-bit returns preserve the high word") {
+    const ProgramResult program = compile_and_run(
+        "long long make() { return -123; }\n"
+        "int main() {\n"
+        "    long long value = make();\n"
+        "    if (value != -123) return 1;\n"
+        "    if ((int)(value >> 32) != -1) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("function pointers can be called directly") {
     const ProgramResult program = compile_and_run(
         "int add(int left, int right) { return left + right; }\n"
@@ -181,6 +194,8 @@ TEST_CASE("<cstdlib> converts C strings") {
         "    if (std::strtod(\"2.5x\", &end) != 2.5 || end[0] != 'x') return 9;\n"
         "    if (std::strtod(\"1.5e2x\", &end) != 150.0 || end[0] != 'x') return 10;\n"
         "    if (std::atof(\"1e2\") != 100.0) return 11;\n"
+        "    if (std::strtoll(\"-123z\", &end, 10) != -123) return 12;\n"
+        "    if (std::strtoull(\"123z\", &end, 10) != 123) return 13;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

@@ -4427,6 +4427,16 @@ private:
             if (is_fp_type(type)) {
                 emit(type->kind == Type::Kind::Double ? "    FNEG.D F0, F0"
                                                       : "    FNEG.S F0, F0");
+            } else if (is_long_long_type(type)) {
+                const std::string skip = new_label("llneg");
+                emit("    NEG R0, R0");
+                emit("    MOV R2, #0");
+                emit("    CMP R0, #0");
+                emit("    JNZ " + skip);
+                emit("    MOV R2, #1");
+                emit(skip + ":");
+                emit("    NOT R1, R1");
+                emit("    ADD R1, R1, R2");
             } else {
                 emit("    NEG R0, R0");
             }

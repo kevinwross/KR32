@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 12:07 -08:00
+> **Last updated:** 2026-11-08 12:12 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2216,6 +2216,9 @@ Newest entries at the bottom. Use the local time zone.
       pointer and exposed it as `std::strtod`.
 - **2026-11-08 12:07 -08:00** — Added decimal exponent parsing to
       `strtod`; `atof` now delegates to `strtod`.
+- **2026-11-08 12:12 -08:00** — Added 64-bit `strtoll`/`strtoull`, fixed C
+      64-bit unary negation (high-word borrow), and fixed C++ implicit
+      `int`-to-`long long` return staging.
 
 ## 10. Updating this file
 
