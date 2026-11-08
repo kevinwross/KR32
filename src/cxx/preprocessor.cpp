@@ -1813,6 +1813,9 @@ private:
             error(line_number, 1, std::string(trim(rest)));
             return;
         }
+        if (directive == "warning") {
+            return;
+        }
         if (directive == "pragma" || directive == "line") {
             return;
         }

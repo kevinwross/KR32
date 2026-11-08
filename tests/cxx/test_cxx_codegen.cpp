@@ -747,6 +747,14 @@ TEST_CASE("predefined source macros expand") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("C++ #warning directives are accepted") {
+    const ProgramResult program = compile_and_run(
+        "#warning this should not stop compilation\n"
+        "int main() { return 0; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("__func__ names the current function") {
     const ProgramResult program = compile_and_run(
         "const char* name() { return __func__; }\n"
