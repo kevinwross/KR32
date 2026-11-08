@@ -1,23 +1,41 @@
 # Resume notes: C/C++ compiler work
 
-**Updated:** 2026-11-07 19:08 America/Los_Angeles
+**Updated:** 2026-11-08 04:22 America/Los_Angeles
 **Repository:** `C:\Users\kevin\source\repos\KR32`
-**Last feature commit:** `46bab01` (`cxx: convert scalars in returns and comparisons`).
+**Last feature commit:** `ff90f10` (`cxx: add not-of search positions`).
 **Goal:** “Continue to improve the C and C++ compilers to support the system”
-**Goal status:** the harness goal is still marked `paused`. The user requested
-resume, but `update_goal action=resume` is rejected for the model; the user must
-use the UI resume control. Work can continue manually in the meantime.
+**Goal status:** active. Rounds 69–110 continued the goal; latest verification is
+below.
 
 ## Last verified state
 
 - Windows Debug CTest: **43/43 passed**
 - Linux GCC CTest (WSL): **43/43 passed**
-- Unit suite: **420 test cases, 7,077 assertions**, all passing
+- Unit suite: **437 test cases, 7,202 assertions**, all passing
 - Working tree clean except pre-existing untracked `node_modules/`,
   `package.json`, and `package-lock.json` (not part of compiler work; leave
   untracked)
 
-Most recent compiler feature, round 69:
+## Recent feature areas (rounds 69–110)
+
+- Conversion operators now apply to scalar returns, equality/relational
+  comparisons, and integer arithmetic, including reversed operands.
+- Converting constructors work for copy initialization, scalar arguments,
+  globals/TLS, explicit-constructor rejection, and C-style class casts.
+- Default arguments cover functions, members, and constructors, including
+  global and copy-initialized objects.
+- C: `#error`/`#warning`, attribute skipping, `__attribute__((packed/aligned))`,
+  `_Alignas`, `_Generic`, `typeof`/`__typeof__`, and `_Static_assert`/
+  `static_assert` checks.
+- C++ classes: `explicit`, `alignas`/`alignof`, C-style class temporaries,
+  range-for over `begin`/`end` ranges and reference loop variables.
+- `std::string`: many search/compare/assign/insert/erase/resize overloads,
+  `npos`, `data`, `begin`/`end`, deep copy assignment, and repeated-character
+  operations.
+- C++ ABI: fixed integer arguments beyond `R3` are stack-passed, enabling
+  four- and five-argument member calls such as `std::string::replace/compare`.
+
+## Earlier conversion-operator foundation (rounds 67–68)
 
 ```cpp
 class Flag {
@@ -27,37 +45,40 @@ public:
     operator bool() const { return value != 0; }
 };
 
-bool truth(Flag flag) { return flag; }   // conversion in a return
+bool truth(Flag flag) { return flag; }
 Flag zero(0);
-if (zero == 0) { ... }                  // conversion in equality comparison
+if (zero == 0) { ... }
 ```
-
-Round 68 added:
-
-```cpp
-Number number(7);
-int converted = number;   // copy initialization
-take(number);             // scalar function argument
-```
-
-Changes in `src/cxx/codegen.cpp`:
 
 - `conversion_cost` accepts class → scalar via a conversion operator
 - `gen_scalar_conversion` invokes the matching conversion operator, with an
   `operator bool` fallback for integer targets
-- Copy initialization, scalar/FP/long-long arguments, scalar returns, and
-  equality comparisons use it
-
-Round 67 added conversion operators themselves:
-
-- Conditions (`if (flag)`)
-- Explicit casts (`(bool)flag`, `(int)number`)
-- Conversion-operator mangling (`operator bool` → `operator_cast_bool`)
+- Conditions, explicit casts, copy initialization, scalar/FP/long-long
+  arguments, returns, comparisons, and integer arithmetic use it
 
 ## Recent rounds already committed
 
 Approximate order, newest first:
 
+- `ff90f10` — cxx: add not-of search positions
+- `c2b9842` — cxx: compare string subranges
+- `e934ecb` — cxx: deep-copy string assignment
+- `ee9186b` — cxx: compare string prefixes by count
+- `37c43b9` — cxx: pass fixed arguments on the stack
+- `0b242e2` — cxx: append string prefixes by count
+- `6689d18` — cxx: insert string prefixes by count
+- `c83be11` — cxx: append string prefixes by count
+- `f0a0a91` — cxx: resize strings with fill characters
+- `e9fb414` — cc: support _Alignas declarations
+- `e609737` — cxx: iterate strings with begin and end
+- `5e85996` — cc: honor aligned struct attributes
+- `d478717` — cc: apply trailing packed attributes
+- `dd96da5` — cc: honor packed struct attributes
+- `ceb23d5` — cxx: add string data accessors
+- `6054cea` — cxx: support alignas and alignof
+- `53ad2f9` — cxx: add string assign overloads
+- `ba4e244` — cxx: support default arguments
+- `78719b4` — cxx: construct class temporaries from scalar arguments
 - `46bab01` — cxx: convert scalars in returns and comparisons
 - `e0ca3b2` — build: embed KR32OS images in kr32 (BIOS/kernel are now
   embedded by default, with platform-separated OS build outputs)
@@ -148,41 +169,34 @@ Approximate order, newest first:
 
 ## Current known gaps / good next targets
 
-1. **More implicit conversion contexts**
-   - arithmetic/operands involving class conversions
-   - `0 == flag` and relational comparisons (`flag < 5`)
-   - `return`/argument conversions to class constructors
-   - conversion to `std::string`? (would need constructor/conversion interplay)
+1. **Remaining conversion contexts**
+   - class-to-class casts/conversions
+   - conversion operators returning references/pointers
+   - further constructor-overload ranking cases
 
-2. **C `_Generic`**
-   - Currently unsupported; `_Generic(value, int: ..., default: ...)` parses
-     `int` as an expression and errors.
-   - Hard in single-pass compiler; would need branch parsing/rollback and
-     compile-time type selection.
-
-3. **More C features**
-   - `#error` / `#warning`
-   - `__attribute__((...))` skipping and packed/aligned layout
-   - `_Generic`
-   - `#line`
+2. **C features**
+   - `_Atomic` / `<stdatomic.h>` semantics beyond plain qualifiers
+   - `#line` file-name tracking in diagnostics
    - designated initializer edge cases
-   - `typeof`
-   - `_Atomic` / `<stdatomic.h>`
+   - `_Alignas` after the type and on parameters
    - richer initializer/declarator combinations
 
-4. **C++ library surface**
+3. **C++ library surface**
    - `std::vector` / `std::algorithm` style helpers
-   - more `std::string` (e.g. `find` with position, `replace` with string,
-     `operator<<` for string streams)
+   - `std::string` still lacks some niche overloads and stream insertion
    - full iostreams/locales/facets remain out of scope
    - standard `<utility>`/`<algorithm>` pieces commonly expected by guest code
 
-5. **C++ language**
-   - default arguments if not already complete
+4. **C++ language**
+   - range-for with custom iterator classes (pointer iterators work)
    - more template/overload resolution cases
    - `operator->*`
-   - conversion operators returning references/pointers
-   - `mutable`, `constexpr`, richer class semantics
+   - richer `constexpr`/`mutable`/class semantics
+
+5. **C++ ABI**
+   - FP stack arguments beyond `F7`
+   - `long long` and two-register classes beyond the integer register bank
+   - stack-argument coverage for aggregates/lambdas
 
 6. **Known small quirks**
    - `__FILE__` uses the compiler’s provided source name, which may be a full
