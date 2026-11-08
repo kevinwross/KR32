@@ -2,7 +2,7 @@
 
 **Paused:** 2026-11-07 17:51 America/Los_Angeles
 **Repository:** `C:\Users\kevin\source\repos\KR32`
-**HEAD at pause:** `136c246` (`cxx: convert scalars in initialization and arguments`)
+**HEAD at pause:** `3b785ca` (`docs: add compiler work resume notes`)
 **Goal:** “Continue to improve the C and C++ compilers to support the system”
 **Goal status at pause:** intentionally paused by user request. On resume, call
 `get_goal` and `update_goal` with action `resume` before continuing automatic
