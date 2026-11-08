@@ -281,6 +281,26 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("char assignments preserve neighboring bytes") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    char text[4] = \"abc\";\n"
+        "    text[0] = 'x';\n"
+        "    if (text[1] != 'b') return 1;\n"
+        "    char& reference = text[2];\n"
+        "    reference = 'z';\n"
+        "    if (text[2] != 'z') return 2;\n"
+        "    std::string value(\"abc\");\n"
+        "    value.front() = 'x';\n"
+        "    value.back() = 'z';\n"
+        "    return value == \"xbz\" ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("const strings expose front and back") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"

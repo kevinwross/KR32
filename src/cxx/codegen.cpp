@@ -3660,7 +3660,11 @@ private:
     }
 
     void store_value(const TypePtr& type) {
-        const TypePtr resolved = resolve_type(type);
+        TypePtr resolved = resolve_type(type);
+        if (resolved && (resolved->kind == TypeKind::LValueRef ||
+                         resolved->kind == TypeKind::RValueRef)) {
+            resolved = resolve_type(resolved->element);
+        }
         if (is_long_long(resolved)) {
             emit("    STORE R0, [R1]");
             emit("    STORE R2, [R1 + 4]");

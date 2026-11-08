@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 14:11 -08:00
+> **Last updated:** 2026-11-08 14:14 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2317,6 +2317,9 @@ Newest entries at the bottom. Use the local time zone.
       specifier (currently compiled as the corresponding real scalar).
 - **2026-11-08 14:11 -08:00** — Accepted `_Imaginary` as a C type
       specifier (currently compiled as the corresponding real scalar).
+- **2026-11-08 14:14 -08:00** — Unwrapped reference types in `store_value`,
+      fixing character assignments that previously stored a full word and
+      overwrote neighboring bytes.
 
 ## 10. Updating this file
 
