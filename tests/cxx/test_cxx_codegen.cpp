@@ -505,6 +505,11 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (replaced_with_string != \"aXYc\") return 39;\n"
         "    replaced_with_string.insert(1, replacement);\n"
         "    if (replaced_with_string != \"aXYXYc\") return 40;\n"
+        "    std::string char_text(\"ab\");\n"
+        "    std::string appended_char = char_text + 'c';\n"
+        "    if (appended_char != \"abc\") return 41;\n"
+        "    std::string prefixed_char = 'd' + char_text;\n"
+        "    if (prefixed_char != \"dab\") return 42;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
