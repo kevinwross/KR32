@@ -1378,6 +1378,31 @@ TEST_CASE("a compiled C program calls putchar and exits") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("typeof derives types from expressions and type names") {
+    const ProgramResult program = compile_and_run(
+        "struct Point { int x; int y; };\n"
+        "int main(void) {\n"
+        "    int source = 3;\n"
+        "    typeof(source) copy = 4;\n"
+        "    typeof(source + 1) added = 5;\n"
+        "    typeof(int*) pointer = &source;\n"
+        "    typeof(int[3]) values;\n"
+        "    typeof(struct Point) point;\n"
+        "    values[0] = 6;\n"
+        "    point.x = 2;\n"
+        "    point.y = 3;\n"
+        "    if (copy != 4) return 1;\n"
+        "    if (added != 5) return 2;\n"
+        "    if (*pointer != 3) return 3;\n"
+        "    if (sizeof(values) != 12) return 4;\n"
+        "    if (values[0] != 6) return 5;\n"
+        "    if (point.x + point.y != 5) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("C11 generic selections choose by expression type") {
     const ProgramResult program = compile_and_run(
         "#define KIND(x) _Generic((x), int: 1, char: 2, double: 3, default: 0)\n"

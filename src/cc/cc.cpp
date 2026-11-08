@@ -1397,7 +1397,9 @@ private:
                text == "struct" || text == "union" || text == "enum" ||
                text == "const" || text == "unsigned" || text == "signed" ||
                text == "static" || text == "extern" || text == "volatile" ||
-               text == "register" || text == "long" || typedefs_.find(text) != typedefs_.end();
+               text == "register" || text == "long" ||
+               text == "typeof" || text == "__typeof__" ||
+               typedefs_.find(text) != typedefs_.end();
     }
 
     static int align_up(int value, int alignment) {
@@ -1817,6 +1819,14 @@ private:
             base = parse_struct_or_union(true);
         } else if (match("enum")) {
             base = parse_enum();
+        } else if (match("typeof") || match("__typeof__")) {
+            expect("(");
+            if (is_type_start()) {
+                base = parse_array_suffix(parse_type());
+            } else {
+                base = parse_unevaluated_expression();
+            }
+            expect(")");
         } else if (peek().kind == TokenKind::Identifier &&
                    typedefs_.find(peek().text) != typedefs_.end()) {
             base = typedefs_[take().text];
