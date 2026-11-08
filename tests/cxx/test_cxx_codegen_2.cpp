@@ -281,6 +281,27 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm equal compares ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int left[3] = { 1, 2, 3 };\n"
+        "    int right[3] = { 1, 2, 3 };\n"
+        "    if (!std::equal(left, left + 3, right)) return 1;\n"
+        "    right[1] = 9;\n"
+        "    if (std::equal(left, left + 3, right)) return 2;\n"
+        "    char a[4] = \"abc\";\n"
+        "    char b[4] = \"abc\";\n"
+        "    if (!std::equal(a, a + 3, b)) return 3;\n"
+        "    double x[2] = { 1.5, 2.5 };\n"
+        "    double y[2] = { 1.5, 2.5 };\n"
+        "    return std::equal(x, x + 2, y) ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm count tallies elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
