@@ -1,3 +1,9 @@
+include(ProcessorCount)
+ProcessorCount(KR32_TEST_JOBS)
+if(KR32_TEST_JOBS EQUAL 0)
+    set(KR32_TEST_JOBS 8)
+endif()
+
 set(KR32_TEST_SOURCES
     unit/test_main.cpp
     unit/test_encoding.cpp
@@ -11,7 +17,14 @@ set(KR32_TEST_SOURCES
     unit/test_container.cpp
     unit/test_object_assembler.cpp
     unit/test_linker.cpp
-    unit/test_cc.cpp
+    unit/test_cc_1.cpp
+    unit/test_cc_2.cpp
+    unit/test_cc_3.cpp
+    unit/test_cc_4.cpp
+    unit/test_cc_5.cpp
+    unit/test_cc_6.cpp
+    unit/test_cc_7.cpp
+    unit/test_cc_8.cpp
     unit/test_debug.cpp
     unit/test_embedded_os.cpp
     unit/test_host.cpp
@@ -24,7 +37,11 @@ set(KR32_TEST_SOURCES
     cxx/test_cxx_codegen_1.cpp
     cxx/test_cxx_codegen_2.cpp
     cxx/test_cxx_codegen_3.cpp
-    cxx/test_cxx_codegen_4.cpp)
+    cxx/test_cxx_codegen_4.cpp
+    cxx/test_cxx_codegen_5.cpp
+    cxx/test_cxx_codegen_6.cpp
+    cxx/test_cxx_codegen_7.cpp
+    cxx/test_cxx_codegen_8.cpp)
 
 add_executable(kr32_tests ${KR32_TEST_SOURCES})
 
@@ -351,10 +368,10 @@ set_tests_properties(boundary_bad PROPERTIES WILL_FAIL TRUE)
 #   check-unit : only the doctest suites, parallel
 #   check      : the whole CTest suite, parallel
 add_custom_target(check-unit
-    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> -L unit --output-on-failure -j8
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> -L unit --output-on-failure -j${KR32_TEST_JOBS}
     DEPENDS kr32_tests
     USES_TERMINAL)
 add_custom_target(check
-    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j8
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j${KR32_TEST_JOBS}
     DEPENDS kr32 kr32_tests
     USES_TERMINAL)

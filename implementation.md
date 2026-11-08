@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 11:31 -08:00
+> **Last updated:** 2026-11-08 11:39 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2193,9 +2193,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 11:07 -08:00** — Added `<cassert>` with an `assert`
       function-like macro.
 - **2026-11-08 11:31 -08:00** — Split CTest into per-source-file unit
-      entries, split the C++ codegen suite into four buckets, serialized the
-      OS build tests, and documented the fast/full testing workflow. Full
-      parallel suite dropped from ~290 s to ~82 s on Windows and ~24 s on Linux.
+      entries, split the C and C++ codegen suites into eight buckets each,
+      serialized the OS build tests, used the detected CPU count for
+      `ctest -j`, and documented the fast/full testing workflow. Full parallel
+      suite dropped from ~290 s to ~49 s on Windows and ~12 s on Linux.
 
 ## 10. Updating this file
 

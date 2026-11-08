@@ -1,739 +1,488 @@
 #include "cxx_test_support.h"
 
-TEST_CASE("non-type template array bounds accept constant offsets") {
-    const ProgramResult program = compile_and_run(
-        "template <int N> struct Array {\n"
-        "    int values[N + 1];\n"
-        "    int size() { return N + 1; }\n"
-        "};\n"
+TEST_CASE("matrix transpose, multiply-add, and transform stack run") {
+    const ProgramResult transpose = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
         "int main() {\n"
-        "    Array<2> array;\n"
-        "    array.values[2] = 42;\n"
-        "    return array.size() + array.values[2] - 3;\n"
+        "    kr32::mat4 a; a.m[0] = 1.0; a.m[1] = 7.0; a.m[15] = 1.0;\n"
+        "    kr32::mat4 b = kr32::transpose(a);\n"
+        "    return b.m[4] == 7.0 ? 42 : 0;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
+    INFO(transpose.diagnostics);
+    REQUIRE(transpose.ok);
+    CHECK(transpose.result == 42);
+
+    const ProgramResult add = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 2.0; a.m[15] = 1.0;\n"
+        "    kr32::mat4 b; b.m[0] = 3.0; b.m[15] = 1.0;\n"
+        "    kr32::mat4 c; c.m[0] = 4.0;\n"
+        "    kr32::mat4 r = kr32::matrix_mul_add(a, b, c);\n"
+        "    return r.m[0] == 10.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(add.diagnostics);
+    REQUIRE(add.ok);
+    CHECK(add.result == 42);
+
+    const ProgramResult stack = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 5.0;\n"
+        "    kr32::push(a);\n"
+        "    kr32::mat4 b;\n"
+        "    kr32::pop(b);\n"
+        "    kr32::drop();\n"
+        "    return b.m[0] == 5.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(stack.diagnostics);
+    REQUIRE(stack.ok);
+    CHECK(stack.result == 42);
+
+    const ProgramResult alias = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4 a; a.m[0] = 2.0; a.m[15] = 1.0;\n"
+        "    kr32::mat4 b = kr32::matrix_mul(a, a);\n"
+        "    a = kr32::matrix_mul(a, b);\n"
+        "    return a.m[0] == 8.0 ? 42 : 0;\n"
+        "}\n");
+    INFO(alias.diagnostics);
+    REQUIRE(alias.ok);
+    CHECK(alias.result == 42);
 }
 
-TEST_CASE("non-type template arguments accept constant expressions") {
-    const ProgramResult program = compile_and_run(
-        "template <int N> class Box {\n"
-        "public:\n"
-        "    int size() { return N; }\n"
-        "};\n"
-        "int main() {\n"
-        "    Box<2 + 3> five;\n"
-        "    Box<1 << 3> eight;\n"
-        "    return five.size() * 10 + eight.size();\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 58);
+TEST_CASE("matrix debug info keeps array bounds and float members") {
+    container::Image image;
+    std::string error;
+    REQUIRE_MESSAGE(build_cluster_image(
+                        "#include <kr32/matrix.hpp>\n"
+                        "int main() {\n"
+                        "    kr32::mat4 m;\n"
+                        "    kr32::vec4 v;\n"
+                        "    v.x = 1.0;\n"
+                        "    return 0;\n"
+                        "}\n",
+                        image, error),
+                    error);
+    debug::Info info;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error);
+
+    const debug::ClassInfo* matrix = nullptr;
+    const debug::ClassInfo* vector = nullptr;
+    for (const debug::ClassInfo& klass : info.classes) {
+        if (klass.name == "kr32::mat4") matrix = &klass;
+        if (klass.name == "kr32::vec4") vector = &klass;
+    }
+    REQUIRE(matrix != nullptr);
+    REQUIRE(vector != nullptr);
+    REQUIRE(matrix->members.size() == 1);
+    CHECK(matrix->members[0].name == "m");
+    CHECK(matrix->members[0].type == "float[16]");
+    REQUIRE(vector->members.size() == 4);
+    CHECK(vector->members[0].type == "float");
+
+    const debug::Function* main = nullptr;
+    for (const debug::Function& function : info.functions) {
+        if (function.name == "main") main = &function;
+    }
+    REQUIRE(main != nullptr);
+    bool found_return_line = false;
+    for (const debug::Line& line : info.lines) {
+        if (line.source == 0 && line.line == 6 &&
+            line.address >= main->start && line.address < main->end) {
+            found_return_line = true;
+        }
+    }
+    CHECK(found_return_line);
 }
 
-TEST_CASE("non-type template parameters size arrays") {
-    const ProgramResult program = compile_and_run(
-        "template <int N> class Box {\n"
-        "public:\n"
-        "    int data[N];\n"
-        "    int size() { return N; }\n"
-        "};\n"
+TEST_CASE("try/catch handles thrown scalars and nested handlers") {
+    const ProgramResult scalar = compile_and_run(
         "int main() {\n"
-        "    Box<4> box;\n"
-        "    box.data[3] = 42;\n"
-        "    return box.data[3] + box.size() - 4;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("function template explicit specializations override generic calls") {
-    const ProgramResult specialized = compile_and_run(
-        "template <typename T> T twice(T value) { return value + value; }\n"
-        "template <> int twice<int>(int value) { return 42; }\n"
-        "int main() {\n"
-        "    int first = twice(1);\n"
-        "    int second = twice(1);\n"
-        "    return first + second;\n"
-        "}\n");
-    CHECK(specialized.ok);
-    CHECK(specialized.result == 84);
-
-    const ProgramResult generic = compile_and_run(
-        "template <typename T> T twice(T value) { return value + value; }\n"
-        "int main() { return (int)twice(1.5); }\n");
-    CHECK(generic.ok);
-    CHECK(generic.result == 3);
-
-    const ProgramResult mixed = compile_and_run(
-        "template <typename T> T twice(T value) { return value + value; }\n"
-        "template <> int twice<int>(int value) { return 42; }\n"
-        "int main() {\n"
-        "    int specialized = twice(1);\n"
-        "    int generic = (int)twice(1.5);\n"
-        "    return specialized * 10 + generic;\n"
-        "}\n");
-    CHECK(mixed.ok);
-    CHECK(mixed.result == 423);
-}
-
-TEST_CASE("non-type template parameters bind integer arguments") {
-    const ProgramResult program = compile_and_run(
-        "template <int N> class Box {\n"
-        "public:\n"
-        "    int value;\n"
-        "    int size() { return N; }\n"
-        "};\n"
-        "int main() {\n"
-        "    Box<7> seven;\n"
-        "    Box<9> nine;\n"
-        "    return seven.size() * 10 + nine.size();\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 79);
-}
-
-TEST_CASE("class template static data members use their definition initializer") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box {\n"
-        "public:\n"
-        "    static T value;\n"
-        "};\n"
-        "template <typename T> T Box<T>::value = 42;\n"
-        "int main() {\n"
-        "    Box<int> box;\n"
-        "    return Box<int>::value == box.value ? 42 : 0;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("out-of-class template member definitions attach to instantiations") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box {\n"
-        "public:\n"
-        "    T value;\n"
-        "    T add(T amount);\n"
-        "};\n"
-        "template <typename T> T Box<T>::add(T amount) {\n"
-        "    return value + amount;\n"
-        "}\n"
-        "int main() {\n"
-        "    Box<int> box;\n"
-        "    box.value = 40;\n"
-        "    return box.add(2);\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("specialized out-of-class template members define specialization methods") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box {\n"
-        "public:\n"
-        "    T value;\n"
-        "    T get();\n"
-        "};\n"
-        "template <> class Box<int> {\n"
-        "public:\n"
-        "    int value;\n"
-        "    int get();\n"
-        "};\n"
-        "template <> int Box<int>::get() { return 42; }\n"
-        "int main() {\n"
-        "    Box<int> box;\n"
-        "    box.value = 1;\n"
-        "    return box.get();\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("partial specializations match array patterns") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box { public: int kind() { return 1; } };\n"
-        "template <typename T> class Box<T[3]> { public: int kind() { return 5; } };\n"
-        "int main() {\n"
-        "    Box<int[3]> array_box;\n"
-        "    return array_box.kind();\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 5);
-}
-
-TEST_CASE("partial specializations match reference and multi-level pointer patterns") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box { public: int kind() { return 1; } };\n"
-        "template <typename T> class Box<T&> { public: int kind() { return 3; } };\n"
-        "template <typename T> class Box<T**> { public: int kind() { return 4; } };\n"
-        "int main() {\n"
-        "    Box<int&> reference_box;\n"
-        "    Box<int**> pointer_box;\n"
-        "    return reference_box.kind() * 10 + pointer_box.kind();\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 34);
-}
-
-TEST_CASE("partial class template specializations match pointer patterns") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box {\n"
-        "public:\n"
-        "    T value;\n"
-        "    int kind() { return 1; }\n"
-        "};\n"
-        "template <typename T> class Box<T*> {\n"
-        "public:\n"
-        "    T* value;\n"
-        "    int kind() { return 2; }\n"
-        "};\n"
-        "int main() {\n"
-        "    Box<int*> pointer_box;\n"
-        "    Box<int> value_box;\n"
-        "    return pointer_box.kind() * 10 + value_box.kind();\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 21);
-}
-
-TEST_CASE("C++ long long arrays and references keep both halves") {
-    const ProgramResult array_program = compile_and_run(
-        "int main() {\n"
-        "    long long values[2];\n"
-        "    values[0] = 10000000000;\n"
-        "    values[1] = 2;\n"
-        "    return (int)(values[0] / 1000000000) + (int)values[1];\n"
-        "}\n");
-    CHECK(array_program.ok);
-    CHECK(array_program.result == 12);
-
-    const ProgramResult reference_program = compile_and_run(
-        "int main() {\n"
-        "    long long value = 10000000000;\n"
-        "    long long& ref = value;\n"
-        "    ref = ref + 1;\n"
-        "    return (int)(value / 1000000000);\n"
-        "}\n");
-    CHECK(reference_program.ok);
-    CHECK(reference_program.result == 10);
-}
-
-TEST_CASE("C++ long long globals and fields keep both halves") {
-    const ProgramResult program = compile_and_run(
-        "long long global = 10000000000;\n"
-        "struct Box { long long value; };\n"
-        "int main() {\n"
-        "    Box box;\n"
-        "    box.value = global;\n"
-        "    return (int)(box.value / 1000000000);\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("C++ long long static members keep both halves") {
-    const ProgramResult program = compile_and_run(
-        "struct Box { static long long value; };\n"
-        "long long Box::value = 10000000000;\n"
-        "int main() {\n"
-        "    return Box::value == 10000000000 ? 42 : 0;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("C++ long long literals carry across 64-bit addition") {
-    const ProgramResult program = compile_and_run(
-        "int main() {\n"
-        "    long long positive = 10000000000;\n"
-        "    long long negative = -10000000000;\n"
-        "    return positive + negative == 0 ? 42 : 0;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("C++ printf formats long long values") {
-    const ProgramResult program = compile_and_run(
-        "#include <stdio.h>\n"
-        "int main() {\n"
-        "    long long value = 100000;\n"
-        "    long long big = value * value;\n"
-        "    printf(\"%lld %llx\\n\", big, big);\n"
+        "    try { throw 42; } catch (int value) { return value; }\n"
         "    return 0;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.output == "10000000000 2540be400\n");
-}
+    INFO(scalar.diagnostics);
+    REQUIRE(scalar.ok);
+    CHECK(scalar.result == 42);
 
-TEST_CASE("C++ long long functions pass and return 64-bit values") {
-    const ProgramResult program = compile_and_run(
-        "long long mul(long long a, long long b) { return a * b; }\n"
+    const ProgramResult nested = compile_and_run(
         "int main() {\n"
-        "    return (int)(mul(100000, 100000) / 1000000000);\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("C++ long long locals support 64-bit arithmetic") {
-    const ProgramResult program = compile_and_run(
-        "int main() {\n"
-        "    long long a = 100000;\n"
-        "    long long b = 100000;\n"
-        "    long long c = a * b;\n"
-        "    return (int)(c / 1000000000);\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("range-for iterates initializer_list variables") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "int main() {\n"
-        "    auto values = {1, 2, 3, 4};\n"
-        "    int total = 0;\n"
-        "    for (int value : values) { total += value; }\n"
-        "    return total;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("auto initializer_list variables hold braced values") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "int main() {\n"
-        "    auto values = {1, 2, 3, 4};\n"
-        "    return values.data_[0] + values.data_[3] + values.size_;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 9);
-}
-
-TEST_CASE("auto deduces scalar and pointer return types") {
-    const ProgramResult program = compile_and_run(
-        "int* pointer() { static int value = 42; return &value; }\n"
-        "long long wide() { return 10000000000; }\n"
-        "double real() { return 2.5; }\n"
-        "int main() {\n"
-        "    auto p = pointer();\n"
-        "    auto w = wide();\n"
-        "    auto d = real();\n"
-        "    return *p + (int)(w / 1000000000) + (int)d;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 54);
-}
-
-TEST_CASE("auto deduces class return types from calls") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "std::initializer_list<int> make() { return {4, 5, 6}; }\n"
-        "int main() {\n"
-        "    auto values = make();\n"
-        "    return values.data_[0] + values.data_[2];\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("reference copy constructors are selected") {
-    const ProgramResult program = compile_and_run(
-        "struct Value {\n"
-        "    int number;\n"
-        "    Value(int value) { number = value; }\n"
-        "    Value(Value& other) { number = other.number; }\n"
-        "};\n"
-        "int main() { Value first(42); Value second{first}; return second.number; }\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("constructors are selected by class argument type") {
-    const ProgramResult program = compile_and_run(
-        "struct Value {\n"
-        "    int number;\n"
-        "    Value(int value) { number = value; }\n"
-        "    Value(Value other) { number = other.number; }\n"
-        "};\n"
-        "int main() { Value first(42); Value second{first}; return second.number; }\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("functions return braced initializer_lists") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "std::initializer_list<int> make() { return {4, 5, 6}; }\n"
-        "int main() {\n"
-        "    std::initializer_list<int> values = make();\n"
-        "    return values.data_[0] + values.data_[2];\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("initializer_list constructors accept empty braced lists") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "struct Count {\n"
-        "    int total;\n"
-        "    Count(std::initializer_list<int> values) {\n"
-        "        total = 0;\n"
-        "        for (int value : values) total += value;\n"
-        "    }\n"
-        "};\n"
-        "int main() { Count count{}; return count.total; }\n");
-    CHECK(program.ok);
-    CHECK(program.result == 0);
-}
-
-TEST_CASE("functions return empty braced initializer_lists") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "std::initializer_list<int> empty() { return {}; }\n"
-        "int main() {\n"
-        "    std::initializer_list<int> values = empty();\n"
-        "    return values.size_;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 0);
-}
-
-TEST_CASE("initializer_list constructors keep 64-bit elements") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "struct Sum {\n"
-        "    long long total;\n"
-        "    Sum(std::initializer_list<long long> values) {\n"
-        "        total = 0;\n"
-        "        for (long long value : values) total += value;\n"
-        "    }\n"
-        "};\n"
-        "int main() {\n"
-        "    Sum sum{10000000000, 2};\n"
-        "    return (int)(sum.total / 1000000000);\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("constructors accept initializer_list arguments") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "struct Sum {\n"
-        "    int total;\n"
-        "    Sum(std::initializer_list<int> values) {\n"
-        "        total = 0;\n"
-        "        for (int value : values) total += value;\n"
-        "    }\n"
-        "};\n"
-        "int main() { Sum sum{1, 2, 3}; return sum.total; }\n");
-    CHECK(program.ok);
-    CHECK(program.result == 6);
-}
-
-TEST_CASE("initializer_list keeps 64-bit elements") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "int main() {\n"
-        "    auto values = {10000000000, 2};\n"
-        "    return (int)(values.data_[0] / 1000000000) + values.data_[1];\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 12);
-}
-
-TEST_CASE("initializer_list begin and end iterate values") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "int main() {\n"
-        "    auto values = {7, 8};\n"
-        "    int total = 0;\n"
-        "    for (const int* p = values.begin(); p != values.end(); ++p) {\n"
-        "        total += *p;\n"
-        "    }\n"
-        "    return total;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 15);
-}
-
-TEST_CASE("pointer-returning methods initialize locals") {
-    const ProgramResult program = compile_and_run(
-        "struct Holder { int* value; int* get() { return value; } };\n"
-        "int main() {\n"
-        "    int number = 42;\n"
-        "    Holder holder;\n"
-        "    holder.value = &number;\n"
-        "    int* pointer = holder.get();\n"
-        "    return *pointer;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 42);
-}
-
-TEST_CASE("initializer_list parameters accept braced arguments") {
-    const ProgramResult program = compile_and_run(
-        "#include <initializer_list>\n"
-        "int sum(std::initializer_list<int> values) {\n"
-        "    int total = 0;\n"
-        "    for (int index = 0; index < values.size_; ++index) {\n"
-        "        total += values.data_[index];\n"
-        "    }\n"
-        "    return total;\n"
-        "}\n"
-        "int main() { return sum({1, 2, 3, 4}); }\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
-}
-
-TEST_CASE("range-for binds reference loop variables") {
-    const ProgramResult program = compile_and_run(
-        "int main() {\n"
-        "    int values[3] = {1, 2, 3};\n"
-        "    for (int& value : values) value = value + 1;\n"
-        "    if (values[0] != 2) return 1;\n"
-        "    if (values[1] != 3) return 2;\n"
-        "    if (values[2] != 4) return 3;\n"
+        "    try {\n"
+        "        try { throw 42; } catch (double value) { return 1; }\n"
+        "    } catch (int value) { return value; }\n"
         "    return 0;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 0);
-}
+    INFO(nested.diagnostics);
+    REQUIRE(nested.ok);
+    CHECK(nested.result == 42);
 
-TEST_CASE("range-for iterates classes with begin and end") {
-    const ProgramResult program = compile_and_run(
-        "struct Range {\n"
-        "    int values[3];\n"
-        "    int* begin() { return values; }\n"
-        "    int* end() { return values + 3; }\n"
-        "};\n"
+    const ProgramResult rethrow = compile_and_run(
         "int main() {\n"
-        "    Range range;\n"
-        "    range.values[0] = 1;\n"
-        "    range.values[1] = 2;\n"
-        "    range.values[2] = 3;\n"
-        "    int sum = 0;\n"
-        "    for (int value : range) sum += value;\n"
-        "    return sum == 6 ? 0 : 1;\n"
+        "    try {\n"
+        "        try { throw 42; } catch (int value) { throw; }\n"
+        "    } catch (int value) { return value; }\n"
+        "    return 0;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 0);
+    INFO(rethrow.diagnostics);
+    REQUIRE(rethrow.ok);
+    CHECK(rethrow.result == 42);
 }
 
-TEST_CASE("range-for iterates braced initializer lists") {
-    const ProgramResult program = compile_and_run(
-        "int main() {\n"
-        "    int total = 0;\n"
-        "    for (int value : {1, 2, 3, 4}) { total += value; }\n"
-        "    return total;\n"
-        "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 10);
+TEST_CASE("exceptions emit ABI metadata and runtime entry points") {
+    const cxx::Result result = cxx::compile(
+        "int main() { try { throw 1; } catch (int value) { return value; } return 0; }\n");
+    REQUIRE(result.ok);
+    CHECK(result.assembly.find(".cpp_except") != std::string::npos);
+    CHECK(result.assembly.find("__kr32_personality_v0") != std::string::npos);
+    CHECK(result.assembly.find("__cxa_begin_catch") != std::string::npos);
+    CHECK(result.assembly.find("__cxa_end_catch") != std::string::npos);
+    CHECK(result.assembly.find("__cxa_atexit") != std::string::npos);
 }
 
-TEST_CASE("explicit class template specializations override generic instantiations") {
-    const ProgramResult program = compile_and_run(
-        "template <typename T> class Box {\n"
+TEST_CASE("class exceptions are caught by reference and value") {
+    const ProgramResult reference = compile_and_run(
+        "class Error {\n"
         "public:\n"
-        "    T value;\n"
-        "    int generic() { return 1; }\n"
-        "};\n"
-        "template <> class Box<int> {\n"
-        "public:\n"
-        "    int value;\n"
-        "    int specialized() { return 41; }\n"
+        "    int code;\n"
+        "    Error(int input) { code = input; }\n"
         "};\n"
         "int main() {\n"
-        "    Box<int> box;\n"
-        "    box.value = 1;\n"
-        "    return box.specialized() + box.value;\n"
+        "    try { Error error(42); throw error; }\n"
+        "    catch (const Error& caught) { return caught.code; }\n"
+        "    return 0;\n"
         "}\n");
-    CHECK(program.ok);
+    INFO(reference.diagnostics);
+    REQUIRE(reference.ok);
+    CHECK(reference.result == 42);
+
+    const ProgramResult value = compile_and_run(
+        "class Error {\n"
+        "public:\n"
+        "    int code;\n"
+        "    Error(int input) { code = input; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Error error(42); throw error; }\n"
+        "    catch (Error caught) { return caught.code; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(value.diagnostics);
+    REQUIRE(value.ok);
+    CHECK(value.result == 42);
+
+    const ProgramResult destruction = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Error {\n"
+        "public:\n"
+        "    ~Error() { destroyed = 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    int caught = 0;\n"
+        "    try { Error error; throw error; }\n"
+        "    catch (const Error& caught_error) { caught = 1; }\n"
+        "    return destroyed == 1 && caught == 1 ? 42 : 0;\n"
+        "}\n");
+    INFO(destruction.diagnostics);
+    REQUIRE(destruction.ok);
+    CHECK(destruction.result == 42);
+}
+
+TEST_CASE("unwinder walks multiple frames and resumes through cleanup pads") {
+    const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    int digit;\n"
+        "    Guard(int value) { digit = value; }\n"
+        "    ~Guard() { result = result * 10 + digit; }\n"
+        "};\n"
+        "void deep() { Guard guard(3); throw 1; }\n"
+        "void middle() { Guard guard(2); deep(); }\n"
+        "int main() {\n"
+        "    try { Guard guard(1); middle(); }\n"
+        "    catch (int value) { return result == 321 ? 42 : 0; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
     CHECK(program.result == 42);
 }
 
-TEST_CASE("class templates instantiate fields, methods, and constructors") {
+TEST_CASE("exceptions propagate across function calls") {
     const ProgramResult program = compile_and_run(
-        "template <typename T> class Box {\n"
-        "public:\n"
-        "    T value;\n"
-        "    Box(T initial) { value = initial; }\n"
-        "    T get() { return value; }\n"
-        "};\n"
+        "int risky() { throw 42; }\n"
         "int main() {\n"
-        "    Box<int> number(42);\n"
-        "    Box<char> letter('A');\n"
-        "    return number.get() + letter.get();\n"
+        "    try { return risky(); }\n"
+        "    catch (int value) { return value; }\n"
+        "    return 0;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 107);
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+
+    const ProgramResult cleanup = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    Guard() { }\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int risky() { Guard guard; throw 1; }\n"
+        "int main() {\n"
+        "    try { risky(); } catch (int value) { return result; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(cleanup.diagnostics);
+    REQUIRE(cleanup.ok);
+    CHECK(cleanup.result == 42);
 }
 
-TEST_CASE("C++ friends and private static members enforce access") {
-    const ProgramResult friends = compile_and_run(
-        "class Box {\n"
-        "private:\n"
+TEST_CASE("throw unwinds live destructors before catch") {
+    const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    Guard() { }\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Guard guard; throw 1; }\n"
+        "    catch (int value) { return result; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("new and delete allocate and construct objects") {
+    const ProgramResult scalar = compile_and_run(
+        "int main() { int* value = new int(42); int result = *value; delete value; "
+        "return result; }\n");
+    INFO(scalar.diagnostics);
+    REQUIRE(scalar.ok);
+    CHECK(scalar.result == 42);
+
+    const ProgramResult object = compile_and_run(
+        "class Value {\n"
+        "public:\n"
         "    int value;\n"
-        "public:\n"
-        "    Box() { value = 42; }\n"
-        "    friend int peek(Box& box);\n"
-        "    friend class Inspector;\n"
+        "    Value(int input) { value = input; }\n"
         "};\n"
-        "int peek(Box& box) { return box.value; }\n"
-        "class Inspector { public: int get(Box& box) { return box.value; } };\n"
-        "int main() { Box box; Inspector inspector; return peek(box) + inspector.get(box); }\n");
-    CHECK(friends.ok);
-    CHECK(friends.result == 84);
+        "int main() { Value* value = new Value(42); int result = value->value; "
+        "delete value; return result; }\n");
+    INFO(object.diagnostics);
+    REQUIRE(object.ok);
+    CHECK(object.result == 42);
 
-    const ProgramResult statics = compile_and_run(
-        "class Counter {\n"
-        "private:\n"
-        "    static int secret;\n"
+    const ProgramResult array = compile_and_run(
+        "int main() {\n"
+        "    int* values = new int[3];\n"
+        "    values[0] = 10; values[1] = 20; values[2] = 12;\n"
+        "    int result = values[0] + values[1] + values[2];\n"
+        "    delete[] values;\n"
+        "    return result;\n"
+        "}\n");
+    INFO(array.diagnostics);
+    REQUIRE(array.ok);
+    CHECK(array.result == 42);
+
+    const ProgramResult class_array = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Item {\n"
         "public:\n"
-        "    static int get() { return secret; }\n"
+        "    int value;\n"
+        "    Item() { value = 7; }\n"
+        "    ~Item() { destroyed = destroyed + 1; }\n"
         "};\n"
-        "int Counter::secret = 42;\n"
-        "int main() { return Counter::get(); }\n");
-    CHECK(statics.ok);
-    CHECK(statics.result == 42);
+        "int main() {\n"
+        "    Item* items = new Item[3];\n"
+        "    int result = items[2].value;\n"
+        "    delete[] items;\n"
+        "    return destroyed == 3 ? result : 0;\n"
+        "}\n");
+    INFO(class_array.diagnostics);
+    REQUIRE(class_array.ok);
+    CHECK(class_array.result == 7);
 
-    const cxx::Result rejected = cxx::compile(
-        "class Counter {\n"
-        "private:\n"
-        "    static int secret;\n"
+    const ProgramResult throwing_array = compile_and_run(
+        "int destroyed = 0;\n"
+        "int constructed = 0;\n"
+        "class Item {\n"
         "public:\n"
-        "    static int get() { return secret; }\n"
+        "    Item() { if (constructed == 2) { throw 7; } constructed = constructed + 1; }\n"
+        "    ~Item() { destroyed = destroyed + 1; }\n"
         "};\n"
-        "int Counter::secret = 42;\n"
-        "int main() { return Counter::secret; }\n");
-    CHECK_FALSE(rejected.ok);
+        "int main() {\n"
+        "    try { Item* items = new Item[3]; delete[] items; }\n"
+        "    catch (int value) { return destroyed == 2 ? 42 : 0; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(throwing_array.diagnostics);
+    REQUIRE(throwing_array.ok);
+    CHECK(throwing_array.result == 42);
 }
 
-TEST_CASE("C++ access control rejects private members and allows class internals") {
-    const ProgramResult internal = compile_and_run(
-        "class P {\n"
-        "private:\n"
-        "    int secret;\n"
-        "public:\n"
-        "    int x;\n"
-        "    P() { secret = 7; x = 1; }\n"
-        "    int get() { return secret; }\n"
-        "};\n"
-        "int main() { P p; p.x = 2; return p.get() + p.x; }\n");
-    CHECK(internal.ok);
-    CHECK(internal.result == 9);
-
-    const cxx::Result outside = cxx::compile(
-        "class P { private: int secret; public: P() { secret = 1; } };\n"
-        "int main() { P p; p.secret = 2; return 0; }\n");
-    CHECK_FALSE(outside.ok);
-    REQUIRE_FALSE(outside.diagnostics.empty());
-
-    const ProgramResult protected_access = compile_and_run(
-        "class B { protected: int x; public: B() { x = 1; } };\n"
-        "class D : public B { public: int get() { return x; } };\n"
-        "int main() { D d; return d.get(); }\n");
-    CHECK(protected_access.ok);
-    CHECK(protected_access.result == 1);
-}
-
-TEST_CASE("C++ supports designated aggregate and array initializers") {
-    const ProgramResult program = compile_and_run(
-        "struct P { int x; int y; };\n"
-        "P global = {.y = 5};\n"
+TEST_CASE("new and delete handle null, placement, nothrow, and failure") {
+    const ProgramResult null_delete = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Guard { public: ~Guard() { destroyed = 1; } };\n"
         "int main() {\n"
-        "    P p = {.y = 2};\n"
-        "    int a[4] = {[2] = 7, 8};\n"
-        "    return p.x + p.y + a[0] + a[2] + a[3] + global.y;\n"
+        "    Guard* pointer = 0;\n"
+        "    delete pointer;\n"
+        "    Guard* array = 0;\n"
+        "    delete[] array;\n"
+        "    return destroyed;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 22);
-}
+    INFO(null_delete.diagnostics);
+    REQUIRE(null_delete.ok);
+    CHECK(null_delete.result == 0);
 
-TEST_CASE("C++ global aggregate initializers are constant data") {
-    const ProgramResult program = compile_and_run(
-        "struct P { int x; int y; };\n"
-        "int a[2][2] = {{1, 2}, {3, 4}};\n"
-        "P p = {11, 22};\n"
-        "int b[3] = {5};\n"
+    const ProgramResult placement = compile_and_run(
+        "class Value { public: int value; Value(int input) { value = input; } };\n"
         "int main() {\n"
-        "    return a[0][0] + a[0][1] + a[1][0] + a[1][1] + b[0] + b[2] + p.x + p.y;\n"
+        "    unsigned int storage[4];\n"
+        "    Value* value = new (storage) Value(7);\n"
+        "    if (value != (Value*)storage || value->value != 7) return 1;\n"
+        "    int* scalar_storage = (int*)storage;\n"
+        "    int* scalar = new (scalar_storage) int(42);\n"
+        "    return *scalar == 42 ? 42 : 2;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 48);
-}
+    INFO(placement.diagnostics);
+    REQUIRE(placement.ok);
+    CHECK(placement.result == 42);
 
-TEST_CASE("C++ aggregate and nested array initializers run") {
-    const ProgramResult program = compile_and_run(
-        "struct P { int x; int y; };\n"
+    const ProgramResult nothrow = compile_and_run(
         "int main() {\n"
-        "    int a[2][2] = {{1, 2}, {3, 4}};\n"
-        "    int b[3] = {5};\n"
-        "    P p = {11, 22};\n"
-        "    return a[0][0] + a[0][1] + a[1][0] + a[1][1] + b[0] + b[2] + p.x + p.y;\n"
+        "    int* value = new (std::nothrow) int[0x7FFFFFFF];\n"
+        "    return value == 0 ? 42 : 0;\n"
         "}\n");
-    CHECK(program.ok);
-    CHECK(program.result == 48);
-}
+    INFO(nothrow.diagnostics);
+    REQUIRE(nothrow.ok);
+    CHECK(nothrow.result == 42);
 
-TEST_CASE("goto labels and range-for arrays run") {
-    const ProgramResult jump = compile_and_run(
+    const ProgramResult failure = compile_and_run(
         "int main() {\n"
-        "    int i = 0;\n"
-        "    goto check;\n"
-        "body:\n"
-        "    i += 1;\n"
-        "check:\n"
-        "    if (i < 4) goto body;\n"
-        "    return i;\n"
-        "}\n");
-    CHECK(jump.ok);
-    CHECK(jump.result == 4);
-
-    const ProgramResult range = compile_and_run(
-        "int main() {\n"
-        "    int values[4];\n"
-        "    values[0] = 1; values[1] = 2; values[2] = 3; values[3] = 4;\n"
-        "    int total = 0;\n"
-        "    for (int value : values) { total += value; }\n"
-        "    return total;\n"
-        "}\n");
-    CHECK(range.ok);
-    CHECK(range.result == 10);
-}
-
-TEST_CASE("conditional expressions and switch fallthrough run") {
-    const ProgramResult ternary = compile_and_run(
-        "int main() {\n"
-        "    int x = 5;\n"
-        "    int i = 2;\n"
-        "    int result = (x > i) ? 0 : 1;\n"
-        "    return result + (i > x ? 10 : 20);\n"
-        "}\n");
-    CHECK(ternary.ok);
-    CHECK(ternary.result == 20);
-
-    const ProgramResult fallthrough = compile_and_run(
-        "int main() {\n"
-        "    int x = 1;\n"
-        "    int total = 0;\n"
-        "    switch (x) {\n"
-        "    case 1: total += 1;\n"
-        "    case 2: total += 2; break;\n"
-        "    case 3: total += 4; break;\n"
-        "    default: total += 8;\n"
+        "    try {\n"
+        "        int* value = new int[0x7FFFFFFF];\n"
+        "        delete[] value;\n"
+        "    } catch (std::bad_alloc& error) {\n"
+        "        return 42;\n"
         "    }\n"
-        "    return total;\n"
+        "    return 0;\n"
         "}\n");
-    CHECK(fallthrough.ok);
-    CHECK(fallthrough.result == 3);
+    INFO(failure.diagnostics);
+    REQUIRE(failure.ok);
+    CHECK(failure.result == 42);
+
+    const ProgramResult constructor_failure = compile_and_run(
+        "class Throwing {\n"
+        "public:\n"
+        "    Throwing() { throw 7; }\n"
+        "};\n"
+        "int main() {\n"
+        "    try { Throwing* value = new Throwing; }\n"
+        "    catch (int error) { return 42; }\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(constructor_failure.diagnostics);
+    REQUIRE(constructor_failure.ok);
+    CHECK(constructor_failure.result == 42);
 }
 
-TEST_CASE("classes lay out members and call member functions") {
+TEST_CASE("new arrays initialize and delete dispatches virtual destructors") {
+    const ProgramResult arrays = compile_and_run(
+        "int main() {\n"
+        "    int* values = new int[4]{1, 2, 3};\n"
+        "    if (values[0] != 1 || values[2] != 3 || values[3] != 0) return 1;\n"
+        "    delete[] values;\n"
+        "    int* zeroed = new int[2]();\n"
+        "    if (zeroed[0] != 0 || zeroed[1] != 0) return 2;\n"
+        "    delete[] zeroed;\n"
+        "    float* floats = new float[2]{1.5f, 2.5f};\n"
+        "    if (floats[0] != 1.5f || floats[1] != 2.5f) return 3;\n"
+        "    delete[] floats;\n"
+        "    double* aligned = new double(2.5);\n"
+        "    if (((unsigned int)aligned & 7U) != 0 || *aligned != 2.5) return 4;\n"
+        "    delete aligned;\n"
+        "    return 42;\n"
+        "}\n");
+    INFO(arrays.diagnostics);
+    REQUIRE(arrays.ok);
+    CHECK(arrays.result == 42);
+
+    const ProgramResult virtual_delete = compile_and_run(
+        "int base_destroyed = 0;\n"
+        "int derived_destroyed = 0;\n"
+        "class Base {\n"
+        "public:\n"
+        "    virtual ~Base() { base_destroyed = 1; }\n"
+        "};\n"
+        "class Derived : public Base {\n"
+        "public:\n"
+        "    ~Derived() { derived_destroyed = 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Base* pointer = new Derived;\n"
+        "    delete pointer;\n"
+        "    return base_destroyed == 1 && derived_destroyed == 1 ? 42 : 0;\n"
+        "}\n");
+    INFO(virtual_delete.diagnostics);
+    REQUIRE(virtual_delete.ok);
+    CHECK(virtual_delete.result == 42);
+
+    const ProgramResult aligned_matrix = compile_and_run(
+        "#include <kr32/matrix.hpp>\n"
+        "int main() {\n"
+        "    kr32::mat4* matrix = new kr32::mat4;\n"
+        "    if (((unsigned int)matrix & 15U) != 0) return 1;\n"
+        "    matrix->m[0] = 1.0;\n"
+        "    float value = matrix->m[0];\n"
+        "    delete matrix;\n"
+        "    return value == 1.0 ? 42 : 2;\n"
+        "}\n");
+    INFO(aligned_matrix.diagnostics);
+    REQUIRE(aligned_matrix.ok);
+    CHECK(aligned_matrix.result == 42);
+
+    const ProgramResult virtual_array = compile_and_run(
+        "int destroyed = 0;\n"
+        "class Base {\n"
+        "public:\n"
+        "    int value;\n"
+        "    virtual ~Base() { destroyed = destroyed + 1; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Base* values = new Base[2];\n"
+        "    values[0].value = 1;\n"
+        "    values[1].value = 2;\n"
+        "    int result = values[0].value + values[1].value;\n"
+        "    delete[] values;\n"
+        "    return result == 3 && destroyed == 2 ? 42 : 0;\n"
+        "}\n");
+    INFO(virtual_array.diagnostics);
+    REQUIRE(virtual_array.ok);
+    CHECK(virtual_array.result == 42);
+}
+
+TEST_CASE("delete runs the destructor") {
     const ProgramResult program = compile_and_run(
+        "int result = 0;\n"
+        "class Guard {\n"
+        "public:\n"
+        "    Guard() { }\n"
+        "    ~Guard() { result = 42; }\n"
+        "};\n"
+        "int main() { Guard* guard = new Guard(); delete guard; return result; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("C++ debug info records classes, members, this, and lines") {
+    const cxx::Result compiled = cxx::compile(
         "class Point {\n"
         "public:\n"
         "    int x;\n"
@@ -741,94 +490,244 @@ TEST_CASE("classes lay out members and call member functions") {
         "    int sum() { return x + y; }\n"
         "};\n"
         "int main() { Point point; point.x = 20; point.y = 22; return point.sum(); }\n");
-    INFO(program.diagnostics);
-    REQUIRE(program.ok);
-    CHECK(program.result == 42);
+    REQUIRE(compiled.ok);
+    container::Image user;
+    assembler::Error assembly_error;
+    INFO(assembly_error.message);
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE(assembler::assemble_object(cc::runtime_assembly(), runtime,
+                                       assembly_error));
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE(linker::link({user, runtime}, linker::Options{}, image, map,
+                         link_error));
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    REQUIRE_FALSE(info.classes.empty());
+    const debug::ClassInfo* point = nullptr;
+    for (const debug::ClassInfo& candidate : info.classes) {
+        if (candidate.name.find("Point") != std::string::npos) {
+            point = &candidate;
+        }
+    }
+    REQUIRE(point != nullptr);
+    CHECK(point->size == 8);
+    REQUIRE(point->members.size() == 2);
+    CHECK(point->members[0].name == "x");
+    CHECK(point->members[0].offset == 0);
+    CHECK(point->members[1].name == "y");
+    CHECK(point->members[1].offset == 4);
+    bool found_this = false;
+    for (const debug::Variable& variable : info.variables) {
+        if (variable.name == "this") {
+            found_this = true;
+            CHECK(variable.type.find("Point") != std::string::npos);
+        }
+    }
+    CHECK(found_this);
+    CHECK_FALSE(info.lines.empty());
+    CHECK_FALSE(info.functions.empty());
 }
 
-TEST_CASE("constructors, this, and member initializer lists run") {
+TEST_CASE("function-local statics initialize once behind a guard") {
     const ProgramResult program = compile_and_run(
-        "class Point {\n"
-        "public:\n"
-        "    int x;\n"
-        "    int y;\n"
-        "    Point(int value) : x(value) { y = 1; }\n"
-        "    int sum() { return this->x + this->y; }\n"
-        "};\n"
-        "int main() { Point point(41); return point.sum(); }\n");
+        "int next() {\n"
+        "    static int count = 0;\n"
+        "    count = count + 1;\n"
+        "    return count;\n"
+        "}\n"
+        "int main() {\n"
+        "    int first = next();\n"
+        "    int second = next();\n"
+        "    return first == 1 && second == 2 ? 42 : 0;\n"
+        "}\n");
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);
 }
 
-TEST_CASE("destructors run at scope exit") {
+TEST_CASE("floating point converts to long long") {
     const ProgramResult program = compile_and_run(
-        "int result = 0;\n"
-        "class Guard {\n"
-        "public:\n"
-        "    ~Guard() { result = 42; }\n"
-        "};\n"
-        "int main() { { Guard guard; } return result; }\n");
-    INFO(program.diagnostics);
-    REQUIRE(program.ok);
+        "int main() {\n"
+        "    double positive = 10000000000.0;\n"
+        "    double negative = -10000000000.0;\n"
+        "    long long p = (long long)positive;\n"
+        "    long long n = (long long)negative;\n"
+        "    return (int)(p / 1000000000) == 10 &&\n"
+        "           (int)(n / 1000000000) == -10 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
     CHECK(program.result == 42);
 }
 
-TEST_CASE("single inheritance lays out the base at offset zero") {
+TEST_CASE("C++ long long converts to floating point") {
     const ProgramResult program = compile_and_run(
-        "class Base {\n"
-        "public:\n"
-        "    int a;\n"
-        "    Base() { a = 40; }\n"
-        "};\n"
-        "class Derived : public Base {\n"
-        "public:\n"
-        "    int b;\n"
-        "    Derived() { b = 2; }\n"
-        "    int sum() { return a + b; }\n"
-        "};\n"
-        "int main() { Derived value; return value.sum(); }\n");
-    INFO(program.diagnostics);
-    REQUIRE(program.ok);
+        "int main() {\n"
+        "    long long positive = 10000000000;\n"
+        "    long long negative = -10000000000;\n"
+        "    double p = (double)positive;\n"
+        "    double n = (double)negative;\n"
+        "    return (int)(p / 1000000000.0) == 10 &&\n"
+        "           (int)(n / 1000000000.0) == -10 ? 42 : 0;\n"
+        "}\n");
+    CHECK(program.ok);
     CHECK(program.result == 42);
 }
 
-TEST_CASE("member access through pointers and FP members run") {
-    const ProgramResult pointer = compile_and_run(
-        "class Point {\n"
-        "public:\n"
-        "    int x;\n"
-        "    int sum() { return x; }\n"
-        "};\n"
-        "int main() { Point point; point.x = 42; Point* pointer = &point; "
-        "return pointer->sum(); }\n");
-    INFO(pointer.diagnostics);
-    REQUIRE(pointer.ok);
-    CHECK(pointer.result == 42);
+TEST_CASE("C++ long long casts extend and wide shifts work") {
+    const ProgramResult cast_program = compile_and_run(
+        "int main() {\n"
+        "    unsigned int value = 4294967295;\n"
+        "    long long wide = (long long)value;\n"
+        "    int negative = -1;\n"
+        "    unsigned long long sign_extended = (unsigned long long)negative;\n"
+        "    return (int)(wide >> 32) == 0 &&\n"
+        "           (int)(sign_extended >> 32) == -1 ? 42 : 0;\n"
+        "}\n");
+    CHECK(cast_program.ok);
+    CHECK(cast_program.result == 42);
 
-    const ProgramResult fp = compile_and_run(
-        "class Value {\n"
-        "public:\n"
-        "    double x;\n"
-        "    Value(double value) : x(value) { }\n"
-        "    double get() { return x; }\n"
-        "};\n"
-        "int main() { Value value(21.0); return (int)(value.get() * 2.0); }\n");
-    INFO(fp.diagnostics);
-    REQUIRE(fp.ok);
-    CHECK(fp.result == 42);
+    const ProgramResult shift_program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 1;\n"
+        "    long long high = value << 40;\n"
+        "    return (high >> 40) == 1 ? 42 : 0;\n"
+        "}\n");
+    CHECK(shift_program.ok);
+    CHECK(shift_program.result == 42);
 }
 
-TEST_CASE("static data members and static member functions run") {
+TEST_CASE("C++ long long compound assignments preserve both halves") {
     const ProgramResult program = compile_and_run(
-        "class Counter {\n"
-        "public:\n"
-        "    static int value;\n"
-        "    static int get() { return value; }\n"
+        "int main() {\n"
+        "    long long value = 100000;\n"
+        "    value += 200000;\n"
+        "    value *= 2;\n"
+        "    return (int)(value / 1000);\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 600);
+}
+
+TEST_CASE("long long literal suffixes select 64-bit arithmetic") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 1LL << 40;\n"
+        "    return (int)((value >> 40) + (1000000000LL / 1000000000));\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 2);
+}
+
+TEST_CASE("thread_local dynamic initializers run at startup") {
+    const ProgramResult program = compile_and_run(
+        "int seed() { return 42; }\n"
+        "thread_local int value = seed();\n"
+        "thread_local long long wide = seed() * 1000000000LL;\n"
+        "int main() { return value + (int)(wide / 1000000000) - 42; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 42);
+}
+
+TEST_CASE("thread_local long long keeps both halves") {
+    const ProgramResult program = compile_and_run(
+        "thread_local long long value = 10000000000;\n"
+        "int main() { return (int)(value / 1000000000); }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 10);
+}
+
+TEST_CASE("thread_local class objects construct and destruct") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "struct Guard {\n"
+        "    int value;\n"
+        "    Guard() { value = 42; }\n"
+        "    ~Guard() { putchar('T'); }\n"
         "};\n"
-        "int Counter::value = 42;\n"
-        "int main() { return Counter::get(); }\n");
+        "thread_local Guard guard;\n"
+        "int main() { putchar('B'); return guard.value == 42 ? 0 : 1; }\n");
+    CHECK(program.ok);
+    CHECK(program.output == "BT");
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("thread/atomic/mutex header surface compiles and runs") {
+    const ProgramResult program = compile_and_run(
+        "#include <kr32/thread.hpp>\n"
+        "int main() {\n"
+        "    kr32::atomic_int value;\n"
+        "    value.store(1);\n"
+        "    value.fetch_add(41);\n"
+        "    kr32::mutex guard;\n"
+        "    guard.lock();\n"
+        "    guard.unlock();\n"
+        "    return value.load();\n"
+        "}\n");
     INFO(program.diagnostics);
     REQUIRE(program.ok);
     CHECK(program.result == 42);
 }
+
+TEST_CASE("atomic builtins lower to LL/SC") {
+    const ProgramResult program = compile_and_run(
+        "int counter = 0;\n"
+        "int main() {\n"
+        "    __atomic_store_n(&counter, 1, 0);\n"
+        "    __atomic_fetch_add(&counter, 41, 0);\n"
+        "    return __atomic_load_n(&counter, 0);\n"
+        "}\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+
+    const ProgramResult compare_exchange = compile_and_run(
+        "int value = 0;\n"
+        "int main() {\n"
+        "    int expected = 0;\n"
+        "    if (!__atomic_compare_exchange_n(&value, &expected, 42, 0, 0, 0)) {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    return value;\n"
+        "}\n");
+    INFO(compare_exchange.diagnostics);
+    REQUIRE(compare_exchange.ok);
+    CHECK(compare_exchange.result == 42);
+}
+
+TEST_CASE("thread_local globals use R11 TP offsets") {
+    const ProgramResult program = compile_and_run(
+        "thread_local int value;\n"
+        "int main() { value = 42; return value; }\n");
+    INFO(program.diagnostics);
+    REQUIRE(program.ok);
+    CHECK(program.result == 42);
+
+    const ProgramResult initialized = compile_and_run(
+        "thread_local int value = 42;\n"
+        "int main() { return value; }\n");
+    INFO(initialized.diagnostics);
+    REQUIRE(initialized.ok);
+    CHECK(initialized.result == 42);
+}
+
+TEST_CASE("function templates instantiate explicitly and by deduction") {
+    const ProgramResult explicit_call = compile_and_run(
+        "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
+        "int main() { return maximum<int>(20, 42); }\n");
+    INFO(explicit_call.diagnostics);
+    REQUIRE(explicit_call.ok);
+    CHECK(explicit_call.result == 42);
+
+    const ProgramResult deduced = compile_and_run(
+        "template <typename T> T maximum(T a, T b) { return a > b ? a : b; }\n"
+        "int main() { return (int)maximum(20.5, 42.5); }\n");
+    INFO(deduced.diagnostics);
+    REQUIRE(deduced.ok);
+    CHECK(deduced.result == 42);
+}
+
