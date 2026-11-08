@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm binary searches sorted ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 1, 3, 3, 7, 9 };\n"
+        "    if (!std::binary_search(values, values + 5, 3)) return 1;\n"
+        "    if (std::binary_search(values, values + 5, 4)) return 2;\n"
+        "    if (std::lower_bound(values, values + 5, 3) != values + 1) return 3;\n"
+        "    if (std::upper_bound(values, values + 5, 3) != values + 3) return 4;\n"
+        "    char text[5] = \"acegi\";\n"
+        "    if (!std::binary_search(text, text + 5, 'e')) return 5;\n"
+        "    double reals[4] = { 0.5, 1.5, 2.5, 3.5 };\n"
+        "    return std::binary_search(reals, reals + 4, 2.5) ? 0 : 6;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm finds minimum and maximum elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
