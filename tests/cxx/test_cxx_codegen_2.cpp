@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm checks sorted inclusion") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int big[5] = { 1, 2, 3, 4, 5 };\n"
+        "    int small[3] = { 2, 3, 5 };\n"
+        "    if (!std::includes(big, big + 5, small, small + 3)) return 1;\n"
+        "    int missing[2] = { 2, 6 };\n"
+        "    if (std::includes(big, big + 5, missing, missing + 2)) return 2;\n"
+        "    char text[7] = \"abcdef\";\n"
+        "    char part[4] = \"bde\";\n"
+        "    if (!std::includes(text, text + 6, part, part + 3)) return 3;\n"
+        "    double all[4] = { 1.5, 2.5, 3.5, 4.5 };\n"
+        "    double some[2] = { 2.5, 4.5 };\n"
+        "    if (!std::includes(all, all + 4, some, some + 2)) return 4;\n"
+        "    return std::includes(text, text + 6, part, part) ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm compares ranges lexicographically") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
