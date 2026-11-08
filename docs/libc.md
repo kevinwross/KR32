@@ -222,7 +222,7 @@ wrappers over `FILE`. The compiler currently supports member binary operator
 overloads (including class-by-value parameters), member `operator[]`, compound assignment operators, and simple
 unary operators, postfix increment/decrement, `operator->`, and conversion
 operators such as `operator bool` and `operator int`, including conditions,
-casts, copy initialization, and scalar arguments. Free binary operators are
+casts, copy initialization, scalar arguments, returns, and scalar equality comparisons. Free binary operators are
 supported; member `operator()` supports multiple arguments. Full standard
 iostreams, locales, and facets are not fully implemented; `std::string` is a
 compact subset with `operator=` (C string or `std::string`), `operator+=` (C

@@ -5572,6 +5572,11 @@ private:
         }
         Function* conversion = find_member_operator(
             info, "operator " + target->to_string(), nullptr, true);
+        if (conversion == nullptr && is_integer(target) &&
+            target->builtin != BuiltinKind::Bool) {
+            conversion =
+                find_member_operator(info, "operator bool", nullptr, true);
+        }
         if (conversion == nullptr) {
             return false;
         }
@@ -5692,6 +5697,35 @@ private:
         }
         if (is_long_long(left_type) || is_long_long(right_type)) {
             return gen_long_long_binary(expression, left_type, right_type);
+        }
+        if ((op == "==" || op == "!=") && class_of(left_type) != nullptr &&
+            class_of(right_type) == nullptr) {
+            const TypePtr target =
+                right_type != nullptr &&
+                        right_type->kind == TypeKind::Builtin
+                    ? right_type
+                    : Type::make_builtin(BuiltinKind::Bool);
+            if (gen_scalar_conversion(*expression.children[0], target)) {
+                const int left_temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " +
+                     std::to_string(left_temp) + "]");
+                gen_expr(*expression.children[1]);
+                emit("    MOV R1, R0");
+                emit("    LOAD R0, [R7 + " +
+                     std::to_string(left_temp) + "]");
+                const std::string true_label = new_label("true");
+                const std::string end_label = new_label("cmpend");
+                emit("    CMP R0, R1");
+                emit(std::string("    ") + (op == "==" ? "JZ " : "JNZ ") +
+                     true_label);
+                emit("    MOV R0, #0");
+                emit("    JMP " + end_label);
+                emit(true_label + ":");
+                emit("    MOV R0, #1");
+                emit(end_label + ":");
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
         }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -6707,6 +6741,40 @@ private:
                      declared_result->kind == TypeKind::RValueRef)) {
                     gen_address(*statement.expression);
                     emit_all_local_destructors();
+                    emit("    JMP " + return_label_);
+                    return;
+                }
+                if (declared_result != nullptr &&
+                    declared_result->kind == TypeKind::Builtin &&
+                    class_of(type_of(*statement.expression)) != nullptr &&
+                    gen_scalar_conversion(*statement.expression,
+                                          declared_result)) {
+                    const int converted = allocate_local(declared_result);
+                    if (is_fp(declared_result)) {
+                        emit(std::string("    FSTORE.") +
+                             (is_float32(declared_result) ? "W" : "D") +
+                             " F0, [R7 + " + std::to_string(converted) + "]");
+                    } else {
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(converted) + "]");
+                        if (is_long_long(declared_result)) {
+                            emit("    STORE R1, [R7 + " +
+                                 std::to_string(converted + 4) + "]");
+                        }
+                    }
+                    emit_all_local_destructors();
+                    if (is_fp(declared_result)) {
+                        emit(std::string("    FLOAD.") +
+                             (is_float32(declared_result) ? "W" : "D") +
+                             " F0, [R7 + " + std::to_string(converted) + "]");
+                    } else {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(converted) + "]");
+                        if (is_long_long(declared_result)) {
+                            emit("    LOAD R1, [R7 + " +
+                                 std::to_string(converted + 4) + "]");
+                        }
+                    }
                     emit("    JMP " + return_label_);
                     return;
                 }
