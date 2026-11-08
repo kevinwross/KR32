@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm finds first matching element") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int text[6] = { 1, 2, 3, 4, 5, 6 };\n"
+        "    int set[2] = { 4, 6 };\n"
+        "    if (std::find_first_of(text, text + 6, set, set + 2) != text + 3) return 1;\n"
+        "    int missing[2] = { 8, 9 };\n"
+        "    if (std::find_first_of(text, text + 6, missing, missing + 2) != text + 6) return 2;\n"
+        "    char letters[7] = \"abcdef\";\n"
+        "    char chars[3] = \"xd\";\n"
+        "    if (std::find_first_of(letters, letters + 6, chars, chars + 2) != letters + 3) return 3;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    double wanted[2] = { 9.0, 2.5 };\n"
+        "    if (std::find_first_of(reals, reals + 3, wanted, wanted + 2) != reals + 1) return 4;\n"
+        "    return std::find_first_of(letters, letters + 6, chars, chars) == letters + 6 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm reports sorted prefixes") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
