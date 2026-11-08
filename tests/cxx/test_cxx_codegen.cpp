@@ -591,6 +591,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    std::string reserved(\"abc\");\n"
         "    reserved.reserve(16);\n"
         "    if (reserved.size() != 3 || reserved.capacity() < 3) return 81;\n"
+        "    char copied_buffer[4] = {0, 0, 0, 0};\n"
+        "    if (repeated.copy(copied_buffer, 2, 1) != 2) return 82;\n"
+        "    if (copied_buffer[0] != 'b' || copied_buffer[1] != 'c') return 83;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

@@ -241,7 +241,7 @@ character, or `std::string`), with `find`/`rfind`/`find_first_of`/
 start position and `compare` accepting
 a substring position/count and optional source position/count; `std::string::npos` is available. `starts_with`/`ends_with`,
 `at`, `substr` (with or without
-count), `front`, `back`, `replace`/`insert` (C string, `std::string`,
+count), `copy`, `front`, `back`, `replace`/`insert` (C string, `std::string`,
 character, count+character, or prefix count), `erase` (position or range), `resize` (count or count+character), `push_back`,
 `pop_back`, `assign` (C string or prefix count), `append` (string, C string,
 prefix count, or count+character), `swap`, `begin`/`end`, `data`, `capacity`,
