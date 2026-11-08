@@ -229,7 +229,7 @@ supported; member `operator()` supports multiple arguments, and functions and
 members and constructors may declare default arguments; `alignas` and
 `alignof` are supported. Full standard
 iostreams, locales, and facets are not fully implemented; `std::string` is a
-compact subset with `operator=` (C string or `std::string`), `operator+=` (C
+compact subset with `operator=` (C string, character, or `std::string`), `operator+=` (C
 string, character, or `std::string`), `operator+` (string/string, string/C
 string, C string/string, string/character, character/string), `operator==`, `operator!=`, relational operators,
 `find`/`rfind`/`find_first_of`/`find_last_of`/`compare` (C string,
