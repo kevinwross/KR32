@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 13:33 -08:00
+> **Last updated:** 2026-11-08 13:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2288,6 +2288,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 13:31 -08:00** — Added `std::string::shrink_to_fit`.
 - **2026-11-08 13:33 -08:00** — Implemented real `std::string::reserve` and
       capacity tracking.
+- **2026-11-08 13:36 -08:00** — Treated calls returning references as
+      lvalues in codegen, enabling reference-returning helper functions in
+      assignment expressions.
 
 ## 10. Updating this file
 

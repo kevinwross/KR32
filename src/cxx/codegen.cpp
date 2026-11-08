@@ -3382,18 +3382,28 @@ private:
         return best;
     }
 
-    bool is_lvalue(const Expr& expression) const {
-        if (expression.kind == ExprKind::Name) {
-            return true;
-        }
-        if (expression.kind == ExprKind::Index) {
-            return true;
-        }
-        if (expression.kind == ExprKind::Member) {
+    bool is_lvalue(const Expr& expression) {
+        if (expression.kind == ExprKind::Name ||
+            expression.kind == ExprKind::Index ||
+            expression.kind == ExprKind::Member) {
             return true;
         }
         if (expression.kind == ExprKind::Unary && expression.text == "*") {
             return true;
+        }
+        if (expression.kind == ExprKind::Binary &&
+            (expression.text == "=" || expression.text == "+=" ||
+             expression.text == "-=" || expression.text == "*=" ||
+             expression.text == "/=" || expression.text == "%=" ||
+             expression.text == "&=" || expression.text == "|=" ||
+             expression.text == "^=" || expression.text == "<<=" ||
+             expression.text == ">>=")) {
+            return true;
+        }
+        if (expression.kind == ExprKind::Call) {
+            const TypePtr type = type_of(expression, false);
+            return type && (type->kind == TypeKind::LValueRef ||
+                            type->kind == TypeKind::RValueRef);
         }
         return false;
     }

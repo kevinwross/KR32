@@ -281,6 +281,20 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("reference-returning calls are lvalues") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "std::string& identity(std::string& text) { return text; }\n"
+        "int main() {\n"
+        "    std::string text(\"a\");\n"
+        "    identity(text) += \"b\";\n"
+        "    return text == \"ab\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string reserves capacity") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
