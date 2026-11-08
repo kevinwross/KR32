@@ -281,6 +281,27 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm equal compares two bounded ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int left[3] = { 1, 2, 3 };\n"
+        "    int right[3] = { 1, 2, 3 };\n"
+        "    if (!std::equal(left, left + 3, right, right + 3)) return 1;\n"
+        "    int shorter[2] = { 1, 2 };\n"
+        "    if (std::equal(left, left + 3, shorter, shorter + 2)) return 2;\n"
+        "    char a[3] = \"ab\";\n"
+        "    char b[2] = \"ab\";\n"
+        "    if (!std::equal(a, a + 2, b, b + 2)) return 3;\n"
+        "    double x[2] = { 1.5, 2.5 };\n"
+        "    double y[2] = { 1.5, 2.5 };\n"
+        "    return std::equal(x, x + 2, y, y + 2) ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm finds the last subsequence") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
