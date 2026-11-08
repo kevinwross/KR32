@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 17:32 -08:00
+> **Last updated:** 2026-11-07 17:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2033,6 +2033,8 @@ Newest entries at the bottom. Use the local time zone.
       `__builtin_constant_p`, `__builtin_unreachable`, and `__extension__`.
 - **2026-11-07 17:32 -08:00** — Added C++ conversion operators, including
       `operator bool` in conditions and explicit scalar casts.
+- **2026-11-07 17:44 -08:00** — Extended conversion operators to copy
+      initialization and scalar function arguments.
 
 ## 10. Updating this file
 

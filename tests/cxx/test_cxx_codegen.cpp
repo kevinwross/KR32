@@ -562,12 +562,16 @@ TEST_CASE("conversion operators work in conditions and casts") {
         "    Number(int input) : value(input) {}\n"
         "    operator int() const { return value; }\n"
         "};\n"
+        "int take(int input) { return input; }\n"
         "int main() {\n"
         "    Flag zero(0);\n"
         "    if (zero) return 1;\n"
         "    Flag one(1);\n"
         "    if (!(bool)one) return 2;\n"
         "    Number number(7);\n"
+        "    int converted = number;\n"
+        "    if (converted != 7) return 3;\n"
+        "    if (take(number) != 7) return 4;\n"
         "    return (int)number - 7;\n"
         "}\n");
     CHECK(program.ok);

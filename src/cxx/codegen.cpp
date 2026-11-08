@@ -2423,6 +2423,14 @@ private:
             param->builtin == BuiltinKind::Bool) {
             return 2;
         }
+        if (ClassInfo* info = class_of(arg)) {
+            if (param->kind == TypeKind::Builtin &&
+                find_member_operator(info, "operator " + param->to_string(),
+                                     nullptr, true) != nullptr) {
+                return 3;
+            }
+            return 100;
+        }
         return 100;
     }
 
@@ -5553,6 +5561,24 @@ private:
         return operation->result;
     }
 
+    bool gen_scalar_conversion(const Expr& expression,
+                               const TypePtr& target) {
+        if (!target || target->kind != TypeKind::Builtin) {
+            return false;
+        }
+        ClassInfo* info = class_of(type_of(expression));
+        if (info == nullptr) {
+            return false;
+        }
+        Function* conversion = find_member_operator(
+            info, "operator " + target->to_string(), nullptr, true);
+        if (conversion == nullptr) {
+            return false;
+        }
+        gen_zero_argument_member_call(expression, conversion);
+        return true;
+    }
+
     TypePtr gen_zero_argument_member_call(const Expr& object,
                                           Function* operation) {
         const int this_temp =
@@ -6305,7 +6331,10 @@ private:
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (is_fp(parameter)) {
-                gen_as_fp(*expression.arguments[index], parameter);
+                if (!gen_scalar_conversion(*expression.arguments[index],
+                                           parameter)) {
+                    gen_as_fp(*expression.arguments[index], parameter);
+                }
                 slot.fp = true;
                 slot.offset = allocate_local(parameter);
                 emit(std::string("    FSTORE.") +
@@ -6313,7 +6342,10 @@ private:
                      std::to_string(slot.offset) + "]");
                 ++fp_argument;
             } else if (is_long_long(parameter)) {
-                gen_expr(*expression.arguments[index]);
+                if (!gen_scalar_conversion(*expression.arguments[index],
+                                           parameter)) {
+                    gen_expr(*expression.arguments[index]);
+                }
                 const TypePtr argument_type =
                     type_of(*expression.arguments[index]);
                 if (!is_long_long(argument_type)) {
@@ -6329,7 +6361,10 @@ private:
                      std::to_string(slot.offset + 4) + "]");
                 integer_argument += 2;
             } else {
-                gen_expr(*expression.arguments[index]);
+                if (!gen_scalar_conversion(*expression.arguments[index],
+                                           parameter)) {
+                    gen_expr(*expression.arguments[index]);
+                }
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
@@ -7802,12 +7837,16 @@ private:
                 }
             }
             if (is_fp(type)) {
-                gen_as_fp(*initializer, type);
+                if (!gen_scalar_conversion(*initializer, type)) {
+                    gen_as_fp(*initializer, type);
+                }
                 emit(std::string("    FSTORE.") + (is_float32(type) ? "W" : "D") +
                      " F0, [R7 + " + std::to_string(local.offset) + "]");
                 return;
             }
-            gen_expr(*initializer);
+            if (!gen_scalar_conversion(*initializer, type)) {
+                gen_expr(*initializer);
+            }
             if (is_long_long(type)) {
                 const TypePtr initializer_type = type_of(*initializer);
                 if (!is_long_long(initializer_type)) {
