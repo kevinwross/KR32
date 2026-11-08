@@ -281,6 +281,23 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string starts and ends with strings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    std::string prefix(\"he\");\n"
+        "    std::string suffix(\"lo\");\n"
+        "    if (!text.starts_with(prefix)) return 1;\n"
+        "    if (!text.ends_with(suffix)) return 2;\n"
+        "    if (text.starts_with(\"xy\")) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string contains substrings") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
