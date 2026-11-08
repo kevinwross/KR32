@@ -275,9 +275,6 @@ TypePtr decay(const TypePtr& type) {
     if (type && type->kind == TypeKind::Array) {
         return Type::make_pointer(type->element);
     }
-    if (type && type->kind == TypeKind::Function) {
-        return Type::make_pointer(type);
-    }
     return type;
 }
 
@@ -2320,6 +2317,18 @@ private:
                 expression.children[0]->name.to_string() == "std::move" &&
                 expression.arguments.size() == 1) {
                 return type_of(*expression.arguments[0], false);
+            }
+            if (!expression.children.empty() &&
+                expression.children[0]->kind == ExprKind::Name &&
+                lookup_local(expression.children[0]->name) != nullptr &&
+                lookup_local(expression.children[0]->name)->lambda_target ==
+                    nullptr) {
+                const TypePtr callee = type_of(*expression.children[0], false);
+                if (callee && callee->kind == TypeKind::Pointer &&
+                    callee->element &&
+                    callee->element->kind == TypeKind::Function) {
+                    return resolve_type(callee->element->element);
+                }
             }
             if (Function* function = resolve_call(expression)) {
                 return resolve_type(function->result);
@@ -6480,6 +6489,59 @@ private:
                 emit("    ADD R2, R2, #8");
                 emit("    STORE R2, [R1]");
                 return type;
+            }
+        }
+        if (!expression.children.empty() &&
+            expression.children[0]->kind == ExprKind::Name &&
+            lookup_local(expression.children[0]->name) != nullptr &&
+            lookup_local(expression.children[0]->name)->lambda_target ==
+                nullptr) {
+            const TypePtr callee_type = type_of(*expression.children[0], false);
+            const TypePtr function_type =
+                callee_type && callee_type->kind == TypeKind::Pointer &&
+                        callee_type->element &&
+                        callee_type->element->kind == TypeKind::Function
+                    ? callee_type->element
+                    : nullptr;
+            const bool local_function_pointer =
+                expression.children[0]->kind == ExprKind::Name &&
+                lookup_local(expression.children[0]->name) != nullptr;
+            if (function_type != nullptr && local_function_pointer) {
+                const int callee_temp =
+                    allocate_local(Type::make_builtin(BuiltinKind::Int));
+                gen_expr(*expression.children[0]);
+                emit("    STORE R0, [R7 + " + std::to_string(callee_temp) +
+                     "]");
+                std::vector<int> argument_temps;
+                for (std::size_t index = 0;
+                     index < expression.arguments.size(); ++index) {
+                    const TypePtr parameter =
+                        index < function_type->parameters.size()
+                            ? resolve_type(function_type->parameters[index])
+                            : Type::make_builtin(BuiltinKind::Int);
+                    if (is_fp(parameter) || class_of(parameter) != nullptr) {
+                        diagnose_once(expression,
+                                      "indirect calls support integer arguments only");
+                        emit("    MOV R0, #0");
+                        return Type::make_builtin(BuiltinKind::Int);
+                    }
+                    if (!gen_scalar_conversion(*expression.arguments[index],
+                                               parameter)) {
+                        gen_expr(*expression.arguments[index]);
+                    }
+                    const int temp =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
+                    argument_temps.push_back(temp);
+                }
+                for (std::size_t index = 0; index < argument_temps.size();
+                     ++index) {
+                    emit("    LOAD R" + std::to_string(index) + ", [R7 + " +
+                         std::to_string(argument_temps[index]) + "]");
+                }
+                emit("    LOAD R4, [R7 + " + std::to_string(callee_temp) + "]");
+                emit("    CALL R4");
+                return resolve_type(function_type->element);
             }
         }
         Function* function = nullptr;

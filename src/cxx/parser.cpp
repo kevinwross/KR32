@@ -761,8 +761,7 @@ private:
 
         // Function-pointer declarator: `int (*name)(int, int)` or the
         // abstract form `int (*)(int, int)` used in parameter lists.
-        if (at("(") && allow_function &&
-            (peek(1).text == "*" || peek(1).text == "&")) {
+        if (at("(") && (peek(1).text == "*" || peek(1).text == "&")) {
             advance();
             int pointer_depth = 0;
             while (consume("*") || consume("&")) {

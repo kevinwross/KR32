@@ -138,6 +138,19 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("function pointers can be called directly") {
+    const ProgramResult program = compile_and_run(
+        "int add(int left, int right) { return left + right; }\n"
+        "int main() {\n"
+        "    int (*operation)(int, int) = add;\n"
+        "    if (operation(2, 3) != 5) return 1;\n"
+        "    operation = add;\n"
+        "    return operation(4, 5) == 9 ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstdlib> converts C strings") {
     const ProgramResult program = compile_and_run(
         "#include <cstdlib>\n"
