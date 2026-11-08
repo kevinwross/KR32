@@ -1,4 +1,4 @@
-add_executable(kr32_tests
+set(KR32_TEST_SOURCES
     unit/test_main.cpp
     unit/test_encoding.cpp
     unit/test_version.cpp
@@ -21,7 +21,12 @@ add_executable(kr32_tests
     cxx/test_cxx_abi.cpp
     cxx/test_cxx_api.cpp
     cxx/test_cxx_parser.cpp
-    cxx/test_cxx_codegen.cpp)
+    cxx/test_cxx_codegen_1.cpp
+    cxx/test_cxx_codegen_2.cpp
+    cxx/test_cxx_codegen_3.cpp
+    cxx/test_cxx_codegen_4.cpp)
+
+add_executable(kr32_tests ${KR32_TEST_SOURCES})
 
 target_link_libraries(kr32_tests PRIVATE
     kr32_core
@@ -44,6 +49,11 @@ target_compile_features(kr32_tests PRIVATE cxx_std_20)
 if(TARGET kr32_ui)
     target_sources(kr32_tests PRIVATE unit/test_ui.cpp)
     target_link_libraries(kr32_tests PRIVATE kr32_ui)
+    add_test(NAME unit_test_ui
+        COMMAND kr32_tests "--source-file=*test_ui.cpp")
+    set_tests_properties(unit_test_ui PROPERTIES
+        LABELS "unit"
+        TIMEOUT 300)
     if(WIN32 AND TARGET SDL2::SDL2)
         add_custom_command(TARGET kr32_tests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -58,7 +68,20 @@ if(CMAKE_CXX_COMPILER_ID MATCHES "Clang")
     target_compile_options(kr32_tests PRIVATE "-Wno-#warnings")
 endif()
 
-add_test(NAME unit COMMAND kr32_tests)
+# Register each test translation unit separately so `ctest -j` can run the
+# independent suites in parallel. doctest's --source-file filter selects the
+# cases compiled from that file; this avoids a monolithic 4-5 minute `unit`.
+foreach(test_source IN LISTS KR32_TEST_SOURCES)
+    if(test_source STREQUAL "unit/test_main.cpp")
+        continue()
+    endif()
+    get_filename_component(test_name "${test_source}" NAME_WE)
+    add_test(NAME "unit_${test_name}"
+        COMMAND kr32_tests "--source-file=*${test_name}.cpp")
+    set_tests_properties("unit_${test_name}" PROPERTIES
+        LABELS "unit"
+        TIMEOUT 300)
+endforeach()
 
 if(TARGET kr32_cxx_tool)
     add_test(NAME cxx_tool_help COMMAND kr32_cxx_tool --help)
@@ -190,6 +213,15 @@ add_test(NAME run_os_user
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsUser.cmake)
 
+# These tests regenerate the same kr32os/build/windows tree. Serialize them
+# under one resource lock so `ctest -j` cannot interleave their object files.
+set_tests_properties(
+    run_os_boot
+    run_os_shell
+    run_os_fault_timer
+    run_os_user
+    PROPERTIES RESOURCE_LOCK kr32os_build)
+
 add_test(NAME build_hello
     COMMAND $<TARGET_FILE:kr32> build
         ${CMAKE_SOURCE_DIR}/examples/hello.s
@@ -314,3 +346,15 @@ add_test(NAME boundary_bad
         -DKR32_SCAN_DIR=${CMAKE_SOURCE_DIR}/tests/boundary/bad_ui.cpp
         -P ${CMAKE_SOURCE_DIR}/cmake/CheckPlatformBoundary.cmake)
 set_tests_properties(boundary_bad PROPERTIES WILL_FAIL TRUE)
+
+# Convenience targets:
+#   check-unit : only the doctest suites, parallel
+#   check      : the whole CTest suite, parallel
+add_custom_target(check-unit
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> -L unit --output-on-failure -j8
+    DEPENDS kr32_tests
+    USES_TERMINAL)
+add_custom_target(check
+    COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j8
+    DEPENDS kr32 kr32_tests
+    USES_TERMINAL)
