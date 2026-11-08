@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 13:21 -08:00
+> **Last updated:** 2026-11-08 13:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2278,9 +2278,11 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 13:19 -08:00** — Extended static-local constant data to
       all scalar widths, including floating-point values, and made local
       static symbols unique.
-- **2026-11-08 13:21 -08:00** — Replaced the local-static constructor
-      guard with a simple initialized flag, fixing function-local class and
-      string statics.
+- **2026-11-08 13:21 -08:00** — Aligned function-local static storage and
+      kept guarded construction for class/string statics.
+- **2026-11-08 13:27 -08:00** — Replaced the local-static guard call with an
+      inline LL/SC initialization sequence, fixing class/string statics in
+      both the CLI and threaded VM harness.
 
 ## 10. Updating this file
 

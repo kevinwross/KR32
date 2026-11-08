@@ -138,6 +138,22 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("function statics call non-constant initializers once") {
+    const ProgramResult program = compile_and_run(
+        "int calls = 0;\n"
+        "int initialize() { calls = calls + 1; return 7; }\n"
+        "int get() { static int value = initialize(); return value; }\n"
+        "int main() {\n"
+        "    if (get() != 7) return 1;\n"
+        "    if (get() != 7) return 2;\n"
+        "    if (calls != 1) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("function-local class statics initialize once") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"

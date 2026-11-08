@@ -8515,13 +8515,23 @@ private:
             const bool guarded = declaration.initializer != nullptr || info != nullptr;
             if (guarded) {
                 const std::string guard = raw->symbol + "_guard";
-                bss_ += ".align 4\n" + linkage + guard + "\n" + guard +
-                        ":\n    .space 4\n";
-                emit("    LEA R0, [" + guard + "]");
-                emit("    CALL __cxa_guard_acquire");
+                data_ += ".align 4\n" + linkage + guard + "\n" + guard +
+                         ":\n    .word 0\n";
                 const std::string done = new_label("guard_done");
-                emit("    CMP R0, #0");
+                const std::string retry = new_label("guard_retry");
+                const std::string try_init = new_label("guard_try");
+                emit("    LEA R1, [" + guard + "]");
+                emit(retry + ":");
+                emit("    LL R2, [R1]");
+                emit("    CMP R2, #2");
                 emit("    JZ " + done);
+                emit("    CMP R2, #0");
+                emit("    JZ " + try_init);
+                emit("    JMP " + retry);
+                emit(try_init + ":");
+                emit("    MOV R3, #1");
+                emit("    SC R3, [R1]");
+                emit("    JNZ " + retry);
                 if (info != nullptr) {
                     const int address =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -8546,8 +8556,9 @@ private:
                     emit("    LEA R1, [" + raw->symbol + "]");
                     store_value(type);
                 }
-                emit("    LEA R0, [" + guard + "]");
-                emit("    CALL __cxa_guard_release");
+                emit("    LEA R1, [" + guard + "]");
+                emit("    MOV R2, #2");
+                emit("    STORE R2, [R1]");
                 emit(done + ":");
             }
             if (template_owner) {
