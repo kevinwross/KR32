@@ -8632,7 +8632,27 @@ private:
         }
         if (type && type->kind == TypeKind::Array) {
             if (declaration.initializer &&
-                declaration.initializer->kind == ExprKind::InitializerList) {
+                declaration.initializer->kind == ExprKind::StringLiteral &&
+                type->element && type->element->kind == TypeKind::Builtin &&
+                type->element->builtin == BuiltinKind::Char) {
+                zero_object(local.offset, std::max(1, type_size(type)));
+                const int limit = std::min(
+                    static_cast<int>(type->array_size),
+                    static_cast<int>(declaration.initializer->text.size() + 1));
+                for (int index = 0; index < limit; ++index) {
+                    const unsigned char value =
+                        index < static_cast<int>(declaration.initializer->text.size())
+                            ? static_cast<unsigned char>(
+                                  declaration.initializer->text[
+                                      static_cast<std::size_t>(index)])
+                            : 0;
+                    emit("    MOV R0, #" + std::to_string(value));
+                    emit("    STORE8 R0, [R7 + " +
+                         std::to_string(local.offset + index) + "]");
+                }
+            } else if (declaration.initializer &&
+                       declaration.initializer->kind ==
+                           ExprKind::InitializerList) {
                 gen_array_initializer(type, local.offset, *declaration.initializer);
             }
             return;

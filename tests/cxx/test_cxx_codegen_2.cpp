@@ -138,6 +138,20 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("local char arrays initialize from string literals") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    char buffer[8] = \"abc\";\n"
+        "    if (buffer[0] != 'a' || buffer[1] != 'b' || buffer[2] != 'c') {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    if (buffer[3] != 0) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("namespace class references match unqualified parameter types") {
     const ProgramResult program = compile_and_run(
         "namespace N {\n"
