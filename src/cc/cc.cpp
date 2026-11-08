@@ -1037,6 +1037,7 @@ struct Type {
     bool is_packed = false;
     int explicit_alignment = 0;
 
+
     Type() = default;
     Type(Kind type_kind, TypePtr type_base, int type_count)
         : kind(type_kind), base(std::move(type_base)), count(type_count) {}
@@ -1060,21 +1061,26 @@ struct Type {
     }
 
     [[nodiscard]] int alignment() const {
+        int result = 4;
         switch (kind) {
-        case Kind::Void: return 1;
-        case Kind::Char: return 1;
-        case Kind::Short: return 2;
-        case Kind::Bool: return 1;
-        case Kind::Int: return is_long_long ? 8 : 4;
-        case Kind::Float: return 4;
-        case Kind::Double: return 8;
-        case Kind::Pointer: return 4;
-        case Kind::Function: return 4;
-        case Kind::Array: return base ? base->alignment() : 1;
+        case Kind::Void: result = 1; break;
+        case Kind::Char: result = 1; break;
+        case Kind::Short: result = 2; break;
+        case Kind::Bool: result = 1; break;
+        case Kind::Int: result = is_long_long ? 8 : 4; break;
+        case Kind::Float: result = 4; break;
+        case Kind::Double: result = 8; break;
+        case Kind::Pointer: result = 4; break;
+        case Kind::Function: result = 4; break;
+        case Kind::Array:
+            result = base ? base->alignment() : 1;
+            break;
         case Kind::Struct:
-        case Kind::Union: return struct_alignment;
+        case Kind::Union:
+            result = struct_alignment;
+            break;
         }
-        return 4;
+        return std::max(result, explicit_alignment);
     }
 
     [[nodiscard]] bool is_pointer() const {
@@ -1401,6 +1407,7 @@ private:
                text == "static" || text == "extern" || text == "volatile" ||
                text == "register" || text == "long" ||
                text == "typeof" || text == "__typeof__" ||
+               text == "_Alignas" ||
                typedefs_.find(text) != typedefs_.end();
     }
 
@@ -1862,6 +1869,15 @@ private:
 
     TypePtr parse_type() {
         skip_attributes();
+        if (match("_Alignas")) {
+            expect("(");
+            const std::int64_t alignment = constant_expression();
+            expect(")");
+            TypePtr base = parse_type();
+            auto aligned = std::make_shared<Type>(*base);
+            aligned->explicit_alignment = static_cast<int>(alignment);
+            return aligned;
+        }
         bool unsigned_flag = false;
         bool signed_flag = false;
         bool long_flag = false;

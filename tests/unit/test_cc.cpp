@@ -1441,6 +1441,18 @@ TEST_CASE("generic selection without a match is rejected") {
           std::string::npos);
 }
 
+TEST_CASE("_Alignas raises declaration alignment") {
+    const ProgramResult program = compile_and_run(
+        "struct Aligned { char tag; _Alignas(16) int value; };\n"
+        "int main(void) {\n"
+        "    if (__builtin_offsetof(struct Aligned, value) != 16) return 1;\n"
+        "    if (sizeof(struct Aligned) != 32) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("packed attributes remove struct padding") {
     const ProgramResult program = compile_and_run(
         "struct __attribute__((packed)) Packed { char tag; int value; };\n"

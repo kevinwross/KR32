@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 01:58 -08:00
+> **Last updated:** 2026-11-08 02:11 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -413,8 +413,8 @@ M9 C++ work.
       `#warning`; built-in headers.
 - [x] Lexer, parser, type checker for the M4 subset.
 - [x] C11 `_Static_assert` and `_Generic` type selection; `typeof`/`__typeof__`
-      for type names and expressions; `__attribute__((packed, aligned(N)))`
-      struct layout.
+      for type names and expressions; `_Alignas`; and
+      `__attribute__((packed, aligned(N)))` struct layout.
 - [x] Code generation to KR32 assembly; ILP32 frames (R7 frame pointer) and
       callee-saved frame handling.
 - [x] `crt0`, `putchar`, `exit`, `memcpy`/`memset`/`strlen`; bump allocator.
@@ -2104,6 +2104,8 @@ Newest entries at the bottom. Use the local time zone.
       for C strings and prefix lengths.
 - **2026-11-08 01:58 -08:00** — Added `std::string::find_first_not_of` and
       `find_last_not_of` for sets and characters.
+- **2026-11-08 02:11 -08:00** — Added C `_Alignas` declaration alignment,
+      including aligned struct members.
 
 ## 10. Updating this file
 
