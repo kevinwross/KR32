@@ -149,6 +149,7 @@ TEST_CASE("<cstdlib> converts C strings") {
         "    char* end;\n"
         "    if (std::strtol(\"123x\", &end, 10) != 123 || end[0] != 'x') return 4;\n"
         "    if (std::strtoul(\"ffz\", &end, 16) != 255 || end[0] != 'z') return 5;\n"
+        "    if (std::labs(-7) != 7) return 6;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
