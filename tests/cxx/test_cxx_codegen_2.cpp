@@ -138,6 +138,22 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string inserts substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"abef\");\n"
+        "    std::string part(\"xxcdyy\");\n"
+        "    text.insert(2, part, 2, 2);\n"
+        "    if (text != \"abcdef\") return 1;\n"
+        "    text.insert(6, \"QQghRR\", 2, 2);\n"
+        "    return text == \"abcdefgh\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string assigns substrings") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
