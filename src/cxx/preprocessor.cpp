@@ -646,6 +646,9 @@ private:
                         "extern \"C\" {\n"
                         "int atoi(const char* text);\n"
                         "double atof(const char* text);\n"
+                        "long strtol(const char* text, char** end, int base);\n"
+                        "unsigned long strtoul(const char* text, char** end, int base);\n"
+
                         "void* malloc(int size);\n"
                         "void* calloc(int count, int size);\n"
                         "void* realloc(void* memory, int size);\n"
@@ -656,6 +659,9 @@ private:
                         "namespace std {\n"
                         "inline int atoi(const char* text) { return ::atoi(text); }\n"
                         "inline double atof(const char* text) { return ::atof(text); }\n"
+                        "using ::strtol;\n"
+                        "using ::strtoul;\n"
+
                         "using ::malloc;\n"
                         "using ::calloc;\n"
                         "using ::realloc;\n"

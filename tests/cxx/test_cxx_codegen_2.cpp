@@ -146,6 +146,9 @@ TEST_CASE("<cstdlib> converts C strings") {
         "    if (std::atoi(\"42\") != 42) return 1;\n"
         "    if (std::atoi(\"-7\") != -7) return 2;\n"
         "    if (std::atof(\"2.5\") != 2.5) return 3;\n"
+        "    char* end;\n"
+        "    if (std::strtol(\"123x\", &end, 10) != 123 || end[0] != 'x') return 4;\n"
+        "    if (std::strtoul(\"ffz\", &end, 16) != 255 || end[0] != 'z') return 5;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
