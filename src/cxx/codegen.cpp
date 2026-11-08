@@ -5710,6 +5710,47 @@ private:
         return true;
     }
 
+    bool gen_conversion_arithmetic(const Expr& converted,
+                                   const Expr& other,
+                                   const TypePtr& other_type,
+                                   bool converted_is_left,
+                                   const std::string& op) {
+        if (other_type == nullptr || other_type->kind != TypeKind::Builtin ||
+            is_fp(other_type) || is_long_long(other_type)) {
+            return false;
+        }
+        if (find_scalar_conversion(converted, other_type) == nullptr) {
+            return false;
+        }
+        const int saved =
+            allocate_local(Type::make_builtin(BuiltinKind::Int));
+        if (converted_is_left) {
+            gen_scalar_conversion(converted, other_type);
+            emit("    STORE R0, [R7 + " + std::to_string(saved) + "]");
+            gen_expr(other);
+            emit("    MOV R1, R0");
+            emit("    LOAD R0, [R7 + " + std::to_string(saved) + "]");
+        } else {
+            gen_expr(other);
+            emit("    STORE R0, [R7 + " + std::to_string(saved) + "]");
+            gen_scalar_conversion(converted, other_type);
+            emit("    MOV R1, R0");
+            emit("    LOAD R0, [R7 + " + std::to_string(saved) + "]");
+        }
+        if (op == "+") emit("    ADD R0, R0, R1");
+        else if (op == "-") emit("    SUB R0, R0, R1");
+        else if (op == "*") emit("    MUL R0, R0, R1");
+        else if (op == "/") emit("    DIVS R0, R0, R1");
+        else if (op == "%") emit("    MODS R0, R0, R1");
+        else if (op == "&") emit("    AND R0, R0, R1");
+        else if (op == "|") emit("    OR R0, R0, R1");
+        else if (op == "^") emit("    XOR R0, R0, R1");
+        else if (op == "<<") emit("    SHL R0, R0, R1");
+        else if (op == ">>") emit("    SAR R0, R0, R1");
+        else return false;
+        return true;
+    }
+
     TypePtr gen_binary(const Expr& expression) {
         const std::string& op = expression.text;
         const TypePtr left_operand = type_of(*expression.children[0]);
@@ -5770,6 +5811,24 @@ private:
                                       *expression.children[0], left_type,
                                       false, op)) {
             return Type::make_builtin(BuiltinKind::Bool);
+        }
+        const bool arithmetic =
+            op == "+" || op == "-" || op == "*" || op == "/" ||
+            op == "%" || op == "&" || op == "|" || op == "^" ||
+            op == "<<" || op == ">>";
+        if (arithmetic && class_of(left_type) != nullptr &&
+            class_of(right_type) == nullptr &&
+            gen_conversion_arithmetic(*expression.children[0],
+                                      *expression.children[1], right_type,
+                                      true, op)) {
+            return Type::make_builtin(BuiltinKind::Int);
+        }
+        if (arithmetic && class_of(right_type) != nullptr &&
+            class_of(left_type) == nullptr &&
+            gen_conversion_arithmetic(*expression.children[1],
+                                      *expression.children[0], left_type,
+                                      false, op)) {
+            return Type::make_builtin(BuiltinKind::Int);
         }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));

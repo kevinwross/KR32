@@ -582,6 +582,12 @@ TEST_CASE("conversion operators work in conditions and casts") {
         "    int converted = number;\n"
         "    if (converted != 7) return 8;\n"
         "    if (take(number) != 7) return 9;\n"
+        "    if (number + 1 != 8) return 14;\n"
+        "    if (1 + number != 8) return 15;\n"
+        "    if (number - 1 != 6) return 16;\n"
+        "    if (number * 2 != 14) return 17;\n"
+        "    if (number / 2 != 3) return 18;\n"
+        "    if (number % 4 != 3) return 19;\n"
         "    return (int)number - 7;\n"
         "}\n");
     CHECK(program.ok);
