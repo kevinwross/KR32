@@ -281,6 +281,24 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm fill_n writes counted elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 0, 0, 0, 0 };\n"
+        "    int* end = std::fill_n(values, 3, 5);\n"
+        "    if (end != values + 3) return 1;\n"
+        "    if (values[2] != 5 || values[3] != 0) return 2;\n"
+        "    double reals[2] = { 0.0, 0.0 };\n"
+        "    std::fill_n(reals, 2, 1.5);\n"
+        "    if (reals[0] != 1.5 || reals[1] != 1.5) return 3;\n"
+        "    return std::fill_n(values, 0, 9) == values ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("numeric accumulates and fills sequences") {
     const ProgramResult program = compile_and_run(
         "#include <numeric>\n"
