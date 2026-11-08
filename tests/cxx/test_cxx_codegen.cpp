@@ -590,6 +590,9 @@ TEST_CASE("conversion operators work in conditions and casts") {
         "    if (number % 4 != 3) return 19;\n"
         "    if ((number & 1) != 1) return 20;\n"
         "    if ((number * 2) != 14) return 21;\n"
+        "    Number implicit = 5;\n"
+        "    if (implicit.value != 5) return 22;\n"
+        "    if (take(8) != 8) return 23;\n"
         "    return (int)number - 7;\n"
         "}\n");
     CHECK(program.ok);

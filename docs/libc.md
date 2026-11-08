@@ -221,7 +221,7 @@ available. These streams are unbuffered
 wrappers over `FILE`. The compiler currently supports member binary operator
 overloads (including class-by-value parameters), member `operator[]`, compound assignment operators, and simple
 unary operators, postfix increment/decrement, `operator->`, and conversion
-operators such as `operator bool` and `operator int`, including conditions,
+operators such as `operator bool` and `operator int`, and converting constructors, including conditions,
 casts, copy initialization, scalar arguments, returns, scalar
 equality/relational comparisons, and integer arithmetic, including reversed
 operands. Free binary operators are

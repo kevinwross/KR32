@@ -2431,6 +2431,21 @@ private:
             }
             return 100;
         }
+        if (ClassInfo* parameter_class = class_of(param)) {
+            if (class_of(arg) == nullptr) {
+                for (Function* constructor : parameter_class->constructors) {
+                    if (constructor->parameters.size() != 1) {
+                        continue;
+                    }
+                    const int inner = conversion_cost(
+                        arg, constructor->parameters[0], true, false);
+                    if (inner < 100) {
+                        return 3 + inner;
+                    }
+                }
+            }
+            return 100;
+        }
         return 100;
     }
 
@@ -6402,6 +6417,22 @@ private:
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
+                if (expression.arguments[index]->kind !=
+                        ExprKind::InitializerList &&
+                    class_of(type_of(*expression.arguments[index])) == nullptr) {
+                    const int object = allocate_local(parameter);
+                    construct_object_from_expression(
+                        parameter_class, object,
+                        *expression.arguments[index]);
+                    slot.offset =
+                        allocate_local(Type::make_builtin(BuiltinKind::Int));
+                    emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
+                    emit("    STORE R0, [R7 + " +
+                         std::to_string(slot.offset) + "]");
+                    ++integer_argument;
+                    slots.push_back(std::move(slot));
+                    continue;
+                }
                 if (aggregate_abi(parameter_class) == AggregateAbi::Floating) {
                     gen_expr(*expression.arguments[index]);
                     const int argument_object = allocate_local_bytes(16);
@@ -7331,6 +7362,83 @@ private:
         emit_pending_check();
     }
 
+    void construct_object_from_expression(ClassInfo* info, int offset,
+                                          const Expr& argument) {
+        if (info->abstract) {
+            error(*info->decl,
+                  "cannot instantiate abstract class: " + info->qualified);
+            return;
+        }
+        Function* constructor = nullptr;
+        int best_score = -100000;
+        const TypePtr argument_type = resolve_type(type_of(argument));
+        for (Function* candidate : info->constructors) {
+            if (candidate->parameters.size() != 1) {
+                continue;
+            }
+            const TypePtr parameter =
+                resolve_type(candidate->parameters[0]);
+            int score = 0;
+            if (parameter &&
+                (parameter->kind == TypeKind::LValueRef ||
+                 parameter->kind == TypeKind::RValueRef)) {
+                score = same_type(parameter->element, argument_type) ? 10 : 1;
+            } else if (same_type(parameter, argument_type)) {
+                score = 10;
+            } else if (class_of(parameter) != nullptr ||
+                       class_of(argument_type) != nullptr) {
+                score = -100;
+            } else {
+                score = 1;
+            }
+            if (score > best_score) {
+                best_score = score;
+                constructor = candidate;
+            }
+        }
+        if (constructor == nullptr || best_score < 0) {
+            error(*info->decl,
+                  "no matching constructor for " + info->qualified);
+            return;
+        }
+        if (!can_access(constructor->owner, constructor->access)) {
+            error(*info->decl, "constructor is not accessible");
+            return;
+        }
+        const TypePtr parameter =
+            resolve_type(constructor->parameters[0]);
+        int value_temp = -1;
+        bool fp_value = false;
+        if (parameter &&
+            (parameter->kind == TypeKind::LValueRef ||
+             parameter->kind == TypeKind::RValueRef)) {
+            gen_address(argument);
+            value_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+        } else if (is_fp(parameter)) {
+            gen_as_fp(argument, parameter);
+            value_temp = allocate_local(parameter);
+            fp_value = true;
+            emit(std::string("    FSTORE.") +
+                 (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                 std::to_string(value_temp) + "]");
+        } else {
+            gen_expr(argument);
+            value_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
+        }
+        emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+        if (fp_value) {
+            emit(std::string("    FLOAD.") +
+                 (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                 std::to_string(value_temp) + "]");
+        } else {
+            emit("    LOAD R1, [R7 + " + std::to_string(value_temp) + "]");
+        }
+        emit("    CALL " + constructor->symbol);
+        emit_pending_check();
+    }
+
     Function* find_destructor(ClassInfo* info) {
         for (ClassInfo* current = info; current != nullptr; current = current->base) {
             if (current->destructor != nullptr) {
@@ -7850,6 +7958,15 @@ private:
                            ExprKind::InitializerList) {
                     arguments = &declaration.initializer->children;
                 } else {
+                    if (class_of(type_of(*declaration.initializer)) == nullptr) {
+                        construct_object_from_expression(
+                            info, local.offset, *declaration.initializer);
+                        if (Function* destructor = find_destructor(info)) {
+                            local_destructors_.back().push_back(
+                                {local.offset, destructor});
+                        }
+                        return;
+                    }
                     gen_address(*declaration.initializer);
                     emit("    MOV R1, R0");
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");

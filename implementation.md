@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 19:34 -08:00
+> **Last updated:** 2026-11-07 19:48 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2044,6 +2044,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-07 19:34 -08:00** — Stopped treating unknown `identifier *`/`&`
       inside parentheses as pointer cast types, fixing `(value & mask)` and
       `(value * factor)` expressions.
+- **2026-11-07 19:48 -08:00** — Added converting-constructor implicit
+      conversions for copy initialization and scalar function arguments.
 
 ## 10. Updating this file
 
