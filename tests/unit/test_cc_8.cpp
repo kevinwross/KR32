@@ -161,3 +161,11 @@ TEST_CASE("C accepts _Noreturn function declarations") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("C accepts _Thread_local declarations") {
+    const ProgramResult program = compile_and_run(
+        "_Thread_local int value = 5;\n"
+        "int main() { return value == 5 ? 0 : 1; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}

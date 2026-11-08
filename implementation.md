@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 14:00 -08:00
+> **Last updated:** 2026-11-08 14:02 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2309,6 +2309,8 @@ Newest entries at the bottom. Use the local time zone.
       syntax.
 - **2026-11-08 14:00 -08:00** — Accepted `_Noreturn` as a C function
       specifier.
+- **2026-11-08 14:02 -08:00** — Accepted `_Thread_local` as a C storage
+      specifier (currently single-thread storage semantics).
 
 ## 10. Updating this file
 
