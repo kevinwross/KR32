@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 19:27 -08:00
+> **Last updated:** 2026-11-07 19:34 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2041,6 +2041,9 @@ Newest entries at the bottom. Use the local time zone.
       operators and reversed scalar/class operands.
 - **2026-11-07 19:27 -08:00** — Extended conversion operators to integer
       arithmetic with class operands on either side.
+- **2026-11-07 19:34 -08:00** — Stopped treating unknown `identifier *`/`&`
+      inside parentheses as pointer cast types, fixing `(value & mask)` and
+      `(value * factor)` expressions.
 
 ## 10. Updating this file
 

@@ -2096,8 +2096,7 @@ private:
             }
             if (index + 1 < tokens_.size()) {
                 const std::string& next = tokens_[index + 1].text;
-                if (next == "::" || next == "*" || next == "&" ||
-                    next == "&&") {
+                if (next == "::") {
                     return true;
                 }
                 if (next == "<") {
