@@ -4792,6 +4792,12 @@ private:
             emit("    MOV R0, #" + std::to_string(token.line));
             return type_int();
         }
+        if (peek().kind == TokenKind::Identifier &&
+            peek().text == "__COUNTER__") {
+            take();
+            emit("    MOV R0, #" + std::to_string(counter_value_++));
+            return type_int();
+        }
         if (peek().kind == TokenKind::Identifier && peek().text == "__FILE__") {
             take();
             const std::string label = ".Lstr_" + std::to_string(string_counter_++);
@@ -5101,6 +5107,7 @@ private:
     int line_counter_ = 0;
     int label_counter_ = 0;
     int string_counter_ = 0;
+    int counter_value_ = 0;
 };
 
 } // namespace

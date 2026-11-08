@@ -414,6 +414,15 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(standard_macros.ok);
     CHECK(standard_macros.result == 0);
 
+    const ProgramResult counter = compile_and_run(
+        "int main(void) {\n"
+        "    int first = __COUNTER__;\n"
+        "    int second = __COUNTER__;\n"
+        "    return first == 0 && second == 1 ? 0 : 1;\n"
+        "}\n");
+    CHECK(counter.ok);
+    CHECK(counter.result == 0);
+
     const ProgramResult bounded_strings = compile_and_run(
         "#include <string.h>\n"
         "#include <stdlib.h>\n"
