@@ -530,6 +530,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (erased != \"a\") return 52;\n"
         "    erased.insert(1, 'b');\n"
         "    if (erased != \"ab\") return 53;\n"
+        "    if (repeated.compare(1, 2, \"bc\") != 0) return 54;\n"
+        "    std::string bc(\"bc\");\n"
+        "    if (repeated.compare(4, 2, bc) != 0) return 55;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
