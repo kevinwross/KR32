@@ -1,32 +1,40 @@
 # Resume notes: C/C++ compiler work
 
-**Paused:** 2026-11-07 17:51 America/Los_Angeles
+**Updated:** 2026-11-07 19:08 America/Los_Angeles
 **Repository:** `C:\Users\kevin\source\repos\KR32`
-**Last feature commit:** `136c246` (`cxx: convert scalars in initialization and arguments`). Resume notes were added in a follow-up docs commit.
+**Last feature commit:** `46bab01` (`cxx: convert scalars in returns and comparisons`).
 **Goal:** “Continue to improve the C and C++ compilers to support the system”
-**Goal status at pause:** intentionally paused by user request. On resume, call
-`get_goal` and `update_goal` with action `resume` before continuing automatic
-round work.
+**Goal status:** the harness goal is still marked `paused`. The user requested
+resume, but `update_goal action=resume` is rejected for the model; the user must
+use the UI resume control. Work can continue manually in the meantime.
 
 ## Last verified state
 
-- Windows Debug CTest: **42/42 passed**
-- Linux GCC CTest (WSL): **42/42 passed**
-- Unit suite: **419 test cases, 7,063 assertions**, all passing
+- Windows Debug CTest: **43/43 passed**
+- Linux GCC CTest (WSL): **43/43 passed**
+- Unit suite: **420 test cases, 7,077 assertions**, all passing
 - Working tree clean except pre-existing untracked `node_modules/`,
   `package.json`, and `package-lock.json` (not part of compiler work; leave
   untracked)
 
-Last feature landed in round 68:
+Most recent compiler feature, round 69:
 
 ```cpp
-class Number {
+class Flag {
 public:
     int value;
-    Number(int input) : value(input) {}
-    operator int() const { return value; }
+    Flag(int input) : value(input) {}
+    operator bool() const { return value != 0; }
 };
 
+bool truth(Flag flag) { return flag; }   // conversion in a return
+Flag zero(0);
+if (zero == 0) { ... }                  // conversion in equality comparison
+```
+
+Round 68 added:
+
+```cpp
 Number number(7);
 int converted = number;   // copy initialization
 take(number);             // scalar function argument
@@ -34,9 +42,11 @@ take(number);             // scalar function argument
 
 Changes in `src/cxx/codegen.cpp`:
 
-- `conversion_cost` now accepts class → scalar via a conversion operator
-- `gen_scalar_conversion` invokes the matching conversion operator when needed
-- Copy initialization and scalar/FP/long-long argument paths use it
+- `conversion_cost` accepts class → scalar via a conversion operator
+- `gen_scalar_conversion` invokes the matching conversion operator, with an
+  `operator bool` fallback for integer targets
+- Copy initialization, scalar/FP/long-long arguments, scalar returns, and
+  equality comparisons use it
 
 Round 67 added conversion operators themselves:
 
@@ -48,6 +58,9 @@ Round 67 added conversion operators themselves:
 
 Approximate order, newest first:
 
+- `46bab01` — cxx: convert scalars in returns and comparisons
+- `e0ca3b2` — build: embed KR32OS images in kr32 (BIOS/kernel are now
+  embedded by default, with platform-separated OS build outputs)
 - `136c246` — cxx: convert scalars in initialization and arguments
 - `9f47292` — cxx: support conversion operators
 - `9f0665d` — cc: support common compiler builtins
@@ -136,9 +149,9 @@ Approximate order, newest first:
 ## Current known gaps / good next targets
 
 1. **More implicit conversion contexts**
-   - `return flag;` from a `bool`/`int` function
-   - comparisons such as `flag == 0`
    - arithmetic/operands involving class conversions
+   - `0 == flag` and relational comparisons (`flag < 5`)
+   - `return`/argument conversions to class constructors
    - conversion to `std::string`? (would need constructor/conversion interplay)
 
 2. **C `_Generic`**
