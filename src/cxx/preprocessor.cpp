@@ -1070,6 +1070,11 @@ private:
                     "extern int errno;\n"
                     "const char* strerror(int code);\n"
                     "void perror(const char* prefix);\n"
+                    "}\n"
+                    "namespace std {\n"
+                    "using ::errno;\n"
+                    "using ::strerror;\n"
+                    "using ::perror;\n"
                     "}\n");
                 macros_["EPERM"] = Macro{false, {}, "1"};
                 macros_["ENOENT"] = Macro{false, {}, "2"};

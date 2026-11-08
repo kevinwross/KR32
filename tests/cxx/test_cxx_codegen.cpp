@@ -867,6 +867,21 @@ TEST_CASE("<cstddef> provides size types") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cerrno> exposes errno") {
+    const ProgramResult program = compile_and_run(
+        "#include <cerrno>\n"
+        "int main() {\n"
+        "    std::errno = EINVAL;\n"
+        "    if (std::errno != EINVAL) return 1;\n"
+        "    const char* text = std::strerror(std::errno);\n"
+        "    if (text == 0 || text[0] == 0) return 2;\n"
+        "    if (EPERM != 1 || ENOENT != 2) return 3;\n"
+        "    return EACCES == 13 && ENOSPC == 28 ? 0 : 4;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<ctime> provides time functions") {
     const ProgramResult program = compile_and_run(
         "#include <ctime>\n"
