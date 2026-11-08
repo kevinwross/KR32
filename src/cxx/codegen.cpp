@@ -7842,8 +7842,20 @@ private:
                     argument ? class_of(argument) : nullptr;
                 if (parameter_class != nullptr || argument_class != nullptr) {
                     score += parameter_class == argument_class ? 10 : -100;
+                } else if (arguments[index]) {
+                    const bool is_zero =
+                        arguments[index]->kind == ExprKind::IntegerLiteral &&
+                        arguments[index]->integer == 0;
+                    const int cost = conversion_cost(
+                        argument_raw, parameter_raw,
+                        is_lvalue(*arguments[index]), is_zero);
+                    if (cost >= 100) {
+                        score -= 1000;
+                    } else {
+                        score += 10 - cost;
+                    }
                 } else {
-                    score += 1;
+                    score -= 1000;
                 }
             }
             if (score > best_score) {

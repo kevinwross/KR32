@@ -281,6 +281,33 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string constructor overloads rank by conversion") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string repeated(3, 'x');\n"
+        "    if (repeated != \"xxx\") return 1;\n"
+        "    std::string prefix(\"abcdef\", 3);\n"
+        "    return prefix == \"abc\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string replaces with repeated characters") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"abc\");\n"
+        "    text.replace(1, 1, 2, 'x');\n"
+        "    return text == \"axxc\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string erases all characters") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
