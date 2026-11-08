@@ -772,6 +772,22 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cmath> provides scalar math") {
+    const ProgramResult program = compile_and_run(
+        "#include <cmath>\n"
+        "#include <cmath>\n"
+        "int main() {\n"
+        "    if (std::abs(-3) != 3) return 1;\n"
+        "    if (std::abs(-2.5) != 2.5) return 2;\n"
+        "    if (std::sqrt(9.0) != 3.0) return 3;\n"
+        "    if (std::fabs(-2.0) != 2.0) return 4;\n"
+        "    if (std::sqrt(4.0f) != 2.0f) return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<algorithm> provides std::min and std::max") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

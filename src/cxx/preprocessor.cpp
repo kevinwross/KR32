@@ -611,6 +611,34 @@ private:
                 }
                 return;
             }
+            if (header.find("<cmath>") != std::string::npos) {
+                if (!cmath_header_injected_) {
+                    cmath_header_injected_ = true;
+                    append_line(
+                        "extern \"C\" {\n"
+                        "double sqrt(double value);\n"
+                        "float sqrtf(float value);\n"
+                        "double fabs(double value);\n"
+                        "float fabsf(float value);\n"
+                        "}\n"
+                        "namespace std {\n"
+                        "inline int abs(int value) {\n"
+                        "    return value < 0 ? -value : value;\n"
+                        "}\n"
+                        "inline float abs(float value) {\n"
+                        "    return value < 0 ? -value : value;\n"
+                        "}\n"
+                        "inline double abs(double value) {\n"
+                        "    return value < 0 ? -value : value;\n"
+                        "}\n"
+                        "inline double sqrt(double value) { return ::sqrt(value); }\n"
+                        "inline float sqrt(float value) { return ::sqrtf(value); }\n"
+                        "inline double fabs(double value) { return ::fabs(value); }\n"
+                        "inline float fabs(float value) { return ::fabsf(value); }\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<initializer_list>") != std::string::npos ||
                 header.find("initializer_list") != std::string::npos) {
                 if (!initializer_list_header_injected_) {
@@ -2237,6 +2265,7 @@ private:
     bool initializer_list_header_injected_ = false;
     bool utility_header_injected_ = false;
     bool algorithm_header_injected_ = false;
+    bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;
     std::string logical_file_;

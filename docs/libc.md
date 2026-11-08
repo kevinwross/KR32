@@ -38,6 +38,7 @@ source line numbers and debugger line mappings are preserved.
 | `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append` (C string or `std::string`), `swap`, `clear` |
 | `<utility>` | `std::swap` for integer, character, and floating-point types |
 | `<algorithm>` | `std::min`/`std::max` for integer, character, and floating-point types |
+| `<cmath>` | `std::abs`, `std::sqrt`, `std::fabs` (including `float` forms) |
 | `<errno.h>` | `errno`, `strerror`, `perror`, and error constants |
 | `<sys/stat.h>` | `struct stat`, `stat`, `fstat`, `remove`, `rename` |
 | `<unistd.h>` | `access`, `isatty`, `truncate`, `fsync`, `fdatasync`, `getcwd`, `chdir`, `dup`, `dup2` |
