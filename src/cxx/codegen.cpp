@@ -275,6 +275,9 @@ TypePtr decay(const TypePtr& type) {
     if (type && type->kind == TypeKind::Array) {
         return Type::make_pointer(type->element);
     }
+    if (type && type->kind == TypeKind::Function) {
+        return Type::make_pointer(type);
+    }
     return type;
 }
 
@@ -2153,8 +2156,10 @@ private:
                     return member->type;
                 }
             }
-            if (!lookup_functions(expression.name, current_prefix_).empty()) {
-                return Type::make_pointer(Type::make_builtin(BuiltinKind::Int));
+            if (const std::vector<Function*> functions =
+                    lookup_functions(expression.name, current_prefix_);
+                !functions.empty()) {
+                return lambda_function_type(functions.front());
             }
             diagnose_once(expression, "unknown identifier: " +
                                           expression.name.to_string());
@@ -5009,7 +5014,7 @@ private:
                     lookup_functions(expression.name, current_prefix_);
                 !functions.empty()) {
                 emit("    LEA R0, [" + functions.front()->symbol + "]");
-                return Type::make_pointer(Type::make_builtin(BuiltinKind::Int));
+                return lambda_function_type(functions.front());
             }
             diagnose_once(expression, "unknown identifier: " + expression.name.to_string());
             emit("    MOV R0, #0");

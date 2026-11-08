@@ -142,6 +142,11 @@ TEST_CASE("<cstdlib> converts C strings") {
     const ProgramResult program = compile_and_run(
         "#include <cstdlib>\n"
         "#include <cstdlib>\n"
+        "int compare_ints(const void* left, const void* right) {\n"
+        "    int a = *(const int*)left;\n"
+        "    int b = *(const int*)right;\n"
+        "    return a < b ? -1 : (a > b ? 1 : 0);\n"
+        "}\n"
         "int main() {\n"
         "    if (std::atoi(\"42\") != 42) return 1;\n"
         "    if (std::atoi(\"-7\") != -7) return 2;\n"
@@ -150,6 +155,16 @@ TEST_CASE("<cstdlib> converts C strings") {
         "    if (std::strtol(\"123x\", &end, 10) != 123 || end[0] != 'x') return 4;\n"
         "    if (std::strtoul(\"ffz\", &end, 16) != 255 || end[0] != 'z') return 5;\n"
         "    if (std::labs(-7) != 7) return 6;\n"
+        "    int values[5];\n"
+        "    values[0] = 4; values[1] = 1; values[2] = 5;\n"
+        "    values[3] = 2; values[4] = 3;\n"
+        "    std::qsort(values, 5, sizeof(int), compare_ints);\n"
+        "    for (int index = 0; index < 5; ++index) {\n"
+        "        if (values[index] != index + 1) return 7;\n"
+        "    }\n"
+        "    int key = 3;\n"
+        "    int* found = (int*)std::bsearch(&key, values, 5, sizeof(int), compare_ints);\n"
+        "    if (found == 0 || *found != 3) return 8;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);

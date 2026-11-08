@@ -759,6 +759,55 @@ private:
             leading = false;
         }
 
+        // Function-pointer declarator: `int (*name)(int, int)` or the
+        // abstract form `int (*)(int, int)` used in parameter lists.
+        if (at("(") && allow_function &&
+            (peek(1).text == "*" || peek(1).text == "&")) {
+            advance();
+            int pointer_depth = 0;
+            while (consume("*") || consume("&")) {
+                ++pointer_depth;
+            }
+            while (at("const") || at("volatile")) {
+                advance();
+            }
+            if (at_identifier() || peek().kind == TokenKind::Keyword) {
+                while (true) {
+                    declarator.name.parts.push_back(peek().text);
+                    advance();
+                    if (!consume("::")) {
+                        break;
+                    }
+                }
+            } else if (!allow_abstract) {
+                error(peek(), "expected declarator name");
+                return false;
+            }
+            expect(")", "after function-pointer declarator");
+            if (!at("(")) {
+                error(peek(), "expected function parameter list");
+                return false;
+            }
+            std::vector<Param> parsed_parameters;
+            bool variadic = false;
+            parse_parameter_list(parsed_parameters, variadic);
+            std::vector<TypePtr> parameters;
+            for (const Param& parameter : parsed_parameters) {
+                parameters.push_back(parameter.type);
+            }
+            auto function = std::make_shared<Type>();
+            function->kind = TypeKind::Function;
+            function->element = type;
+            function->parameters = std::move(parameters);
+            function->variadic = variadic;
+            TypePtr result = function;
+            for (int index = 0; index < pointer_depth; ++index) {
+                result = Type::make_pointer(result);
+            }
+            declarator.type = result;
+            return true;
+        }
+
         if (at("~")) {
             advance();
             declarator.is_destructor = true;
@@ -1018,7 +1067,7 @@ private:
             parameter.location = {peek().line, peek().column};
             Specifiers specifiers = parse_specifiers();
             Declarator declarator;
-            parse_declarator(specifiers.type, declarator, false, true);
+            parse_declarator(specifiers.type, declarator, true, true);
             parameter.type = declarator.type;
             parameter.name = declarator.name;
             if (consume("=")) {
