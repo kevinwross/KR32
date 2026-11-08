@@ -195,7 +195,14 @@ std::string expand_local_includes(std::string_view source,
     return result;
 }
 
-std::string preprocess(std::string_view source, const std::string& source_name) {
+struct PreprocessMessage {
+    int line = 0;
+    bool error = false;
+    std::string text;
+};
+
+std::string preprocess(std::string_view source, const std::string& source_name,
+                       std::vector<PreprocessMessage>& messages) {
     std::string without_comments = strip_comments(source);
     std::set<std::string> once_files;
     std::set<std::string> active_files;
@@ -360,7 +367,9 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
     std::string result;
     std::istringstream lines(without_comments);
     std::string line;
+    int line_number = 0;
     while (std::getline(lines, line)) {
+        ++line_number;
         std::string trimmed = line;
         const std::size_t first = trimmed.find_first_not_of(" \t");
         if (first != std::string::npos && trimmed[first] == '#') {
@@ -461,6 +470,19 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                     active = conditions.back().parent_active;
                     conditions.pop_back();
                 }
+            } else if (active &&
+                       (directive.rfind("#error", 0) == 0 ||
+                        directive.rfind("#warning", 0) == 0)) {
+                const bool is_error =
+                    directive.rfind("#error", 0) == 0;
+                std::string text =
+                    directive.substr(is_error ? 6 : 8);
+                const std::size_t text_first =
+                    text.find_first_not_of(" \t");
+                text = text_first == std::string::npos
+                           ? std::string()
+                           : text.substr(text_first);
+                messages.push_back({line_number, is_error, text});
             } else if (directive.rfind("#include", 0) == 0 && active) {
                 if (directive.find("unistd.h") != std::string::npos) {
                     result +=
@@ -1178,10 +1200,23 @@ class Compiler {
 public:
     Compiler(std::string_view source, std::string_view name, int source_id = 0)
         : source_name_(name), source_id_(source_id),
-          tokens_(Lexer(preprocess(source, std::string(name))).tokenize()) {}
+          tokens_(Lexer(preprocess(source, std::string(name),
+                                    preprocessor_messages_))
+                      .tokenize()) {}
 
     Result run() {
         Result result;
+        bool fatal_preprocess = false;
+        for (const PreprocessMessage& message : preprocessor_messages_) {
+            result.diagnostics.push_back(
+                {message.line, 1,
+                 std::string(message.error ? "error: " : "warning: ") +
+                     message.text});
+            fatal_preprocess = fatal_preprocess || message.error;
+        }
+        if (fatal_preprocess) {
+            return result;
+        }
         try {
             emit(".text");
             debug_record("S " + std::to_string(source_id_) + " " + source_name_);
@@ -4801,6 +4836,7 @@ private:
 
     std::string source_name_;
     int source_id_ = 0;
+    std::vector<PreprocessMessage> preprocessor_messages_;
     std::vector<Token> tokens_;
     std::size_t position_ = 0;
     std::string text_;

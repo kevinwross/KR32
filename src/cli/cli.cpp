@@ -860,11 +860,11 @@ int command_build(int argc, char** argv) {
     assembler::Error assembly_error;
     if (is_c_source(source)) {
         const cc::Result compiled = cc::compile(text, source);
+        for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
+            std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
+                         diagnostic.column, diagnostic.message.c_str());
+        }
         if (!compiled.ok) {
-            for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
-                std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
-                             diagnostic.column, diagnostic.message.c_str());
-            }
             return 1;
         }
         container::Image user;
@@ -1015,11 +1015,11 @@ int command_cc(int argc, char** argv) {
     }
     const std::string text(bytes.begin(), bytes.end());
     const cc::Result compiled = cc::compile(text, source, source_id);
+    for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
+        std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
+                     diagnostic.column, diagnostic.message.c_str());
+    }
     if (!compiled.ok) {
-        for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
-            std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
-                         diagnostic.column, diagnostic.message.c_str());
-        }
         return 1;
     }
 

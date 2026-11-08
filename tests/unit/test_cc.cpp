@@ -1378,6 +1378,35 @@ TEST_CASE("a compiled C program calls putchar and exits") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("the preprocessor reports error and warning directives") {
+    const cc::Result warning = cc::compile(
+        "#warning check this\n"
+        "int main(void) { return 0; }\n");
+    CHECK(warning.ok);
+    REQUIRE_FALSE(warning.diagnostics.empty());
+    CHECK(warning.diagnostics.front().message.find("warning: check this") !=
+          std::string::npos);
+    CHECK(warning.diagnostics.front().line == 1);
+
+    const cc::Result error = cc::compile(
+        "#error stop here\n"
+        "int main(void) { return 0; }\n");
+    CHECK_FALSE(error.ok);
+    REQUIRE_FALSE(error.diagnostics.empty());
+    CHECK(error.diagnostics.front().message.find("error: stop here") !=
+          std::string::npos);
+}
+
+TEST_CASE("inactive preprocessor errors are ignored") {
+    const cc::Result result = cc::compile(
+        "#if 0\n"
+        "#error not reached\n"
+        "#endif\n"
+        "int main(void) { return 0; }\n");
+    CHECK(result.ok);
+    CHECK(result.diagnostics.empty());
+}
+
 TEST_CASE("the C compiler reports syntax errors with positions") {
     const cc::Result result = cc::compile("int main(void) { return 1 + ; }\n");
     CHECK_FALSE(result.ok);
