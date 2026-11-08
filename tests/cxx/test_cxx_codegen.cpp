@@ -552,6 +552,9 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    if (spaced.find_last_not_of(' ') != 4) return 62;\n"
         "    std::string spaces(\" \");\n"
         "    if (spaced.find_first_not_of(spaces) != 2) return 63;\n"
+        "    std::string resized_fill(\"ab\");\n"
+        "    resized_fill.resize(5, 'x');\n"
+        "    if (resized_fill != \"abxxx\") return 64;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
