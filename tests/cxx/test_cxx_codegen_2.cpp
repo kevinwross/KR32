@@ -281,6 +281,21 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string contains substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    if (!text.contains(\"ell\")) return 1;\n"
+        "    if (text.contains(\"xyz\")) return 2;\n"
+        "    std::string needle(\"lo\");\n"
+        "    return text.contains(needle) ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("char assignments preserve neighboring bytes") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
