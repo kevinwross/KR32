@@ -281,6 +281,23 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm count tallies elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 1, 2, 2, 3, 2 };\n"
+        "    if (std::count(values, values + 5, 2) != 3) return 1;\n"
+        "    char text[6] = \"abaca\";\n"
+        "    if (std::count(text, text + 5, 'a') != 3) return 2;\n"
+        "    double reals[3] = { 1.5, 2.5, 1.5 };\n"
+        "    if (std::count(reals, reals + 3, 1.5) != 2) return 3;\n"
+        "    return std::count(reals, reals + 3, 9.0) == 0 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copy duplicates arrays") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
