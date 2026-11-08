@@ -1459,6 +1459,25 @@ TEST_CASE("packed attributes remove struct padding") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("aligned attributes raise struct alignment") {
+    const ProgramResult program = compile_and_run(
+        "struct __attribute__((aligned(16))) Before { char value; };\n"
+        "struct After { char value; } __attribute__((aligned(8)));\n"
+        "struct __attribute__((packed, aligned(8))) Mixed { char tag; int value; };\n"
+        "int main(void) {\n"
+        "    if (sizeof(struct Before) != 16) return 1;\n"
+        "    if (_Alignof(struct Before) != 16) return 2;\n"
+        "    if (sizeof(struct After) != 8) return 3;\n"
+        "    if (_Alignof(struct After) != 8) return 4;\n"
+        "    if (__builtin_offsetof(struct Mixed, value) != 1) return 5;\n"
+        "    if (sizeof(struct Mixed) != 8) return 6;\n"
+        "    if (_Alignof(struct Mixed) != 8) return 7;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("attribute specifiers are skipped") {
     const ProgramResult program = compile_and_run(
         "int value __attribute__((unused)) = 3;\n"

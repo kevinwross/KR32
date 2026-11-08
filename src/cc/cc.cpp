@@ -1035,6 +1035,7 @@ struct Type {
     int bit_offset = 0;
     bool is_bitfield = false;
     bool is_packed = false;
+    int explicit_alignment = 0;
 
     Type() = default;
     Type(Kind type_kind, TypePtr type_base, int type_count)
@@ -1454,6 +1455,15 @@ private:
         }
     }
 
+    void apply_struct_alignment(const TypePtr& type) {
+        if (type->explicit_alignment > 0) {
+            type->struct_alignment =
+                std::max(type->struct_alignment, type->explicit_alignment);
+            type->total_size =
+                align_up(type->total_size, type->struct_alignment);
+        }
+    }
+
     TypePtr parse_struct_or_union(bool is_union) {
         skip_attributes();
         std::string tag;
@@ -1463,11 +1473,14 @@ private:
         skip_attributes();
         const bool packed = pending_packed_;
         pending_packed_ = false;
+        const int explicit_alignment = pending_alignment_;
+        pending_alignment_ = 0;
         if (match("{")) {
             auto type = std::make_shared<Type>();
             type->kind = is_union ? Type::Kind::Union : Type::Kind::Struct;
             type->tag = tag;
             type->is_packed = packed;
+            type->explicit_alignment = explicit_alignment;
             if (!tag.empty()) {
                 tags_[tag] = type;
             }
@@ -1564,11 +1577,18 @@ private:
             if (type->total_size == 0) {
                 type->total_size = 1;
             }
+            apply_struct_alignment(type);
             skip_attributes();
             if (pending_packed_ && !type->is_packed) {
                 type->is_packed = true;
                 repack_struct(type, is_union);
             }
+            if (pending_alignment_ > 0) {
+                type->explicit_alignment =
+                    std::max(type->explicit_alignment, pending_alignment_);
+                pending_alignment_ = 0;
+            }
+            apply_struct_alignment(type);
             pending_packed_ = false;
             std::vector<Member> promoted;
             for (const Member& member : type->members) {
@@ -1912,6 +1932,7 @@ private:
         if (base->kind != Type::Kind::Struct &&
             base->kind != Type::Kind::Union) {
             pending_packed_ = false;
+            pending_alignment_ = 0;
         }
         if (long_flag && base->kind == Type::Kind::Double) {
             error("long double is not supported");
@@ -1954,6 +1975,13 @@ private:
                         if (peek().text == "packed" ||
                             peek().text == "__packed__") {
                             pending_packed_ = true;
+                        }
+                        if ((peek().text == "aligned" ||
+                             peek().text == "__aligned__") &&
+                            peek(1).text == "(" &&
+                            peek(2).kind == TokenKind::Number) {
+                            pending_alignment_ =
+                                static_cast<int>(peek(2).value);
                         }
                         take();
                     }
@@ -5022,6 +5050,7 @@ private:
     std::map<std::string, Variable> globals_;
     bool parsed_extern_ = false;
     bool pending_packed_ = false;
+    int pending_alignment_ = 0;
     std::map<std::string, FunctionSignature> functions_;
     std::map<std::string, TypePtr> typedefs_;
     std::map<std::string, TypePtr> tags_;
