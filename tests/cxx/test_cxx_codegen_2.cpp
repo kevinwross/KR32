@@ -281,6 +281,23 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm find locates elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    if (std::find(values, values + 4, 3) != values + 2) return 1;\n"
+        "    if (std::find(values, values + 4, 9) != values + 4) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    if (std::find(text, text + 3, 'b') != text + 1) return 3;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    return std::find(reals, reals + 2, 2.5) == reals + 1 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm fill sets arrays") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
