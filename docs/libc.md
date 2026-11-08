@@ -37,7 +37,7 @@ source line numbers and debugger line mappings are preserved.
 | `<limits.h>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append` (C string or `std::string`), `swap`, `clear` |
 | `<utility>` | `std::swap` for integer, character, and floating-point types |
-| `<algorithm>` | `std::min`/`std::max`/`std::clamp`, `std::sort`, and `std::reverse` for integer, character, and floating-point arrays |
+| `<algorithm>` | `std::min`/`std::max`/`std::clamp`, `std::sort`, `std::reverse`, and `std::fill` for integer, character, and floating-point arrays |
 | `<cmath>` | `std::abs`, `std::sqrt`, `std::fabs` (including `float` forms) |
 | `<cstdlib>` | `std::atoi`, `atof`, `strtol`, `strtoul`, `strtoll`, `strtoull`, `strtod`/`strtof`/`strtold` (decimal/exponent), `labs`, `llabs`, `qsort`, `bsearch`, `malloc`, `calloc`, `realloc`, `free`, `exit`, `abort` |
 | `<cstring>` | `std::strlen`, `strcpy`, `strncpy`, `strcat`, `strncat`, `strcmp`, `strncmp`, `strchr`, `strrchr`, `strstr`, `strtok`, `strdup`, `memcpy`, `memmove`, `memset`, `memcmp`, `memchr` |

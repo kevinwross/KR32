@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm fill sets arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    std::fill(values, values + 4, 7);\n"
+        "    if (values[0] != 7 || values[3] != 7) return 1;\n"
+        "    double reals[3] = { 0.0, 0.0, 0.0 };\n"
+        "    std::fill(reals, reals + 3, 1.5);\n"
+        "    if (reals[0] != 1.5 || reals[2] != 1.5) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    std::fill(text, text + 3, 'z');\n"
+        "    return text[0] == 'z' && text[2] == 'z' ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm reverse orders arrays") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
