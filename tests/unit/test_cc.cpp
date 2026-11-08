@@ -1255,6 +1255,22 @@ TEST_CASE("the preprocessor expands function-like macros") {
     CHECK(program.result == 14);
 }
 
+TEST_CASE("the preprocessor expands variadic macros") {
+    const ProgramResult program = compile_and_run(
+        "#define SUM(a, ...) ((a) + (__VA_ARGS__))\n"
+        "#define REST(...) (__VA_ARGS__)\n"
+        "int main(void) {\n"
+        "    if (SUM(1, 2) != 3) return 1;\n"
+        "    if (REST(4) != 4) return 2;\n"
+        "    if (REST(5, 6) != 6) return 3;\n"
+        "    int value = (7, 8);\n"
+        "    if (value != 8) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("Casts truncate to char and normalize _Bool") {
     const ProgramResult character = compile_and_run(
         "int main(void) { return (char)0x141; }\n");

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 16:45 -08:00
+> **Last updated:** 2026-11-07 16:59 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2024,6 +2024,9 @@ Newest entries at the bottom. Use the local time zone.
       by-value semantics.
 - **2026-11-07 16:45 -08:00** — Promoted anonymous struct/union members into the
       enclosing type for direct member access.
+- **2026-11-07 16:57 -08:00** — Added variadic function-like macros and
+      `__VA_ARGS__` expansion.
+- **2026-11-07 16:59 -08:00** — Added parenthesized C comma expressions.
 
 ## 10. Updating this file
 

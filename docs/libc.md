@@ -71,6 +71,8 @@ sandboxed just like `open`.
   string literals
 - Compound literals such as `(struct Point){1, 2}`
 - Anonymous struct and union members promoted into the enclosing type
+- Variadic function-like macros using `__VA_ARGS__`
+- Parenthesized comma expressions
 - Struct/union parameters copied into callee locals, preserving by-value semantics
 - `__func__`, `__LINE__`, `__FILE__`, `__DATE__`, `__TIME__`, `__STDC__`,
   `__STDC_HOSTED__`, and `__STDC_VERSION__`

@@ -207,6 +207,7 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
     struct FunctionMacro {
         std::vector<std::string> parameters;
         std::string body;
+        bool variadic = false;
     };
     std::map<std::string, FunctionMacro> function_macros;
     struct Conditional {
@@ -307,6 +308,24 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                             arguments.push_back(current);
                         }
                         std::string substituted = function_macro->second.body;
+                        if (function_macro->second.variadic) {
+                            std::string variadic_text;
+                            for (std::size_t argument =
+                                     function_macro->second.parameters.size();
+                                 argument < arguments.size(); ++argument) {
+                                if (!variadic_text.empty()) {
+                                    variadic_text += ", ";
+                                }
+                                variadic_text += arguments[argument];
+                            }
+                            std::size_t position = 0;
+                            while ((position = substituted.find("__VA_ARGS__",
+                                                                position)) !=
+                                   std::string::npos) {
+                                substituted.replace(position, 11, variadic_text);
+                                position += variadic_text.size();
+                            }
+                        }
                         for (std::size_t parameter = 0;
                              parameter < function_macro->second.parameters.size(); ++parameter) {
                             const std::string needle = function_macro->second.parameters[parameter];
@@ -367,7 +386,22 @@ std::string preprocess(std::string_view source, const std::string& source_name) 
                                                                      : comma - position);
                             const std::size_t first_char = parameter.find_first_not_of(" \t");
                             if (first_char != std::string::npos) {
-                                macro.parameters.push_back(parameter.substr(first_char));
+                                std::string trimmed_parameter =
+                                    parameter.substr(first_char);
+                                if (trimmed_parameter == "...") {
+                                    macro.variadic = true;
+                                    trimmed_parameter.clear();
+                                } else if (trimmed_parameter.size() >= 3 &&
+                                           trimmed_parameter.compare(
+                                               trimmed_parameter.size() - 3, 3,
+                                               "...") == 0) {
+                                    macro.variadic = true;
+                                    trimmed_parameter.erase(
+                                        trimmed_parameter.size() - 3);
+                                }
+                                if (!trimmed_parameter.empty()) {
+                                    macro.parameters.push_back(trimmed_parameter);
+                                }
                             }
                             if (comma == std::string::npos) {
                                 break;
@@ -3042,6 +3076,14 @@ private:
         return gen_assignment_expression();
     }
 
+    TypePtr gen_comma_expression() {
+        TypePtr type = gen_expression();
+        while (match(",")) {
+            type = gen_expression();
+        }
+        return type;
+    }
+
     void push_value(const TypePtr& type) {
         if (is_fp_type(type)) {
             emit("    ADJSP #-8");
@@ -4106,7 +4148,7 @@ private:
                 convert_value(source, target);
                 return target;
             }
-            TypePtr type = gen_expression();
+            TypePtr type = gen_comma_expression();
             expect(")");
             bool address = false;
             type = apply_postfix(type, address);
