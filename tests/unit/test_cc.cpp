@@ -403,6 +403,17 @@ TEST_CASE("C local declarations support multiple declarators") {
     CHECK(source_identity.ok);
     CHECK(source_identity.result == 0);
 
+    const ProgramResult standard_macros = compile_and_run(
+        "int main(void) {\n"
+        "    if (__STDC__ != 1) return 1;\n"
+        "    if (__STDC_VERSION__ < 199901) return 2;\n"
+        "    if (__DATE__[0] == 0) return 3;\n"
+        "    if (__TIME__[2] != ':') return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(standard_macros.ok);
+    CHECK(standard_macros.result == 0);
+
     const ProgramResult bounded_strings = compile_and_run(
         "#include <string.h>\n"
         "#include <stdlib.h>\n"

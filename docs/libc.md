@@ -69,7 +69,8 @@ sandboxed just like `open`.
   direct `int (*fn)(int)` declarators, array-element calls, and calls with more than four fixed arguments
 - Aggregate local initializers and assignment from struct-returning calls and
   string literals
-- `__func__`, `__LINE__`, and `__FILE__`
+- `__func__`, `__LINE__`, `__FILE__`, `__DATE__`, `__TIME__`, `__STDC__`,
+  `__STDC_HOSTED__`, and `__STDC_VERSION__`
 - `__builtin_heap_start()` and `__builtin_heap_end()` for the linker-provided
   heap bounds
 

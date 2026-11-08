@@ -7,6 +7,7 @@
 #include <cctype>
 #include <cstdint>
 #include <cstdio>
+#include <ctime>
 #include <cstdlib>
 #include <filesystem>
 #include <fstream>
@@ -1113,6 +1114,27 @@ struct FunctionSignature {
     bool variadic = false;
     bool defined = false;
 };
+
+std::string compile_time_stamp(const char* format) {
+    const std::time_t now = std::time(nullptr);
+    [[maybe_unused]] std::tm local_storage = {};
+#if defined(_WIN32)
+    if (localtime_s(&local_storage, &now) != 0) {
+        return "";
+    }
+    const std::tm* local = &local_storage;
+#else
+    const std::tm* local = std::localtime(&now);
+    if (local == nullptr) {
+        return "";
+    }
+#endif
+    char buffer[64] = {};
+    if (std::strftime(buffer, sizeof(buffer), format, local) == 0) {
+        return "";
+    }
+    return buffer;
+}
 
 class Compiler {
 public:
@@ -4226,6 +4248,34 @@ private:
             expect(")");
             emit("    LEA R0, [__heap_end]");
             return type_pointer(type_char());
+        }
+        if (peek().kind == TokenKind::Identifier &&
+            (peek().text == "__STDC__" || peek().text == "__STDC_HOSTED__")) {
+            take();
+            emit("    MOV R0, #1");
+            return type_int();
+        }
+        if (peek().kind == TokenKind::Identifier &&
+            peek().text == "__STDC_VERSION__") {
+            take();
+            emit("    MOV R0, #201112");
+            return type_int();
+        }
+        if (peek().kind == TokenKind::Identifier &&
+            (peek().text == "__DATE__" || peek().text == "__TIME__")) {
+            const std::string name = take().text;
+            const std::string text =
+                name == "__DATE__" ? compile_time_stamp("%b %e %Y")
+                                   : compile_time_stamp("%H:%M:%S");
+            const std::string label = ".Lstr_" + std::to_string(string_counter_++);
+            rodata_ += label + ":\n    .asciz \"" + escape_string(text) + "\"\n";
+            emit("    LEA R0, [" + label + "]");
+            bool address = false;
+            TypePtr type = apply_postfix(type_pointer(type_char()), address);
+            if (address) {
+                gen_load(type);
+            }
+            return type;
         }
         if (peek().kind == TokenKind::Identifier && peek().text == "__LINE__") {
             const Token token = take();
