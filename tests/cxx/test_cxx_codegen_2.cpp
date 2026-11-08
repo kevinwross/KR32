@@ -281,6 +281,26 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm copy_n copies counted elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[3] = { 1, 2, 3 };\n"
+        "    int target[3] = { 0, 0, 0 };\n"
+        "    int* end = std::copy_n(source, 2, target);\n"
+        "    if (end != target + 2) return 1;\n"
+        "    if (target[1] != 2 || target[2] != 0) return 2;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    double out[2] = { 0.0, 0.0 };\n"
+        "    std::copy_n(reals, 2, out);\n"
+        "    if (out[0] != 1.5 || out[1] != 2.5) return 3;\n"
+        "    return std::copy_n(source, 0, target) == target ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm fill_n writes counted elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
