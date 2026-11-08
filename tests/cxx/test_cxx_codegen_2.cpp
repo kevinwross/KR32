@@ -138,6 +138,22 @@ TEST_CASE("<cstring> exposes C string helpers") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string appends substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"ab\");\n"
+        "    std::string part(\"xxcdyy\");\n"
+        "    text.append(part, 2, 2);\n"
+        "    if (text != \"abcd\") return 1;\n"
+        "    text.append(\"QQefRR\", 2, 2);\n"
+        "    return text == \"abcdef\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string repeated-character constructor compiles") {
     const cxx::Result compiled = cxx::compile(
         "#include <string>\n"
