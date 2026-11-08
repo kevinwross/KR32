@@ -281,6 +281,21 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("string shrinks to fit") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    text.reserve(100);\n"
+        "    text.resize(2);\n"
+        "    text.shrink_to_fit();\n"
+        "    return text == \"he\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("string append supports chaining") {
     const ProgramResult program = compile_and_run(
         "#include <string>\n"
