@@ -1492,7 +1492,7 @@ private:
                 tags_[tag] = type;
             }
             while (!match("}")) {
-                TypePtr member_type = parse_type();
+                TypePtr member_type = parse_declaration_type();
                 if (peek().text == ";") {
                     take();
                     if (member_type->kind != Type::Kind::Struct &&
@@ -1976,6 +1976,21 @@ private:
         return base;
     }
 
+    TypePtr parse_declaration_type() {
+        TypePtr type = parse_type();
+        while (match("_Alignas")) {
+            expect("(");
+            const std::int64_t alignment = constant_expression();
+            expect(")");
+            auto aligned = std::make_shared<Type>(*type);
+            aligned->explicit_alignment =
+                std::max(aligned->explicit_alignment,
+                         static_cast<int>(alignment));
+            type = aligned;
+        }
+        return type;
+    }
+
     void skip_attributes() {
         while (peek().text == "__attribute__" ||
                peek().text == "__declspec") {
@@ -2093,7 +2108,7 @@ private:
             expect(";");
             return;
         }
-        TypePtr type = parse_type();
+        TypePtr type = parse_declaration_type();
         const bool is_extern = parsed_extern_;
         if (match(";")) {
             return;
@@ -3032,7 +3047,7 @@ private:
         if (is_static) {
             take();
         }
-        const TypePtr type = parse_type();
+        const TypePtr type = parse_declaration_type();
         TypePtr base_type = type;
         while (base_type->kind == Type::Kind::Pointer) {
             base_type = base_type->element();

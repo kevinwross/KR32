@@ -1453,6 +1453,17 @@ TEST_CASE("_Alignas raises declaration alignment") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("_Alignas may follow the type") {
+    const ProgramResult program = compile_and_run(
+        "int _Alignas(16) aligned_global = 1;\n"
+        "int main(void) {\n"
+        "    int _Alignas(16) aligned_local = 2;\n"
+        "    return aligned_global + aligned_local - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("packed attributes remove struct padding") {
     const ProgramResult program = compile_and_run(
         "struct __attribute__((packed)) Packed { char tag; int value; };\n"
