@@ -1410,6 +1410,50 @@ private:
         return ((value + alignment - 1) / alignment) * alignment;
     }
 
+    void repack_struct(const TypePtr& type, bool is_union) {
+        int offset = 0;
+        int max_size = 0;
+        int bit_cursor = 0;
+        int bit_unit_start = -1;
+        for (Member& member : type->members) {
+            const int member_size = std::max(1, member.type->size());
+            if (is_union) {
+                member.offset = 0;
+                member.type->bit_offset = 0;
+                max_size = std::max(max_size, member_size);
+                continue;
+            }
+            if (!member.type->is_bitfield) {
+                bit_cursor = 0;
+                bit_unit_start = -1;
+                member.offset = offset;
+                offset += member_size;
+                continue;
+            }
+            const int unit_bits = member_size * 8;
+            const int width = member.type->bit_width;
+            if (width == 0) {
+                bit_cursor = 0;
+                bit_unit_start = -1;
+                member.offset = offset;
+                continue;
+            }
+            if (bit_unit_start < 0 || bit_cursor + width > unit_bits) {
+                bit_unit_start = offset;
+                offset += member_size;
+                bit_cursor = 0;
+            }
+            member.offset = bit_unit_start;
+            member.type->bit_offset = bit_cursor;
+            bit_cursor += width;
+        }
+        type->struct_alignment = 1;
+        type->total_size = is_union ? max_size : offset;
+        if (type->total_size == 0) {
+            type->total_size = 1;
+        }
+    }
+
     TypePtr parse_struct_or_union(bool is_union) {
         skip_attributes();
         std::string tag;
@@ -1520,6 +1564,12 @@ private:
             if (type->total_size == 0) {
                 type->total_size = 1;
             }
+            skip_attributes();
+            if (pending_packed_ && !type->is_packed) {
+                type->is_packed = true;
+                repack_struct(type, is_union);
+            }
+            pending_packed_ = false;
             std::vector<Member> promoted;
             for (const Member& member : type->members) {
                 if (!member.name.empty() || member.type == nullptr ||

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-07 23:46 -08:00
+> **Last updated:** 2026-11-07 23:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2083,6 +2083,8 @@ Newest entries at the bottom. Use the local time zone.
       range-for iteration and reference mutation.
 - **2026-11-07 23:46 -08:00** — Added `__attribute__((packed))` struct
       layout with byte alignment and packed member offsets.
+- **2026-11-07 23:58 -08:00** — Applied trailing `__attribute__((packed))`
+      after a struct body by recomputing member offsets.
 
 ## 10. Updating this file
 

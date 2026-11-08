@@ -1445,11 +1445,14 @@ TEST_CASE("packed attributes remove struct padding") {
     const ProgramResult program = compile_and_run(
         "struct __attribute__((packed)) Packed { char tag; int value; };\n"
         "struct Plain { char tag; int value; };\n"
+        "struct Trailing { char tag; int value; } __attribute__((packed));\n"
         "int main(void) {\n"
         "    if (sizeof(struct Packed) != 5) return 1;\n"
         "    if (__builtin_offsetof(struct Packed, value) != 1) return 2;\n"
         "    if (sizeof(struct Plain) != 8) return 3;\n"
         "    if (__builtin_offsetof(struct Plain, value) != 4) return 4;\n"
+        "    if (sizeof(struct Trailing) != 5) return 5;\n"
+        "    if (__builtin_offsetof(struct Trailing, value) != 1) return 6;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
