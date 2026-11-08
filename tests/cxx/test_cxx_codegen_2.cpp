@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm replace substitutes values") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 1, 3 };\n"
+        "    std::replace(values, values + 4, 1, 9);\n"
+        "    if (values[0] != 9 || values[1] != 2 || values[2] != 9) return 1;\n"
+        "    char text[5] = \"aabaa\";\n"
+        "    std::replace(text, text + 5, 'a', 'z');\n"
+        "    if (text[0] != 'z' || text[2] != 'b' || text[4] != 'z') return 2;\n"
+        "    double reals[3] = { 1.5, 2.5, 1.5 };\n"
+        "    std::replace(reals, reals + 3, 1.5, 9.0);\n"
+        "    return reals[0] == 9.0 && reals[1] == 2.5 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copy_n copies counted elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
