@@ -1441,6 +1441,21 @@ TEST_CASE("generic selection without a match is rejected") {
           std::string::npos);
 }
 
+TEST_CASE("packed attributes remove struct padding") {
+    const ProgramResult program = compile_and_run(
+        "struct __attribute__((packed)) Packed { char tag; int value; };\n"
+        "struct Plain { char tag; int value; };\n"
+        "int main(void) {\n"
+        "    if (sizeof(struct Packed) != 5) return 1;\n"
+        "    if (__builtin_offsetof(struct Packed, value) != 1) return 2;\n"
+        "    if (sizeof(struct Plain) != 8) return 3;\n"
+        "    if (__builtin_offsetof(struct Plain, value) != 4) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("attribute specifiers are skipped") {
     const ProgramResult program = compile_and_run(
         "int value __attribute__((unused)) = 3;\n"

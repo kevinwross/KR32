@@ -1034,6 +1034,7 @@ struct Type {
     int bit_width = 0;
     int bit_offset = 0;
     bool is_bitfield = false;
+    bool is_packed = false;
 
     Type() = default;
     Type(Kind type_kind, TypePtr type_base, int type_count)
@@ -1410,14 +1411,19 @@ private:
     }
 
     TypePtr parse_struct_or_union(bool is_union) {
+        skip_attributes();
         std::string tag;
         if (peek().kind == TokenKind::Identifier) {
             tag = take().text;
         }
+        skip_attributes();
+        const bool packed = pending_packed_;
+        pending_packed_ = false;
         if (match("{")) {
             auto type = std::make_shared<Type>();
             type->kind = is_union ? Type::Kind::Union : Type::Kind::Struct;
             type->tag = tag;
+            type->is_packed = packed;
             if (!tag.empty()) {
                 tags_[tag] = type;
             }
@@ -1465,7 +1471,10 @@ private:
             int bit_unit_start = -1;
             int bit_unit_size = 0;
             for (Member& member : type->members) {
-                const int alignment = std::max(1, member.type->alignment());
+                const int alignment =
+                    type->is_packed
+                        ? 1
+                        : std::max(1, member.type->alignment());
                 const int member_size = std::max(1, member.type->size());
                 max_alignment = std::max(max_alignment, alignment);
                 if (is_union) {
@@ -1850,6 +1859,10 @@ private:
         } else {
             error("expected a type");
         }
+        if (base->kind != Type::Kind::Struct &&
+            base->kind != Type::Kind::Union) {
+            pending_packed_ = false;
+        }
         if (long_flag && base->kind == Type::Kind::Double) {
             error("long double is not supported");
         }
@@ -1888,6 +1901,10 @@ private:
                     } else if (match(")")) {
                         --depth;
                     } else {
+                        if (peek().text == "packed" ||
+                            peek().text == "__packed__") {
+                            pending_packed_ = true;
+                        }
                         take();
                     }
                 }
@@ -4954,6 +4971,7 @@ private:
     std::map<std::string, Variable> locals_;
     std::map<std::string, Variable> globals_;
     bool parsed_extern_ = false;
+    bool pending_packed_ = false;
     std::map<std::string, FunctionSignature> functions_;
     std::map<std::string, TypePtr> typedefs_;
     std::map<std::string, TypePtr> tags_;
