@@ -536,6 +536,12 @@ TEST_CASE("std::string subset supports construction, append, and assignment") {
         "    std::string assigned(\"abc\");\n"
         "    assigned = 'z';\n"
         "    if (assigned != \"z\") return 56;\n"
+        "    std::string repeated_chars;\n"
+        "    repeated_chars.append(3, 'x');\n"
+        "    if (repeated_chars != \"xxx\") return 57;\n"
+        "    std::string inserted_chars(\"a\");\n"
+        "    inserted_chars.insert(1, 2, 'y');\n"
+        "    if (inserted_chars != \"ayy\") return 58;\n"
         "    return 0;\n"
         "}\n");
     CHECK(program.ok);
