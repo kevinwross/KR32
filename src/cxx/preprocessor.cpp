@@ -654,6 +654,59 @@ private:
                 }
                 return;
             }
+            if (header.find("<cstring>") != std::string::npos) {
+                if (!cstring_header_injected_) {
+                    cstring_header_injected_ = true;
+                    append_line(
+                        "extern \"C\" {\n"
+                        "int strlen(const char* text);\n"
+                        "void* memcpy(void* destination, const void* source, int count);\n"
+                        "void* memset(void* destination, int value, int count);\n"
+                        "char* strcpy(char* destination, const char* source);\n"
+                        "char* strncpy(char* destination, const char* source, int count);\n"
+                        "char* strcat(char* destination, const char* source);\n"
+                        "int strcmp(const char* left, const char* right);\n"
+                        "int strncmp(const char* left, const char* right, int count);\n"
+                        "char* strchr(const char* text, int character);\n"
+                        "char* strstr(const char* text, const char* needle);\n"
+                        "int memcmp(const void* left, const void* right, int count);\n"
+                        "}\n"
+                        "namespace std {\n"
+                        "inline int strlen(const char* text) { return ::strlen(text); }\n"
+                        "inline void* memcpy(void* destination, const void* source, int count) {\n"
+                        "    return ::memcpy(destination, source, count);\n"
+                        "}\n"
+                        "inline void* memset(void* destination, int value, int count) {\n"
+                        "    return ::memset(destination, value, count);\n"
+                        "}\n"
+                        "inline char* strcpy(char* destination, const char* source) {\n"
+                        "    return ::strcpy(destination, source);\n"
+                        "}\n"
+                        "inline char* strncpy(char* destination, const char* source, int count) {\n"
+                        "    return ::strncpy(destination, source, count);\n"
+                        "}\n"
+                        "inline char* strcat(char* destination, const char* source) {\n"
+                        "    return ::strcat(destination, source);\n"
+                        "}\n"
+                        "inline int strcmp(const char* left, const char* right) {\n"
+                        "    return ::strcmp(left, right);\n"
+                        "}\n"
+                        "inline int strncmp(const char* left, const char* right, int count) {\n"
+                        "    return ::strncmp(left, right, count);\n"
+                        "}\n"
+                        "inline char* strchr(const char* text, int character) {\n"
+                        "    return ::strchr(text, character);\n"
+                        "}\n"
+                        "inline char* strstr(const char* text, const char* needle) {\n"
+                        "    return ::strstr(text, needle);\n"
+                        "}\n"
+                        "inline int memcmp(const void* left, const void* right, int count) {\n"
+                        "    return ::memcmp(left, right, count);\n"
+                        "}\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<initializer_list>") != std::string::npos ||
                 header.find("initializer_list") != std::string::npos) {
                 if (!initializer_list_header_injected_) {
@@ -2281,6 +2334,7 @@ private:
     bool utility_header_injected_ = false;
     bool algorithm_header_injected_ = false;
     bool cstdlib_header_injected_ = false;
+    bool cstring_header_injected_ = false;
     bool cmath_header_injected_ = false;
     int counter_ = 0;
     int line_delta_ = 0;

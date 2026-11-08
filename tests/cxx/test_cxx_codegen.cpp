@@ -772,6 +772,33 @@ TEST_CASE("<utility> provides std::swap") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("<cstring> exposes C string helpers") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstring>\n"
+        "#include <cstring>\n"
+        "int main() {\n"
+        "    char buffer[16];\n"
+        "    std::memset(buffer, 0, 16);\n"
+        "    std::strcpy(buffer, \"hello\");\n"
+        "    if (std::strlen(buffer) != 5) return 1;\n"
+        "    if (std::strcmp(buffer, \"hello\") != 0) return 2;\n"
+        "    if (std::strncmp(buffer, \"help\", 3) != 0) return 3;\n"
+        "    if (std::strchr(buffer, 'l') == 0) return 4;\n"
+        "    if (std::strstr(buffer, \"ell\") == 0) return 5;\n"
+        "    std::strcat(buffer, \"!\");\n"
+        "    if (std::strcmp(buffer, \"hello!\") != 0) return 6;\n"
+        "    char copy[16];\n"
+        "    std::memcpy(copy, buffer, 7);\n"
+        "    if (std::memcmp(copy, buffer, 7) != 0) return 7;\n"
+        "    char partial[16];\n"
+        "    std::strncpy(partial, \"abcdef\", 3);\n"
+        "    partial[3] = 0;\n"
+        "    return std::strcmp(partial, \"abc\") == 0 ? 0 : 8;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("<cstdlib> converts C strings") {
     const ProgramResult program = compile_and_run(
         "#include <cstdlib>\n"

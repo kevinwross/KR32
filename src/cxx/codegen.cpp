@@ -1538,8 +1538,9 @@ private:
         }
         static const std::set<std::string> runtime_functions = {
             "exit", "malloc", "free", "memcpy", "memset", "strlen", "putchar"};
-        if (owner == nullptr && runtime_functions.find(base_name) !=
-                                    runtime_functions.end()) {
+        if (owner == nullptr &&
+            function->qualified.find("::") == std::string::npos &&
+            runtime_functions.find(base_name) != runtime_functions.end()) {
             function->extern_c = true;
             function->symbol = base_name;
         }
