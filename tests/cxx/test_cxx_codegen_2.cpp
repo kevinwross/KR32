@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm reverse orders arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    std::reverse(values, values + 4);\n"
+        "    if (values[0] != 4 || values[3] != 1) return 1;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    std::reverse(reals, reals + 3);\n"
+        "    if (reals[0] != 3.5 || reals[2] != 1.5) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    std::reverse(text, text + 3);\n"
+        "    return text[0] == 'c' && text[2] == 'a' ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm sort orders arrays") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
