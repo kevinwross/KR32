@@ -281,6 +281,27 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm detects sorted ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int sorted[4] = { 1, 2, 3, 4 };\n"
+        "    int unsorted[4] = { 1, 3, 2, 4 };\n"
+        "    if (!std::is_sorted(sorted, sorted + 4)) return 1;\n"
+        "    if (std::is_sorted(unsorted, unsorted + 4)) return 2;\n"
+        "    char text[5] = \"abcd\";\n"
+        "    if (!std::is_sorted(text, text + 4)) return 3;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    if (!std::is_sorted(reals, reals + 3)) return 4;\n"
+        "    int equal[3] = { 2, 2, 2 };\n"
+        "    if (!std::is_sorted(equal, equal + 3)) return 5;\n"
+        "    return std::is_sorted(text, text) ? 0 : 6;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm equal compares two bounded ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
