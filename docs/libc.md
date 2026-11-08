@@ -225,7 +225,8 @@ operators such as `operator bool` and `operator int`, and converting constructor
 casts, copy initialization, scalar arguments, returns, scalar
 equality/relational comparisons, and integer arithmetic, including reversed
 operands. Free binary operators are
-supported; member `operator()` supports multiple arguments. Full standard
+supported; member `operator()` supports multiple arguments, and functions and
+members may declare default arguments. Full standard
 iostreams, locales, and facets are not fully implemented; `std::string` is a
 compact subset with `operator=` (C string or `std::string`), `operator+=` (C
 string, character, or `std::string`), `operator+` (string/string, string/C

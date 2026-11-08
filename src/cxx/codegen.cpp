@@ -586,6 +586,7 @@ private:
         std::string qualified;
         std::string symbol;
         std::vector<TypePtr> parameters;
+        std::vector<const Expr*> default_arguments;
         TypePtr result;
         bool extern_c = false;
         bool variadic = false;
@@ -1505,6 +1506,8 @@ private:
         for (const Param& parameter : declaration.parameters) {
             function->parameters.push_back(decay(resolve_type(
                 qualify_self_type(parameter.type, owner))));
+            function->default_arguments.push_back(
+                parameter.default_value.get());
         }
         if (owner && (constructor || destructor)) {
             function->symbol = mangle_member(owner->qualified, base_name,
@@ -3164,16 +3167,26 @@ private:
         int best_cost = 1000000;
         bool ambiguous = false;
         for (Function* candidate : candidates) {
+            std::size_t required = candidate->parameters.size();
+            while (required > 0 &&
+                   required <= candidate->default_arguments.size() &&
+                   candidate->default_arguments[required - 1] != nullptr) {
+                --required;
+            }
+            if (argument_types.size() < required) {
+                continue;
+            }
             if (candidate->variadic) {
                 if (argument_types.size() < candidate->parameters.size()) {
                     continue;
                 }
-            } else if (candidate->parameters.size() != argument_types.size()) {
+            } else if (argument_types.size() > candidate->parameters.size()) {
                 continue;
             }
             int cost = 0;
             bool viable = true;
-            const std::size_t named = candidate->parameters.size();
+            const std::size_t named =
+                std::min(argument_types.size(), candidate->parameters.size());
             for (std::size_t index = 0; index < named; ++index) {
                 const int argument_cost =
                     conversion_cost(argument_types[index], candidate->parameters[index],
@@ -6380,26 +6393,46 @@ private:
             (member_call ? 1 : 0) + (lambda_closure_offset >= 0 ? 1 : 0);
         int fp_argument = 0;
         const std::size_t named_parameters = function->parameters.size();
-        for (std::size_t index = 0; index < expression.arguments.size(); ++index) {
+        std::vector<const Expr*> effective_arguments;
+        effective_arguments.reserve(named_parameters);
+        for (const ExprPtr& argument : expression.arguments) {
+            effective_arguments.push_back(argument.get());
+        }
+        for (std::size_t index = expression.arguments.size();
+             index < named_parameters; ++index) {
+            const Expr* default_argument =
+                index < function->default_arguments.size()
+                    ? function->default_arguments[index]
+                    : nullptr;
+            if (default_argument == nullptr) {
+                break;
+            }
+            effective_arguments.push_back(default_argument);
+        }
+        if (!function->variadic &&
+            effective_arguments.size() > named_parameters) {
+            effective_arguments.resize(named_parameters);
+        }
+        for (std::size_t index = 0; index < effective_arguments.size(); ++index) {
             if (index >= named_parameters) {
                 if (!function->variadic) {
                     diagnose_once(expression, "too many arguments for " +
                                                   function->qualified);
                     break;
                 }
-                const TypePtr argument_type = type_of(*expression.arguments[index]);
+                const TypePtr argument_type = type_of(*effective_arguments[index]);
                 const int temp = allocate_local(Type::make_builtin(BuiltinKind::Double));
                 if (is_fp(argument_type)) {
-                    gen_as_fp(*expression.arguments[index],
+                    gen_as_fp(*effective_arguments[index],
                               Type::make_builtin(BuiltinKind::Double));
                     emit("    FSTORE.D F0, [R7 + " + std::to_string(temp) + "]");
                 } else if (is_long_long(argument_type)) {
-                    gen_expr(*expression.arguments[index]);
+                    gen_expr(*effective_arguments[index]);
                     emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
                     emit("    STORE R1, [R7 + " +
                          std::to_string(temp + 4) + "]");
                 } else {
-                    gen_expr(*expression.arguments[index]);
+                    gen_expr(*effective_arguments[index]);
                     emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
                     emit("    MOV R0, #0");
                     emit("    STORE R0, [R7 + " + std::to_string(temp + 4) + "]");
@@ -6412,18 +6445,18 @@ private:
             slot.type = parameter;
             if (parameter && (parameter->kind == TypeKind::LValueRef ||
                               parameter->kind == TypeKind::RValueRef)) {
-                gen_address(*expression.arguments[index]);
+                gen_address(*effective_arguments[index]);
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (ClassInfo* parameter_class = class_of(parameter)) {
-                if (expression.arguments[index]->kind !=
+                if (effective_arguments[index]->kind !=
                         ExprKind::InitializerList &&
-                    class_of(type_of(*expression.arguments[index])) == nullptr) {
+                    class_of(type_of(*effective_arguments[index])) == nullptr) {
                     const int object = allocate_local(parameter);
                     construct_object_from_expression(
                         parameter_class, object,
-                        *expression.arguments[index]);
+                        *effective_arguments[index]);
                     slot.offset =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
@@ -6434,7 +6467,7 @@ private:
                     continue;
                 }
                 if (aggregate_abi(parameter_class) == AggregateAbi::Floating) {
-                    gen_expr(*expression.arguments[index]);
+                    gen_expr(*effective_arguments[index]);
                     const int argument_object = allocate_local_bytes(16);
                     emit("    MOV R1, R0");
                     emit("    MOV R2, #" + std::to_string(parameter_class->size));
@@ -6449,7 +6482,7 @@ private:
                     continue;
                 }
                 if (is_register_class(parameter_class)) {
-                    gen_expr(*expression.arguments[index]);
+                    gen_expr(*effective_arguments[index]);
                     const int address_temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
@@ -6472,10 +6505,10 @@ private:
                     continue;
                 }
                 if (is_initializer_list_class(parameter_class) &&
-                    expression.arguments[index]->kind ==
+                    effective_arguments[index]->kind ==
                         ExprKind::InitializerList) {
                     const int object = prepare_initializer_list_argument(
-                        parameter_class, parameter, *expression.arguments[index]);
+                        parameter_class, parameter, *effective_arguments[index]);
                     slot.offset =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     if (object >= 0) {
@@ -6488,7 +6521,7 @@ private:
                     slots.push_back(std::move(slot));
                     continue;
                 }
-                gen_expr(*expression.arguments[index]);
+                gen_expr(*effective_arguments[index]);
                 const int argument_object = allocate_local(parameter);
                 emit("    MOV R1, R0");
                 emit("    MOV R2, #" + std::to_string(parameter_class->size));
@@ -6499,9 +6532,9 @@ private:
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
             } else if (is_fp(parameter)) {
-                if (!gen_scalar_conversion(*expression.arguments[index],
+                if (!gen_scalar_conversion(*effective_arguments[index],
                                            parameter)) {
-                    gen_as_fp(*expression.arguments[index], parameter);
+                    gen_as_fp(*effective_arguments[index], parameter);
                 }
                 slot.fp = true;
                 slot.offset = allocate_local(parameter);
@@ -6510,12 +6543,12 @@ private:
                      std::to_string(slot.offset) + "]");
                 ++fp_argument;
             } else if (is_long_long(parameter)) {
-                if (!gen_scalar_conversion(*expression.arguments[index],
+                if (!gen_scalar_conversion(*effective_arguments[index],
                                            parameter)) {
-                    gen_expr(*expression.arguments[index]);
+                    gen_expr(*effective_arguments[index]);
                 }
                 const TypePtr argument_type =
-                    type_of(*expression.arguments[index]);
+                    type_of(*effective_arguments[index]);
                 if (!is_long_long(argument_type)) {
                     emit("    MOV R1, R0");
                     emit(std::string("    ") +
@@ -6529,9 +6562,9 @@ private:
                      std::to_string(slot.offset + 4) + "]");
                 integer_argument += 2;
             } else {
-                if (!gen_scalar_conversion(*expression.arguments[index],
+                if (!gen_scalar_conversion(*effective_arguments[index],
                                            parameter)) {
-                    gen_expr(*expression.arguments[index]);
+                    gen_expr(*effective_arguments[index]);
                 }
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");

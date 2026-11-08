@@ -601,6 +601,30 @@ TEST_CASE("conversion operators work in conditions and casts") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("default arguments fill missing call parameters") {
+    const ProgramResult program = compile_and_run(
+        "int sum(int a, int b = 2, int c = 3) { return a + b + c; }\n"
+        "int value(int a = 4) { return a; }\n"
+        "class Box {\n"
+        "public:\n"
+        "    int total;\n"
+        "    Box() : total(0) {}\n"
+        "    int add(int amount = 3) { total = total + amount; return total; }\n"
+        "};\n"
+        "int main() {\n"
+        "    if (sum(1) != 6) return 1;\n"
+        "    if (sum(1, 5) != 9) return 2;\n"
+        "    if (sum(1, 5, 6) != 12) return 3;\n"
+        "    if (value() != 4) return 4;\n"
+        "    Box box;\n"
+        "    if (box.add() != 3) return 5;\n"
+        "    if (box.add(4) != 7) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("operator arrow forwards member access") {
     const ProgramResult program = compile_and_run(
         "struct Point { int x; int y; };\n"
