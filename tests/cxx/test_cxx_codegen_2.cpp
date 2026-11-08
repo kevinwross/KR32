@@ -281,6 +281,24 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("pointer differences count elements") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int values[5] = { 1, 2, 3, 4, 5 };\n"
+        "    int* end = values + 3;\n"
+        "    if (end - values != 3) return 1;\n"
+        "    char text[6] = \"abcde\";\n"
+        "    char* pointer = text + 4;\n"
+        "    if (pointer - text != 4) return 2;\n"
+        "    double reals[3] = { 0.0, 0.0, 0.0 };\n"
+        "    double* last = reals + 2;\n"
+        "    return last - reals == 2 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm remove compacts ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

@@ -2291,6 +2291,10 @@ private:
                 expression.text == "&&" || expression.text == "||") {
                 return Type::make_builtin(BuiltinKind::Bool);
             }
+            if (expression.text == "-" && is_pointer(left) &&
+                is_pointer(right)) {
+                return Type::make_builtin(BuiltinKind::Int);
+            }
             if ((expression.text == "+" || expression.text == "-") &&
                 is_pointer(left)) {
                 return decay(left);
@@ -6138,6 +6142,16 @@ private:
         emit("    MOV R1, R0");
         emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
 
+        if (op == "-" && is_pointer(left_type) && is_pointer(right_type)) {
+            const int element_size =
+                left_type->element ? type_size(left_type->element) : 1;
+            emit("    SUB R0, R0, R1");
+            if (element_size != 1) {
+                emit("    MOV R1, #" + std::to_string(element_size));
+                emit("    DIVS R0, R0, R1");
+            }
+            return Type::make_builtin(BuiltinKind::Int);
+        }
         if ((op == "+" || op == "-") && is_pointer(left_type)) {
             const int element_size =
                 left_type->element ? type_size(left_type->element) : 1;
