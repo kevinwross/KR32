@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 20:32 -08:00
+> **Last updated:** 2026-11-08 20:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2510,6 +2510,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 20:32 -08:00** — Added ordinary-expression constant folding
       in both C and C++ plus C++ pruning of `if (0)`, `while (0)`, and
       `for (; 0;)`. Both unoptimized and optimized suites pass.
+- **2026-11-08 20:44 -08:00** — Added immediate arithmetic/comparison
+      codegen in both C and C++, C `if (0)`/`while (0)` pruning, and
+      unreachable statement removal after jumps and returns.
 
 ## 10. Updating this file
 

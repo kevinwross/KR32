@@ -1352,6 +1352,9 @@ private:
     }
 
     void emit(std::string line) {
+        if (suppress_emit_ > 0) {
+            return;
+        }
         line += '\n';
         if (output_ != nullptr) {
             *output_ += line;
@@ -2665,8 +2668,27 @@ private:
     }
 
     void parse_block_contents() {
+        bool terminated = false;
         while (!at_end() && peek().text != "}") {
+            if (terminated) {
+                const bool is_label =
+                    (peek().kind == TokenKind::Identifier && peek(1).text == ":") ||
+                    peek().text == "case" || peek().text == "default";
+                if (!is_label) {
+                    ++suppress_emit_;
+                    parse_statement();
+                    --suppress_emit_;
+                    continue;
+                }
+                terminated = false;
+            }
+            const bool terminates =
+                peek().text == "return" || peek().text == "break" ||
+                peek().text == "continue" || peek().text == "goto";
             parse_statement();
+            if (terminates) {
+                terminated = true;
+            }
         }
         expect("}");
     }
@@ -2756,8 +2778,31 @@ private:
         }
         if (match("if")) {
             expect("(");
-            gen_condition();
+            std::int64_t folded_condition = 0;
+            const bool known_condition =
+                try_fold_constant(folded_condition);
+            if (!known_condition) {
+                gen_condition();
+            }
             expect(")");
+            if (known_condition) {
+                if (folded_condition != 0) {
+                    parse_statement();
+                    if (match("else")) {
+                        ++suppress_emit_;
+                        parse_statement();
+                        --suppress_emit_;
+                    }
+                } else {
+                    ++suppress_emit_;
+                    parse_statement();
+                    --suppress_emit_;
+                    if (match("else")) {
+                        parse_statement();
+                    }
+                }
+                return;
+            }
             const std::string else_label = new_label("else");
             const std::string end_label = new_label("endif");
             emit("    CMP R0, #0");
@@ -2799,7 +2844,21 @@ private:
             const std::string end = new_label("endwhile");
             emit(start + ":");
             expect("(");
-            gen_condition();
+            std::int64_t folded_condition = 0;
+            const bool known_condition =
+                try_fold_constant(folded_condition);
+            if (known_condition && folded_condition == 0) {
+                expect(")");
+                ++suppress_emit_;
+                parse_statement();
+                --suppress_emit_;
+                return;
+            }
+            if (known_condition) {
+                emit("    MOV R0, #1");
+            } else {
+                gen_condition();
+            }
             expect(")");
             emit("    CMP R0, #0");
             emit("    JZ " + end);
@@ -4070,10 +4129,69 @@ private:
             for (const std::string& op : ops) {
                 if (peek().text == op) {
                     take();
-                    push_value(left);
-                    TypePtr right = (this->*next)();
                     const bool comparison = op == "==" || op == "!=" || op == "<" ||
                                             op == "<=" || op == ">" || op == ">=";
+                    const bool immediate_operator =
+                        op == "+" || op == "-" || op == "*" || op == "&" ||
+                        op == "|" || op == "^" || op == "<<" || op == ">>";
+                    const bool scalar_left =
+                        left->kind == Type::Kind::Int ||
+                        left->kind == Type::Kind::Char ||
+                        left->kind == Type::Kind::Short ||
+                        left->kind == Type::Kind::Bool;
+                    if (immediate_operator && scalar_left &&
+                        !is_long_long_type(left) && !left->is_pointer() &&
+                        (peek().kind == TokenKind::Number ||
+                         peek().kind == TokenKind::Character)) {
+                        const std::int64_t value = take().value;
+                        std::string mnemonic;
+                        if (op == "+") mnemonic = "ADD";
+                        else if (op == "-") mnemonic = "SUB";
+                        else if (op == "*") mnemonic = "MUL";
+                        else if (op == "&") mnemonic = "AND";
+                        else if (op == "|") mnemonic = "OR";
+                        else if (op == "^") mnemonic = "XOR";
+                        else if (op == "<<") mnemonic = "SHL";
+                        else mnemonic = is_unsigned_scalar(left) ? "SHR" : "SAR";
+                        emit("    " + mnemonic + " R0, R0, #" +
+                             std::to_string(value));
+                        left = is_unsigned_scalar(left) ? type_uint()
+                                                        : type_int();
+                        matched = true;
+                        continue;
+                    }
+                    if (comparison && scalar_left && !is_long_long_type(left) &&
+                        (peek().kind == TokenKind::Number ||
+                         peek().kind == TokenKind::Character)) {
+                        const std::int64_t value = take().value;
+                        const std::string true_label = new_label("true");
+                        const std::string end_label = new_label("cmpend");
+                        emit("    CMP R0, #" + std::to_string(value));
+                        const bool unsigned_compare = is_unsigned_scalar(left);
+                        if (op == "==") emit("    JZ " + true_label);
+                        if (op == "!=") emit("    JNZ " + true_label);
+                        if (unsigned_compare) {
+                            if (op == "<") emit("    JNC " + true_label);
+                            if (op == "<=") emit("    JLS " + true_label);
+                            if (op == ">") emit("    JHI " + true_label);
+                            if (op == ">=") emit("    JCS " + true_label);
+                        } else {
+                            if (op == "<") emit("    JLT " + true_label);
+                            if (op == "<=") emit("    JLE " + true_label);
+                            if (op == ">") emit("    JGT " + true_label);
+                            if (op == ">=") emit("    JGE " + true_label);
+                        }
+                        emit("    MOV R0, #0");
+                        emit("    JMP " + end_label);
+                        emit(true_label + ":");
+                        emit("    MOV R0, #1");
+                        emit(end_label + ":");
+                        left = type_int();
+                        matched = true;
+                        continue;
+                    }
+                    push_value(left);
+                    TypePtr right = (this->*next)();
                     gen_binary(op, left, right);
                     left = comparison
                                ? type_int()
@@ -5301,10 +5419,69 @@ private:
             for (const std::string& op : ops) {
                 if (peek().text == op) {
                     take();
-                    push_value(left);
-                    TypePtr right = (this->*next)();
                     const bool comparison = op == "==" || op == "!=" || op == "<" ||
                                             op == "<=" || op == ">" || op == ">=";
+                    const bool immediate_operator =
+                        op == "+" || op == "-" || op == "*" || op == "&" ||
+                        op == "|" || op == "^" || op == "<<" || op == ">>";
+                    const bool scalar_left =
+                        left->kind == Type::Kind::Int ||
+                        left->kind == Type::Kind::Char ||
+                        left->kind == Type::Kind::Short ||
+                        left->kind == Type::Kind::Bool;
+                    if (immediate_operator && scalar_left &&
+                        !is_long_long_type(left) && !left->is_pointer() &&
+                        (peek().kind == TokenKind::Number ||
+                         peek().kind == TokenKind::Character)) {
+                        const std::int64_t value = take().value;
+                        std::string mnemonic;
+                        if (op == "+") mnemonic = "ADD";
+                        else if (op == "-") mnemonic = "SUB";
+                        else if (op == "*") mnemonic = "MUL";
+                        else if (op == "&") mnemonic = "AND";
+                        else if (op == "|") mnemonic = "OR";
+                        else if (op == "^") mnemonic = "XOR";
+                        else if (op == "<<") mnemonic = "SHL";
+                        else mnemonic = is_unsigned_scalar(left) ? "SHR" : "SAR";
+                        emit("    " + mnemonic + " R0, R0, #" +
+                             std::to_string(value));
+                        left = is_unsigned_scalar(left) ? type_uint()
+                                                        : type_int();
+                        matched = true;
+                        continue;
+                    }
+                    if (comparison && scalar_left && !is_long_long_type(left) &&
+                        (peek().kind == TokenKind::Number ||
+                         peek().kind == TokenKind::Character)) {
+                        const std::int64_t value = take().value;
+                        const std::string true_label = new_label("true");
+                        const std::string end_label = new_label("cmpend");
+                        emit("    CMP R0, #" + std::to_string(value));
+                        const bool unsigned_compare = is_unsigned_scalar(left);
+                        if (op == "==") emit("    JZ " + true_label);
+                        if (op == "!=") emit("    JNZ " + true_label);
+                        if (unsigned_compare) {
+                            if (op == "<") emit("    JNC " + true_label);
+                            if (op == "<=") emit("    JLS " + true_label);
+                            if (op == ">") emit("    JHI " + true_label);
+                            if (op == ">=") emit("    JCS " + true_label);
+                        } else {
+                            if (op == "<") emit("    JLT " + true_label);
+                            if (op == "<=") emit("    JLE " + true_label);
+                            if (op == ">") emit("    JGT " + true_label);
+                            if (op == ">=") emit("    JGE " + true_label);
+                        }
+                        emit("    MOV R0, #0");
+                        emit("    JMP " + end_label);
+                        emit(true_label + ":");
+                        emit("    MOV R0, #1");
+                        emit(end_label + ":");
+                        left = type_int();
+                        matched = true;
+                        continue;
+                    }
+                    push_value(left);
+                    TypePtr right = (this->*next)();
                     gen_binary(op, left, right);
                     left = comparison
                                ? type_int()
@@ -5397,6 +5574,7 @@ private:
     std::string debug_;
     std::set<std::string> debug_types_;
     std::string* output_ = nullptr;
+    int suppress_emit_ = 0;
     int frame_size_ = 0;
     int line_counter_ = 0;
     int label_counter_ = 0;

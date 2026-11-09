@@ -6376,6 +6376,41 @@ private:
 
         const TypePtr left_type = type_of(*expression.children[0]);
         const TypePtr right_type = type_of(*expression.children[1]);
+        if (expression.children[1]->kind == ExprKind::IntegerLiteral &&
+            left_type && right_type && is_integer(left_type) &&
+            is_integer(right_type) && !is_long_long(left_type) &&
+            !is_long_long(right_type) && !is_pointer(left_type)) {
+            const std::int64_t immediate = expression.children[1]->integer;
+            const bool supported =
+                op == "+" || op == "-" || op == "*" || op == "&" ||
+                op == "|" || op == "^" || op == "<<" || op == ">>" ||
+                (op == "/" && immediate != 0) ||
+                (op == "%" && immediate != 0);
+            if (supported) {
+                gen_expr(*expression.children[0]);
+                std::string mnemonic;
+                if (op == "+") mnemonic = "ADD";
+                else if (op == "-") mnemonic = "SUB";
+                else if (op == "*") mnemonic = "MUL";
+                else if (op == "/") {
+                    mnemonic = is_unsigned_operation(left_type, right_type)
+                                   ? "DIV" : "DIVS";
+                } else if (op == "%") {
+                    mnemonic = is_unsigned_operation(left_type, right_type)
+                                   ? "MOD" : "MODS";
+                } else if (op == "&") mnemonic = "AND";
+                else if (op == "|") mnemonic = "OR";
+                else if (op == "^") mnemonic = "XOR";
+                else if (op == "<<") mnemonic = "SHL";
+                else {
+                    mnemonic = is_unsigned_operation(left_type, right_type)
+                                   ? "SHR" : "SAR";
+                }
+                emit("    " + mnemonic + " R0, R0, #" +
+                     std::to_string(immediate));
+                return type_of(expression);
+            }
+        }
         if (is_fp(left_type) || is_fp(right_type)) {
             return gen_fp_binary(expression, left_type, right_type);
         }
@@ -7468,9 +7503,26 @@ private:
             return;
         case StmtKind::Compound: {
             push_scope();
+            bool terminated = false;
             for (const StmtPtr& child : statement.statements) {
-                if (child) {
-                    gen_statement(*child);
+                if (!child) {
+                    continue;
+                }
+                if (terminated) {
+                    if (child->kind == StmtKind::Label ||
+                        child->kind == StmtKind::Case ||
+                        child->kind == StmtKind::Default) {
+                        terminated = false;
+                    } else {
+                        continue;
+                    }
+                }
+                gen_statement(*child);
+                if (child->kind == StmtKind::Return ||
+                    child->kind == StmtKind::Break ||
+                    child->kind == StmtKind::Continue ||
+                    child->kind == StmtKind::Goto) {
+                    terminated = true;
                 }
             }
             pop_scope();

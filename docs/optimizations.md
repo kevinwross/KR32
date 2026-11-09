@@ -10,7 +10,7 @@ target-level cleanup.
 0. **Front-end constant folding and dead branches**
    - Integer constant expressions are folded before emission in both C and C++.
    - `1 + 2 * 3` becomes a single `MOV R0, #7`.
-   - C++ `if (0)`, `while (0)`, and `for (; 0;)` bodies are not emitted.
+   - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
 
@@ -41,7 +41,11 @@ target-level cleanup.
    - Removes a move whose destination is overwritten before any read.
    - Removes moves whose destination is never read in the function.
 
-4. **Redundant jumps**
+4. **Unreachable statements**
+   - Skips statements after `return`, `break`, `continue`, or `goto` until
+     the next label.
+
+5. **Redundant jumps**
    - Removes an unconditional jump whose target is the next label.
 
 ## Safety model
@@ -67,8 +71,6 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 
 ## Planned next steps
 
-1. Constant-condition pruning in the C statement generator.
-2. Unreachable statement removal after `return`, `break`, and `continue`.
-3. More aggressive spill elimination with local value numbering.
-4. Register allocation across straight-line regions.
-5. Inlining and loop optimizations only after the above are stable.
+1. More aggressive spill elimination with local value numbering.
+2. Register allocation across straight-line regions.
+3. Inlining and loop optimizations only after the above are stable.
