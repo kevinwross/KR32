@@ -449,10 +449,7 @@ bool register_dead_after(const std::vector<std::string>& lines,
             return false;
         }
         if (is_call(instruction.mnemonic)) {
-            if (reg < 4) {
-                return false;
-            }
-            return true;
+            return false;
         }
         const std::size_t first =
             writes_first_operand(instruction) ? 1 : 0;
@@ -825,6 +822,18 @@ int remove_redundant_jumps(std::vector<std::string>& lines) {
     return removed;
 }
 
+int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::string& line : lines) {
+        const std::string value = trim(line);
+        if (value == "ADJSP #-0" || value == "ADJSP #0") {
+            line.clear();
+            ++removed;
+        }
+    }
+    return removed;
+}
+
 int remove_noop_moves(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -882,6 +891,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
+    stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += fold_frame_address_arithmetic(lines);
     stats.removed += fold_frame_addresses(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);

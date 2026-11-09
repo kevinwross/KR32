@@ -22,6 +22,21 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("MOV R2, R0") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer removes zero frame adjustments") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    ADJSP #-0\n"
+        "    RET\n"
+        "    ADJSP #0\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("ADJSP #-0") == std::string::npos);
+    CHECK(assembly.find("ADJSP #0") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer folds frame address arithmetic") {
     std::string assembly =
         ".text\n"
