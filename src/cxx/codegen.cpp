@@ -3386,10 +3386,8 @@ private:
                             argument->integer == 0);
             (void)value;
         }
-        if (candidates.empty()) {
-            if (Function* instantiated = try_template_call(call, argument_types)) {
-                candidates.push_back(instantiated);
-            }
+        if (Function* instantiated = try_template_call(call, argument_types)) {
+            candidates.push_back(instantiated);
         }
         if (candidates.empty()) {
             diagnose_once(call, "unknown function");
@@ -3453,7 +3451,16 @@ private:
                 best_cost = cost;
                 ambiguous = false;
             } else if (cost == best_cost) {
-                ambiguous = true;
+                if (best != nullptr && best->from_template &&
+                    !candidate->from_template) {
+                    best = candidate;
+                    ambiguous = false;
+                } else if (best != nullptr && !best->from_template &&
+                           candidate->from_template) {
+                    ambiguous = false;
+                } else {
+                    ambiguous = true;
+                }
             }
         }
         if (!best) {

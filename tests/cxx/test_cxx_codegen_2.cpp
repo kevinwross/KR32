@@ -1088,6 +1088,37 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("function templates overload non-template names") {
+    const ProgramResult program = compile_and_run(
+        "namespace std {\n"
+        "inline void arrange(int* first, int* last) { }\n"
+        "template<typename Compare>\n"
+        "inline void arrange(int* first, int* last, Compare compare) {\n"
+        "    int* current = first;\n"
+        "    if (current != last) current = current + 1;\n"
+        "    while (current < last) {\n"
+        "        int value = *current;\n"
+        "        int* hole = current;\n"
+        "        while (hole > first && compare(value, *(hole - 1))) {\n"
+        "            *hole = *(hole - 1);\n"
+        "            hole = hole - 1;\n"
+        "        }\n"
+        "        *hole = value;\n"
+        "        current = current + 1;\n"
+        "    }\n"
+        "}\n"
+        "}\n"
+        "int main() {\n"
+        "    int values[4] = { 3, 1, 4, 2 };\n"
+        "    std::arrange(values, values + 4,\n"
+        "                 [](int left, int right) { return right < left; });\n"
+        "    return values[0] == 4 && values[3] == 1 ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("function templates substitute pointer element types") {
     const ProgramResult program = compile_and_run(
         "template<typename T> void sort_values(T* first, T* last) {\n"
