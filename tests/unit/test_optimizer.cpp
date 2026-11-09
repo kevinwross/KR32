@@ -23,6 +23,60 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("CMP R0, R1") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds push pop pairs") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    PUSH R0\n"
+        "    MOV R0, #0\n"
+        "    POP R1\n"
+        "    STORE R0, [R1]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("PUSH R0") == std::string::npos);
+    CHECK(assembly.find("POP R1") == std::string::npos);
+    CHECK(assembly.find("MOV R1, R0") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer forwards frame loads across loops") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R0, #0\n"
+        "    STORE R0, [R7 + 0]\n"
+        ".Lloop:\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    CMP R0, #4\n"
+        "    JCS .Ldone\n"
+        "    ADD R0, R0, #1\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    JMP .Lloop\n"
+        ".Ldone:\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LOAD R0, [R7 + 0]") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer forwards frame slot zero") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    STORE R0, [R7]\n"
+        "    LOAD R0, [R7]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LOAD R0, [R7]") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer removes jumps across labels") {
     std::string assembly =
         ".text\n"

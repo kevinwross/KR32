@@ -110,6 +110,10 @@ bool parse_frame_slot(std::string_view text, int& slot) {
                                     return std::isspace(character) != 0;
                                 }),
                  inside.end());
+    if (inside == "R7") {
+        slot = 0;
+        return true;
+    }
     if (inside.rfind("R7+", 0) != 0) {
         return false;
     }
@@ -2571,6 +2575,287 @@ int remove_dead_functions(std::vector<std::string>& lines) {
     return removed_lines;
 }
 
+using FrameAvailability = std::map<int, int>;
+
+void invalidate_register(FrameAvailability& available, int reg) {
+    for (auto entry = available.begin(); entry != available.end();) {
+        if (entry->second == reg) {
+            entry = available.erase(entry);
+        } else {
+            ++entry;
+        }
+    }
+}
+
+void transfer_frame_availability(FrameAvailability& available,
+                                 const Instruction& instruction) {
+    if (is_call(instruction.mnemonic)) {
+        available.clear();
+        return;
+    }
+    if (instruction.mnemonic == "STORE" &&
+        instruction.operands.size() == 2) {
+        int source = 0;
+        int slot = 0;
+        if (parse_register(instruction.operands[0], source) &&
+            parse_frame_slot(instruction.operands[1], slot)) {
+            available[slot] = source;
+        } else {
+            available.clear();
+        }
+        return;
+    }
+    if (instruction.mnemonic == "STORE8" ||
+        instruction.mnemonic == "STORE16" ||
+        instruction.mnemonic == "FSTORE.W" ||
+        instruction.mnemonic == "FSTORE.D" ||
+        instruction.mnemonic == "SC") {
+        available.clear();
+        return;
+    }
+    if (instruction.mnemonic == "LOAD" &&
+        instruction.operands.size() == 2) {
+        int destination = 0;
+        int slot = 0;
+        if (parse_register(instruction.operands[0], destination) &&
+            parse_frame_slot(instruction.operands[1], slot) &&
+            available.find(slot) != available.end() &&
+            available[slot] == destination) {
+            return;
+        }
+    }
+    if (writes_first_operand(instruction) &&
+        !instruction.operands.empty()) {
+        int destination = 0;
+        if (parse_register(instruction.operands[0], destination)) {
+            invalidate_register(available, destination);
+        }
+    }
+}
+
+FrameAvailability intersect_availability(
+    const std::vector<FrameAvailability>& inputs) {
+    if (inputs.empty()) {
+        return {};
+    }
+    FrameAvailability result = inputs.front();
+    for (std::size_t index = 1; index < inputs.size(); ++index) {
+        for (auto entry = result.begin(); entry != result.end();) {
+            const auto found = inputs[index].find(entry->first);
+            if (found == inputs[index].end() ||
+                found->second != entry->second) {
+                entry = result.erase(entry);
+            } else {
+                ++entry;
+            }
+        }
+    }
+    return result;
+}
+
+int forward_cfg_frame_loads(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        bool has_exception_path = false;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            if (lines[index].find(".Lcs_") != std::string::npos) {
+                has_exception_path = true;
+                break;
+            }
+        }
+        if (has_exception_path || function.blocks.empty()) {
+            continue;
+        }
+        const std::size_t block_count = function.blocks.size();
+        std::vector<std::vector<std::size_t>> predecessors(block_count);
+        for (std::size_t block = 0; block < block_count; ++block) {
+            for (const std::size_t successor :
+                 function.blocks[block].successors) {
+                if (successor < block_count) {
+                    predecessors[successor].push_back(block);
+                }
+            }
+        }
+        std::vector<FrameAvailability> live_in(block_count);
+        std::vector<FrameAvailability> live_out(block_count);
+        bool changed = true;
+        int rounds = 0;
+        while (changed && rounds++ < 256) {
+            changed = false;
+            for (std::size_t block = 0; block < block_count; ++block) {
+                std::vector<FrameAvailability> inputs;
+                for (const std::size_t predecessor :
+                     predecessors[block]) {
+                    inputs.push_back(live_out[predecessor]);
+                }
+                FrameAvailability in = intersect_availability(inputs);
+                FrameAvailability out = in;
+                for (std::size_t index = function.blocks[block].begin;
+                     index < function.blocks[block].end; ++index) {
+                    Instruction instruction;
+                    if (parse_instruction(lines[index], instruction)) {
+                        transfer_frame_availability(out, instruction);
+                    }
+                }
+                if (in != live_in[block] || out != live_out[block]) {
+                    live_in[block] = std::move(in);
+                    live_out[block] = std::move(out);
+                    changed = true;
+                }
+            }
+        }
+        for (std::size_t block = 0; block < block_count; ++block) {
+            FrameAvailability available = live_in[block];
+            for (std::size_t index = function.blocks[block].begin;
+                 index < function.blocks[block].end; ++index) {
+                Instruction instruction;
+                if (!parse_instruction(lines[index], instruction)) {
+                    continue;
+                }
+                if (instruction.mnemonic == "LOAD" &&
+                    instruction.operands.size() == 2) {
+                    int destination = 0;
+                    int slot = 0;
+                    if (parse_register(instruction.operands[0],
+                                       destination) &&
+                        destination != 7 && destination != 11 &&
+                        parse_frame_slot(instruction.operands[1], slot) &&
+                        available.find(slot) != available.end() &&
+                        available[slot] == destination) {
+                        lines[index].clear();
+                        ++removed;
+                        continue;
+                    }
+                }
+                transfer_frame_availability(available, instruction);
+            }
+        }
+    }
+    return removed;
+}
+
+int fold_push_pop_pairs(std::vector<std::string>& lines, int& rewritten) {
+    int removed = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        Instruction push;
+        if (!parse_instruction(lines[index], push) ||
+            push.mnemonic != "PUSH" || push.operands.size() != 1) {
+            continue;
+        }
+        int source = 0;
+        if (!parse_register(push.operands[0], source)) {
+            continue;
+        }
+        int depth = 1;
+        bool invalid = false;
+        std::size_t pop_index = index + 1;
+        for (; pop_index < lines.size(); ++pop_index) {
+            const std::string text = trim(lines[pop_index]);
+            if (text.empty()) {
+                continue;
+            }
+            if (is_label(text)) {
+                invalid = true;
+                break;
+            }
+            Instruction instruction;
+            if (!parse_instruction(text, instruction)) {
+                invalid = true;
+                break;
+            }
+            if (instruction.mnemonic == "PUSH") {
+                ++depth;
+                continue;
+            }
+            if (instruction.mnemonic == "POP") {
+                --depth;
+                if (depth == 0) {
+                    break;
+                }
+                continue;
+            }
+            if (is_call(instruction.mnemonic) ||
+                is_branch(instruction.mnemonic) ||
+                instruction.mnemonic == "RET" ||
+                instruction.mnemonic == "HALT" ||
+                instruction.mnemonic == "ADJSP") {
+                invalid = true;
+                break;
+            }
+            for (const std::string& operand : instruction.operands) {
+                if (operand.find("SP") != std::string::npos) {
+                    invalid = true;
+                    break;
+                }
+            }
+            if (invalid) {
+                break;
+            }
+        }
+        if (invalid || pop_index >= lines.size()) {
+            continue;
+        }
+        Instruction pop;
+        if (!parse_instruction(lines[pop_index], pop) ||
+            pop.mnemonic != "POP" || pop.operands.size() != 1) {
+            continue;
+        }
+        int destination = 0;
+        if (!parse_register(pop.operands[0], destination) ||
+            destination == 7) {
+            continue;
+        }
+        bool destination_conflict = false;
+        for (std::size_t scan = index + 1; scan < pop_index; ++scan) {
+            Instruction instruction;
+            if (!parse_instruction(lines[scan], instruction)) {
+                continue;
+            }
+            if (writes_first_operand(instruction) &&
+                !instruction.operands.empty()) {
+                int written = 0;
+                if (parse_register(instruction.operands[0], written) &&
+                    written == destination) {
+                    destination_conflict = true;
+                    break;
+                }
+            }
+            const std::size_t first_read =
+                writes_first_operand(instruction) ? 1 : 0;
+            for (std::size_t operand = first_read;
+                 operand < instruction.operands.size(); ++operand) {
+                int read = 0;
+                if ((parse_register(instruction.operands[operand], read) ||
+                     parse_register_address(instruction.operands[operand],
+                                            read)) &&
+                    read == destination) {
+                    destination_conflict = true;
+                    break;
+                }
+            }
+            if (destination_conflict) {
+                break;
+            }
+        }
+        if (destination_conflict) {
+            continue;
+        }
+        if (destination == source) {
+            lines[index].clear();
+            lines[pop_index].clear();
+            removed += 2;
+        } else {
+            lines[index] = "    MOV R" + std::to_string(destination) +
+                           ", R" + std::to_string(source);
+            lines[pop_index].clear();
+            ++removed;
+            ++rewritten;
+        }
+    }
+    return removed;
+}
+
 int strength_reduce_immediates(std::vector<std::string>& lines,
                                int& rewritten) {
     int changed = 0;
@@ -2758,8 +3043,10 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_comparison_values(lines);
     stats.removed += fold_compare_materialization_branches(lines);
     stats.removed += fold_boolean_branches(lines);
+    stats.removed += forward_cfg_frame_loads(lines);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
+    stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += strength_reduce_immediates(lines, stats.rewritten);
     stats.removed += coalesce_moves(lines);
     stats.removed += remove_dead_moves(lines);

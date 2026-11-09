@@ -210,6 +210,19 @@ target-level cleanup.
      labels, landing pads, and LSDA entries.
    - Virtual calls remain wrapped because the dynamic target is unknown.
 
+28. **CFG frame-load availability**
+   - Tracks which frame slot currently lives in which register across
+     basic-block boundaries.
+   - A block-entry `LOAD` is removed only when every predecessor agrees on
+     the same slot/register mapping.
+   - Calls, partial stores, unknown stores, and register writes invalidate
+     the mapping.
+
+29. **PUSH/POP pair folding**
+   - Replaces a matched `PUSH Rs`/`POP Rd` pair with `MOV Rd, Rs` when the
+     intervening code does not touch `Rd` or the stack pointer.
+   - Removes the pair entirely when `Rd == Rs`.
+
 ## Safety model
 
 The pass is deliberately conservative:
