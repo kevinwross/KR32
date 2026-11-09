@@ -2730,6 +2730,26 @@ private:
         return comparisons == 1;
     }
 
+    std::string true_comparison(const std::string& op,
+                                bool unsigned_compare) const {
+        if (unsigned_compare) {
+            if (op == "==") return "JZ";
+            if (op == "!=") return "JNZ";
+            if (op == "<") return "JNC";
+            if (op == "<=") return "JLS";
+            if (op == ">") return "JHI";
+            if (op == ">=") return "JCS";
+        } else {
+            if (op == "==") return "JZ";
+            if (op == "!=") return "JNZ";
+            if (op == "<") return "JLT";
+            if (op == "<=") return "JLE";
+            if (op == ">") return "JGT";
+            if (op == ">=") return "JGE";
+        }
+        return {};
+    }
+
     std::string inverse_comparison(const std::string& op,
                                    bool unsigned_compare) const {
         if (unsigned_compare) {
@@ -2847,6 +2867,7 @@ private:
                 }
                 gen_condition();
                 branch_false_label_.clear();
+                branch_true_label_.clear();
             }
             expect(")");
             if (known_condition) {
@@ -2895,10 +2916,18 @@ private:
                 error("expected while after do body");
             }
             expect("(");
+            condition_branched_ = false;
+            if (simple_comparison_ahead()) {
+                branch_true_label_ = start;
+            }
             gen_condition();
+            branch_false_label_.clear();
+            branch_true_label_.clear();
             expect(")");
-            emit("    CMP R0, #0");
-            emit("    JNZ " + start);
+            if (!condition_branched_) {
+                emit("    CMP R0, #0");
+                emit("    JNZ " + start);
+            }
             emit(end + ":");
             expect(";");
             return;
@@ -2927,6 +2956,7 @@ private:
                 }
                 gen_condition();
                 branch_false_label_.clear();
+                branch_true_label_.clear();
             }
             expect(")");
             if (!condition_branched_) {
@@ -4255,25 +4285,37 @@ private:
                         left->kind == Type::Kind::Char ||
                         left->kind == Type::Kind::Short ||
                         left->kind == Type::Kind::Bool;
-                    if (comparison && !branch_false_label_.empty() &&
+                    if (comparison &&
+                        (!branch_false_label_.empty() ||
+                         !branch_true_label_.empty()) &&
                         !is_long_long_type(left) &&
                         (peek().kind == TokenKind::Number ||
                          peek().kind == TokenKind::Character)) {
                         const std::int64_t value = take().value;
                         emit("    CMP R0, #" + std::to_string(value));
-                        const std::string inverse = inverse_comparison(
-                            op, is_unsigned_scalar(left));
-                        emit("    " + inverse + " " + branch_false_label_);
+                        const bool jump_true = !branch_true_label_.empty();
+                        const std::string target = jump_true
+                            ? branch_true_label_ : branch_false_label_;
+                        const std::string branch = jump_true
+                            ? true_comparison(op, is_unsigned_scalar(left))
+                            : inverse_comparison(op, is_unsigned_scalar(left));
+                        emit("    " + branch + " " + target);
                         branch_false_label_.clear();
+                        branch_true_label_.clear();
                         condition_branched_ = true;
                         left = type_int();
                         matched = true;
                         continue;
                     }
-                    if (comparison && !branch_false_label_.empty() &&
+                    if (comparison &&
+                        (!branch_false_label_.empty() ||
+                         !branch_true_label_.empty()) &&
                         !is_long_long_type(left) && !is_fp_type(left)) {
-                        const std::string false_label = branch_false_label_;
+                        const bool jump_true = !branch_true_label_.empty();
+                        const std::string target = jump_true
+                            ? branch_true_label_ : branch_false_label_;
                         branch_false_label_.clear();
+                        branch_true_label_.clear();
                         emit("    PUSH R0");
                         TypePtr right = (this->*next)();
                         if (!is_long_long_type(right) &&
@@ -4281,10 +4323,13 @@ private:
                             emit("    MOV R1, R0");
                             emit("    POP R0");
                             emit("    CMP R0, R1");
-                            const std::string inverse = inverse_comparison(
-                                op, is_unsigned_scalar(left) ||
-                                        is_unsigned_scalar(right));
-                            emit("    " + inverse + " " + false_label);
+                            const bool unsigned_compare =
+                                is_unsigned_scalar(left) ||
+                                is_unsigned_scalar(right);
+                            const std::string branch = jump_true
+                                ? true_comparison(op, unsigned_compare)
+                                : inverse_comparison(op, unsigned_compare);
+                            emit("    " + branch + " " + target);
                             condition_branched_ = true;
                             left = type_int();
                             matched = true;
@@ -5614,25 +5659,37 @@ private:
                         left->kind == Type::Kind::Char ||
                         left->kind == Type::Kind::Short ||
                         left->kind == Type::Kind::Bool;
-                    if (comparison && !branch_false_label_.empty() &&
+                    if (comparison &&
+                        (!branch_false_label_.empty() ||
+                         !branch_true_label_.empty()) &&
                         !is_long_long_type(left) &&
                         (peek().kind == TokenKind::Number ||
                          peek().kind == TokenKind::Character)) {
                         const std::int64_t value = take().value;
                         emit("    CMP R0, #" + std::to_string(value));
-                        const std::string inverse = inverse_comparison(
-                            op, is_unsigned_scalar(left));
-                        emit("    " + inverse + " " + branch_false_label_);
+                        const bool jump_true = !branch_true_label_.empty();
+                        const std::string target = jump_true
+                            ? branch_true_label_ : branch_false_label_;
+                        const std::string branch = jump_true
+                            ? true_comparison(op, is_unsigned_scalar(left))
+                            : inverse_comparison(op, is_unsigned_scalar(left));
+                        emit("    " + branch + " " + target);
                         branch_false_label_.clear();
+                        branch_true_label_.clear();
                         condition_branched_ = true;
                         left = type_int();
                         matched = true;
                         continue;
                     }
-                    if (comparison && !branch_false_label_.empty() &&
+                    if (comparison &&
+                        (!branch_false_label_.empty() ||
+                         !branch_true_label_.empty()) &&
                         !is_long_long_type(left) && !is_fp_type(left)) {
-                        const std::string false_label = branch_false_label_;
+                        const bool jump_true = !branch_true_label_.empty();
+                        const std::string target = jump_true
+                            ? branch_true_label_ : branch_false_label_;
                         branch_false_label_.clear();
+                        branch_true_label_.clear();
                         emit("    PUSH R0");
                         TypePtr right = (this->*next)();
                         if (!is_long_long_type(right) &&
@@ -5640,10 +5697,13 @@ private:
                             emit("    MOV R1, R0");
                             emit("    POP R0");
                             emit("    CMP R0, R1");
-                            const std::string inverse = inverse_comparison(
-                                op, is_unsigned_scalar(left) ||
-                                        is_unsigned_scalar(right));
-                            emit("    " + inverse + " " + false_label);
+                            const bool unsigned_compare =
+                                is_unsigned_scalar(left) ||
+                                is_unsigned_scalar(right);
+                            const std::string branch = jump_true
+                                ? true_comparison(op, unsigned_compare)
+                                : inverse_comparison(op, unsigned_compare);
+                            emit("    " + branch + " " + target);
                             condition_branched_ = true;
                             left = type_int();
                             matched = true;
@@ -5803,6 +5863,7 @@ private:
     int frame_size_ = 0;
     int line_counter_ = 0;
     std::string branch_false_label_;
+    std::string branch_true_label_;
     bool condition_branched_ = false;
     int label_counter_ = 0;
     int string_counter_ = 0;

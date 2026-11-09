@@ -20,7 +20,8 @@ TEST_CASE("c constant folding") {
 TEST_CASE("c comparisons branch directly") {
     const cc::Result result = cc::compile(
         "int f(int x) { if (x == 1) return 1; return 2; }\n"
-        "int g(int a, int b) { if (a < b) return 1; return 2; }\n");
+        "int g(int a, int b) { if (a < b) return 1; return 2; }\n"
+        "int d(int x) { do { x = x - 1; } while (x > 0); return x; }\n");
     CHECK(result.ok);
     CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
     CHECK(result.assembly.find("JNZ .Lelse") != std::string::npos);

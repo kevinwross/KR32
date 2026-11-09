@@ -22,6 +22,8 @@ target-level cleanup.
      instead of materializing a 0/1 boolean and testing it again.
    - C branches directly at `-O0` for both immediate and register right
      operands; `-O1` folds remaining boolean materializations.
+   - `do`/`while` conditions branch directly to the loop head in both C and
+     C++.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
