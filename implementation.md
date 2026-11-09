@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 23:49 -08:00
+> **Last updated:** 2026-11-08 23:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2572,6 +2572,8 @@ Newest entries at the bottom. Use the local time zone.
       a single return expression, including `heightOf` and `maximum`.
 - **2026-11-08 23:49 -08:00** — Trivial member and static-member functions are
       inlined under `-O1` as well.
+- **2026-11-08 23:55 -08:00** — C++ reads of constant scalar locals with
+      constant initializers use immediates instead of reloading the slot.
 
 ## 10. Updating this file
 

@@ -5273,6 +5273,14 @@ private:
                              class_of(type) != nullptr);
                 if (!local->is_reference && local->static_global == nullptr &&
                     !address_value) {
+                    const auto constant =
+                        const_local_values_.find(local->offset);
+                    if (constant != const_local_values_.end() && type &&
+                        is_integer(type) && !is_long_long(type)) {
+                        emit("    MOV R0, #" +
+                             std::to_string(constant->second));
+                        return type;
+                    }
                     const std::string address =
                         "[R7 + " + std::to_string(local->offset) + "]";
                     if (is_long_long(type)) {
@@ -9630,6 +9638,13 @@ private:
         local.is_reference = type && (type->kind == TypeKind::LValueRef ||
                                       type->kind == TypeKind::RValueRef);
         local.offset = allocate_local(type);
+        if (declaration.is_const && declaration.initializer && type &&
+            is_integer(type) && !is_long_long(type)) {
+            std::int64_t constant = 0;
+            if (eval_const(*declaration.initializer, constant)) {
+                const_local_values_[local.offset] = constant;
+            }
+        }
         if (lambda_target != nullptr && lambda_target->lambda_closure) {
             local.offset = allocate_local_bytes(lambda_target->lambda_closure_size);
             local.lambda_closure_offset = local.offset;
@@ -9975,6 +9990,7 @@ private:
         call_targets_.clear();
         diagnosed_expressions_.clear();
         frame_size_ = 0;
+        const_local_values_.clear();
         push_scope();
 
         const int function_id = function_counter_++;
@@ -10489,6 +10505,7 @@ private:
         Function* saved_function = current_function_;
         current_function_ = nullptr;
         frame_size_ = 0;
+        const_local_values_.clear();
         push_scope();
         local_destructors_.push_back({});
         text_ += ".text\n.Lcxx_init:\n";
@@ -10520,6 +10537,7 @@ private:
         Function* saved_function = current_function_;
         current_function_ = nullptr;
         frame_size_ = 0;
+        const_local_values_.clear();
         push_scope();
         local_destructors_.push_back({});
         text_ += ".text\n.weak __kr32_tls_init\n__kr32_tls_init:\n";
@@ -11276,6 +11294,7 @@ private:
     std::vector<DeclPtr> template_class_storage_;
 
     std::vector<std::map<std::string, Local>> local_scopes_;
+    std::map<int, std::int64_t> const_local_values_;
     std::vector<std::vector<std::pair<int, Function*>>> local_destructors_;
     std::vector<std::string> break_labels_;
     std::vector<std::string> continue_labels_;

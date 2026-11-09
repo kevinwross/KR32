@@ -56,6 +56,14 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("constant locals propagate") {
+    const cxx::Result result = cxx::compile(
+        "int f() { const int N = 5; return N; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("LOAD R0, [R7 + 0]") == std::string::npos);
+    CHECK(result.assembly.find("MOV R0, #5") != std::string::npos);
+}
+
 TEST_CASE("trivial functions inline at O1") {
     cxx::Options options;
     options.optimize = true;
