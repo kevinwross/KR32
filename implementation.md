@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 18:23 -08:00
+> **Last updated:** 2026-11-08 18:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2457,6 +2457,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 18:23 -08:00** — Added `<vector>` with a minimal
       `std::vector<T>` (growth, reserve, element access, iteration, and
       clear) including vectors of `std::pair`.
+- **2026-11-08 18:30 -08:00** — Added `<optional>` and `<string_view>`;
+      `std::optional<T>` supports `has_value`, `value`, `value_or`, `set`,
+      and `reset`, and `std::string_view` supports construction, slicing,
+      prefix/suffix removal, and comparison.
 
 ## 10. Updating this file
 

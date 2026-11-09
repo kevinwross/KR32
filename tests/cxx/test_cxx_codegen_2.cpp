@@ -1088,6 +1088,33 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std optional and string view") {
+    const ProgramResult program = compile_and_run(
+        "#include <optional>\n"
+        "#include <string_view>\n"
+        "int main() {\n"
+        "    std::optional<int> item;\n"
+        "    if (item.has_value() || item) return 1;\n"
+        "    item.set(7);\n"
+        "    if (!item.has_value() || item.value() != 7) return 2;\n"
+        "    if (item.value_or(3) != 7) return 3;\n"
+        "    item.reset();\n"
+        "    if (item.value_or(3) != 3) return 4;\n"
+        "    std::string_view view(\"hello\");\n"
+        "    if (view.size() != 5 || view.empty()) return 5;\n"
+        "    if (view[0] != 'h' || view.back() != 'o') return 6;\n"
+        "    std::string_view tail = view.substr(1, 3);\n"
+        "    if (tail.size() != 3 || tail[0] != 'e') return 7;\n"
+        "    view.remove_prefix(1);\n"
+        "    view.remove_suffix(1);\n"
+        "    return view.size() == 3 &&\n"
+        "                   view.compare(std::string_view(\"ell\")) == 0 ? 0 : 8;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std vector grows and preserves values") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"

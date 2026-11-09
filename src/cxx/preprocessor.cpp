@@ -586,6 +586,77 @@ private:
                 }
                 return;
             }
+            if (header.find("<optional>") != std::string::npos) {
+                if (!optional_header_injected_) {
+                    optional_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "template<typename T> class optional {\n"
+                        "    bool has_;\n"
+                        "    T value_;\n"
+                        "public:\n"
+                        "    optional() { has_ = false; }\n"
+                        "    bool has_value() const { return has_; }\n"
+                        "    operator bool() const { return has_; }\n"
+                        "    T& value() { return value_; }\n"
+                        "    const T& value() const { return value_; }\n"
+                        "    void set(T value) { value_ = value; has_ = true; }\n"
+                        "    void reset() { has_ = false; }\n"
+                        "    T value_or(T fallback) const {\n"
+                        "        return has_ ? value_ : fallback;\n"
+                        "    }\n"
+                        "};\n"
+                        "}\n");
+                }
+                return;
+            }
+            if (header.find("<string_view>") != std::string::npos) {
+                if (!string_view_header_injected_) {
+                    string_view_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "class string_view {\n"
+                        "    const char* data_;\n"
+                        "    int size_;\n"
+                        "public:\n"
+                        "    string_view() { data_ = 0; size_ = 0; }\n"
+                        "    string_view(const char* text) {\n"
+                        "        data_ = text;\n"
+                        "        size_ = 0;\n"
+                        "        while (text[size_] != 0) size_ = size_ + 1;\n"
+                        "    }\n"
+                        "    string_view(const char* text, int count) {\n"
+                        "        data_ = text;\n"
+                        "        size_ = count;\n"
+                        "    }\n"
+                        "    const char* data() const { return data_; }\n"
+                        "    int size() const { return size_; }\n"
+                        "    bool empty() const { return size_ == 0; }\n"
+                        "    char operator[](int index) const { return data_[index]; }\n"
+                        "    char front() const { return data_[0]; }\n"
+                        "    char back() const { return data_[size_ - 1]; }\n"
+                        "    string_view substr(int position, int count) const {\n"
+                        "        return string_view(data_ + position, count);\n"
+                        "    }\n"
+                        "    void remove_prefix(int count) {\n"
+                        "        data_ = data_ + count;\n"
+                        "        size_ = size_ - count;\n"
+                        "    }\n"
+                        "    void remove_suffix(int count) { size_ = size_ - count; }\n"
+                        "    int compare(string_view other) const {\n"
+                        "        int limit = size_ < other.size_ ? size_ : other.size_;\n"
+                        "        for (int index = 0; index < limit; ++index) {\n"
+                        "            if (data_[index] < other.data_[index]) return -1;\n"
+                        "            if (data_[index] > other.data_[index]) return 1;\n"
+                        "        }\n"
+                        "        if (size_ < other.size_) return -1;\n"
+                        "        return size_ > other.size_ ? 1 : 0;\n"
+                        "    }\n"
+                        "};\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<vector>") != std::string::npos) {
                 if (!vector_header_injected_) {
                     vector_header_injected_ = true;
@@ -5276,6 +5347,8 @@ private:
     bool array_header_injected_ = false;
     bool atomic_header_injected_ = false;
     bool vector_header_injected_ = false;
+    bool optional_header_injected_ = false;
+    bool string_view_header_injected_ = false;
     bool numeric_header_injected_ = false;
     bool cstring_header_injected_ = false;
     bool cctype_header_injected_ = false;
