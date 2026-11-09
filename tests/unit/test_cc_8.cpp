@@ -23,7 +23,8 @@ TEST_CASE("c comparisons branch directly") {
         "int g(int a, int b) { if (a < b) return 1; return 2; }\n"
         "int d(int x) { do { x = x - 1; } while (x > 0); return x; }\n"
         "int t(int x) { return x == 1 ? 10 : 20; }\n"
-        "int add(int a, int b) { return a + b; }\n");
+        "int add(int a, int b) { return a + b; }\n"
+        "int inc(int value) { ++value; return value; }\n");
     CHECK(result.ok);
     CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
     CHECK(result.assembly.find("JNZ .Lelse") != std::string::npos);

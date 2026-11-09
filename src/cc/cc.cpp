@@ -5019,7 +5019,43 @@ private:
             return parse_unary();
         }
         if (peek().text == "++" || peek().text == "--") {
-            const std::string op = take().text;
+            const std::string op = peek().text;
+            if (peek(1).kind == TokenKind::Identifier) {
+                const Variable* variable = lookup(peek(1).text);
+                if (variable != nullptr && !variable->global &&
+                    !variable->type->is_atomic &&
+                    !is_long_long_type(variable->type) &&
+                    !is_fp_type(variable->type) &&
+                    !variable->type->is_pointer() &&
+                    variable->type->kind != Type::Kind::Array &&
+                    variable->type->kind != Type::Kind::Struct &&
+                    variable->type->kind != Type::Kind::Union &&
+                    peek(2).text != "[" && peek(2).text != "." &&
+                    peek(2).text != "->") {
+                    take();
+                    take();
+                    const TypePtr type = variable->type;
+                    const std::string frame =
+                        "[R7 + " + std::to_string(variable->offset) + "]";
+                    const bool byte_value =
+                        type->kind == Type::Kind::Char ||
+                        type->kind == Type::Kind::Bool;
+                    const bool short_value =
+                        type->kind == Type::Kind::Short;
+                    emit(byte_value ? "    LOAD8S R0, " + frame
+                                    : (short_value
+                                           ? "    LOAD16S R0, " + frame
+                                           : "    LOAD R0, " + frame));
+                    emit(std::string("    ") +
+                         (op == "++" ? "ADD" : "SUB") + " R0, R0, #1");
+                    emit(byte_value ? "    STORE8 R0, " + frame
+                                    : (short_value
+                                           ? "    STORE16 R0, " + frame
+                                           : "    STORE R0, " + frame));
+                    return type;
+                }
+            }
+            take();
             TypePtr type;
             if (!gen_lvalue(type)) {
                 error("increment/decrement requires an lvalue");

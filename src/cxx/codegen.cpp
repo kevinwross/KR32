@@ -5728,6 +5728,36 @@ private:
                 resolved && resolved->kind == TypeKind::Builtin &&
                 (resolved->builtin == BuiltinKind::Char ||
                  resolved->builtin == BuiltinKind::Bool);
+            if (expression.children[0]->kind == ExprKind::Name) {
+                Local* local = lookup_local(expression.children[0]->name);
+                if (local != nullptr && !local->is_reference &&
+                    local->static_global == nullptr && !is_fp(type) &&
+                    !is_long_long(type)) {
+                    const std::string frame =
+                        "[R7 + " + std::to_string(local->offset) + "]";
+                    emit(byte_value ? "    LOAD8S R0, " + frame
+                                    : "    LOAD R0, " + frame);
+                    if (!expression.is_prefix) {
+                        emit("    MOV R2, R0");
+                    }
+                    int amount = 1;
+                    if (resolved &&
+                        resolved->kind == TypeKind::Pointer) {
+                        amount = resolved->element
+                                     ? type_size(resolve_type(resolved->element))
+                                     : 1;
+                    }
+                    emit(std::string("    ") +
+                         (op == "++" ? "ADD" : "SUB") + " R0, R0, #" +
+                         std::to_string(amount));
+                    emit(byte_value ? "    STORE8 R0, " + frame
+                                    : "    STORE R0, " + frame);
+                    if (!expression.is_prefix) {
+                        emit("    MOV R0, R2");
+                    }
+                    return type;
+                }
+            }
             gen_address(*expression.children[0]);
             emit("    MOV R1, R0");
             if (byte_value) {

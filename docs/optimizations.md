@@ -27,6 +27,8 @@ target-level cleanup.
    - Ternary conditions branch directly on a comparison in both languages.
    - C and C++ arithmetic on two simple locals keeps the left operand in
      `R1`, avoiding a temporary frame slot.
+   - Local `++`/`--` updates load and store the frame slot directly instead
+     of computing its address first.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.

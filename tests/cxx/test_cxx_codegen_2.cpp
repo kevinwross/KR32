@@ -37,6 +37,14 @@ TEST_CASE("comparison conditions branch directly") {
     CHECK(result.assembly.find("STORE R0, [R7 + 8]") == std::string::npos);
 }
 
+TEST_CASE("local increments store directly") {
+    const cxx::Result result = cxx::compile(
+        "int inc(int value) { ++value; return value; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("ADD R0, R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("LEA R1, [R7 + 0]") == std::string::npos);
+}
+
 TEST_CASE("scalar returns avoid spills") {
     const cxx::Result result = cxx::compile(
         "int ret() { int value = 2; return value; }\n");
