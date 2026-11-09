@@ -281,6 +281,29 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm copies ranges with replacement") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[3] = { 1, 2, 1 };\n"
+        "    int target[3] = { 0, 0, 0 };\n"
+        "    int* end = std::replace_copy(source, source + 3, target, 1, 9);\n"
+        "    if (end != target + 3) return 1;\n"
+        "    if (target[0] != 9 || target[1] != 2 || target[2] != 9) return 2;\n"
+        "    char text[5] = \"abaca\";\n"
+        "    char letters[5] = { 0, 0, 0, 0, 0 };\n"
+        "    if (std::replace_copy(text, text + 5, letters, 'a', 'z') != letters + 5) return 3;\n"
+        "    if (letters[0] != 'z' || letters[1] != 'b' || letters[4] != 'z') return 4;\n"
+        "    double reals[3] = { 1.5, 2.5, 1.5 };\n"
+        "    double copied[3] = { 0.0, 0.0, 0.0 };\n"
+        "    std::replace_copy(reals, reals + 3, copied, 1.5, 9.0);\n"
+        "    return copied[0] == 9.0 && copied[1] == 2.5 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copies rotated ranges") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
