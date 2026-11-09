@@ -5387,6 +5387,35 @@ private:
             bool address = type->kind == Type::Kind::Struct ||
                            type->kind == Type::Kind::Union ||
                            type->kind == Type::Kind::Array;
+            const bool scalar_local =
+                !variable->global && !variable->is_thread_local &&
+                !address && !type->is_atomic &&
+                peek().text != "[" && peek().text != "." &&
+                peek().text != "->" && peek().text != "++" &&
+                peek().text != "--";
+            if (scalar_local) {
+                const std::string frame =
+                    "[R7 + " + std::to_string(variable->offset) + "]";
+                if (is_long_long_type(type)) {
+                    emit("    LOAD R0, " + frame);
+                    emit("    LOAD R1, [R7 + " +
+                         std::to_string(variable->offset + 4) + "]");
+                } else if (is_fp_type(type)) {
+                    emit(std::string("    FLOAD.") +
+                         (type->kind == Type::Kind::Double ? "D" : "W") +
+                         " F0, " + frame);
+                } else if (type->kind == Type::Kind::Char ||
+                           type->kind == Type::Kind::Bool) {
+                    emit(std::string("    LOAD8") +
+                         (type->is_unsigned ? "U" : "S") + " R0, " + frame);
+                } else if (type->kind == Type::Kind::Short) {
+                    emit(std::string("    LOAD16") +
+                         (type->is_unsigned ? "U" : "S") + " R0, " + frame);
+                } else {
+                    emit("    LOAD R0, " + frame);
+                }
+                return type;
+            }
             gen_lvalue_address(name);
             if (peek().text == "++" || peek().text == "--") {
                 const std::string op = take().text;

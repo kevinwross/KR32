@@ -12,8 +12,8 @@ target-level cleanup.
    - `1 + 2 * 3` becomes a single `MOV R0, #7`.
    - Constant right operands use immediate ALU and `CMP` forms, avoiding a
      register materialization and left-operand spill.
-   - Scalar local reads use `LOAD reg, [R7 + n]` directly instead of a
-     `LEA` followed by an indirect load.
+   - Scalar local reads in both C and C++ use `LOAD reg, [R7 + n]`
+     directly instead of a `LEA` followed by an indirect load.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
