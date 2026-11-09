@@ -57,7 +57,17 @@ bool parse_register_address(std::string_view text, int& reg) {
     if (value.size() < 3 || value.front() != '[' || value.back() != ']') {
         return false;
     }
-    return parse_register(value.substr(1, value.size() - 2), reg);
+    std::string inside = value.substr(1, value.size() - 2);
+    inside.erase(std::remove_if(inside.begin(), inside.end(),
+                                [](unsigned char character) {
+                                    return std::isspace(character) != 0;
+                                }),
+                 inside.end());
+    const std::size_t separator = inside.find_first_of("+-");
+    if (separator != std::string::npos) {
+        inside.resize(separator);
+    }
+    return parse_register(inside, reg);
 }
 
 bool parse_frame_slot(std::string_view text, int& slot) {
@@ -389,6 +399,49 @@ int fold_immediate_consumers(std::vector<std::string>& lines) {
     return removed;
 }
 
+bool register_dead_after(const std::vector<std::string>& lines,
+                         std::size_t start, int reg) {
+    for (std::size_t index = start; index < lines.size(); ++index) {
+        if (trim(lines[index]) == ".text") {
+            return true;
+        }
+        Instruction instruction;
+        if (!parse_instruction(lines[index], instruction)) {
+            if (is_label(lines[index])) {
+                return false;
+            }
+            continue;
+        }
+        if (is_branch(instruction.mnemonic)) {
+            return false;
+        }
+        if (is_call(instruction.mnemonic)) {
+            if (reg < 4) {
+                return false;
+            }
+            return true;
+        }
+        const std::size_t first =
+            writes_first_operand(instruction) ? 1 : 0;
+        for (std::size_t operand = first;
+             operand < instruction.operands.size(); ++operand) {
+            int used = 0;
+            if ((parse_register(instruction.operands[operand], used) ||
+                 parse_register_address(instruction.operands[operand], used)) &&
+                used == reg) {
+                return false;
+            }
+        }
+        int destination = 0;
+        if (writes_first_operand(instruction) &&
+            parse_register(instruction.operands[0], destination) &&
+            destination == reg) {
+            return true;
+        }
+    }
+    return true;
+}
+
 int fold_frame_addresses(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -407,24 +460,38 @@ int fold_frame_addresses(std::vector<std::string>& lines) {
         while (next < lines.size() && lines[next].empty()) {
             ++next;
         }
-        Instruction load;
+        Instruction consumer;
         if (next >= lines.size() ||
-            !parse_instruction(lines[next], load) ||
-            load.mnemonic != "LOAD" || load.operands.size() != 2) {
+            !parse_instruction(lines[next], consumer) ||
+            consumer.operands.size() != 2) {
             continue;
         }
-        int destination = 0;
-        int loaded_address = 0;
-        if (!parse_register(load.operands[0], destination) ||
-            !parse_register_address(load.operands[1], loaded_address) ||
-            loaded_address != address_register) {
-            continue;
-        }
-        load.operands[1] = "[R7 + " + std::to_string(slot) + "]";
-        lines[next] = format_instruction(load);
-        if (destination == address_register) {
-            lines[index].clear();
-            ++removed;
+        if (consumer.mnemonic == "LOAD") {
+            int destination = 0;
+            int loaded_address = 0;
+            if (!parse_register(consumer.operands[0], destination) ||
+                !parse_register_address(consumer.operands[1], loaded_address) ||
+                loaded_address != address_register) {
+                continue;
+            }
+            consumer.operands[1] = "[R7 + " + std::to_string(slot) + "]";
+            lines[next] = format_instruction(consumer);
+            if (destination == address_register ||
+                register_dead_after(lines, next + 1, address_register)) {
+                lines[index].clear();
+                ++removed;
+            }
+        } else if (consumer.mnemonic == "STORE") {
+            int stored_address = 0;
+            int stored_source = 0;
+            if (!parse_register_address(consumer.operands[1], stored_address) ||
+                stored_address != address_register ||
+                (parse_register(consumer.operands[0], stored_source) &&
+                 stored_source == address_register)) {
+                continue;
+            }
+            consumer.operands[1] = "[R7 + " + std::to_string(slot) + "]";
+            lines[next] = format_instruction(consumer);
         }
     }
     return removed;
