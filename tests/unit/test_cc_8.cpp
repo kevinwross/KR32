@@ -11,7 +11,7 @@ TEST_CASE("c constant folding") {
     CHECK(result.ok);
     CHECK(result.assembly.find("MOV R0, #7") != std::string::npos);
     CHECK(result.assembly.find("MUL") == std::string::npos);
-    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("SLTU R0, R0, #1") != std::string::npos);
     CHECK(result.assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
     CHECK(result.assembly.find("STORE R0, [R7 + 4]") != std::string::npos);
     CHECK(result.assembly.find("LEA R0, [R7 + 0]") == std::string::npos);
@@ -30,6 +30,15 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
     CHECK(result.assembly.find("JNZ .Lelse") != std::string::npos);
     CHECK(result.assembly.find("cmpend") == std::string::npos);
+}
+
+TEST_CASE("c equality values avoid branches") {
+    const cc::Result result = cc::compile(
+        "int eq(int a, int b) { return a == b; }\n"
+        "int ne(int a, int b) { return a != b; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("XOR R0, R1, R0") != std::string::npos);
+    CHECK(result.assembly.find("SLTU R0, R0, #1") != std::string::npos);
 }
 
 TEST_CASE("c comparison values use SLT") {

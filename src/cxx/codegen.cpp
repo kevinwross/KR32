@@ -6606,6 +6606,15 @@ private:
                     return Type::make_builtin(BuiltinKind::Bool);
                 }
             }
+            if (op == "==" || op == "!=") {
+                gen_expr(*expression.children[0]);
+                emit("    XOR R0, R0, #" + std::to_string(immediate));
+                emit("    SLTU R0, R0, #1");
+                if (op == "!=") {
+                    emit("    XOR R0, R0, #1");
+                }
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
             gen_expr(*expression.children[0]);
             emit("    CMP R0, #" + std::to_string(immediate));
             const std::string true_label = new_label("true");
@@ -6783,6 +6792,14 @@ private:
                     emit("    XOR R0, R0, #1");
                 } else {
                     emit("    " + mnemonic + " R0, R0, R1");
+                    emit("    XOR R0, R0, #1");
+                }
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
+            if (op == "==" || op == "!=") {
+                emit("    XOR R0, R0, R1");
+                emit("    SLTU R0, R0, #1");
+                if (op == "!=") {
                     emit("    XOR R0, R0, #1");
                 }
                 return Type::make_builtin(BuiltinKind::Bool);

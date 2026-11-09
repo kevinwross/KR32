@@ -4121,6 +4121,14 @@ private:
                 }
                 return;
             }
+            if (op == "==" || op == "!=") {
+                emit("    XOR R0, R1, R0");
+                emit("    SLTU R0, R0, #1");
+                if (op == "!=") {
+                    emit("    XOR R0, R0, #1");
+                }
+                return;
+            }
             const std::string true_label = new_label("true");
             const std::string end_label = new_label("cmpend");
             emit("    CMP R1, R0");
@@ -4610,6 +4618,17 @@ private:
                                  (unsigned_compare ? "SLTU" : "SLT") +
                                  " R0, R0, #" + std::to_string(bound));
                             if (op == ">=" || op == ">") {
+                                emit("    XOR R0, R0, #1");
+                            }
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
+                        if (op == "==" || op == "!=") {
+                            emit("    XOR R0, R0, #" +
+                                 std::to_string(value));
+                            emit("    SLTU R0, R0, #1");
+                            if (op == "!=") {
                                 emit("    XOR R0, R0, #1");
                             }
                             left = type_int();
@@ -6199,6 +6218,17 @@ private:
                                  (unsigned_compare ? "SLTU" : "SLT") +
                                  " R0, R0, #" + std::to_string(bound));
                             if (op == ">=" || op == ">") {
+                                emit("    XOR R0, R0, #1");
+                            }
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
+                        if (op == "==" || op == "!=") {
+                            emit("    XOR R0, R0, #" +
+                                 std::to_string(value));
+                            emit("    SLTU R0, R0, #1");
+                            if (op == "!=") {
                                 emit("    XOR R0, R0, #1");
                             }
                             left = type_int();

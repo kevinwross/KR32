@@ -56,6 +56,15 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("equality values avoid branches") {
+    const cxx::Result result = cxx::compile(
+        "int eq(int a, int b) { return a == b; }\n"
+        "int ne(int a, int b) { return a != b; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("XOR R0, R0, R1") != std::string::npos);
+    CHECK(result.assembly.find("SLTU R0, R0, #1") != std::string::npos);
+}
+
 TEST_CASE("comparison values use SLT") {
     const cxx::Result result = cxx::compile(
         "int lt(int a, int b) { return a < b; }\n"
@@ -116,7 +125,7 @@ TEST_CASE("immediate comparisons avoid spills") {
     const cxx::Result result = cxx::compile(
         "int is_one(int value) { return value == 1; }\n");
     CHECK(result.ok);
-    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("SLTU R0, R0, #1") != std::string::npos);
 }
 
 TEST_CASE("optimized programs preserve behavior") {
