@@ -70,6 +70,39 @@ bool parse_register_address(std::string_view text, int& reg) {
     return parse_register(inside, reg);
 }
 
+bool parse_register_offset(std::string_view text, int& reg, int& offset) {
+    const std::string value = trim(text);
+    if (value.size() < 3 || value.front() != '[' || value.back() != ']') {
+        return false;
+    }
+    std::string inside = value.substr(1, value.size() - 2);
+    inside.erase(std::remove_if(inside.begin(), inside.end(),
+                                [](unsigned char character) {
+                                    return std::isspace(character) != 0;
+                                }),
+                 inside.end());
+    offset = 0;
+    const std::size_t separator = inside.find_first_of("+-");
+    if (separator == std::string::npos) {
+        return parse_register(inside, reg);
+    }
+    if (!parse_register(inside.substr(0, separator), reg)) {
+        return false;
+    }
+    const int sign = inside[separator] == '-' ? -1 : 1;
+    const std::string number = inside.substr(separator + 1);
+    if (number.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(number.c_str(), &end, 10);
+    if (end == nullptr || *end != '\0') {
+        return false;
+    }
+    offset = sign * static_cast<int>(parsed);
+    return true;
+}
+
 bool parse_frame_slot(std::string_view text, int& slot) {
     const std::string value = trim(text);
     if (value.size() < 4 || value.front() != '[' || value.back() != ']') {
@@ -442,6 +475,60 @@ bool register_dead_after(const std::vector<std::string>& lines,
     return true;
 }
 
+int fold_frame_address_arithmetic(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int slot = 0;
+        if (!parse_register(address.operands[0], destination) ||
+            !parse_frame_slot(address.operands[1], slot)) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction adjust;
+        if (!parse_instruction(lines[next], adjust) ||
+            (adjust.mnemonic != "ADD" && adjust.mnemonic != "SUB") ||
+            adjust.operands.size() != 3) {
+            continue;
+        }
+        int left = 0;
+        int right = 0;
+        int value = 0;
+        if (!parse_register(adjust.operands[0], left) ||
+            !parse_register(adjust.operands[1], right) ||
+            left != destination || right != destination ||
+            adjust.operands[2].empty() ||
+            adjust.operands[2].front() != '#') {
+            continue;
+        }
+        try {
+            value = std::stoi(adjust.operands[2].substr(1));
+        } catch (...) {
+            continue;
+        }
+        if (adjust.mnemonic == "SUB") {
+            value = -value;
+        }
+        address.operands[1] =
+            "[R7 + " + std::to_string(slot + value) + "]";
+        lines[index] = format_instruction(address);
+        lines[next].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int fold_frame_addresses(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -469,12 +556,15 @@ int fold_frame_addresses(std::vector<std::string>& lines) {
         if (consumer.mnemonic == "LOAD") {
             int destination = 0;
             int loaded_address = 0;
+            int offset = 0;
             if (!parse_register(consumer.operands[0], destination) ||
-                !parse_register_address(consumer.operands[1], loaded_address) ||
+                !parse_register_offset(consumer.operands[1], loaded_address,
+                                       offset) ||
                 loaded_address != address_register) {
                 continue;
             }
-            consumer.operands[1] = "[R7 + " + std::to_string(slot) + "]";
+            consumer.operands[1] =
+                "[R7 + " + std::to_string(slot + offset) + "]";
             lines[next] = format_instruction(consumer);
             if (destination == address_register ||
                 register_dead_after(lines, next + 1, address_register)) {
@@ -484,13 +574,16 @@ int fold_frame_addresses(std::vector<std::string>& lines) {
         } else if (consumer.mnemonic == "STORE") {
             int stored_address = 0;
             int stored_source = 0;
-            if (!parse_register_address(consumer.operands[1], stored_address) ||
+            int offset = 0;
+            if (!parse_register_offset(consumer.operands[1], stored_address,
+                                       offset) ||
                 stored_address != address_register ||
                 (parse_register(consumer.operands[0], stored_source) &&
                  stored_source == address_register)) {
                 continue;
             }
-            consumer.operands[1] = "[R7 + " + std::to_string(slot) + "]";
+            consumer.operands[1] =
+                "[R7 + " + std::to_string(slot + offset) + "]";
             lines[next] = format_instruction(consumer);
         }
     }
@@ -789,6 +882,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
+    stats.removed += fold_frame_address_arithmetic(lines);
     stats.removed += fold_frame_addresses(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
     stats.removed += fold_immediate_consumers(lines);

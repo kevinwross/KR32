@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 23:12 -08:00
+> **Last updated:** 2026-11-08 23:18 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2560,6 +2560,8 @@ Newest entries at the bottom. Use the local time zone.
       in `R0` instead of spilling it to a temporary.
 - **2026-11-08 23:12 -08:00** — C++ member calls with up to three simple
       arguments keep `this` in `R4` and load arguments directly.
+- **2026-11-08 23:18 -08:00** — `-O1` folds frame-address `ADD`/`SUB`
+      adjustments into the preceding `LEA` and supports offset consumers.
 
 ## 10. Updating this file
 
