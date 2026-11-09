@@ -13,6 +13,13 @@ TEST_CASE("constant folding and dead branches") {
     CHECK(result.assembly.find(".Lwhile") == std::string::npos);
 }
 
+TEST_CASE("immediate comparisons avoid spills") {
+    const cxx::Result result = cxx::compile(
+        "int is_one(int value) { return value == 1; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
+}
+
 TEST_CASE("optimized programs preserve behavior") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"

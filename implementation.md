@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 20:45 -08:00
+> **Last updated:** 2026-11-08 20:51 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2515,6 +2515,10 @@ Newest entries at the bottom. Use the local time zone.
       unreachable statement removal after jumps and returns.
 - **2026-11-08 20:45 -08:00** — Added dead frame-store elimination to the
       `-O1` pass for slots that are never loaded or address-taken.
+- **2026-11-08 20:49 -08:00** — Attempted repeated-load forwarding; reverted
+      after a vector regression. Store-based frame forwarding remains.
+- **2026-11-08 20:51 -08:00** — Added C++ immediate comparison codegen,
+      matching C and avoiding operand spills for `value == constant`.
 
 ## 10. Updating this file
 

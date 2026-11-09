@@ -198,14 +198,15 @@ void count_reads(const Instruction& instruction, RegisterReadCounts& counts) {
 int remove_forwarded_loads(std::vector<std::string>& lines, int& rewritten) {
     int removed = 0;
     std::map<int, std::string> slots;
+    const auto clear = [&]() { slots.clear(); };
     for (std::string& line : lines) {
         Instruction instruction;
         if (!parse_instruction(line, instruction)) {
-            slots.clear();
+            clear();
             continue;
         }
         if (is_call(instruction.mnemonic) || is_branch(instruction.mnemonic)) {
-            slots.clear();
+            clear();
             continue;
         }
         if (instruction.mnemonic == "STORE" &&
@@ -216,15 +217,15 @@ int remove_forwarded_loads(std::vector<std::string>& lines, int& rewritten) {
                 parse_frame_slot(instruction.operands[1], slot)) {
                 slots[slot] = instruction.operands[0];
             } else {
-                slots.clear();
+                clear();
             }
             continue;
         }
-        if ((instruction.mnemonic == "STORE8" ||
-             instruction.mnemonic == "STORE16") ||
+        if (instruction.mnemonic == "STORE8" ||
+            instruction.mnemonic == "STORE16" ||
             (instruction.mnemonic == "STORE" &&
              instruction.operands.size() != 2)) {
-            slots.clear();
+            clear();
             continue;
         }
         if (instruction.mnemonic == "LOAD" &&
@@ -240,16 +241,14 @@ int remove_forwarded_loads(std::vector<std::string>& lines, int& rewritten) {
                         source == destination) {
                         line.clear();
                         ++removed;
-                        continue;
-                    }
-                    if (parse_register(found->second, source)) {
+                    } else if (parse_register(found->second, source)) {
                         line = "    MOV " + instruction.operands[0] + ", " +
                                found->second;
                         ++rewritten;
                     }
                 }
+                remove_register(slots, destination);
             }
-            remove_register(slots, destination);
             continue;
         }
         int destination = 0;
@@ -260,7 +259,6 @@ int remove_forwarded_loads(std::vector<std::string>& lines, int& rewritten) {
     }
     return removed;
 }
-
 int fold_immediate_consumers(std::vector<std::string>& lines) {
     std::vector<RegisterReadCounts> function_counts;
     std::vector<int> function_of_line(lines.size(), 0);

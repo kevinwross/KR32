@@ -6411,6 +6411,39 @@ private:
                 return type_of(expression);
             }
         }
+        if (expression.children[1]->kind == ExprKind::IntegerLiteral &&
+            left_type && right_type && is_integer(left_type) &&
+            is_integer(right_type) && !is_long_long(left_type) &&
+            !is_long_long(right_type) && !is_pointer(left_type) &&
+            (op == "==" || op == "!=" || op == "<" || op == "<=" ||
+             op == ">" || op == ">=")) {
+            const std::int64_t immediate = expression.children[1]->integer;
+            gen_expr(*expression.children[0]);
+            emit("    CMP R0, #" + std::to_string(immediate));
+            const std::string true_label = new_label("true");
+            const std::string end_label = new_label("cmpend");
+            const bool unsigned_compare =
+                is_unsigned_operation(left_type, right_type);
+            if (op == "==") emit("    JZ " + true_label);
+            if (op == "!=") emit("    JNZ " + true_label);
+            if (unsigned_compare) {
+                if (op == "<") emit("    JNC " + true_label);
+                if (op == "<=") emit("    JLS " + true_label);
+                if (op == ">") emit("    JHI " + true_label);
+                if (op == ">=") emit("    JCS " + true_label);
+            } else {
+                if (op == "<") emit("    JLT " + true_label);
+                if (op == "<=") emit("    JLE " + true_label);
+                if (op == ">") emit("    JGT " + true_label);
+                if (op == ">=") emit("    JGE " + true_label);
+            }
+            emit("    MOV R0, #0");
+            emit("    JMP " + end_label);
+            emit(true_label + ":");
+            emit("    MOV R0, #1");
+            emit(end_label + ":");
+            return Type::make_builtin(BuiltinKind::Bool);
+        }
         if (is_fp(left_type) || is_fp(right_type)) {
             return gen_fp_binary(expression, left_type, right_type);
         }

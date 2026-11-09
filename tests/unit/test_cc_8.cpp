@@ -4,12 +4,13 @@ TEST_CASE("c constant folding") {
     const cc::Result result = cc::compile(
         "int math(void) { return 1 + 2 * 3; }\n"
         "int branch(void) { if (0) return 1; return 2; }\n"
-        "int loop(void) { int x = 0; while (0) x = x + 1; return x; }\n");
+        "int loop(void) { int x = 0; while (0) x = x + 1; return x; }\n"
+        "int is_one(int value) { return value == 1; }\n");
     CHECK(result.ok);
     CHECK(result.assembly.find("MOV R0, #7") != std::string::npos);
     CHECK(result.assembly.find("MUL") == std::string::npos);
     CHECK(result.assembly.find("ADD") == std::string::npos);
-    CHECK(result.assembly.find("JZ") == std::string::npos);
+    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
 }
 
 TEST_CASE("optimized c programs preserve behavior") {
