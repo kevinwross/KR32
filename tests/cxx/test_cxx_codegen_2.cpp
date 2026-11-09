@@ -1131,6 +1131,22 @@ TEST_CASE("indirect calls pass floating point arguments") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("class methods bind const reference temporaries") {
+    const ProgramResult program = compile_and_run(
+        "struct Accumulator {\n"
+        "    int add(const int& value) { return value + 1; }\n"
+        "    double scale(const double& value) { return value * 2.0; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Accumulator accumulator;\n"
+        "    if (accumulator.add(3) != 4) return 1;\n"
+        "    return accumulator.scale(1.5) == 3.0 ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std map inserts updates and counts") {
     const ProgramResult program = compile_and_run(
         "#include <map>\n"

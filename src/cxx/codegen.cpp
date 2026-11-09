@@ -6039,10 +6039,17 @@ private:
             const TypePtr element = resolve_type(parameter->element);
             if (!is_lvalue(right) && element != nullptr &&
                 class_of(element) == nullptr) {
-                gen_expr(right);
                 const int value_temp = allocate_local(element);
-                emit("    LEA R1, [R7 + " + std::to_string(value_temp) + "]");
-                store_value(element);
+                if (is_fp(element)) {
+                    gen_as_fp(right, element);
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(element) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(value_temp) + "]");
+                } else {
+                    gen_expr(right);
+                    emit("    LEA R1, [R7 + " + std::to_string(value_temp) + "]");
+                    store_value(element);
+                }
                 emit("    LEA R0, [R7 + " + std::to_string(value_temp) + "]");
             } else {
                 gen_address(right);
@@ -7058,7 +7065,24 @@ private:
             slot.type = parameter;
             if (parameter && (parameter->kind == TypeKind::LValueRef ||
                               parameter->kind == TypeKind::RValueRef)) {
-                gen_address(*effective_arguments[index]);
+                const TypePtr element = resolve_type(parameter->element);
+                if (!is_lvalue(*effective_arguments[index]) &&
+                    element != nullptr && class_of(element) == nullptr) {
+                    const int value_temp = allocate_local(element);
+                    if (is_fp(element)) {
+                        gen_as_fp(*effective_arguments[index], element);
+                        emit(std::string("    FSTORE.") +
+                             (is_float32(element) ? "W" : "D") + " F0, [R7 + " +
+                             std::to_string(value_temp) + "]");
+                    } else {
+                        gen_expr(*effective_arguments[index]);
+                        emit("    LEA R1, [R7 + " + std::to_string(value_temp) + "]");
+                        store_value(element);
+                    }
+                    emit("    LEA R0, [R7 + " + std::to_string(value_temp) + "]");
+                } else {
+                    gen_address(*effective_arguments[index]);
+                }
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
                 ++integer_argument;
