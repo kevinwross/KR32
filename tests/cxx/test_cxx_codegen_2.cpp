@@ -85,9 +85,11 @@ TEST_CASE("equality values avoid branches") {
 TEST_CASE("comparison values use SLT") {
     const cxx::Result result = cxx::compile(
         "int lt(int a, int b) { return a < b; }\n"
-        "int ge(int a, int b) { return a >= b; }\n");
+        "int ge(int a, int b) { return a >= b; }\n"
+        "int z(int x) { return x == 0; }\n");
     CHECK(result.ok);
     CHECK(result.assembly.find("SLT R0, R0, R1") != std::string::npos);
+    CHECK(result.assembly.find("XOR R0, R0, #0") == std::string::npos);
 }
 
 TEST_CASE("constant locals propagate") {

@@ -4667,8 +4667,10 @@ private:
                             continue;
                         }
                         if (op == "==" || op == "!=") {
-                            emit("    XOR R0, R0, #" +
-                                 std::to_string(value));
+                            if (value != 0) {
+                                emit("    XOR R0, R0, #" +
+                                     std::to_string(value));
+                            }
                             emit("    SLTU R0, R0, #1");
                             if (op == "!=") {
                                 emit("    XOR R0, R0, #1");
@@ -6304,8 +6306,10 @@ private:
                             continue;
                         }
                         if (op == "==" || op == "!=") {
-                            emit("    XOR R0, R0, #" +
-                                 std::to_string(value));
+                            if (value != 0) {
+                                emit("    XOR R0, R0, #" +
+                                     std::to_string(value));
+                            }
                             emit("    SLTU R0, R0, #1");
                             if (op == "!=") {
                                 emit("    XOR R0, R0, #1");

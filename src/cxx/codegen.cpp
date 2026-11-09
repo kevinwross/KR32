@@ -6636,7 +6636,10 @@ private:
             }
             if (op == "==" || op == "!=") {
                 gen_expr(*expression.children[0]);
-                emit("    XOR R0, R0, #" + std::to_string(immediate));
+                if (immediate != 0) {
+                    emit("    XOR R0, R0, #" +
+                         std::to_string(immediate));
+                }
                 emit("    SLTU R0, R0, #1");
                 if (op == "!=") {
                     emit("    XOR R0, R0, #1");
@@ -6751,6 +6754,69 @@ private:
             gen_expr(*expression.children[1]);
             emit("    " + mnemonic + " R0, R1, R0");
             return type_of(expression);
+        }
+        const bool integer_comparison =
+            op == "==" || op == "!=" || op == "<" || op == "<=" ||
+            op == ">" || op == ">=";
+        if (integer_comparison &&
+            expression.children[0]->kind == ExprKind::Name &&
+            expression.children[1]->kind == ExprKind::Name &&
+            is_integer(left_type) && is_integer(right_type) &&
+            !is_long_long(left_type) && !is_long_long(right_type)) {
+            Local* left_local = lookup_local(expression.children[0]->name);
+            Local* right_local = lookup_local(expression.children[1]->name);
+            const auto load_local = [&](Local* local, const TypePtr& type,
+                                        const std::string& reg) {
+                const std::string frame =
+                    "[R7 + " + std::to_string(local->offset) + "]";
+                if (type->kind == TypeKind::Builtin &&
+                    (type->builtin == BuiltinKind::Char ||
+                     type->builtin == BuiltinKind::Bool)) {
+                    emit("    LOAD8S " + reg + ", " + frame);
+                } else if (type->kind == TypeKind::Builtin &&
+                           (type->builtin == BuiltinKind::Short ||
+                            type->builtin == BuiltinKind::UnsignedShort)) {
+                    emit("    LOAD16S " + reg + ", " + frame);
+                } else {
+                    emit("    LOAD " + reg + ", " + frame);
+                }
+            };
+            const TypePtr left_local_type =
+                left_local != nullptr ? resolve_type(left_local->type)
+                                      : nullptr;
+            const TypePtr right_local_type =
+                right_local != nullptr ? resolve_type(right_local->type)
+                                       : nullptr;
+            if (left_local != nullptr && right_local != nullptr &&
+                left_local_type != nullptr && right_local_type != nullptr &&
+                !left_local->is_reference &&
+                left_local->static_global == nullptr &&
+                !right_local->is_reference &&
+                right_local->static_global == nullptr) {
+                load_local(left_local, left_local_type, "R0");
+                load_local(right_local, right_local_type, "R1");
+                const bool unsigned_compare =
+                    is_unsigned_operation(left_type, right_type);
+                const std::string slt = unsigned_compare ? "SLTU" : "SLT";
+                if (op == "==" || op == "!=") {
+                    emit("    XOR R0, R0, R1");
+                    emit("    SLTU R0, R0, #1");
+                    if (op == "!=") {
+                        emit("    XOR R0, R0, #1");
+                    }
+                } else if (op == "<") {
+                    emit("    " + slt + " R0, R0, R1");
+                } else if (op == ">") {
+                    emit("    " + slt + " R0, R1, R0");
+                } else if (op == "<=") {
+                    emit("    " + slt + " R0, R1, R0");
+                    emit("    XOR R0, R0, #1");
+                } else {
+                    emit("    " + slt + " R0, R0, R1");
+                    emit("    XOR R0, R0, #1");
+                }
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
         }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
