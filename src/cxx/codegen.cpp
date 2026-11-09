@@ -7404,6 +7404,35 @@ private:
                 virtual_dispatch = true;
             }
         }
+        if (member_call && !virtual_dispatch && expression.arguments.empty() &&
+            function->parameters.empty() && lambda_closure_offset < 0 &&
+            class_of(resolve_type(function->result)) == nullptr) {
+            if (expression.children[0]->kind == ExprKind::Member) {
+                const Expr& member = *expression.children[0];
+                if (member.is_arrow) {
+                    gen_expr(*member.children[0]);
+                } else {
+                    gen_address(*member.children[0]);
+                }
+            } else if (this_offset_ >= 0) {
+                emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
+            } else {
+                diagnose_once(expression, "member call outside a member function");
+                emit("    MOV R0, #0");
+            }
+            const std::string call_start = new_label("cs_start");
+            const std::string call_end = new_label("cs_end");
+            const std::string call_landing = new_label("cs_landing");
+            const std::string call_continue = new_label("cs_continue");
+            emit(call_start + ":");
+            emit("    CALL " + function->symbol);
+            emit(call_end + ":");
+            emit("    JMP " + call_continue);
+            emit_unwind_landing(call_landing);
+            emit(call_continue + ":");
+            record_call_site(call_start, call_end, call_landing);
+            return resolve_type(function->result);
+        }
         int this_temp = -1;
         if (member_call) {
             this_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));

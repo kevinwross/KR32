@@ -37,6 +37,15 @@ TEST_CASE("comparison conditions branch directly") {
     CHECK(result.assembly.find("STORE R0, [R7 + 8]") == std::string::npos);
 }
 
+TEST_CASE("zero-argument member calls avoid this temporaries") {
+    const cxx::Result result = cxx::compile(
+        "struct Box { int value; int get() { return value; } };\n"
+        "int f(Box* box) { return box->get(); }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("STORE R0, [R7 + 4]") == std::string::npos);
+    CHECK(result.assembly.find("CALL _ZN3Box3getEv") != std::string::npos);
+}
+
 TEST_CASE("simple calls avoid argument temporaries") {
     const cxx::Result result = cxx::compile(
         "int add(int a, int b) { return a + b; }\n"
