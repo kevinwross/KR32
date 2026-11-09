@@ -5832,6 +5832,66 @@ private:
         return promote(type);
     }
 
+    bool gen_comparison_jump_false(const Expr& expression,
+                                   const std::string& false_label) {
+        if (expression.kind != ExprKind::Binary ||
+            expression.children.size() != 2) {
+            return false;
+        }
+        const std::string& op = expression.text;
+        if (op != "==" && op != "!=" && op != "<" && op != "<=" &&
+            op != ">" && op != ">=") {
+            return false;
+        }
+        const TypePtr left_type = type_of(*expression.children[0]);
+        const TypePtr right_type = type_of(*expression.children[1]);
+        if (is_fp(left_type) || is_fp(right_type) ||
+            is_long_long(left_type) || is_long_long(right_type) ||
+            class_of(left_type) != nullptr ||
+            class_of(right_type) != nullptr) {
+            return false;
+        }
+        gen_expr(*expression.children[0]);
+        if (expression.children[1]->kind == ExprKind::IntegerLiteral) {
+            emit("    CMP R0, #" +
+                 std::to_string(expression.children[1]->integer));
+        } else {
+            emit("    PUSH R0");
+            gen_expr(*expression.children[1]);
+            emit("    MOV R1, R0");
+            emit("    POP R0");
+            emit("    CMP R0, R1");
+        }
+        const bool unsigned_compare =
+            is_unsigned_operation(left_type, right_type);
+        if (unsigned_compare) {
+            if (op == "==") emit("    JNZ " + false_label);
+            if (op == "!=") emit("    JZ " + false_label);
+            if (op == "<") emit("    JCS " + false_label);
+            if (op == "<=") emit("    JHI " + false_label);
+            if (op == ">") emit("    JLS " + false_label);
+            if (op == ">=") emit("    JNC " + false_label);
+        } else {
+            if (op == "==") emit("    JNZ " + false_label);
+            if (op == "!=") emit("    JZ " + false_label);
+            if (op == "<") emit("    JGE " + false_label);
+            if (op == "<=") emit("    JGT " + false_label);
+            if (op == ">") emit("    JLE " + false_label);
+            if (op == ">=") emit("    JLT " + false_label);
+        }
+        return true;
+    }
+
+    void gen_condition_jump_false(const Expr& expression,
+                                  const std::string& false_label) {
+        if (gen_comparison_jump_false(expression, false_label)) {
+            return;
+        }
+        gen_condition(expression);
+        emit("    CMP R0, #0");
+        emit("    JZ " + false_label);
+    }
+
     void gen_condition(const Expr& expression) {
         const TypePtr type = type_of(expression);
         if (ClassInfo* info = class_of(type)) {
@@ -7639,9 +7699,7 @@ private:
             }
             const std::string else_label = new_label("ifelse");
             const std::string end_label = new_label("ifend");
-            gen_condition(*statement.condition);
-            emit("    CMP R0, #0");
-            emit("    JZ " + else_label);
+            gen_condition_jump_false(*statement.condition, else_label);
             if (statement.body) {
                 gen_statement(*statement.body);
             }
@@ -7664,9 +7722,7 @@ private:
             break_labels_.push_back(end);
             continue_labels_.push_back(start);
             emit(start + ":");
-            gen_condition(*statement.condition);
-            emit("    CMP R0, #0");
-            emit("    JZ " + end);
+            gen_condition_jump_false(*statement.condition, end);
             if (statement.body) {
                 gen_statement(*statement.body);
             }

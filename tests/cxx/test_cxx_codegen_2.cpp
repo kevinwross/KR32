@@ -22,6 +22,15 @@ TEST_CASE("local scalar reads load directly") {
     CHECK(result.assembly.find("STORE R0, [R7 + 4]") != std::string::npos);
 }
 
+TEST_CASE("comparison conditions branch directly") {
+    const cxx::Result result = cxx::compile(
+        "int cond(int x) { if (x == 1) return 1; return 2; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("JNZ .Lifelse") != std::string::npos);
+    CHECK(result.assembly.find("cmpend") == std::string::npos);
+}
+
 TEST_CASE("scalar returns avoid spills") {
     const cxx::Result result = cxx::compile(
         "int ret() { int value = 2; return value; }\n");
