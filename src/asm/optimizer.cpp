@@ -985,6 +985,38 @@ int remove_redundant_jumps(std::vector<std::string>& lines) {
     return removed;
 }
 
+bool is_terminator(const std::string& mnemonic) {
+    return mnemonic == "RET" || mnemonic == "JMP" || mnemonic == "HALT";
+}
+
+int remove_unreachable_after_terminators(std::vector<std::string>& lines) {
+    int removed = 0;
+    bool unreachable = false;
+    for (std::string& line : lines) {
+        const std::string value = trim(line);
+        if (value.empty()) {
+            continue;
+        }
+        const bool label = value.back() == ':';
+        const bool directive = value.front() == '.';
+        if (unreachable) {
+            if (label || directive) {
+                unreachable = false;
+            } else {
+                line.clear();
+                ++removed;
+                continue;
+            }
+        }
+        Instruction instruction;
+        if (parse_instruction(line, instruction) &&
+            is_terminator(instruction.mnemonic)) {
+            unreachable = true;
+        }
+    }
+    return removed;
+}
+
 int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -1056,6 +1088,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_noop_moves(lines);
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
+    stats.removed += remove_unreachable_after_terminators(lines);
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += fold_frame_address_arithmetic(lines);
     stats.removed += fold_frame_addresses(lines);

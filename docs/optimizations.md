@@ -111,6 +111,10 @@ target-level cleanup.
      again, and replaces the sequence with one inverse conditional branch.
    - Applies to C condition code and other front ends that materialize booleans.
 
+11. **Unreachable instructions**
+   - Removes non-label instructions after `RET`, unconditional `JMP`, or
+     `HALT` until the next label or directive.
+
 ## Safety model
 
 The pass is deliberately conservative:

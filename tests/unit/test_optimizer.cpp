@@ -37,6 +37,21 @@ TEST_CASE("assembly optimizer folds pointer load offsets") {
     CHECK(assembly.find("ADD R0, R0, #4") == std::string::npos);
 }
 
+TEST_CASE("assembly optimizer removes unreachable instructions") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    JMP .Ldone\n"
+        "    MOV R0, #0\n"
+        ".Ldone:\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("MOV R0, #0") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer folds pointer store offsets") {
     std::string assembly =
         ".text\n"
