@@ -2067,7 +2067,16 @@ private:
                 return infer_lambda_value_type(*expression.children[0], found);
             }
             break;
-        case ExprKind::Binary:
+        case ExprKind::Name: {
+            const auto parameter =
+                lambda_parameter_types_.find(expression.name.to_string());
+            if (parameter != lambda_parameter_types_.end()) {
+                found = true;
+                return parameter->second;
+            }
+            break;
+        }
+        case ExprKind::Binary: {
             if (expression.text == "==" || expression.text == "!=" ||
                 expression.text == "<" || expression.text == "<=" ||
                 expression.text == ">" || expression.text == ">=" ||
@@ -2075,7 +2084,24 @@ private:
                 found = true;
                 return Type::make_builtin(BuiltinKind::Bool);
             }
+            if (expression.children.size() == 2) {
+                bool left_found = false;
+                bool right_found = false;
+                const TypePtr left =
+                    infer_lambda_value_type(*expression.children[0], left_found);
+                const TypePtr right =
+                    infer_lambda_value_type(*expression.children[1], right_found);
+                if (left_found || right_found) {
+                    found = true;
+                    if ((left_found && is_fp(left)) ||
+                        (right_found && is_fp(right))) {
+                        return Type::make_builtin(BuiltinKind::Double);
+                    }
+                    return Type::make_builtin(BuiltinKind::Int);
+                }
+            }
             break;
+        }
         default:
             break;
         }
@@ -2203,12 +2229,20 @@ private:
         declaration->name.parts.push_back(
             "__lambda_" + std::to_string(lambda_counter_++));
         declaration->body = expression.body;
+        lambda_parameter_types_.clear();
+        for (const DeclPtr& parameter : expression.parameters) {
+            if (parameter && !parameter->name.parts.empty()) {
+                lambda_parameter_types_[parameter->name.parts[0]] =
+                    resolve_type(parameter->type);
+            }
+        }
         if (expression.type) {
             declaration->type = resolve_type(expression.type);
         } else {
             bool inferred = false;
             declaration->type = infer_lambda_return_type(expression.body.get(), inferred);
         }
+        lambda_parameter_types_.clear();
         for (const DeclPtr& parameter : expression.parameters) {
             if (!parameter) {
                 continue;
@@ -6776,18 +6810,30 @@ private:
                 gen_expr(*expression.children[0]);
                 emit("    STORE R0, [R7 + " + std::to_string(callee_temp) +
                      "]");
-                std::vector<int> argument_temps;
+                std::vector<int> integer_temps;
+                std::vector<int> fp_temps;
+                std::vector<bool> fp_float32;
                 for (std::size_t index = 0;
                      index < expression.arguments.size(); ++index) {
                     const TypePtr parameter =
                         index < function_type->parameters.size()
                             ? resolve_type(function_type->parameters[index])
                             : Type::make_builtin(BuiltinKind::Int);
-                    if (is_fp(parameter) || class_of(parameter) != nullptr) {
+                    if (class_of(parameter) != nullptr) {
                         diagnose_once(expression,
-                                      "indirect calls support integer arguments only");
+                                      "indirect calls do not support class arguments");
                         emit("    MOV R0, #0");
                         return Type::make_builtin(BuiltinKind::Int);
+                    }
+                    if (is_fp(parameter)) {
+                        gen_as_fp(*expression.arguments[index], parameter);
+                        const int temp = allocate_local(parameter);
+                        emit(std::string("    FSTORE") +
+                             (is_float32(parameter) ? ".W" : ".D") +
+                             " F0, [R7 + " + std::to_string(temp) + "]");
+                        fp_temps.push_back(temp);
+                        fp_float32.push_back(is_float32(parameter));
+                        continue;
                     }
                     if (!gen_scalar_conversion(*expression.arguments[index],
                                                parameter)) {
@@ -6796,12 +6842,18 @@ private:
                     const int temp =
                         allocate_local(Type::make_builtin(BuiltinKind::Int));
                     emit("    STORE R0, [R7 + " + std::to_string(temp) + "]");
-                    argument_temps.push_back(temp);
+                    integer_temps.push_back(temp);
                 }
-                for (std::size_t index = 0; index < argument_temps.size();
+                for (std::size_t index = 0; index < integer_temps.size();
                      ++index) {
                     emit("    LOAD R" + std::to_string(index) + ", [R7 + " +
-                         std::to_string(argument_temps[index]) + "]");
+                         std::to_string(integer_temps[index]) + "]");
+                }
+                for (std::size_t index = 0; index < fp_temps.size(); ++index) {
+                    emit(std::string("    FLOAD") +
+                         (fp_float32[index] ? ".W" : ".D") + " F" +
+                         std::to_string(index) + ", [R7 + " +
+                         std::to_string(fp_temps[index]) + "]");
                 }
                 emit("    LOAD R4, [R7 + " + std::to_string(callee_temp) + "]");
                 emit("    CALL R4");
@@ -10384,6 +10436,7 @@ private:
     std::map<const Expr*, Function*> lambda_functions_;
     std::vector<DeclPtr> lambda_decl_storage_;
     int lambda_counter_ = 0;
+    std::map<std::string, TypePtr> lambda_parameter_types_;
     std::set<const Expr*> diagnosed_expressions_;
     std::set<Function*> emitted_functions_;
     struct ExceptionHandler {

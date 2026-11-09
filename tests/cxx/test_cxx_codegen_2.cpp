@@ -1088,6 +1088,25 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("indirect calls pass floating point arguments") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "double scale(int factor, double value) { return value * factor; }\n"
+        "int main() {\n"
+        "    double reals[3] = { 1.5, 3.5, 2.5 };\n"
+        "    std::sort(reals, reals + 3,\n"
+        "              [](double left, double right) { return right < left; });\n"
+        "    if (reals[0] != 3.5 || reals[2] != 1.5) return 1;\n"
+        "    double (*operation)(int, double) = scale;\n"
+        "    if (operation(3, 1.5) != 4.5) return 2;\n"
+        "    double (*square)(double) = [](double value) { return value * value; };\n"
+        "    return square(2.5) == 6.25 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std vector resize insert and erase") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"
