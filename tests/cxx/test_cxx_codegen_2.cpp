@@ -1088,6 +1088,22 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm finds unsigned and float extremes") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    unsigned int values[3] = { 9, 2, 7 };\n"
+        "    if (std::min_element(values, values + 3) != values + 1) return 1;\n"
+        "    if (std::max_element(values, values + 3) != values) return 2;\n"
+        "    float reals[3] = { 1.5f, 3.5f, 2.5f };\n"
+        "    if (std::min_element(reals, reals + 3) != reals) return 3;\n"
+        "    return std::max_element(reals, reals + 3) == reals + 1 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm finds minimum and maximum elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
