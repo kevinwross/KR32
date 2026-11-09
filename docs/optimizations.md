@@ -170,6 +170,12 @@ target-level cleanup.
    - Requires at least one removable load and avoids slots whose address
      escapes.
 
+21. **Loop comparison branch folding**
+   - Folds `SLT`/`SLTU` (optionally with `XOR #1`) plus `CMP #0` and
+     `JZ`/`JNZ` back into a direct `CMP` and conditional branch.
+   - Also folds equality materialization (`XOR`, `SLTU #1`) plus a zero test.
+   - This removes two instructions from common materialized loop conditions.
+
 ## Safety model
 
 The pass is deliberately conservative:
@@ -196,6 +202,6 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 
 ## Planned next steps
 
-1. Loop induction-variable and invariant load optimization.
+1. Loop-invariant load hoisting for loops with calls outside the body.
 2. Broader inlining for C and multi-statement C++ functions.
 3. Tail-call optimization, dead-function removal, and nothrow call metadata.

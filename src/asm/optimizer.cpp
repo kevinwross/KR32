@@ -1673,6 +1673,96 @@ int fold_comparison_values(std::vector<std::string>& lines) {
     return removed;
 }
 
+int fold_compare_materialization_branches(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 2 < lines.size(); ++index) {
+        Instruction first;
+        if (!parse_instruction(lines[index], first) ||
+            first.operands.size() < 3) {
+            continue;
+        }
+        const bool less =
+            first.mnemonic == "SLT" || first.mnemonic == "SLTU";
+        const bool equality = first.mnemonic == "XOR";
+        if (!less && !equality) {
+            continue;
+        }
+        int destination = 0;
+        if (!parse_register(first.operands[0], destination) ||
+            destination != 0) {
+            continue;
+        }
+        std::size_t compare_index = index + 1;
+        bool inverted = false;
+        if (less) {
+            Instruction maybe_invert;
+            if (parse_instruction(lines[compare_index], maybe_invert) &&
+                maybe_invert.mnemonic == "XOR" &&
+                maybe_invert.operands.size() == 2 &&
+                trim(maybe_invert.operands[0]) == "R0" &&
+                trim(maybe_invert.operands[1]) == "#1") {
+                inverted = true;
+                ++compare_index;
+            }
+        } else {
+            Instruction maybe_one;
+            if (!parse_instruction(lines[compare_index], maybe_one) ||
+                maybe_one.mnemonic != "SLTU" ||
+                maybe_one.operands.size() != 3 ||
+                trim(maybe_one.operands[0]) != "R0" ||
+                !parse_register(maybe_one.operands[1], destination) ||
+                destination != 0 ||
+                trim(maybe_one.operands[2]) != "#1") {
+                continue;
+            }
+            ++compare_index;
+        }
+        if (compare_index + 1 >= lines.size()) {
+            continue;
+        }
+        Instruction compare;
+        if (!parse_instruction(lines[compare_index], compare) ||
+            compare.mnemonic != "CMP" || compare.operands.size() != 2 ||
+            trim(compare.operands[0]) != "R0" ||
+            trim(compare.operands[1]) != "#0") {
+            continue;
+        }
+        Instruction branch;
+        if (!parse_instruction(lines[compare_index + 1], branch) ||
+            branch.operands.size() != 1 ||
+            (branch.mnemonic != "JZ" && branch.mnemonic != "JNZ")) {
+            continue;
+        }
+        const bool branch_true = branch.mnemonic == "JNZ";
+        const bool unsigned_compare = first.mnemonic == "SLTU";
+        std::string replacement;
+        if (equality) {
+            replacement = branch_true ? "JZ" : "JNZ";
+        } else if ((less && !inverted) || (inverted && !branch_true)) {
+            replacement = branch_true ? (unsigned_compare ? "JNC" : "JLT")
+                                      : (unsigned_compare ? "JCS" : "JGE");
+        } else {
+            replacement = branch_true ? (unsigned_compare ? "JCS" : "JGE")
+                                      : (unsigned_compare ? "JNC" : "JLT");
+        }
+        if (equality) {
+            lines[index] = "    CMP " + first.operands[1] + ", " +
+                           first.operands[2];
+        } else {
+            lines[index] = "    CMP " + first.operands[1] + ", " +
+                           first.operands[2];
+        }
+        for (std::size_t clear = index + 1; clear <= compare_index;
+             ++clear) {
+            lines[clear].clear();
+        }
+        lines[compare_index + 1] =
+            "    " + replacement + " " + trim(branch.operands[0]);
+        removed += static_cast<int>(compare_index - index);
+    }
+    return removed;
+}
+
 int fold_boolean_branches(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 8 < lines.size(); ++index) {
@@ -2279,6 +2369,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
     stats.removed += fold_immediate_consumers(lines);
     stats.removed += fold_comparison_values(lines);
+    stats.removed += fold_compare_materialization_branches(lines);
     stats.removed += fold_boolean_branches(lines);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 06:27 -08:00
+> **Last updated:** 2026-11-09 06:32 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2612,6 +2612,9 @@ Newest entries at the bottom. Use the local time zone.
       CFG and register/frame-slot liveness; P1 adds liveness dead-store/move
       elimination, block-local copy coalescing, and leaf scalar promotion to
       `R12`-`R15`. Full unoptimized suites pass 80/80 on Windows and Linux.
+- **2026-11-09 06:32 -08:00** — P2 folds `SLT`/equality materialization plus
+      `CMP #0` and a conditional branch back into a direct `CMP`/branch,
+      removing two instructions from common loop conditions.
 
 ## 10. Updating this file
 

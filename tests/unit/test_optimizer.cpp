@@ -23,6 +23,29 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("CMP R0, R1") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds comparison branches") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    SLT R0, R1, R2\n"
+        "    CMP R0, #0\n"
+        "    JZ .Ldone\n"
+        "    XOR R0, R1, R2\n"
+        "    SLTU R0, R0, #1\n"
+        "    CMP R0, #0\n"
+        "    JNZ .Ldone\n"
+        ".Ldone:\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("SLT R0") == std::string::npos);
+    CHECK(assembly.find("CMP R1, R2") != std::string::npos);
+    CHECK(assembly.find("JGE .Ldone") != std::string::npos);
+    CHECK(assembly.find("JZ .Ldone") != std::string::npos);
+}
+
 TEST_CASE("assembly optimizer promotes leaf locals") {
     std::string assembly =
         ".text\n"
