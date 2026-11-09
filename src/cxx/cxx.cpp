@@ -20,7 +20,8 @@ Result compile(std::string_view source, const Options& options) {
         return result;
     }
 
-    result.assembly = generate_assembly(*unit, result.diagnostics);
+    result.assembly = generate_assembly(*unit, result.diagnostics,
+                                       options.optimize);
     if (!result.diagnostics.empty()) {
         result.assembly.clear();
         return result;

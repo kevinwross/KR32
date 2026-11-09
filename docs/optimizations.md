@@ -7,7 +7,14 @@ target-level cleanup.
 
 ## Current `-O1` passes
 
-0. **Front-end constant folding and dead branches**
+0. **Trivial-function inlining (C++ `-O1`)**
+   - Inlines free, non-template functions whose body is a single `return`
+     expression.
+   - Parameters are bound to fresh frame slots holding the evaluated
+     arguments; the expression is generated at the call site.
+   - Recursive and class-result calls are not inlined.
+
+1. **Front-end constant folding and dead branches**
    - Integer constant expressions are folded before emission in both C and C++.
    - `1 + 2 * 3` becomes a single `MOV R0, #7`.
    - Constant right operands use immediate ALU and `CMP` forms, avoiding a

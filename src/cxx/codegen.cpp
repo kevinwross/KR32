@@ -481,8 +481,9 @@ namespace {
 
 class Generator {
 public:
-    explicit Generator(std::vector<Diagnostic>& diagnostics)
-        : diagnostics_(diagnostics) {
+    explicit Generator(std::vector<Diagnostic>& diagnostics,
+                       bool optimize = false)
+        : diagnostics_(diagnostics), optimize_(optimize) {
         type_aliases_["size_t"] = Type::make_builtin(BuiltinKind::UnsignedInt);
         type_aliases_["va_list"] =
             Type::make_pointer(Type::make_builtin(BuiltinKind::Char));
@@ -7387,6 +7388,70 @@ private:
             return Type::make_builtin(BuiltinKind::Int);
         }
         const bool member_call = function->is_member;
+        if (optimize_ && !function->is_member && !function->is_virtual &&
+            !function->variadic && !function->from_template &&
+            function->decl != nullptr && function->decl->body != nullptr &&
+            class_of(resolve_type(function->result)) == nullptr &&
+            function->parameters.size() == expression.arguments.size() &&
+            function->parameters.size() <= 4 &&
+            inline_stack_.find(function) == inline_stack_.end()) {
+            const Stmt* body = function->decl->body.get();
+            const Stmt* ret = nullptr;
+            if (body->kind == StmtKind::Compound &&
+                body->statements.size() == 1) {
+                const Stmt* child = body->statements[0].get();
+                if (child != nullptr && child->kind == StmtKind::Return &&
+                    child->expression) {
+                    ret = child;
+                }
+            }
+            bool scalar_parameters = ret != nullptr;
+            if (scalar_parameters) {
+                for (std::size_t index = 0;
+                     index < function->parameters.size(); ++index) {
+                    const TypePtr parameter =
+                        resolve_type(function->parameters[index]);
+                    if (parameter == nullptr || is_fp(parameter) ||
+                        is_long_long(parameter) ||
+                        parameter->kind == TypeKind::LValueRef ||
+                        parameter->kind == TypeKind::RValueRef ||
+                        class_of(parameter) != nullptr) {
+                        scalar_parameters = false;
+                        break;
+                    }
+                }
+            }
+            if (scalar_parameters) {
+                std::vector<int> slots;
+                slots.reserve(function->parameters.size());
+                for (std::size_t index = 0;
+                     index < expression.arguments.size(); ++index) {
+                    gen_expr(*expression.arguments[index]);
+                    const int slot = allocate_local(
+                        resolve_type(function->parameters[index]));
+                    emit("    STORE R0, [R7 + " + std::to_string(slot) + "]");
+                    slots.push_back(slot);
+                }
+                push_scope();
+                for (std::size_t index = 0;
+                     index < function->parameters.size(); ++index) {
+                    const Param& parameter =
+                        function->decl->parameters[index];
+                    if (parameter.name.parts.empty()) {
+                        continue;
+                    }
+                    Local local;
+                    local.type = resolve_type(function->parameters[index]);
+                    local.offset = slots[index];
+                    local_scopes_.back()[parameter.name.parts.back()] = local;
+                }
+                inline_stack_.insert(function);
+                const TypePtr result = gen_expr(*ret->expression);
+                inline_stack_.erase(function);
+                pop_scope();
+                return result;
+            }
+        }
         bool virtual_dispatch = false;
         if (function->is_virtual && function->vtable_index >= 0) {
             if (expression.children[0]->kind == ExprKind::Member) {
@@ -11119,6 +11184,8 @@ private:
     }
 
     std::vector<Diagnostic>& diagnostics_;
+    bool optimize_ = false;
+    std::set<Function*> inline_stack_;
     std::vector<std::unique_ptr<Function>> function_storage_;
     std::map<std::string, std::vector<Function*>> function_index_;
     std::map<std::string, std::vector<const Decl*>> template_functions_;
@@ -11237,8 +11304,9 @@ private:
 } // namespace
 
 std::string generate_assembly(const TranslationUnit& unit,
-                              std::vector<Diagnostic>& diagnostics) {
-    Generator generator(diagnostics);
+                              std::vector<Diagnostic>& diagnostics,
+                              bool optimize) {
+    Generator generator(diagnostics, optimize);
     return generator.run(unit);
 }
 

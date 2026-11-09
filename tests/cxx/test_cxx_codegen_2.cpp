@@ -56,6 +56,20 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("trivial functions inline at O1") {
+    cxx::Options options;
+    options.optimize = true;
+    const cxx::Result result = cxx::compile(
+        "struct N { int h; N* l; N* r; };\n"
+        "int heightOf(N* n) { return n == 0 ? 0 : n->h; }\n"
+        "int maximum(int a, int b) { return a > b ? a : b; }\n"
+        "int f(N* n) { return maximum(heightOf(n->l), heightOf(n->r)); }\n",
+        options);
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CALL _Z8heightOf") == std::string::npos);
+    CHECK(result.assembly.find("CALL _Z7maximum") == std::string::npos);
+}
+
 TEST_CASE("local compound assignments stay in registers") {
     const cxx::Result result = cxx::compile(
         "int addto(int a, int b) { a += b; return a; }\n");

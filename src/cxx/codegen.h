@@ -18,7 +18,8 @@ namespace kr32::cxx {
 // Lower a parsed translation unit to KR32 assembly. Returns an empty string and
 // appends diagnostics when the unit uses a construct that is not implemented
 // yet or fails semantic analysis.
-[[nodiscard]] std::string generate_assembly(const ast::TranslationUnit& unit,
-                                            std::vector<Diagnostic>& diagnostics);
+[[nodiscard]] std::string generate_assembly(
+    const ast::TranslationUnit& unit, std::vector<Diagnostic>& diagnostics,
+    bool optimize = false);
 
 } // namespace kr32::cxx
