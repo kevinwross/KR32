@@ -1081,6 +1081,7 @@ struct Type {
     int bit_offset = 0;
     bool is_bitfield = false;
     bool is_packed = false;
+    bool is_atomic = false;
     int explicit_alignment = 0;
 
 
@@ -1930,7 +1931,9 @@ private:
             expect("(");
             TypePtr base = parse_type();
             expect(")");
-            return base;
+            auto atomic = std::make_shared<Type>(*base);
+            atomic->is_atomic = true;
+            return atomic;
         }
         if (match("_Alignas")) {
             expect("(");
@@ -1948,6 +1951,7 @@ private:
         bool short_flag = false;
         parsed_extern_ = false;
         parsed_thread_local_ = false;
+        parsed_atomic_ = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
@@ -1961,6 +1965,8 @@ private:
                 parsed_extern_ = true;
             } else if (qualifier == "_Thread_local") {
                 parsed_thread_local_ = true;
+            } else if (qualifier == "_Atomic") {
+                parsed_atomic_ = true;
             } else if (qualifier == "unsigned") {
                 unsigned_flag = true;
             } else if (qualifier == "signed") {
@@ -2033,6 +2039,11 @@ private:
                 error("unsigned is only supported for short, int, and char");
             }
             base->is_unsigned = true;
+        }
+        if (parsed_atomic_ && !base->is_atomic) {
+            auto atomic = std::make_shared<Type>(*base);
+            atomic->is_atomic = true;
+            base = atomic;
         }
         while (match("*")) {
             base = type_pointer(base);
@@ -3262,6 +3273,17 @@ private:
     }
 
     void gen_load(const TypePtr& type) {
+        if (type->is_atomic && !is_long_long_type(type)) {
+            if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
+                emit(type->is_unsigned ? "    LOAD8U R0, [R0]" : "    LOAD8S R0, [R0]");
+            } else if (type->kind == Type::Kind::Short) {
+                emit(type->is_unsigned ? "    LOAD16U R0, [R0]" : "    LOAD16S R0, [R0]");
+            } else if (type->kind == Type::Kind::Int) {
+                emit("    LL R0, [R0]");
+            }
+            emit("    FENCE");
+            return;
+        }
         if (type->is_bitfield) {
             emit("    LOAD R0, [R0]");
             if (type->bit_offset > 0) {
@@ -3315,6 +3337,17 @@ private:
     }
 
     void gen_store(const TypePtr& type) {
+        if (type->is_atomic && !is_long_long_type(type)) {
+            if (type->kind == Type::Kind::Char || type->kind == Type::Kind::Bool) {
+                emit("    STORE8 R0, [R1]");
+            } else if (type->kind == Type::Kind::Short) {
+                emit("    STORE16 R0, [R1]");
+            } else if (type->kind == Type::Kind::Int) {
+                emit("    STORE R0, [R1]");
+            }
+            emit("    FENCE");
+            return;
+        }
         if (type->is_bitfield) {
             const std::uint32_t value_mask =
                 type->bit_width >= 32
@@ -5281,6 +5314,7 @@ private:
     std::map<std::string, Variable> globals_;
     bool parsed_extern_ = false;
     bool parsed_thread_local_ = false;
+    bool parsed_atomic_ = false;
     bool pending_packed_ = false;
     int pending_alignment_ = 0;
     std::map<std::string, FunctionSignature> functions_;

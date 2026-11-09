@@ -1,5 +1,23 @@
 #include "cc_test_support.h"
 
+TEST_CASE("c atomic declarations use atomic loads and stores") {
+    const ProgramResult program = compile_and_run(
+        "_Atomic int counter = 3;\n"
+        "_Atomic(int) total = 1;\n"
+        "_Atomic char flag = 'a';\n"
+        "int main(void) {\n"
+        "    if (counter != 3) return 1;\n"
+        "    counter = 7;\n"
+        "    if (counter != 7) return 2;\n"
+        "    total = 9;\n"
+        "    if (total != 9) return 3;\n"
+        "    flag = 'z';\n"
+        "    return flag == 'z' ? 0 : 4;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("c thread_local globals use tls storage") {
     const ProgramResult program = compile_and_run(
         "_Thread_local int first = 3;\n"
