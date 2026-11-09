@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 05:56 -08:00
+> **Last updated:** 2026-11-09 06:03 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2605,6 +2605,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-09 05:56 -08:00** — Rebuilt KR32OS BIOS and kernel with the current
       compiler. The OS build now defaults to `-O1`; the rebuilt kernel is
       30,944 bytes and the scripted boot/init/fault/wx smoke test exits 0.
+- **2026-11-09 06:03 -08:00** — Refreshed the checked-in embedded OS images from
+      the rebuilt kernels and relinked `kr32.exe`; embedded build id is
+      `bios-7d36f445-kernel-47a4f13a`.
 
 ## 10. Updating this file
 
