@@ -281,6 +281,32 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm copies ranges backward") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[3] = { 1, 2, 3 };\n"
+        "    int target[3] = { 0, 0, 0 };\n"
+        "    int* end = std::copy_backward(source, source + 3, target + 3);\n"
+        "    if (end != target) return 1;\n"
+        "    if (target[0] != 1 || target[2] != 3) return 2;\n"
+        "    char text[6] = \"abc\";\n"
+        "    char letters[6] = { 0, 0, 0, 0, 0, 0 };\n"
+        "    if (std::copy_backward(text, text + 3, letters + 5) != letters + 2) return 3;\n"
+        "    if (letters[2] != 'a' || letters[4] != 'c') return 4;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    double copied[2] = { 0.0, 0.0 };\n"
+        "    std::copy_backward(reals, reals + 2, copied + 2);\n"
+        "    if (copied[0] != 1.5 || copied[1] != 2.5) return 5;\n"
+        "    int values[4] = { 1, 2, 3, 0 };\n"
+        "    std::copy_backward(values, values + 3, values + 4);\n"
+        "    return values[1] == 1 && values[3] == 3 ? 0 : 6;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copies ranges without values") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
