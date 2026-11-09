@@ -7563,12 +7563,54 @@ private:
             inline_stack_.find(function) == inline_stack_.end()) {
             const Stmt* body = function->decl->body.get();
             const Stmt* ret = nullptr;
+            std::vector<const Stmt*> prefix;
             if (body->kind == StmtKind::Compound &&
-                body->statements.size() == 1) {
-                const Stmt* child = body->statements[0].get();
-                if (child != nullptr && child->kind == StmtKind::Return &&
-                    child->expression) {
-                    ret = child;
+                !body->statements.empty()) {
+                const Stmt* last = body->statements.back().get();
+                if (last != nullptr && last->kind == StmtKind::Return &&
+                    last->expression) {
+                    ret = last;
+                }
+            }
+            const auto plain_expression = [&](const Expr& expr,
+                                              const auto& self) -> bool {
+                switch (expr.kind) {
+                case ExprKind::IntegerLiteral:
+                case ExprKind::CharacterLiteral:
+                case ExprKind::BoolLiteral:
+                case ExprKind::Name:
+                case ExprKind::This:
+                case ExprKind::Member:
+                case ExprKind::Unary:
+                case ExprKind::Binary:
+                case ExprKind::Assign:
+                    break;
+                default:
+                    return false;
+                }
+                for (const ExprPtr& child : expr.children) {
+                    if (child != nullptr && !self(*child, self)) {
+                        return false;
+                    }
+                }
+                return true;
+            };
+            if (ret != nullptr) {
+                for (std::size_t index = 0;
+                     index + 1 < body->statements.size(); ++index) {
+                    const Stmt* child = body->statements[index].get();
+                    if (child == nullptr || child->kind == StmtKind::Empty) {
+                        continue;
+                    }
+                    if (child->kind != StmtKind::Expression ||
+                        !child->expression ||
+                        !plain_expression(*child->expression,
+                                          plain_expression)) {
+                        ret = nullptr;
+                        prefix.clear();
+                        break;
+                    }
+                    prefix.push_back(child);
                 }
             }
             bool scalar_parameters = ret != nullptr;
@@ -7641,6 +7683,9 @@ private:
                     }
                 }
                 inline_stack_.insert(function);
+                for (const Stmt* statement : prefix) {
+                    gen_statement(*statement);
+                }
                 const TypePtr result = gen_expr(*ret->expression);
                 inline_stack_.erase(function);
                 current_class_ = saved_class;

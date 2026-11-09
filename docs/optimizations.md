@@ -176,6 +176,12 @@ target-level cleanup.
    - Also folds equality materialization (`XOR`, `SLTU #1`) plus a zero test.
    - This removes two instructions from common materialized loop conditions.
 
+22. **Multi-statement C++ inlining**
+   - Extends trivial inlining to a straight-line prefix of plain
+     assignment, increment, and arithmetic statements followed by `return`.
+   - Prefixes with calls, declarations, control flow, or class construction
+     are rejected.
+
 ## Safety model
 
 The pass is deliberately conservative:

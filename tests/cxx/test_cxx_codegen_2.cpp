@@ -126,6 +126,33 @@ TEST_CASE("trivial functions inline at O1") {
     CHECK(result.assembly.find("CALL _ZN3Box3getEv") == std::string::npos);
 }
 
+TEST_CASE("multi-statement functions inline at O1") {
+    cxx::Options options;
+    options.optimize = true;
+    const cxx::Result result = cxx::compile(
+        "int adjust(int a) { a *= 3; return a + 1; }\n"
+        "struct Counter { int value; int bump() { value += 2; return value; } };\n"
+        "int call_adjust(int x) { return adjust(x); }\n"
+        "int call_bump(Counter* c) { return c->bump(); }\n",
+        options);
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CALL _Z6adjusti") == std::string::npos);
+    CHECK(result.assembly.find("CALL _ZN7Counter4bumpEv") ==
+          std::string::npos);
+}
+
+TEST_CASE("multi-statement inline behavior") {
+    const ProgramResult program = compile_and_run(
+        "struct Counter { int value; Counter(int v) : value(v) {} "
+        "int bump() { value += 2; return value; } };\n"
+        "int adjust(int a) { a *= 3; return a + 1; }\n"
+        "int main() { Counter c(1); if (c.bump() != 3) return 1; "
+        "if (c.bump() != 5) return 2; return adjust(2) == 7 ? 0 : 3; }\n",
+        true);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("local compound assignments stay in registers") {
     const cxx::Result result = cxx::compile(
         "int addto(int a, int b) { a += b; return a; }\n");
