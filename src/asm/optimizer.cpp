@@ -472,6 +472,91 @@ bool register_dead_after(const std::vector<std::string>& lines,
     return true;
 }
 
+bool is_conditional_jump(const std::string& mnemonic) {
+    return mnemonic == "JZ" || mnemonic == "JNZ" ||
+           mnemonic == "JLT" || mnemonic == "JLE" ||
+           mnemonic == "JGT" || mnemonic == "JGE" ||
+           mnemonic == "JCS" || mnemonic == "JNC" ||
+           mnemonic == "JLS" || mnemonic == "JHI";
+}
+
+int fold_pointer_load_offsets(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction adjust;
+        if (!parse_instruction(lines[index], adjust) ||
+            (adjust.mnemonic != "ADD" && adjust.mnemonic != "SUB") ||
+            adjust.operands.size() != 3) {
+            continue;
+        }
+        int destination = 0;
+        int left = 0;
+        int value = 0;
+        if (!parse_register(adjust.operands[0], destination) ||
+            !parse_register(adjust.operands[1], left) ||
+            left != destination || adjust.operands[2].empty() ||
+            adjust.operands[2].front() != '#') {
+            continue;
+        }
+        try {
+            value = std::stoi(adjust.operands[2].substr(1));
+        } catch (...) {
+            continue;
+        }
+        if (adjust.mnemonic == "SUB") {
+            value = -value;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction consumer;
+        if (!parse_instruction(lines[next], consumer) ||
+            consumer.operands.size() != 2) {
+            continue;
+        }
+        const bool load = consumer.mnemonic == "LOAD" ||
+                          consumer.mnemonic == "LOAD8S" ||
+                          consumer.mnemonic == "LOAD8U" ||
+                          consumer.mnemonic == "LOAD16S" ||
+                          consumer.mnemonic == "LOAD16U";
+        if (!load) {
+            continue;
+        }
+        int loaded = 0;
+        int address = 0;
+        int offset = 0;
+        if (!parse_register(consumer.operands[0], loaded) ||
+            loaded != destination ||
+            !parse_register_offset(consumer.operands[1], address, offset) ||
+            address != destination || offset != 0) {
+            continue;
+        }
+        std::size_t after = next + 1;
+        while (after < lines.size() && lines[after].empty()) {
+            ++after;
+        }
+        if (after < lines.size()) {
+            Instruction following;
+            if (parse_instruction(lines[after], following) &&
+                is_conditional_jump(following.mnemonic)) {
+                continue;
+            }
+        }
+        consumer.operands[1] =
+            "[" + adjust.operands[1] +
+            (value >= 0 ? " + " : " - ") +
+            std::to_string(value >= 0 ? value : -value) + "]";
+        lines[next] = format_instruction(consumer);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int fold_frame_address_arithmetic(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -891,6 +976,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
+    stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += fold_frame_address_arithmetic(lines);
     stats.removed += fold_frame_addresses(lines);

@@ -87,10 +87,15 @@ target-level cleanup.
      `STORE Rs, [R7 + n]`.
    - Removes the `LEA` only when its register is provably dead.
 
-8. **Zero frame adjustments**
+8. **Pointer load offsets**
+   - Folds `ADD/SUB reg, reg, #off` followed by `LOAD reg, [reg]` into one
+     offset load.
+   - Skips the transformation if a conditional branch immediately follows.
+
+9. **Zero frame adjustments**
    - Removes `ADJSP #0` and `ADJSP #-0` from functions with no locals.
 
-9. **Boolean branch folding**
+10. **Boolean branch folding**
    - Recognizes a comparison materialized to `0`/`1` and immediately tested
      again, and replaces the sequence with one inverse conditional branch.
    - Applies to C condition code and other front ends that materialize booleans.
