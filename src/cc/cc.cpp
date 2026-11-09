@@ -3473,10 +3473,36 @@ private:
         return type;
     }
 
+    bool try_fold_constant(std::int64_t& value) {
+        const std::size_t saved = position_;
+        try {
+            value = constant_expression();
+        } catch (const CompileError&) {
+            position_ = saved;
+            return false;
+        }
+        const Token& next = peek();
+        const bool terminates =
+            next.kind == TokenKind::End || next.text == ";" ||
+            next.text == "," || next.text == ")" || next.text == "]" ||
+            next.text == ":" || next.text == "}";
+        if (!terminates || value < -2147483647LL - 1 ||
+            value > 2147483647LL) {
+            position_ = saved;
+            return false;
+        }
+        return true;
+    }
+
     TypePtr gen_expression() {
         if (peek().text == "__extension__") {
             take();
             return gen_expression();
+        }
+        std::int64_t folded = 0;
+        if (try_fold_constant(folded)) {
+            emit("    MOV R0, #" + std::to_string(folded));
+            return type_int();
         }
         return gen_assignment_expression();
     }

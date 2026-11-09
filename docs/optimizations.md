@@ -7,6 +7,13 @@ target-level cleanup.
 
 ## Current `-O1` passes
 
+0. **Front-end constant folding and dead branches**
+   - Integer constant expressions are folded before emission in both C and C++.
+   - `1 + 2 * 3` becomes a single `MOV R0, #7`.
+   - C++ `if (0)`, `while (0)`, and `for (; 0;)` bodies are not emitted.
+   - Only the required language constant-evaluation contexts were previously
+     folded; ordinary expressions now use the same evaluation.
+
 1. **Frame-slot forwarding**
    - Tracks `STORE reg, [R7 + n]` within a basic block.
    - Replaces a later `LOAD ..., [R7 + n]` with a register move when the stored
@@ -60,8 +67,8 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 
 ## Planned next steps
 
-1. Front-end constant folding for ordinary expressions.
-2. Constant-condition pruning and unreachable statement removal.
+1. Constant-condition pruning in the C statement generator.
+2. Unreachable statement removal after `return`, `break`, and `continue`.
 3. More aggressive spill elimination with local value numbering.
 4. Register allocation across straight-line regions.
 5. Inlining and loop optimizations only after the above are stable.

@@ -1,5 +1,14 @@
 #include "cc_test_support.h"
 
+TEST_CASE("c constant folding") {
+    const cc::Result result = cc::compile(
+        "int math(void) { return 1 + 2 * 3; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("MOV R0, #7") != std::string::npos);
+    CHECK(result.assembly.find("MUL") == std::string::npos);
+    CHECK(result.assembly.find("ADD") == std::string::npos);
+}
+
 TEST_CASE("optimized c programs preserve behavior") {
     const ProgramResult program = compile_and_run(
         "int add(int left, int right) { return left + right; }\n"

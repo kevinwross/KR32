@@ -6323,6 +6323,23 @@ private:
 
     TypePtr gen_binary(const Expr& expression) {
         const std::string& op = expression.text;
+        std::int64_t folded = 0;
+        if (eval_const(expression, folded)) {
+            const TypePtr result = type_of(expression);
+            if (!is_fp(result)) {
+                if (is_long_long(result)) {
+                    emit("    MOV R0, #" +
+                         std::to_string(static_cast<std::uint32_t>(folded)));
+                    emit("    MOV R1, #" +
+                         std::to_string(static_cast<std::uint32_t>(
+                             static_cast<std::uint64_t>(folded) >> 32)));
+                } else {
+                    emit("    MOV R0, #" +
+                         std::to_string(static_cast<std::int32_t>(folded)));
+                }
+                return result;
+            }
+        }
         const TypePtr left_operand = type_of(*expression.children[0]);
         if (Function* operation = find_member_operator(
                 class_of(left_operand), "operator" + op,
@@ -7470,6 +7487,18 @@ private:
             }
             return;
         case StmtKind::If: {
+            std::int64_t folded = 0;
+            if (statement.condition &&
+                eval_const(*statement.condition, folded)) {
+                if (folded != 0) {
+                    if (statement.body) {
+                        gen_statement(*statement.body);
+                    }
+                } else if (statement.else_body) {
+                    gen_statement(*statement.else_body);
+                }
+                return;
+            }
             const std::string else_label = new_label("ifelse");
             const std::string end_label = new_label("ifend");
             gen_condition(*statement.condition);
@@ -7487,6 +7516,11 @@ private:
             return;
         }
         case StmtKind::While: {
+            std::int64_t folded = 0;
+            if (statement.condition &&
+                eval_const(*statement.condition, folded) && folded == 0) {
+                return;
+            }
             const std::string start = new_label("while");
             const std::string end = new_label("whileend");
             break_labels_.push_back(end);
@@ -7527,6 +7561,12 @@ private:
                 declare_local(*statement.declaration);
             } else if (statement.expression) {
                 gen_expr(*statement.expression);
+            }
+            std::int64_t folded = 0;
+            if (statement.condition &&
+                eval_const(*statement.condition, folded) && folded == 0) {
+                pop_scope();
+                return;
             }
             const std::string start = new_label("for");
             const std::string increment = new_label("forinc");

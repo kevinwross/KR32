@@ -1,5 +1,15 @@
 #include "cxx_test_support.h"
 
+TEST_CASE("constant folding and dead branches") {
+    const cxx::Result result = cxx::compile(
+        "int math() { return 1 + 2 * 3; }\n"
+        "int branch() { if (0) return 1; return 2; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("MOV R0, #7") != std::string::npos);
+    CHECK(result.assembly.find("MUL R0") == std::string::npos);
+    CHECK(result.assembly.find("ifelse") == std::string::npos);
+}
+
 TEST_CASE("optimized programs preserve behavior") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"
