@@ -281,6 +281,29 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm copies rotated ranges") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[5] = { 1, 2, 3, 4, 5 };\n"
+        "    int target[5] = { 0, 0, 0, 0, 0 };\n"
+        "    int* end = std::rotate_copy(source, source + 2, source + 5, target);\n"
+        "    if (end != target + 5) return 1;\n"
+        "    if (target[0] != 3 || target[2] != 5 || target[3] != 1) return 2;\n"
+        "    char text[5] = \"abcde\";\n"
+        "    char letters[5] = { 0, 0, 0, 0, 0 };\n"
+        "    if (std::rotate_copy(text, text + 1, text + 5, letters) != letters + 5) return 3;\n"
+        "    if (letters[0] != 'b' || letters[4] != 'a') return 4;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    double copied[3] = { 0.0, 0.0, 0.0 };\n"
+        "    std::rotate_copy(reals, reals + 2, reals + 3, copied);\n"
+        "    return copied[0] == 3.5 && copied[1] == 1.5 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copies ranges in reverse") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
