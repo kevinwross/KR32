@@ -127,6 +127,11 @@ target-level cleanup.
      register when no store, call, unconditional jump, or register write
      intervenes.
 
+13. **Symbol address folding**
+   - Folds `LEA R, [symbol]` plus `LOAD R, [R]` into `LOAD R, [symbol]`.
+   - Folds stores through a symbol address when the address register is
+     immediately overwritten.
+
 ## Safety model
 
 The pass is deliberately conservative:

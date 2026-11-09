@@ -558,6 +558,135 @@ int fold_pointer_load_offsets(std::vector<std::string>& lines) {
     return removed;
 }
 
+bool parse_symbol_address(std::string_view text, std::string& symbol) {
+    const std::string value = trim(text);
+    if (value.size() < 3 || value.front() != '[' || value.back() != ']') {
+        return false;
+    }
+    const std::string inside =
+        trim(value.substr(1, value.size() - 2));
+    if (inside.empty() || inside.find_first_of("+-* /") != std::string::npos) {
+        return false;
+    }
+    int reg = 0;
+    if (parse_register(inside, reg)) {
+        return false;
+    }
+    symbol = inside;
+    return true;
+}
+
+int fold_symbol_address_loads(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        std::string symbol;
+        if (!parse_register(address.operands[0], destination) ||
+            !parse_symbol_address(address.operands[1], symbol)) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction load;
+        if (!parse_instruction(lines[next], load) ||
+            load.operands.size() != 2) {
+            continue;
+        }
+        const bool loads_value = load.mnemonic == "LOAD" ||
+                                 load.mnemonic == "LOAD8S" ||
+                                 load.mnemonic == "LOAD8U" ||
+                                 load.mnemonic == "LOAD16S" ||
+                                 load.mnemonic == "LOAD16U";
+        if (!loads_value) {
+            continue;
+        }
+        int loaded = 0;
+        int address_register = 0;
+        if (!parse_register(load.operands[0], loaded) ||
+            loaded != destination ||
+            !parse_register_address(load.operands[1], address_register) ||
+            address_register != destination) {
+            continue;
+        }
+        load.operands[1] = "[" + symbol + "]";
+        lines[next] = format_instruction(load);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
+int fold_symbol_address_stores(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        std::string symbol;
+        if (!parse_register(address.operands[0], destination) ||
+            destination == 7 || destination == 11 ||
+            !parse_symbol_address(address.operands[1], symbol)) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction store;
+        if (!parse_instruction(lines[next], store) ||
+            (store.mnemonic != "STORE" &&
+             store.mnemonic != "STORE8" &&
+             store.mnemonic != "STORE16") ||
+            store.operands.size() != 2) {
+            continue;
+        }
+        int source = 0;
+        int address_register = 0;
+        if (!parse_register(store.operands[0], source) ||
+            source == destination ||
+            !parse_register_address(store.operands[1], address_register) ||
+            address_register != destination) {
+            continue;
+        }
+        std::size_t after = next + 1;
+        while (after < lines.size() && lines[after].empty()) {
+            ++after;
+        }
+        if (after >= lines.size()) {
+            continue;
+        }
+        Instruction overwrite;
+        int overwritten = 0;
+        if (!parse_instruction(lines[after], overwrite) ||
+            !writes_first_operand(overwrite) ||
+            !parse_register(overwrite.operands[0], overwritten) ||
+            overwritten != destination) {
+            continue;
+        }
+        store.operands[1] = "[" + symbol + "]";
+        lines[next] = format_instruction(store);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int fold_pointer_store_offsets(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -1224,6 +1353,8 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
+    stats.removed += fold_symbol_address_loads(lines);
+    stats.removed += fold_symbol_address_stores(lines);
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
     stats.removed += remove_repeated_frame_loads(lines);

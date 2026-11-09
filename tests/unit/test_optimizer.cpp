@@ -22,6 +22,26 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("MOV R2, R0") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds symbol addresses") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [counter]\n"
+        "    LOAD R0, [R0]\n"
+        "    LEA R1, [counter]\n"
+        "    STORE R0, [R1]\n"
+        "    MOV R1, #0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("LOAD R0, [counter]") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [counter]") != std::string::npos);
+    CHECK(assembly.find("LEA R0, [counter]") == std::string::npos);
+    CHECK(assembly.find("LEA R1, [counter]") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer folds pointer load offsets") {
     std::string assembly =
         ".text\n"
