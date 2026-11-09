@@ -281,6 +281,26 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm builds heaps") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 3, 1, 4, 1, 5 };\n"
+        "    std::make_heap(values, values + 5);\n"
+        "    if (!std::is_heap(values, values + 5)) return 1;\n"
+        "    if (values[0] != 5) return 2;\n"
+        "    char text[3] = \"cab\";\n"
+        "    std::make_heap(text, text + 3);\n"
+        "    if (!std::is_heap(text, text + 3)) return 3;\n"
+        "    double reals[3] = { 1.5, 3.5, 2.5 };\n"
+        "    std::make_heap(reals, reals + 3);\n"
+        "    return std::is_heap(reals, reals + 3) ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm reports heap prefixes") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
