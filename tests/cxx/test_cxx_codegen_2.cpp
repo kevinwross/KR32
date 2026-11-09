@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm advances permutations") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[3] = { 1, 2, 3 };\n"
+        "    if (!std::next_permutation(values, values + 3)) return 1;\n"
+        "    if (values[0] != 1 || values[1] != 3 || values[2] != 2) return 2;\n"
+        "    int descending[3] = { 3, 2, 1 };\n"
+        "    if (std::next_permutation(descending, descending + 3)) return 3;\n"
+        "    if (descending[0] != 1 || descending[2] != 3) return 4;\n"
+        "    char text[4] = \"abc\";\n"
+        "    if (!std::next_permutation(text, text + 3)) return 5;\n"
+        "    if (text[1] != 'c') return 6;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    std::next_permutation(reals, reals + 3);\n"
+        "    return reals[1] == 3.5 ? 0 : 7;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm swaps individual elements") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
