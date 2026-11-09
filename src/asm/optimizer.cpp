@@ -52,6 +52,14 @@ bool parse_register(std::string_view text, int& reg) {
     return true;
 }
 
+bool parse_register_address(std::string_view text, int& reg) {
+    const std::string value = trim(text);
+    if (value.size() < 3 || value.front() != '[' || value.back() != ']') {
+        return false;
+    }
+    return parse_register(value.substr(1, value.size() - 2), reg);
+}
+
 bool parse_frame_slot(std::string_view text, int& slot) {
     const std::string value = trim(text);
     if (value.size() < 4 || value.front() != '[' || value.back() != ']') {
@@ -381,6 +389,47 @@ int fold_immediate_consumers(std::vector<std::string>& lines) {
     return removed;
 }
 
+int fold_frame_addresses(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int address_register = 0;
+        int slot = 0;
+        if (!parse_register(address.operands[0], address_register) ||
+            !parse_frame_slot(address.operands[1], slot)) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        Instruction load;
+        if (next >= lines.size() ||
+            !parse_instruction(lines[next], load) ||
+            load.mnemonic != "LOAD" || load.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int loaded_address = 0;
+        if (!parse_register(load.operands[0], destination) ||
+            !parse_register_address(load.operands[1], loaded_address) ||
+            loaded_address != address_register) {
+            continue;
+        }
+        load.operands[1] = "[R7 + " + std::to_string(slot) + "]";
+        lines[next] = format_instruction(load);
+        if (destination == address_register) {
+            lines[index].clear();
+            ++removed;
+        }
+    }
+    return removed;
+}
+
 int remove_dead_frame_stores(std::vector<std::string>& lines) {
     int removed = 0;
     std::map<int, std::set<int>> used;
@@ -608,6 +657,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
+    stats.removed += fold_frame_addresses(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
     stats.removed += fold_immediate_consumers(lines);
     stats.removed += remove_dead_frame_stores(lines);

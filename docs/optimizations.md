@@ -55,6 +55,11 @@ target-level cleanup.
      function.
    - Keeps stores to slots whose address is taken with `LEA`.
 
+7. **Frame address folding**
+   - Folds `LEA R, [R7 + n]` followed by `LOAD Rd, [R]` into a direct
+     `LOAD Rd, [R7 + n]`.
+   - Removes the `LEA` when its register is only serving as the address.
+
 ## Safety model
 
 The pass is deliberately conservative:

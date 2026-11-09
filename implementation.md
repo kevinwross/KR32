@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 20:51 -08:00
+> **Last updated:** 2026-11-08 20:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2519,6 +2519,8 @@ Newest entries at the bottom. Use the local time zone.
       after a vector regression. Store-based frame forwarding remains.
 - **2026-11-08 20:51 -08:00** — Added C++ immediate comparison codegen,
       matching C and avoiding operand spills for `value == constant`.
+- **2026-11-08 20:58 -08:00** — Folded `LEA [R7+n]` plus `LOAD [reg]` into a
+      direct frame load in `-O1`.
 
 ## 10. Updating this file
 
