@@ -281,6 +281,25 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm swaps individual elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[2] = { 1, 2 };\n"
+        "    std::iter_swap(values, values + 1);\n"
+        "    if (values[0] != 2 || values[1] != 1) return 1;\n"
+        "    char text[3] = \"ab\";\n"
+        "    std::iter_swap(text, text + 1);\n"
+        "    if (text[0] != 'b' || text[1] != 'a') return 2;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    std::iter_swap(reals, reals + 1);\n"
+        "    return reals[0] == 2.5 && reals[1] == 1.5 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copies ranges backward") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

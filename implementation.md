@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 16:13 -08:00
+> **Last updated:** 2026-11-08 16:16 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2410,6 +2410,8 @@ Newest entries at the bottom. Use the local time zone.
       double arrays.
 - **2026-11-08 16:13 -08:00** — Added `std::copy_backward` for int, char, and
       double arrays.
+- **2026-11-08 16:16 -08:00** — Added `std::iter_swap` for int, char, and
+      double pointers.
 
 ## 10. Updating this file
 
