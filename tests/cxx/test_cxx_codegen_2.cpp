@@ -1122,6 +1122,28 @@ TEST_CASE("indirect calls pass floating point arguments") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std vector resize preserves and zero fills") {
+    const ProgramResult program = compile_and_run(
+        "#include <vector>\n"
+        "#include <utility>\n"
+        "int main() {\n"
+        "    std::vector<int> values;\n"
+        "    values.push_back(4);\n"
+        "    values.resize(3);\n"
+        "    if (values.size() != 3 || values[0] != 4) return 1;\n"
+        "    if (values[2] != 0) return 2;\n"
+        "    values.resize(1);\n"
+        "    if (values.size() != 1 || values[0] != 4) return 3;\n"
+        "    std::vector<std::pair<int, int> > pairs;\n"
+        "    pairs.resize(2);\n"
+        "    if (pairs.size() != 2) return 4;\n"
+        "    return pairs[1].first == 0 && pairs[1].second == 0 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std vector resize insert and erase") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"
