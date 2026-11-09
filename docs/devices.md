@@ -1,5 +1,13 @@
 # Devices, time, and multicore (M8)
 
+> **Display contract is being revised.** [display.md](display.md) is the
+> proposal for framebuffer v2 (commit on `FLIP`, a frame counter, an explicit
+> XRGB8888 format) and for a keyboard device. This document describes the
+> implemented v1 and remains authoritative for it until v2 lands. Do not edit
+> the framebuffer section from another stream; add a note under **Open
+> questions** in `display.md` instead. See [README.md](README.md) for the
+> active work streams.
+
 ## MMIO map
 
 Devices live in the 960 KiB window at `0xFFF0_0000`:
@@ -12,6 +20,7 @@ Devices live in the 960 KiB window at `0xFFF0_0000`:
 | `0xFFF0_3000` | IRQ router | 3 |
 | `0xFFF0_4000` | framebuffer control | 4 |
 | `0xFFF0_5000` | serial tty | 5 |
+| `0xFFF0_6000` | keyboard (proposed, see [display.md](display.md)) | 6 |
 
 Accesses go through the normal load/store path. `Machine` checks the device
 window before RAM/ROM and forwards aligned 32-bit accesses to the `DeviceBus`;
@@ -38,11 +47,14 @@ from the MMIO window:
 
 | Base | Contents |
 | --- | --- |
-| `0xFC00_0000` | front surface: 1920×1080, 32-bit RGBA, 7680-byte stride |
-| `0xFC7E_9000` | back surface |
+| `0xFC00_0000` | surface 0: 1920×1080, 32-bit XRGB8888, 7680-byte stride |
+| `0xFC7E_9000` | surface 1: same geometry |
 
-Pixel accesses use normal little-endian 32-bit storage. Control registers are
-in the MMIO page at `0xFFF0_4000`:
+Pixel accesses use normal little-endian 32-bit storage. A pixel word is
+`0x00RRGGBB`, so its bytes in memory are `B, G, R, 0`. The earlier
+"RGBA8888" wording was ambiguous about byte order; `display.md` names the
+format explicitly and supersedes it. Control registers are in the MMIO page at
+`0xFFF0_4000`:
 
 | Offset | Register |
 | --- | --- |
@@ -50,10 +62,15 @@ in the MMIO page at `0xFFF0_4000`:
 | `0x04` | width |
 | `0x08` | height |
 | `0x0C` | stride |
-| `0x10` | format (`1` = RGBA8888) |
+| `0x10` | format (`1` = XRGB8888) |
 | `0x14` | front-buffer offset |
 | `0x18` | back-buffer offset |
 | `0x1C` | status |
+
+In v1 `FRONT` and `BACK` are ordinary offsets, `STATUS` only reports the enable
+bit, and there is no flip or frame counter. [display.md](display.md) section 5
+specifies the proposed v2 contract: commit on `FLIP`, a committed-frame
+counter, an `ID` register, and `FLIP`-time bounds validation.
 
 ## Timer
 
@@ -65,8 +82,12 @@ in the MMIO page at `0xFFF0_4000`:
 | 0x0C | status bit 0 pending (write 1 clears) |
 | 0x10 | IRQ line 0..15 |
 
-`DeviceBus::tick()` decrements the timer once per scheduler turn. When the
-count reaches zero it sets pending and, if enabled, raises the configured line.
+`DeviceBus::tick()` decrements the timer once per tick. A `Machine` attached
+with `tick_devices = true` ticks devices after every retired instruction, while
+`Cluster` attaches with `false` and ticks once per cluster step. The two
+periods are documented here because they differ; [display.md](display.md)
+recommends stating one rule for all attach modes. When the count reaches zero
+the timer sets pending and, if enabled, raises the configured line.
 
 ## Block
 
@@ -112,3 +133,8 @@ produce the same counter value.
 The machine tab displays the current core id and control state; a full
 multi-core selector/per-core panel layout is a UI follow-up. DMA is
 synchronous rather than tick-scheduled.
+
+The framebuffer has no host presentation path: nothing renders the aperture, so
+pixels are only observable through memory reads. It also has no flip, no frame
+counter, and no bounds validation of a whole surface. Those gaps are the
+subject of [display.md](display.md).
