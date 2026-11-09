@@ -518,6 +518,34 @@ std::string preprocess(std::string_view source, const std::string& source_name,
                         "int isprint(int c); int isgraph(int c); "
                         "int ispunct(int c); int tolower(int c); "
                         "int toupper(int c);";
+                } else if (directive.find("stdatomic.h") != std::string::npos) {
+                    result +=
+                        "typedef int atomic_int; "
+                        "typedef unsigned int atomic_uint; "
+                        "typedef char atomic_char; "
+                        "typedef _Bool atomic_bool; "
+                        "typedef int memory_order;";
+                    macros["memory_order_relaxed"] = "0";
+                    macros["memory_order_consume"] = "1";
+                    macros["memory_order_acquire"] = "2";
+                    macros["memory_order_release"] = "3";
+                    macros["memory_order_acq_rel"] = "4";
+                    macros["memory_order_seq_cst"] = "5";
+                    function_macros["ATOMIC_VAR_INIT"] =
+                        FunctionMacro{{"value"}, "(value)"};
+                    function_macros["atomic_load"] =
+                        FunctionMacro{{"object"},
+                                      "__atomic_load_n((object), 0)"};
+                    function_macros["atomic_store"] =
+                        FunctionMacro{{"object", "desired"},
+                                      "__atomic_store_n((object), (desired), 0)"};
+                    function_macros["atomic_fetch_add"] =
+                        FunctionMacro{{"object", "operand"},
+                                      "__atomic_fetch_add((object), (operand), 0)"};
+                    function_macros["atomic_compare_exchange_strong"] =
+                        FunctionMacro{{"object", "expected", "desired"},
+                                      "__atomic_compare_exchange_n((object), "
+                                      "(expected), (desired), 0, 0, 0)"};
                 } else if (directive.find("stdint.h") != std::string::npos) {
                     result +=
                         "typedef signed char int8_t; "
@@ -4851,6 +4879,99 @@ private:
         if (peek().kind == TokenKind::Identifier) {
             const std::string name = take().text;
             if (match("(")) {
+                if (name == "__atomic_load_n") {
+                    gen_expression();
+                    const int address = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                    if (match(",")) {
+                        gen_expression();
+                    }
+                    expect(")");
+                    emit("    LOAD R1, [R7 + " + std::to_string(address) + "]");
+                    emit("    LL R0, [R1]");
+                    emit("    FENCE");
+                    return type_int();
+                }
+                if (name == "__atomic_store_n") {
+                    gen_expression();
+                    const int address = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                    expect(",");
+                    gen_expression();
+                    const int value = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(value) + "]");
+                    while (match(",")) {
+                        gen_expression();
+                    }
+                    expect(")");
+                    emit("    LOAD R0, [R7 + " + std::to_string(address) + "]");
+                    emit("    LOAD R1, [R7 + " + std::to_string(value) + "]");
+                    emit("    STORE R1, [R0]");
+                    emit("    FENCE");
+                    emit("    MOV R0, #0");
+                    return type_void();
+                }
+                if (name == "__atomic_fetch_add") {
+                    gen_expression();
+                    const int address = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                    expect(",");
+                    gen_expression();
+                    const int value = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(value) + "]");
+                    while (match(",")) {
+                        gen_expression();
+                    }
+                    expect(")");
+                    const std::string loop = new_label("atomic_add");
+                    emit(loop + ":");
+                    emit("    LOAD R0, [R7 + " + std::to_string(address) + "]");
+                    emit("    LL R1, [R0]");
+                    emit("    LOAD R2, [R7 + " + std::to_string(value) + "]");
+                    emit("    ADD R2, R1, R2");
+                    emit("    SC R2, [R0]");
+                    emit("    JNZ " + loop);
+                    emit("    MOV R0, R1");
+                    return type_int();
+                }
+                if (name == "__atomic_compare_exchange_n") {
+                    gen_expression();
+                    const int address = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(address) + "]");
+                    expect(",");
+                    gen_expression();
+                    const int expected = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(expected) + "]");
+                    expect(",");
+                    gen_expression();
+                    const int desired = allocate_local(type_int());
+                    emit("    STORE R0, [R7 + " + std::to_string(desired) + "]");
+                    while (match(",")) {
+                        gen_expression();
+                    }
+                    expect(")");
+                    const std::string loop = new_label("atomic_cas");
+                    const std::string fail = new_label("atomic_cas_fail");
+                    const std::string done = new_label("atomic_cas_done");
+                    emit(loop + ":");
+                    emit("    LOAD R0, [R7 + " + std::to_string(address) + "]");
+                    emit("    LL R1, [R0]");
+                    emit("    LOAD R2, [R7 + " + std::to_string(expected) + "]");
+                    emit("    LOAD R2, [R2]");
+                    emit("    CMP R1, R2");
+                    emit("    JNZ " + fail);
+                    emit("    LOAD R3, [R7 + " + std::to_string(desired) + "]");
+                    emit("    SC R3, [R0]");
+                    emit("    JNZ " + loop);
+                    emit("    MOV R0, #1");
+                    emit("    JMP " + done);
+                    emit(fail + ":");
+                    emit("    LOAD R0, [R7 + " + std::to_string(expected) + "]");
+                    emit("    STORE R1, [R0]");
+                    emit("    MOV R0, #0");
+                    emit(done + ":");
+                    return type_bool();
+                }
                 std::vector<TypePtr> arguments;
                 std::vector<int> slots;
                 std::vector<TypePtr> target_types;

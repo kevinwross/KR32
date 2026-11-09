@@ -34,6 +34,7 @@ source line numbers and debugger line mappings are preserved.
 | `<assert.h>` | `assert` macro and assertion-failure reporting |
 | `<time.h>` | `time_t`, `time`, `difftime` |
 | `<stdbool.h>` | `bool`, `true`, `false` |
+| `<stdatomic.h>` | `atomic_int`/`atomic_uint`/`atomic_char`/`atomic_bool`, `atomic_load`, `atomic_store`, `atomic_fetch_add`, and `atomic_compare_exchange_strong`, backed by LL/SC builtins |
 | `<limits.h>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append` (C string or `std::string`), `swap`, `clear` |
 | `<utility>` | `std::swap` for integer, character, and floating-point types; `std::pair<First, Second>` with public `first`/`second` |
@@ -92,6 +93,8 @@ sandboxed just like `open`.
 - Parenthesized comma expressions
 - Bit-fields with packed layout, masking, and sign extension
 - `__builtin_expect`, `__builtin_constant_p`, `__builtin_unreachable`, and `__extension__`
+- `__atomic_load_n`, `__atomic_store_n`, `__atomic_fetch_add`, and
+  `__atomic_compare_exchange_n` lowered to LL/SC and `FENCE`
 - Struct/union parameters copied into callee locals, preserving by-value semantics
 - `__func__`, `__LINE__`, `__FILE__`, `__DATE__`, `__TIME__`, `__STDC__`,
   `__STDC_HOSTED__`, and `__STDC_VERSION__`
@@ -119,7 +122,7 @@ The allocator is a boundary-tag allocator with address-ordered free lists:
   the old one.
 - `free(0)` is a no-op. Double-free detection is limited to ignoring an
   already-free block; there is no validation of arbitrary pointers.
-- The allocator is not thread-safe; the initial libc layer targets one thread.
+- The allocator is guarded by an LL/SC spinlock, so `malloc` and `free` are safe across threads.
 
 The allocator exports two globals for debugger inspection:
 

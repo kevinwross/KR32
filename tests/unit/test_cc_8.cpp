@@ -1,5 +1,63 @@
 #include "cc_test_support.h"
 
+TEST_CASE("c atomic builtins use ll and sc") {
+    const ProgramResult program = compile_and_run(
+        "int main(void) {\n"
+        "    int value = 5;\n"
+        "    if (__atomic_load_n(&value, 0) != 5) return 1;\n"
+        "    __atomic_store_n(&value, 7, 0);\n"
+        "    if (value != 7) return 2;\n"
+        "    if (__atomic_fetch_add(&value, 3, 0) != 7) return 3;\n"
+        "    if (value != 10) return 4;\n"
+        "    int expected = 10;\n"
+        "    if (!__atomic_compare_exchange_n(&value, &expected, 20, 0, 0, 0)) return 5;\n"
+        "    if (value != 20) return 6;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("stdatomic header wraps atomic builtins") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdatomic.h>\n"
+        "int main(void) {\n"
+        "    atomic_int value;\n"
+        "    value = 5;\n"
+        "    if (atomic_load(&value) != 5) return 1;\n"
+        "    atomic_store(&value, 7);\n"
+        "    if (atomic_load(&value) != 7) return 2;\n"
+        "    if (atomic_fetch_add(&value, 3) != 7) return 3;\n"
+        "    int expected = 10;\n"
+        "    if (!atomic_compare_exchange_strong(&value, &expected, 20)) return 4;\n"
+        "    return atomic_load(&value) == 20 ? 0 : 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("heap allocation remains consistent") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdlib.h>\n"
+        "#include <string.h>\n"
+        "int main(void) {\n"
+        "    char *text = (char *)malloc(16);\n"
+        "    if (text == 0) return 1;\n"
+        "    strcpy(text, \"hello\");\n"
+        "    char *bigger = (char *)realloc(text, 64);\n"
+        "    if (bigger == 0) return 2;\n"
+        "    if (strcmp(bigger, \"hello\") != 0) return 3;\n"
+        "    free(bigger);\n"
+        "    int *values = (int *)calloc(4, sizeof(int));\n"
+        "    if (values == 0) return 4;\n"
+        "    if (values[0] != 0 || values[3] != 0) return 5;\n"
+        "    free(values);\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("packed attributes remove struct padding") {
     const ProgramResult program = compile_and_run(
         "struct __attribute__((packed)) Packed { char tag; int value; };\n"

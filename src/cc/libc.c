@@ -124,6 +124,18 @@ static int heap_ready = 0;
 /* Live heap accounting, exported so the debugger can display it. */
 unsigned int heap_allocated_blocks = 0;
 unsigned int heap_free_blocks = 0;
+static int heap_lock_state = 0;
+
+static void heap_lock_acquire(void) {
+    int expected = 0;
+    while (!__atomic_compare_exchange_n(&heap_lock_state, &expected, 1, 0, 0, 0)) {
+        expected = 0;
+    }
+}
+
+static void heap_lock_release(void) {
+    __atomic_store_n(&heap_lock_state, 0, 0);
+}
 
 unsigned long long __kr32_ulldiv(unsigned long long left,
                                   unsigned long long right) {
@@ -286,7 +298,7 @@ static void heap_insert(struct heap_block *block) {
     }
 }
 
-void *malloc(int size) {
+static void *heap_alloc_locked(int size) {
     if (size <= 0) {
         return 0;
     }
@@ -332,7 +344,7 @@ void *malloc(int size) {
     return (void *)((unsigned int)best + sizeof(struct heap_block));
 }
 
-void free(void *pointer) {
+static void heap_free_locked(void *pointer) {
     if (pointer == 0) {
         return;
     }
@@ -365,6 +377,19 @@ void free(void *pointer) {
         }
     }
     heap_insert(block);
+}
+
+void *malloc(int size) {
+    heap_lock_acquire();
+    void *result = heap_alloc_locked(size);
+    heap_lock_release();
+    return result;
+}
+
+void free(void *pointer) {
+    heap_lock_acquire();
+    heap_free_locked(pointer);
+    heap_lock_release();
 }
 
 void *__kr32_new_alloc(int size, int alignment) {
