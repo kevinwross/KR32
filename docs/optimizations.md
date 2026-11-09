@@ -29,6 +29,8 @@ target-level cleanup.
      `R1`, avoiding a temporary frame slot.
    - Local `++`/`--` updates load and store the frame slot directly instead
      of computing its address first.
+   - Local compound assignments (`+=`, `-=`, shifts, bitwise) load, combine,
+     and store the frame slot directly.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.

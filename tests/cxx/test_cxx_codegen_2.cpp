@@ -37,6 +37,14 @@ TEST_CASE("comparison conditions branch directly") {
     CHECK(result.assembly.find("STORE R0, [R7 + 8]") == std::string::npos);
 }
 
+TEST_CASE("local compound assignments stay in registers") {
+    const cxx::Result result = cxx::compile(
+        "int addto(int a, int b) { a += b; return a; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("ADD R0, R0, R2") != std::string::npos);
+    CHECK(result.assembly.find("LEA R1, [R7 + 0]") == std::string::npos);
+}
+
 TEST_CASE("local increments store directly") {
     const cxx::Result result = cxx::compile(
         "int inc(int value) { ++value; return value; }\n");

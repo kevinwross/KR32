@@ -4250,6 +4250,110 @@ private:
     }
 
     TypePtr gen_assignment_expression() {
+        if (peek().kind == TokenKind::Identifier) {
+            const std::string op = peek(1).text;
+            const bool compound =
+                op == "+=" || op == "-=" || op == "*=" || op == "/=" ||
+                op == "%=" || op == "&=" || op == "|=" || op == "^=" ||
+                op == "<<=" || op == ">>=";
+            const Variable* target = compound ? lookup(peek().text) : nullptr;
+            if (target != nullptr && !target->global &&
+                !target->type->is_atomic &&
+                !is_long_long_type(target->type) &&
+                !is_fp_type(target->type) &&
+                !target->type->is_pointer() &&
+                target->type->kind != Type::Kind::Array &&
+                target->type->kind != Type::Kind::Struct &&
+                target->type->kind != Type::Kind::Union) {
+                const bool rhs_immediate =
+                    peek(2).kind == TokenKind::Number ||
+                    peek(2).kind == TokenKind::Character;
+                const Variable* rhs_variable =
+                    peek(2).kind == TokenKind::Identifier
+                        ? lookup(peek(2).text)
+                        : nullptr;
+                const bool rhs_local =
+                    rhs_variable != nullptr && !rhs_variable->global &&
+                    !rhs_variable->is_thread_local &&
+                    !rhs_variable->type->is_atomic &&
+                    !is_long_long_type(rhs_variable->type) &&
+                    !is_fp_type(rhs_variable->type) &&
+                    !rhs_variable->type->is_pointer() &&
+                    rhs_variable->type->kind != Type::Kind::Array &&
+                    rhs_variable->type->kind != Type::Kind::Struct &&
+                    rhs_variable->type->kind != Type::Kind::Union;
+                const bool rhs_complete =
+                    rhs_local &&
+                    (peek(3).text == ";" || peek(3).text == ")" ||
+                     peek(3).text == "," || peek(3).text == "]" ||
+                     peek(3).text == ":" || peek(3).text == "?");
+                if (rhs_immediate || rhs_complete) {
+                    const TypePtr type = target->type;
+                    take();
+                    const std::string base = take().text.substr(
+                        0, op.size() - 1);
+                    std::int64_t immediate = 0;
+                    if (rhs_immediate) {
+                        immediate = take().value;
+                    } else {
+                        take();
+                    }
+                    std::string mnemonic;
+                    if (base == "+") mnemonic = "ADD";
+                    else if (base == "-") mnemonic = "SUB";
+                    else if (base == "*") mnemonic = "MUL";
+                    else if (base == "/") {
+                        mnemonic = is_unsigned_scalar(type) ? "DIV" : "DIVS";
+                    } else if (base == "%") {
+                        mnemonic = is_unsigned_scalar(type) ? "MOD" : "MODS";
+                    } else if (base == "&") mnemonic = "AND";
+                    else if (base == "|") mnemonic = "OR";
+                    else if (base == "^") mnemonic = "XOR";
+                    else if (base == "<<") mnemonic = "SHL";
+                    else mnemonic = is_unsigned_scalar(type) ? "SHR" : "SAR";
+                    const std::string frame =
+                        "[R7 + " + std::to_string(target->offset) + "]";
+                    const bool byte_value =
+                        type->kind == Type::Kind::Char ||
+                        type->kind == Type::Kind::Bool;
+                    const bool short_value =
+                        type->kind == Type::Kind::Short;
+                    if (rhs_local) {
+                        const std::string rhs_frame =
+                            "[R7 + " + std::to_string(rhs_variable->offset) +
+                            "]";
+                        emit(byte_value ? "    LOAD8S R0, " + rhs_frame
+                                        : (short_value
+                                               ? "    LOAD16S R0, " +
+                                                     rhs_frame
+                                               : "    LOAD R0, " + rhs_frame));
+                        emit("    MOV R2, R0");
+                    }
+                    emit(byte_value ? "    LOAD8S R0, " + frame
+                                    : (short_value
+                                           ? "    LOAD16S R0, " + frame
+                                           : "    LOAD R0, " + frame));
+                    if (rhs_immediate) {
+                        emit("    " + mnemonic + " R0, R0, #" +
+                             std::to_string(immediate));
+                    } else {
+                        emit("    " + mnemonic + " R0, R0, R2");
+                    }
+                    if (type->kind == Type::Kind::Bool) {
+                        const std::string done = new_label("boolnorm");
+                        emit("    CMP R0, #0");
+                        emit("    JZ " + done);
+                        emit("    MOV R0, #1");
+                        emit(done + ":");
+                    }
+                    emit(byte_value ? "    STORE8 R0, " + frame
+                                    : (short_value
+                                           ? "    STORE16 R0, " + frame
+                                           : "    STORE R0, " + frame));
+                    return type;
+                }
+            }
+        }
         if (peek().kind == TokenKind::Identifier && peek(1).text == "=") {
             const Variable* variable = lookup(peek().text);
             if (variable != nullptr && !variable->global &&
@@ -5048,6 +5152,13 @@ private:
                                            : "    LOAD R0, " + frame));
                     emit(std::string("    ") +
                          (op == "++" ? "ADD" : "SUB") + " R0, R0, #1");
+                    if (type->kind == Type::Kind::Bool) {
+                        const std::string done = new_label("boolnorm");
+                        emit("    CMP R0, #0");
+                        emit("    JZ " + done);
+                        emit("    MOV R0, #1");
+                        emit(done + ":");
+                    }
                     emit(byte_value ? "    STORE8 R0, " + frame
                                     : (short_value
                                            ? "    STORE16 R0, " + frame

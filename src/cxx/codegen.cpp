@@ -5750,6 +5750,14 @@ private:
                     emit(std::string("    ") +
                          (op == "++" ? "ADD" : "SUB") + " R0, R0, #" +
                          std::to_string(amount));
+                    if (resolved && resolved->kind == TypeKind::Builtin &&
+                        resolved->builtin == BuiltinKind::Bool) {
+                        const std::string done = new_label("boolnorm");
+                        emit("    CMP R0, #0");
+                        emit("    JZ " + done);
+                        emit("    MOV R0, #1");
+                        emit(done + ":");
+                    }
                     emit(byte_value ? "    STORE8 R0, " + frame
                                     : "    STORE R0, " + frame);
                     if (!expression.is_prefix) {
@@ -6956,6 +6964,79 @@ private:
             emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
             store_value(stored_type);
             return lhs_type;
+        }
+        if (expression.text != "=" &&
+            expression.text.size() > 1 &&
+            expression.text.back() == '=' &&
+            expression.children[0]->kind == ExprKind::Name &&
+            stored_type && is_integer(stored_type) &&
+            !is_long_long(stored_type) && !is_pointer(stored_type)) {
+            Local* local = lookup_local(expression.children[0]->name);
+            const TypePtr rhs = type_of(*expression.children[1]);
+            if (local != nullptr && !local->is_reference &&
+                local->static_global == nullptr && is_integer(rhs) &&
+                !is_long_long(rhs)) {
+                const std::string base =
+                    expression.text.substr(0, expression.text.size() - 1);
+                std::string mnemonic;
+                if (base == "+") mnemonic = "ADD";
+                else if (base == "-") mnemonic = "SUB";
+                else if (base == "*") mnemonic = "MUL";
+                else if (base == "/") {
+                    mnemonic = is_unsigned_operation(stored_type, rhs)
+                                   ? "DIV" : "DIVS";
+                } else if (base == "%") {
+                    mnemonic = is_unsigned_operation(stored_type, rhs)
+                                   ? "MOD" : "MODS";
+                } else if (base == "&") mnemonic = "AND";
+                else if (base == "|") mnemonic = "OR";
+                else if (base == "^") mnemonic = "XOR";
+                else if (base == "<<") mnemonic = "SHL";
+                else if (base == ">>") {
+                    mnemonic = is_unsigned_operation(stored_type, rhs)
+                                   ? "SHR" : "SAR";
+                }
+                if (!mnemonic.empty()) {
+                    gen_expr(*expression.children[1]);
+                    emit("    MOV R2, R0");
+                    const std::string frame =
+                        "[R7 + " + std::to_string(local->offset) + "]";
+                    if (stored_type->kind == TypeKind::Builtin &&
+                        (stored_type->builtin == BuiltinKind::Char ||
+                         stored_type->builtin == BuiltinKind::Bool)) {
+                        emit("    LOAD8S R0, " + frame);
+                    } else if (stored_type->kind == TypeKind::Builtin &&
+                               (stored_type->builtin == BuiltinKind::Short ||
+                                stored_type->builtin ==
+                                    BuiltinKind::UnsignedShort)) {
+                        emit("    LOAD16S R0, " + frame);
+                    } else {
+                        emit("    LOAD R0, " + frame);
+                    }
+                    emit("    " + mnemonic + " R0, R0, R2");
+                    if (stored_type->kind == TypeKind::Builtin &&
+                        stored_type->builtin == BuiltinKind::Bool) {
+                        const std::string done = new_label("boolnorm");
+                        emit("    CMP R0, #0");
+                        emit("    JZ " + done);
+                        emit("    MOV R0, #1");
+                        emit(done + ":");
+                    }
+                    if (stored_type->kind == TypeKind::Builtin &&
+                        (stored_type->builtin == BuiltinKind::Char ||
+                         stored_type->builtin == BuiltinKind::Bool)) {
+                        emit("    STORE8 R0, " + frame);
+                    } else if (stored_type->kind == TypeKind::Builtin &&
+                               (stored_type->builtin == BuiltinKind::Short ||
+                                stored_type->builtin ==
+                                    BuiltinKind::UnsignedShort)) {
+                        emit("    STORE16 R0, " + frame);
+                    } else {
+                        emit("    STORE R0, " + frame);
+                    }
+                    return lhs_type;
+                }
+            }
         }
         if (expression.text == "=" &&
             expression.children[0]->kind == ExprKind::Name &&
