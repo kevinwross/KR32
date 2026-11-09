@@ -1192,6 +1192,61 @@ bool is_terminator(const std::string& mnemonic) {
     return mnemonic == "RET" || mnemonic == "JMP" || mnemonic == "HALT";
 }
 
+int fold_load_copy_overwrites(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 2 < lines.size(); ++index) {
+        Instruction load;
+        if (!parse_instruction(lines[index], load) ||
+            load.mnemonic != "LOAD" || load.operands.size() != 2) {
+            continue;
+        }
+        int source = 0;
+        if (!parse_register(load.operands[0], source)) {
+            continue;
+        }
+        std::size_t copy_index = index + 1;
+        while (copy_index < lines.size() && lines[copy_index].empty()) {
+            ++copy_index;
+        }
+        if (copy_index >= lines.size()) {
+            continue;
+        }
+        Instruction copy;
+        if (!parse_instruction(lines[copy_index], copy) ||
+            copy.mnemonic != "MOV" || copy.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int copied = 0;
+        if (!parse_register(copy.operands[0], destination) ||
+            !parse_register(copy.operands[1], copied) ||
+            copied != source || destination == source) {
+            continue;
+        }
+        std::size_t next = copy_index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction overwrite;
+        int overwritten = 0;
+        if (!parse_instruction(lines[next], overwrite) ||
+            !writes_first_operand(overwrite) ||
+            overwrite.operands.empty() ||
+            !parse_register(overwrite.operands[0], overwritten) ||
+            overwritten != source) {
+            continue;
+        }
+        load.operands[0] = copy.operands[0];
+        lines[index] = format_instruction(load);
+        lines[copy_index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int fold_add_immediate_chain(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -1436,6 +1491,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
     stats.removed += remove_repeated_frame_loads(lines);
+    stats.removed += fold_load_copy_overwrites(lines);
     int add_chain = 0;
     do {
         add_chain = fold_add_immediate_chain(lines);

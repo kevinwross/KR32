@@ -22,6 +22,22 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("MOV R2, R0") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds load copies") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    MOV R1, R0\n"
+        "    LOAD R0, [R7 + 8]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LOAD R1, [R7 + 4]") != std::string::npos);
+    CHECK(assembly.find("MOV R1, R0") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer folds add immediate chains") {
     std::string assembly =
         ".text\n"

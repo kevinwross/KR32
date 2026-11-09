@@ -142,6 +142,10 @@ target-level cleanup.
      adjustment.
    - Skips the fold when a conditional branch immediately follows.
 
+15. **Load copy folding**
+   - Retargets `LOAD R, [mem]` into the destination of a following
+     `MOV Rd, R` when `R` is immediately overwritten.
+
 ## Safety model
 
 The pass is deliberately conservative:
