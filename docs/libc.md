@@ -36,14 +36,14 @@ source line numbers and debugger line mappings are preserved.
 | `<stdbool.h>` | `bool`, `true`, `false` |
 | `<stdatomic.h>` | `atomic_int`/`atomic_uint`/`atomic_char`/`atomic_bool`, `atomic_load`, `atomic_store`, `atomic_fetch_add`, and `atomic_compare_exchange_strong`, backed by LL/SC builtins |
 | `<limits.h>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
-| `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append` (C string or `std::string`), `swap`, `clear` |
+| `<string>` | `std::string` with construction, assignment, `c_str`/`data`, `size`/`capacity`, `operator[]`, `at`, `front`/`back`, `append`/`push_back`, `insert`, `erase`, `replace`, `substr`, `find`/`rfind` and related searches, `compare`, `starts_with`/`ends_with`/`contains`, `resize`, `reserve`, `shrink_to_fit`, `clear`, `swap`, iterators, and numeric conversions |
 | `<utility>` | `std::swap` for integer, character, and floating-point types; `std::pair<First, Second>` with public `first`/`second` |
 | `<optional>` | `std::optional<T>` with `has_value`, `operator bool`, `value`, `operator*`, `value_or`, `set`, and `reset` |
 | `<string_view>` | `std::string_view` with C-string construction, `data`, `size`, `empty`, `operator[]`, `front`/`back`, `substr`, `remove_prefix`/`remove_suffix`, and `compare` |
 | `<vector>` | `std::vector<T>` with `push_back`, `pop_back`, `insert`, `erase`, `resize`, `operator[]`, `size`, `empty`, `capacity`, `reserve`, `clear`, `data`, `begin`/`end`, and `front`/`back` |
 | `<atomic>` | `std::atomic<T>` with `load`, `store`, `exchange`, `fetch_add`, `compare_exchange_weak`/`strong`, assignment, and conversion to `T`, backed by LL/SC |
 | `<array>` | `std::array<T, N>` with `operator[]`, `size`, `empty`, `begin`/`end`, and `front`/`back` |
-| `<algorithm>` | `std::min`/`std::max`/`std::clamp`, `std::sort`, `std::stable_sort`, `std::nth_element`, `std::partial_sort`, `std::reverse`, `std::reverse_copy`, `std::rotate_copy`, `std::replace_copy`, `std::unique_copy`, and `std::remove_copy`, `std::fill`, `std::fill_n`, `std::find`, `std::copy`, `std::copy_n`, `std::copy_backward`, `std::count`, `std::equal`, `std::replace`, `std::remove`, `std::min_element`, `std::max_element`, `std::binary_search`, `std::lower_bound`, and `std::upper_bound`, `std::unique`, `std::swap_ranges`, `std::rotate`, `std::search`, `std::adjacent_find`, `std::search_n`, `std::find_end`, `std::is_sorted`, `std::is_sorted_until`, `std::find_first_of`, `std::lexicographical_compare`, `std::includes`, `std::set_union`, `std::set_intersection`, `std::set_difference`, `std::set_symmetric_difference`, `std::merge`, `std::inplace_merge`, `std::all_of`/`any_of`/`none_of`, `std::find_if`/`find_if_not`, `std::count_if`, `std::for_each`, `std::transform`, `std::remove_if`, `std::replace_if`, and the comparator form of `std::sort` for integer, character, and floating-point arrays |
+| `<algorithm>` | `std::min`/`std::max`/`std::clamp`, `std::sort`, `std::stable_sort`, `std::nth_element`, `std::partial_sort`, `std::reverse`, `std::reverse_copy`, `std::rotate_copy`, `std::replace_copy`, `std::unique_copy`, and `std::remove_copy`, `std::fill`, `std::fill_n`, `std::find`, `std::copy`, `std::copy_n`, `std::copy_backward`, `std::count`, `std::equal`, `std::replace`, `std::remove`, `std::min_element`, `std::max_element`, `std::binary_search`, `std::lower_bound`, and `std::upper_bound`, `std::unique`, `std::swap_ranges`, `std::rotate`, `std::search`, `std::adjacent_find`, `std::search_n`, `std::find_end`, `std::is_sorted`, `std::is_sorted_until`, `std::find_first_of`, `std::lexicographical_compare`, `std::includes`, `std::set_union`, `std::set_intersection`, `std::set_difference`, `std::set_symmetric_difference`, `std::merge`, `std::inplace_merge`, `std::all_of`/`any_of`/`none_of`, `std::find_if`/`find_if_not`, `std::count_if`, `std::for_each`, `std::transform`, `std::remove_if`, `std::replace_if`, the comparator form of `std::sort`, `std::next_permutation`/`prev_permutation`, `std::is_permutation`, and the heap operations `make_heap`, `push_heap`, `pop_heap`, `sort_heap`, `is_heap`, and `is_heap_until` for integer, character, and floating-point arrays |
 | `<numeric>` | `std::accumulate` for integer/character/floating-point arrays and `std::iota` for integer arrays |
 | `<cmath>` | `std::abs`, `std::sqrt`, `std::fabs` (including `float` forms) |
 | `<cstdlib>` | `std::atoi`, `atof`, `strtol`, `strtoul`, `strtoll`, `strtoull`, `strtod`/`strtof`/`strtold` (decimal/exponent), `labs`, `llabs`, `qsort`, `bsearch`, `malloc`, `calloc`, `realloc`, `free`, `exit`, `abort` |
@@ -271,5 +271,23 @@ count), `copy`, `front`, `back`, `replace`/`insert` (C string, `std::string`,
 character, count+character, or prefix count), `erase` (position or range), `resize` (count or count+character), `push_back`,
 `pop_back`, `assign` (C string, prefix count, substring, or count+character), `append` (string, C string,
 prefix count, or count+character), `swap`, `begin`/`end`, `data`, `capacity`,
-`reserve` (capacity hint), `shrink_to_fit`, `std::to_string` (including `long long` and
+`reserve` (real capacity growth), `shrink_to_fit`, `std::to_string` (including `long long` and
 `unsigned long long`), `std::stoi`, `std::stol`, `std::stod`, `std::stof`, and `std::stold` (C string or `std::string`).
+## C++ standard library limits
+
+- `std::vector` has no copy construction or copy assignment, and its iterators
+  are raw pointers. `resize` supports scalar and default-constructible class
+  elements.
+- `std::optional` has no assignment from `T`, `emplace`, or `operator->`.
+- `std::string_view` accepts C strings and pointer/count ranges but has no
+  constructor from `std::string`.
+- `std::atomic` supports integer loads, stores, exchange, fetch-add, and
+  compare-exchange. Operations are sequentially consistent; memory-order
+  parameters are not exposed.
+- Function-pointer calls support scalar integer and floating-point arguments;
+  class arguments are not supported.
+- Templates support type and integer non-type parameters. Qualified class
+  templates such as `std::pair<int, int>` work; there is no variadic template
+  support.
+- There are no associative containers, `std::function`, `std::map`,
+  `std::set`, or full iostream/locale support.

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 19:12 -08:00
+> **Last updated:** 2026-11-08 19:17 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2483,6 +2483,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 19:12 -08:00** — Added `std::vector::resize` using separate
       declaration and assignment, which works for class template elements
       including `std::pair`.
+- **2026-11-08 19:17 -08:00** — Refreshed the standard-library documentation,
+      added a C++ limits section, and named the callee in unknown or
+      non-matching call diagnostics.
 
 ## 10. Updating this file
 

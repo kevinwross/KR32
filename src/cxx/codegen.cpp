@@ -3372,6 +3372,11 @@ private:
             return cached->second;
         }
         call_targets_[&call] = nullptr;
+        std::string callee_label = "<expression>";
+        if (!call.children.empty() &&
+            call.children[0]->kind == ExprKind::Name) {
+            callee_label = call.children[0]->name.to_string();
+        }
         std::vector<Function*> candidates;
         if (!call.children.empty() &&
             call.children[0]->kind == ExprKind::Name) {
@@ -3461,7 +3466,7 @@ private:
             candidates.push_back(instantiated);
         }
         if (candidates.empty()) {
-            diagnose_once(call, "unknown function");
+            diagnose_once(call, "unknown function: " + callee_label);
             return nullptr;
         }
         bool const_object = false;
@@ -3535,11 +3540,11 @@ private:
             }
         }
         if (!best) {
-            diagnose_once(call, "no matching function for call");
+            diagnose_once(call, "no matching function for call to " + callee_label);
             return nullptr;
         }
         if (ambiguous) {
-            diagnose_once(call, "ambiguous function call");
+            diagnose_once(call, "ambiguous function call to " + callee_label);
             return nullptr;
         }
         call_targets_[&call] = best;

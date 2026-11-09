@@ -1,5 +1,14 @@
 #include "cxx_test_support.h"
 
+TEST_CASE("call diagnostics name the target") {
+    const cxx::Result result =
+        cxx::compile("int main() { missing(1); return 0; }\n");
+    CHECK_FALSE(result.ok);
+    REQUIRE_FALSE(result.diagnostics.empty());
+    CHECK(result.diagnostics.front().message.find("missing") !=
+          std::string::npos);
+}
+
 TEST_CASE("<cerrno> exposes errno") {
     const ProgramResult program = compile_and_run(
         "#include <cerrno>\n"
