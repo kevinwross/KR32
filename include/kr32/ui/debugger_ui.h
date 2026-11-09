@@ -238,8 +238,8 @@ private:
     bool settings_stop_at_main_ = true;
     bool settings_write_listing_ = false;
     std::string settings_arguments_;
-    std::string settings_run_limit_text_ = "5000000";
-    std::uint64_t settings_run_limit_ = 5'000'000;
+    std::string settings_run_limit_text_ = "0";
+    std::uint64_t settings_run_limit_ = 0;
     std::string settings_error_;
     bool continuous_run_ = false;
     bool continuous_has_target_ = false;
