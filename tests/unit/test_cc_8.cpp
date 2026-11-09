@@ -32,6 +32,14 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("cmpend") == std::string::npos);
 }
 
+TEST_CASE("c constant locals propagate") {
+    const cc::Result result = cc::compile(
+        "int f(void) { const int N = 5; return N; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("LOAD R0, [R7 + 0]") == std::string::npos);
+    CHECK(result.assembly.find("MOV R0, #5") != std::string::npos);
+}
+
 TEST_CASE("c simple calls avoid argument temporaries") {
     const cc::Result result = cc::compile(
         "int add(int a, int b) { return a + b; }\n"

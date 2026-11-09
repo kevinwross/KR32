@@ -26,7 +26,7 @@ target-level cleanup.
    - Scalar C++ returns keep the result in registers when no local
      destructors or active catch require preserving it across cleanup.
    - Reads of scalar `const` locals with constant initializers use the
-     immediate value directly.
+     immediate value directly in both C and C++.
    - C and C++ `if` and loop comparisons branch directly from `CMP`
      instead of materializing a 0/1 boolean and testing it again.
    - C branches directly at `-O0` for both immediate and register right

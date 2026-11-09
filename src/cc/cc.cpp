@@ -1957,6 +1957,7 @@ private:
         parsed_extern_ = false;
         parsed_thread_local_ = false;
         parsed_atomic_ = false;
+        parsed_const_ = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
@@ -1972,6 +1973,8 @@ private:
                 parsed_thread_local_ = true;
             } else if (qualifier == "_Atomic") {
                 parsed_atomic_ = true;
+            } else if (qualifier == "const") {
+                parsed_const_ = true;
             } else if (qualifier == "unsigned") {
                 unsigned_flag = true;
             } else if (qualifier == "signed") {
@@ -2570,6 +2573,7 @@ private:
         current_function_ = name;
         current_result_type_ = result_type;
         frame_size_ = 0;
+        const_local_values_.clear();
         locals_.clear();
         return_label_ = ".Lreturn_" + name;
         emit(".global " + name);
@@ -3377,6 +3381,7 @@ private:
             take();
         }
         const TypePtr type = parse_declaration_type();
+        const bool local_const = parsed_const_;
         TypePtr base_type = type;
         while (base_type->kind == Type::Kind::Pointer) {
             base_type = base_type->element();
@@ -3426,6 +3431,18 @@ private:
                     gen_zero_object(base_slot, 0, actual->size());
                     gen_initializer_at(actual, base_slot, 0);
                 } else {
+                    if (local_const && !is_long_long_type(actual) &&
+                        (actual->kind == Type::Kind::Int ||
+                         actual->kind == Type::Kind::Char ||
+                         actual->kind == Type::Kind::Short ||
+                         actual->kind == Type::Kind::Bool)) {
+                        const std::size_t saved = position_;
+                        std::int64_t constant = 0;
+                        if (try_fold_constant(constant)) {
+                            const_local_values_[offset] = constant;
+                        }
+                        position_ = saved;
+                    }
                     TypePtr value_type = gen_expression();
                     convert_value(value_type, actual);
                     const std::string frame =
@@ -5967,6 +5984,14 @@ private:
                 peek().text != "->" && peek().text != "++" &&
                 peek().text != "--";
             if (scalar_local) {
+                const auto constant =
+                    const_local_values_.find(variable->offset);
+                if (constant != const_local_values_.end() &&
+                    !is_long_long_type(type)) {
+                    emit("    MOV R0, #" +
+                         std::to_string(constant->second));
+                    return type;
+                }
                 const std::string frame =
                     "[R7 + " + std::to_string(variable->offset) + "]";
                 if (is_long_long_type(type)) {
@@ -6267,6 +6292,8 @@ private:
     std::set<std::string> debug_types_;
     std::string* output_ = nullptr;
     int suppress_emit_ = 0;
+    bool parsed_const_ = false;
+    std::map<int, std::int64_t> const_local_values_;
     int frame_size_ = 0;
     int line_counter_ = 0;
     std::string branch_false_label_;
