@@ -132,6 +132,11 @@ target-level cleanup.
    - Folds stores through a symbol address when the address register is
      immediately overwritten.
 
+14. **Immediate add chains**
+   - Combines adjacent `ADD`/`SUB reg, reg, #imm` pairs into one
+     adjustment.
+   - Skips the fold when a conditional branch immediately follows.
+
 ## Safety model
 
 The pass is deliberately conservative:

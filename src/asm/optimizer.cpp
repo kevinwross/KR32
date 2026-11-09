@@ -1192,6 +1192,84 @@ bool is_terminator(const std::string& mnemonic) {
     return mnemonic == "RET" || mnemonic == "JMP" || mnemonic == "HALT";
 }
 
+int fold_add_immediate_chain(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction first;
+        if (!parse_instruction(lines[index], first) ||
+            (first.mnemonic != "ADD" && first.mnemonic != "SUB") ||
+            first.operands.size() != 3) {
+            continue;
+        }
+        int destination = 0;
+        int left = 0;
+        if (!parse_register(first.operands[0], destination) ||
+            !parse_register(first.operands[1], left) ||
+            left != destination || first.operands[2].empty() ||
+            first.operands[2].front() != '#') {
+            continue;
+        }
+        int value = 0;
+        try {
+            value = std::stoi(first.operands[2].substr(1));
+        } catch (...) {
+            continue;
+        }
+        if (first.mnemonic == "SUB") {
+            value = -value;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction second;
+        if (!parse_instruction(lines[next], second) ||
+            (second.mnemonic != "ADD" && second.mnemonic != "SUB") ||
+            second.operands.size() != 3) {
+            continue;
+        }
+        int second_destination = 0;
+        int second_left = 0;
+        if (!parse_register(second.operands[0], second_destination) ||
+            !parse_register(second.operands[1], second_left) ||
+            second_destination != destination ||
+            second_left != destination || second.operands[2].empty() ||
+            second.operands[2].front() != '#') {
+            continue;
+        }
+        int second_value = 0;
+        try {
+            second_value = std::stoi(second.operands[2].substr(1));
+        } catch (...) {
+            continue;
+        }
+        if (second.mnemonic == "SUB") {
+            second_value = -second_value;
+        }
+        std::size_t after = next + 1;
+        while (after < lines.size() && lines[after].empty()) {
+            ++after;
+        }
+        if (after < lines.size()) {
+            Instruction following;
+            if (parse_instruction(lines[after], following) &&
+                is_conditional_jump(following.mnemonic)) {
+                continue;
+            }
+        }
+        const int total = value + second_value;
+        first.mnemonic = total < 0 ? "SUB" : "ADD";
+        first.operands[2] = "#" + std::to_string(total < 0 ? -total : total);
+        lines[index] = format_instruction(first);
+        lines[next].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int remove_unreachable_after_terminators(std::vector<std::string>& lines) {
     int removed = 0;
     bool unreachable = false;
@@ -1358,6 +1436,11 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
     stats.removed += remove_repeated_frame_loads(lines);
+    int add_chain = 0;
+    do {
+        add_chain = fold_add_immediate_chain(lines);
+        stats.removed += add_chain;
+    } while (add_chain > 0);
     stats.removed += remove_unreachable_after_terminators(lines);
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += fold_frame_address_arithmetic(lines);

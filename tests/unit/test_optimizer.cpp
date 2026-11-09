@@ -22,6 +22,22 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("MOV R2, R0") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds add immediate chains") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    ADD R0, R0, #4\n"
+        "    ADD R0, R0, #8\n"
+        "    SUB R0, R0, #2\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("ADD R0, R0, #10") != std::string::npos);
+    CHECK(assembly.find("ADD R0, R0, #8") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer folds symbol addresses") {
     std::string assembly =
         ".text\n"
