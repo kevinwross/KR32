@@ -1131,6 +1131,27 @@ TEST_CASE("indirect calls pass floating point arguments") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std map inserts updates and counts") {
+    const ProgramResult program = compile_and_run(
+        "#include <map>\n"
+        "int main() {\n"
+        "    std::map<int, int> values;\n"
+        "    values[3] = 30;\n"
+        "    values[1] = 10;\n"
+        "    values[3] = 33;\n"
+        "    if (values.size() != 2) return 1;\n"
+        "    if (values[1] != 10 || values[3] != 33) return 2;\n"
+        "    if (values.count(3) != 1 || values.count(2) != 0) return 3;\n"
+        "    values[2] = 20;\n"
+        "    if (values.size() != 3) return 4;\n"
+        "    values.clear();\n"
+        "    return values.empty() ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std vector copies and assigns") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"

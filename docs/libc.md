@@ -40,6 +40,7 @@ source line numbers and debugger line mappings are preserved.
 | `<utility>` | `std::swap` for integer, character, and floating-point types; `std::pair<First, Second>` with public `first`/`second` |
 | `<optional>` | `std::optional<T>` with `has_value`, `operator bool`, `value`, `operator*`, `operator->`, `value_or`, `set`, assignment from `T`, `emplace`, and `reset` |
 | `<string_view>` | `std::string_view` with C-string construction, `data`, `size`, `empty`, `operator[]`, `front`/`back`, `substr`, `remove_prefix`/`remove_suffix`, `starts_with`/`ends_with`, and `compare` |
+| `<map>` | minimal `std::map<Key, Value>` with `operator[]`, `size`, `empty`, `clear`, and `count`, using linear search and integer-like keys |
 | `<vector>` | `std::vector<T>` with copy construction and copy assignment, `push_back`, `pop_back`, `insert`, `erase`, `resize`, `operator[]`, `size`, `empty`, `capacity`, `reserve`, `clear`, `data`, `begin`/`end`, and `front`/`back` |
 | `<atomic>` | `std::atomic<T>` with `load`, `store`, `exchange`, `fetch_add`, `compare_exchange_weak`/`strong`, assignment, and conversion to `T`, backed by LL/SC |
 | `<array>` | `std::array<T, N>` with `operator[]`, `size`, `empty`, `begin`/`end`, and `front`/`back` |

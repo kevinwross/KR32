@@ -6036,7 +6036,17 @@ private:
         ClassInfo* parameter_class = class_of(parameter);
         if (parameter && (parameter->kind == TypeKind::LValueRef ||
                           parameter->kind == TypeKind::RValueRef)) {
-            gen_address(right);
+            const TypePtr element = resolve_type(parameter->element);
+            if (!is_lvalue(right) && element != nullptr &&
+                class_of(element) == nullptr) {
+                gen_expr(right);
+                const int value_temp = allocate_local(element);
+                emit("    LEA R1, [R7 + " + std::to_string(value_temp) + "]");
+                store_value(element);
+                emit("    LEA R0, [R7 + " + std::to_string(value_temp) + "]");
+            } else {
+                gen_address(right);
+            }
             argument_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(argument_temp) + "]");
         } else if (parameter_class != nullptr &&

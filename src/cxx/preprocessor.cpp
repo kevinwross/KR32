@@ -689,7 +689,61 @@ private:
                 }
                 return;
             }
-            if (header.find("<vector>") != std::string::npos) {
+            if (header.find("<map>") != std::string::npos) {
+                if (!map_header_injected_) {
+                    map_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "template<typename Key, typename Value> class map {\n"
+                        "    Key* keys_;\n"
+                        "    Value* values_;\n"
+                        "    int size_;\n"
+                        "    int capacity_;\n"
+                        "    void reserve(int wanted) {\n"
+                        "        if (wanted <= capacity_) return;\n"
+                        "        Key* new_keys = new Key[wanted];\n"
+                        "        Value* new_values = new Value[wanted];\n"
+                        "        for (int index = 0; index < size_; ++index) {\n"
+                        "            new_keys[index] = keys_[index];\n"
+                        "            new_values[index] = values_[index];\n"
+                        "        }\n"
+                        "        delete[] keys_;\n"
+                        "        delete[] values_;\n"
+                        "        keys_ = new_keys;\n"
+                        "        values_ = new_values;\n"
+                        "        capacity_ = wanted;\n"
+                        "    }\n"
+                        "public:\n"
+                        "    map() { keys_ = 0; values_ = 0; size_ = 0; capacity_ = 0; }\n"
+                        "    ~map() { delete[] keys_; delete[] values_; }\n"
+                        "    int size() const { return size_; }\n"
+                        "    bool empty() const { return size_ == 0; }\n"
+                        "    void clear() { size_ = 0; }\n"
+                        "    int count(Key key) const {\n"
+                        "        for (int index = 0; index < size_; ++index) {\n"
+                        "            if (keys_[index] == key) return 1;\n"
+                        "        }\n"
+                        "        return 0;\n"
+                        "    }\n"
+                        "    Value& operator[](const Key& key) {\n"
+                        "        for (int index = 0; index < size_; ++index) {\n"
+                        "            if (keys_[index] == key) {\n"
+                        "                return values_[index];\n"
+                        "            }\n"
+                        "        }\n"
+                        "        if (size_ == capacity_) {\n"
+                        "            reserve(capacity_ == 0 ? 4 : capacity_ * 2);\n"
+                        "        }\n"
+                        "        keys_[size_] = key;\n"
+                        "        values_[size_] = Value();\n"
+                        "        size_ = size_ + 1;\n"
+                        "        return values_[size_ - 1];\n"
+                        "    }\n"
+                        "};\n"
+                        "}\n");
+                }
+                return;
+            }            if (header.find("<vector>") != std::string::npos) {
                 if (!vector_header_injected_) {
                     vector_header_injected_ = true;
                     append_line(
@@ -5425,6 +5479,7 @@ private:
     bool array_header_injected_ = false;
     bool atomic_header_injected_ = false;
     bool vector_header_injected_ = false;
+    bool map_header_injected_ = false;
     bool optional_header_injected_ = false;
     bool string_view_header_injected_ = false;
     bool numeric_header_injected_ = false;
