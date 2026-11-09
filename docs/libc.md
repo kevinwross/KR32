@@ -96,6 +96,7 @@ sandboxed just like `open`.
 - Parenthesized comma expressions
 - Bit-fields with packed layout, masking, and sign extension
 - `__builtin_expect`, `__builtin_constant_p`, `__builtin_unreachable`, and `__extension__`
+- `_Thread_local` globals in the `.tls` section, copied per thread by the runtime
 - `__atomic_load_n`, `__atomic_store_n`, `__atomic_fetch_add`, and
   `__atomic_compare_exchange_n` lowered to LL/SC and `FENCE`
 - Struct/union parameters copied into callee locals, preserving by-value semantics

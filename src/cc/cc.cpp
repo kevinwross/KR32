@@ -1219,6 +1219,8 @@ struct Variable {
     int offset = 0;
     std::string label;
     bool global = false;
+    bool is_thread_local = false;
+    std::string tls_slot;
 };
 
 struct FunctionSignature {
@@ -1281,6 +1283,9 @@ public:
             result.assembly = text_;
             if (!rodata_.empty()) {
                 result.assembly += ".rodata\n" + rodata_;
+            }
+            if (!tls_.empty()) {
+                result.assembly += ".tls\n" + tls_;
             }
             if (!data_.empty()) {
                 result.assembly += ".data\n" + data_;
@@ -1942,6 +1947,7 @@ private:
         bool long_long_flag = false;
         bool short_flag = false;
         parsed_extern_ = false;
+        parsed_thread_local_ = false;
         while (peek().text == "const" || peek().text == "unsigned" ||
                peek().text == "signed" || peek().text == "static" ||
                peek().text == "extern" || peek().text == "volatile" ||
@@ -1953,6 +1959,8 @@ private:
             const std::string qualifier = take().text;
             if (qualifier == "extern") {
                 parsed_extern_ = true;
+            } else if (qualifier == "_Thread_local") {
+                parsed_thread_local_ = true;
             } else if (qualifier == "unsigned") {
                 unsigned_flag = true;
             } else if (qualifier == "signed") {
@@ -2166,6 +2174,7 @@ private:
         }
         TypePtr type = parse_declaration_type();
         const bool is_extern = parsed_extern_;
+        const bool is_thread_local = parsed_thread_local_;
         if (match(";")) {
             return;
         }
@@ -2196,7 +2205,7 @@ private:
                 return;
             }
             first_declarator = false;
-            parse_global(actual, name, is_extern, false);
+            parse_global(actual, name, is_extern, false, is_thread_local);
             if (!match(",")) {
                 break;
             }
@@ -2325,34 +2334,35 @@ private:
     }
 
     void parse_global(const TypePtr& type, const std::string& name, bool is_extern,
-                      bool expect_semicolon = true) {
+                      bool expect_semicolon = true, bool tls = false) {
         TypePtr actual = parse_array_suffix(type);
         skip_attributes();
+        std::string& out = tls ? tls_ : data_;
         if (match("=")) {
             const bool pointer_array =
                 actual->kind == Type::Kind::Array && actual->base &&
                 actual->base->kind == Type::Kind::Pointer;
             if (pointer_array) {
-                data_ += ".align " +
+                out += ".align " +
                          std::to_string(std::max(1, actual->alignment())) + "\n";
-                data_ += ".global " + name + "\n" + name + ":\n";
+                out += ".global " + name + "\n" + name + ":\n";
                 expect("{");
                 while (!match("}")) {
                     if (match("&")) {
-                        data_ += "    .word " + parse_name() + "\n";
+                        out += "    .word " + parse_name() + "\n";
                     } else if (peek().kind == TokenKind::Identifier &&
                                functions_.find(peek().text) != functions_.end()) {
-                        data_ += "    .word " + take().text + "\n";
+                        out += "    .word " + take().text + "\n";
                     } else if (peek().kind == TokenKind::String) {
                         const std::string text = take().text;
                         const std::string label =
                             ".Lstr_" + std::to_string(string_counter_++);
                         rodata_ += label + ":\n    .asciz \"" +
                                    escape_string(text) + "\"\n";
-                        data_ += "    .word " + label + "\n";
+                        out += "    .word " + label + "\n";
                     } else {
                         const std::int64_t value = parse_constant_value();
-                        data_ += "    .word " +
+                        out += "    .word " +
                                  std::to_string(value & 0xFFFF'FFFFU) + "\n";
                     }
                     if (!match(",")) {
@@ -2368,10 +2378,10 @@ private:
                     static_cast<std::size_t>(std::max(1, actual->size())), 0);
                 parse_global_initializer(actual, bytes, 0);
                 if (expect_semicolon) expect(";");
-                data_ += ".align " + std::to_string(std::max(1, actual->alignment())) + "\n";
-                data_ += ".global " + name + "\n" + name + ":\n";
+                out += ".align " + std::to_string(std::max(1, actual->alignment())) + "\n";
+                out += ".global " + name + "\n" + name + ":\n";
                 for (std::uint8_t byte : bytes) {
-                    data_ += "    .byte " + std::to_string(byte) + "\n";
+                    out += "    .byte " + std::to_string(byte) + "\n";
                 }
             } else if (peek().kind == TokenKind::Float) {
                 const Token token = take();
@@ -2380,15 +2390,15 @@ private:
                     error("floating-point initializer requires a float or double");
                 }
                 if (actual->kind == Type::Kind::Double) {
-                    data_ += ".align 8\n";
+                    out += ".align 8\n";
                 }
-                data_ += ".global " + name + "\n" + name + ":\n";
+                out += ".global " + name + "\n" + name + ":\n";
                 if (actual->kind == Type::Kind::Float) {
                     const std::uint32_t bits =
                         std::bit_cast<std::uint32_t>(static_cast<float>(token.real));
                     char buffer[32] = {};
                     std::snprintf(buffer, sizeof(buffer), "    .word 0x%08X\n", bits);
-                    data_ += buffer;
+                    out += buffer;
                 } else {
                     const std::uint64_t bits = std::bit_cast<std::uint64_t>(token.real);
                     char low[32] = {};
@@ -2397,8 +2407,8 @@ private:
                                   static_cast<std::uint32_t>(bits & 0xFFFFFFFFU));
                     std::snprintf(high, sizeof(high), "    .word 0x%08X\n",
                                   static_cast<std::uint32_t>(bits >> 32));
-                    data_ += low;
-                    data_ += high;
+                    out += low;
+                    out += high;
                 }
                 if (expect_semicolon) expect(";");
             } else if (peek().kind == TokenKind::String && actual->is_pointer()) {
@@ -2406,8 +2416,8 @@ private:
                 const std::string label =
                     ".Lstr_" + std::to_string(string_counter_++);
                 rodata_ += label + ":\n    .asciz \"" + escape_string(text) + "\"\n";
-                data_ += ".global " + name + "\n" + name + ":\n";
-                data_ += "    .word " + label + "\n";
+                out += ".global " + name + "\n" + name + ":\n";
+                out += "    .word " + label + "\n";
                 if (expect_semicolon) expect(";");
             } else if (peek().kind == TokenKind::Identifier &&
                        functions_.find(peek().text) != functions_.end()) {
@@ -2415,51 +2425,63 @@ private:
                     error("function initializer requires a pointer");
                 }
                 const std::string target = take().text;
-                data_ += ".global " + name + "\n" + name + ":\n";
-                data_ += "    .word " + target + "\n";
+                out += ".global " + name + "\n" + name + ":\n";
+                out += "    .word " + target + "\n";
                 if (expect_semicolon) expect(";");
             } else if (match("&")) {
                 if (!actual->is_pointer()) {
                     error("address initializer requires a pointer");
                 }
                 const std::string target = parse_name();
-                data_ += ".global " + name + "\n" + name + ":\n";
-                data_ += "    .word " + target + "\n";
+                out += ".global " + name + "\n" + name + ":\n";
+                out += "    .word " + target + "\n";
                 if (expect_semicolon) expect(";");
             } else {
                 if (peek().kind != TokenKind::Number && peek().kind != TokenKind::Character) {
                     error("global initializer must be a constant");
                 }
                 const std::int64_t value = take().value;
-                data_ += ".global " + name + "\n" + name + ":\n";
+                out += ".global " + name + "\n" + name + ":\n";
                 if (actual->kind == Type::Kind::Char) {
-                    data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                    out += "    .byte " + std::to_string(value & 0xFF) + "\n";
                 } else if (actual->kind == Type::Kind::Short) {
-                    data_ += "    .byte " + std::to_string(value & 0xFF) + "\n";
-                    data_ += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
+                    out += "    .byte " + std::to_string(value & 0xFF) + "\n";
+                    out += "    .byte " + std::to_string((value >> 8) & 0xFF) + "\n";
                 } else if (actual->is_long_long) {
                     const std::uint64_t bits = static_cast<std::uint64_t>(value);
-                    data_ += "    .word " +
+                    out += "    .word " +
                              std::to_string(static_cast<std::uint32_t>(bits)) + "\n";
-                    data_ += "    .word " +
+                    out += "    .word " +
                              std::to_string(static_cast<std::uint32_t>(bits >> 32)) +
                              "\n";
                 } else {
-                    data_ += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
+                    out += "    .word " + std::to_string(value & 0xFFFF'FFFFU) + "\n";
                 }
                 if (expect_semicolon) expect(";");
             }
         } else {
             if (expect_semicolon) expect(";");
             if (!is_extern) {
-                bss_ += ".global " + name + "\n" + name + ":\n";
+                std::string& storage = tls ? tls_ : bss_;
+                storage += ".global " + name + "\n" + name + ":\n";
                 if (actual->kind == Type::Kind::Double) {
-                    bss_ += "    .align 8\n";
+                    storage += "    .align 8\n";
                 }
-                bss_ += "    .space " + std::to_string(actual->size()) + "\n";
+                storage += "    .space " + std::to_string(actual->size()) + "\n";
             }
         }
-        globals_.emplace(name, Variable{name, actual, 0, name, true});
+        Variable variable{name, actual, 0, name, true};
+        if (tls) {
+            variable.is_thread_local = true;
+            variable.tls_slot =
+                ".Ltls_slot_" + std::to_string(tls_slot_counter_++);
+            data_ += variable.tls_slot + ":\n    .word " + name + "\n";
+            if (!tls_base_emitted_) {
+                data_ += ".Ltls_base:\n    .word __kr32_tls_start\n";
+                tls_base_emitted_ = true;
+            }
+        }
+        globals_.emplace(name, std::move(variable));
         debug_type(actual);
         debug_record("G " + name + " " + name + " " + debug_type_name(actual) + " " +
                      std::to_string(actual->size()));
@@ -3212,7 +3234,15 @@ private:
         if (variable == nullptr) {
             error("unknown variable: " + name);
         }
-        if (variable->global) {
+        if (variable->global && variable->is_thread_local) {
+            emit("    LEA R0, [" + variable->tls_slot + "]");
+            emit("    LOAD R0, [R0]");
+            emit("    LEA R1, [.Ltls_base]");
+            emit("    LOAD R1, [R1]");
+            emit("    SUB R0, R0, R1");
+            emit("    ADD R0, R11, R0");
+            emit("    ADD R0, R0, #32");
+        } else if (variable->global) {
             emit("    LEA R0, [" + variable->label + "]");
         } else {
             emit("    LEA R0, [R7 + " + std::to_string(variable->offset) + "]");
@@ -5244,9 +5274,13 @@ private:
     std::string rodata_;
     std::string data_;
     std::string bss_;
+    std::string tls_;
+    int tls_slot_counter_ = 0;
+    bool tls_base_emitted_ = false;
     std::map<std::string, Variable> locals_;
     std::map<std::string, Variable> globals_;
     bool parsed_extern_ = false;
+    bool parsed_thread_local_ = false;
     bool pending_packed_ = false;
     int pending_alignment_ = 0;
     std::map<std::string, FunctionSignature> functions_;

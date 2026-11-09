@@ -1,5 +1,25 @@
 #include "cc_test_support.h"
 
+TEST_CASE("c thread_local globals use tls storage") {
+    const ProgramResult program = compile_and_run(
+        "_Thread_local int first = 3;\n"
+        "_Thread_local int second;\n"
+        "_Thread_local double ratio = 1.5;\n"
+        "static _Thread_local char text[8];\n"
+        "int main(void) {\n"
+        "    if (first != 3) return 1;\n"
+        "    if (second != 0) return 2;\n"
+        "    if (ratio != 1.5) return 3;\n"
+        "    text[0] = 'a';\n"
+        "    text[7] = 'z';\n"
+        "    if (text[0] != 'a' || text[7] != 'z') return 4;\n"
+        "    first = 10;\n"
+        "    return first == 10 ? 0 : 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("c atomic builtins use ll and sc") {
     const ProgramResult program = compile_and_run(
         "int main(void) {\n"

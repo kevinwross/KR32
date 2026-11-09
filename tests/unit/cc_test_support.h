@@ -59,6 +59,16 @@ ProgramResult compile_and_run(std::string_view source) {
         REQUIRE(machine.load_image(section.address, section.data));
     }
     machine.reset(image.entry);
+    machine.set_reg(11, machine.ram_base() + machine.ram_size() - 1024U);
+    for (const container::Section& section : image.sections) {
+        if (section.name == ".tls") {
+            for (std::size_t index = 0; index < section.data.size(); ++index) {
+                (void)machine.write8(
+                    machine.reg(11) + 32U + static_cast<std::uint32_t>(index),
+                    section.data[index]);
+            }
+        }
+    }
     machine.set_syscall_handler([&](core::Machine& current, std::uint32_t vector) {
         if (vector == 33) {
             program.output.push_back(static_cast<char>(current.reg(0) & 0xFFU));
