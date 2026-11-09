@@ -1088,6 +1088,35 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("function templates substitute pointer element types") {
+    const ProgramResult program = compile_and_run(
+        "template<typename T> void sort_values(T* first, T* last) {\n"
+        "    T* current = first;\n"
+        "    if (current != last) current = current + 1;\n"
+        "    while (current < last) {\n"
+        "        T value = *current;\n"
+        "        T* hole = current;\n"
+        "        while (hole > first && value < *(hole - 1)) {\n"
+        "            *hole = *(hole - 1);\n"
+        "            hole = hole - 1;\n"
+        "        }\n"
+        "        *hole = value;\n"
+        "        current = current + 1;\n"
+        "    }\n"
+        "}\n"
+        "int main() {\n"
+        "    char text[4] = \"dcba\";\n"
+        "    sort_values(text, text + 4);\n"
+        "    if (text[0] != 'a' || text[3] != 'd') return 1;\n"
+        "    double reals[3] = { 2.5, 0.5, 1.5 };\n"
+        "    sort_values(reals, reals + 3);\n"
+        "    return reals[0] == 0.5 && reals[2] == 2.5 ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm predicate callbacks") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

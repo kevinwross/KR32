@@ -601,6 +601,7 @@ private:
         bool extern_c = false;
         bool variadic = false;
         bool from_template = false;
+        std::map<std::string, TypePtr> template_bindings;
         bool defined = false;
         bool is_static = false;
         bool is_member = false;
@@ -1289,6 +1290,13 @@ private:
         }
         if (type->kind == TypeKind::Named && !type->template_arguments.empty()) {
             return instantiate_class_template(type);
+        }
+        if (type->kind == TypeKind::Named && type->name.parts.size() == 1) {
+            const auto bound =
+                current_template_bindings_.find(type->name.parts[0]);
+            if (bound != current_template_bindings_.end() && bound->second) {
+                return bound->second->clone();
+            }
         }
         if (type->kind == TypeKind::Named) {
             const auto alias = type_aliases_.find(type->name.to_string());
@@ -3184,6 +3192,7 @@ private:
         function->qualified = qualified;
         function->symbol = symbol;
         function->parameters = parameter_types;
+        function->template_bindings = bindings;
         function->result = resolve_type(clone->type);
         function->defined = clone->body != nullptr;
         function->weak = true;
@@ -9002,6 +9011,7 @@ private:
             return;
         }
         current_function_ = &function;
+        current_template_bindings_ = function.template_bindings;
         current_call_sites_.clear();
         current_prefix_ = function.qualified;
         const std::size_t separator = current_prefix_.rfind("::");
@@ -10296,6 +10306,7 @@ private:
     std::vector<Global*> static_destructors_;
     std::vector<Global*> tls_destructors_;
     std::map<std::string, TypePtr> type_aliases_;
+    std::map<std::string, TypePtr> current_template_bindings_;
     std::map<std::string, std::set<std::string>> imports_;
     std::map<std::string, std::map<std::string, std::string>> using_aliases_;
     std::map<std::string, std::unique_ptr<ClassInfo>> class_index_;

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 17:40 -08:00
+> **Last updated:** 2026-11-08 17:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2435,6 +2435,10 @@ Newest entries at the bottom. Use the local time zone.
       `for_each`, `transform`, `remove_if`, `replace_if`) and comparator
       `sort`; inferred lambda return types from return expressions; stopped
       the matrix `transform` intrinsic from hijacking `std::transform`.
+- **2026-11-08 17:44 -08:00** — Propagated function-template type bindings
+      through `resolve_type` during code generation, so body locals declared
+      with `T*` use the substituted element size; generic sorts now work for
+      `char` and `double`.
 
 ## 10. Updating this file
 
