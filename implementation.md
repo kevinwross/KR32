@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 22:49 -08:00
+> **Last updated:** 2026-11-08 22:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2554,6 +2554,8 @@ Newest entries at the bottom. Use the local time zone.
       store the frame slot directly in both compilers.
 - **2026-11-08 22:49 -08:00** — C++ calls with simple local or constant
       arguments load them directly into the argument registers.
+- **2026-11-08 22:58 -08:00** — C calls with simple local or constant
+      arguments do the same, skipping argument temporaries.
 
 ## 10. Updating this file
 

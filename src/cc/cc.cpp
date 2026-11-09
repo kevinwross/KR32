@@ -5712,6 +5712,110 @@ private:
                         : signature != functions_.end()
                               ? signature->second.parameters.size()
                               : 0;
+                bool simple_arguments = false;
+                if (indirect_function == nullptr && !variadic &&
+                    signature != functions_.end() && fixed_count <= 4) {
+                    std::size_t probe = 0;
+                    bool valid = true;
+                    for (std::size_t index = 0; index < fixed_count; ++index) {
+                        const Token& token = peek(probe);
+                        const TypePtr target =
+                            signature->second.parameters[index];
+                        bool supported = token.kind == TokenKind::Number ||
+                                         token.kind == TokenKind::Character;
+                        if (token.kind == TokenKind::Identifier) {
+                            const Variable* variable = lookup(token.text);
+                            supported =
+                                variable != nullptr && !variable->global &&
+                                !variable->is_thread_local &&
+                                !variable->type->is_atomic &&
+                                !is_long_long_type(variable->type) &&
+                                !is_fp_type(variable->type) &&
+                                variable->type->kind != Type::Kind::Array &&
+                                variable->type->kind != Type::Kind::Struct &&
+                                variable->type->kind != Type::Kind::Union;
+                        }
+                        if (!supported || target == nullptr ||
+                            is_fp_type(target) || is_long_long_type(target) ||
+                            target->kind == Type::Kind::Char ||
+                            target->kind == Type::Kind::Short ||
+                            target->kind == Type::Kind::Bool ||
+                            target->kind == Type::Kind::Struct ||
+                            target->kind == Type::Kind::Union ||
+                            target->kind == Type::Kind::Array) {
+                            valid = false;
+                            break;
+                        }
+                        const std::string& next = peek(probe + 1).text;
+                        if (next != "," && next != ")") {
+                            valid = false;
+                            break;
+                        }
+                        probe += next == "," ? 2 : 1;
+                    }
+                    simple_arguments = valid &&
+                                       peek(probe).text == ")";
+                    if (simple_arguments) {
+                        struct SimpleArgument {
+                            const Variable* variable = nullptr;
+                            TypePtr type;
+                            std::int64_t literal = 0;
+                            bool is_literal = false;
+                        };
+                        std::vector<SimpleArgument> simple;
+                        simple.reserve(fixed_count);
+                        for (std::size_t index = 0; index < fixed_count;
+                             ++index) {
+                            const Token token = take();
+                            SimpleArgument argument;
+                            if (token.kind == TokenKind::Identifier) {
+                                argument.variable = lookup(token.text);
+                                argument.type = argument.variable->type;
+                            } else {
+                                argument.literal = token.value;
+                                argument.is_literal = true;
+                            }
+                            simple.push_back(argument);
+                            if (index + 1 < fixed_count) {
+                                expect(",");
+                            }
+                        }
+                        expect(")");
+                        for (std::size_t index = fixed_count;
+                             index-- > 0;) {
+                            const SimpleArgument& argument = simple[index];
+                            if (argument.is_literal) {
+                                emit("    MOV R0, #" +
+                                     std::to_string(argument.literal));
+                            } else {
+                                const TypePtr type = argument.type;
+                                if (type->kind == Type::Kind::Char ||
+                                    type->kind == Type::Kind::Bool) {
+                                    emit("    LOAD8S R0, [R7 + " +
+                                         std::to_string(
+                                             argument.variable->offset) +
+                                         "]");
+                                } else if (type->kind == Type::Kind::Short) {
+                                    emit("    LOAD16S R0, [R7 + " +
+                                         std::to_string(
+                                             argument.variable->offset) +
+                                         "]");
+                                } else {
+                                    emit("    LOAD R0, [R7 + " +
+                                         std::to_string(
+                                             argument.variable->offset) +
+                                         "]");
+                                }
+                            }
+                            if (index != 0) {
+                                emit("    MOV R" + std::to_string(index) +
+                                     ", R0");
+                            }
+                        }
+                        emit("    CALL " + name);
+                        return signature->second.result;
+                    }
+                }
                 if (!match(")")) {
                     while (true) {
                         TypePtr argument = gen_expression();

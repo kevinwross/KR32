@@ -32,6 +32,15 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("cmpend") == std::string::npos);
 }
 
+TEST_CASE("c simple calls avoid argument temporaries") {
+    const cc::Result result = cc::compile(
+        "int add(int a, int b) { return a + b; }\n"
+        "int call(int x, int y) { return add(x, y); }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("STORE R0, [R7 + 8]") == std::string::npos);
+    CHECK(result.assembly.find("CALL add") != std::string::npos);
+}
+
 TEST_CASE("c optimized branches fold boolean tests") {
     const cc::Result result = cc::compile(
         "int f(int x) { if (x == 1) return 1; return 2; }\n",
