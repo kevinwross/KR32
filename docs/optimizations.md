@@ -18,8 +18,10 @@ target-level cleanup.
      `[R7 + n]`, avoiding a temporary address register.
    - Scalar C++ returns keep the result in registers when no local
      destructors or active catch require preserving it across cleanup.
-   - C++ `if` and loop comparisons branch directly from `CMP` instead of
-     materializing a 0/1 boolean and testing it again.
+   - C and C++ `if` and loop comparisons branch directly from `CMP`
+     instead of materializing a 0/1 boolean and testing it again.
+   - C handles immediate right operands at `-O0`; `-O1` folds other C
+     boolean materializations.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.

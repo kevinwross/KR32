@@ -17,6 +17,15 @@ TEST_CASE("c constant folding") {
     CHECK(result.assembly.find("LEA R0, [R7 + 0]") == std::string::npos);
 }
 
+TEST_CASE("c comparisons branch directly") {
+    const cc::Result result = cc::compile(
+        "int f(int x) { if (x == 1) return 1; return 2; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("JNZ .Lelse") != std::string::npos);
+    CHECK(result.assembly.find("cmpend") == std::string::npos);
+}
+
 TEST_CASE("c optimized branches fold boolean tests") {
     const cc::Result result = cc::compile(
         "int f(int x) { if (x == 1) return 1; return 2; }\n",

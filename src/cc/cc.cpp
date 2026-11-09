@@ -2693,6 +2693,63 @@ private:
         expect("}");
     }
 
+    bool simple_comparison_ahead() const {
+        int depth = 0;
+        int comparisons = 0;
+        for (std::size_t index = 0;; ++index) {
+            const Token& token = peek(index);
+            if (token.kind == TokenKind::End) {
+                break;
+            }
+            if (token.text == "(" || token.text == "[") {
+                ++depth;
+                continue;
+            }
+            if (token.text == ")" || token.text == "]") {
+                if (depth == 0) {
+                    break;
+                }
+                --depth;
+                continue;
+            }
+            if (depth != 0) {
+                continue;
+            }
+            if (token.text == "&&" || token.text == "||" ||
+                token.text == "?" || token.text == "," ||
+                token.text == ";" || token.text == "{" ||
+                is_assignment_operator(token.text)) {
+                return false;
+            }
+            if (token.text == "==" || token.text == "!=" ||
+                token.text == "<" || token.text == "<=" ||
+                token.text == ">" || token.text == ">=") {
+                ++comparisons;
+            }
+        }
+        return comparisons == 1;
+    }
+
+    std::string inverse_comparison(const std::string& op,
+                                   bool unsigned_compare) const {
+        if (unsigned_compare) {
+            if (op == "==") return "JNZ";
+            if (op == "!=") return "JZ";
+            if (op == "<") return "JCS";
+            if (op == "<=") return "JHI";
+            if (op == ">") return "JLS";
+            if (op == ">=") return "JNC";
+        } else {
+            if (op == "==") return "JNZ";
+            if (op == "!=") return "JZ";
+            if (op == "<") return "JGE";
+            if (op == "<=") return "JGT";
+            if (op == ">") return "JLE";
+            if (op == ">=") return "JLT";
+        }
+        return {};
+    }
+
     void parse_statement() {
         if (!current_function_.empty()) {
             const std::string line_label =
@@ -2778,11 +2835,18 @@ private:
         }
         if (match("if")) {
             expect("(");
+            const std::string else_label = new_label("else");
+            const std::string end_label = new_label("endif");
             std::int64_t folded_condition = 0;
             const bool known_condition =
                 try_fold_constant(folded_condition);
+            condition_branched_ = false;
             if (!known_condition) {
+                if (simple_comparison_ahead()) {
+                    branch_false_label_ = else_label;
+                }
                 gen_condition();
+                branch_false_label_.clear();
             }
             expect(")");
             if (known_condition) {
@@ -2803,10 +2867,10 @@ private:
                 }
                 return;
             }
-            const std::string else_label = new_label("else");
-            const std::string end_label = new_label("endif");
-            emit("    CMP R0, #0");
-            emit("    JZ " + else_label);
+            if (!condition_branched_) {
+                emit("    CMP R0, #0");
+                emit("    JZ " + else_label);
+            }
             parse_statement();
             emit("    JMP " + end_label);
             emit(else_label + ":");
@@ -2854,14 +2918,21 @@ private:
                 --suppress_emit_;
                 return;
             }
+            condition_branched_ = false;
             if (known_condition) {
                 emit("    MOV R0, #1");
             } else {
+                if (simple_comparison_ahead()) {
+                    branch_false_label_ = end;
+                }
                 gen_condition();
+                branch_false_label_.clear();
             }
             expect(")");
-            emit("    CMP R0, #0");
-            emit("    JZ " + end);
+            if (!condition_branched_) {
+                emit("    CMP R0, #0");
+                emit("    JZ " + end);
+            }
             break_labels_.push_back(end);
             continue_labels_.push_back(start);
             parse_statement();
@@ -4184,6 +4255,21 @@ private:
                         left->kind == Type::Kind::Char ||
                         left->kind == Type::Kind::Short ||
                         left->kind == Type::Kind::Bool;
+                    if (comparison && !branch_false_label_.empty() &&
+                        !is_long_long_type(left) &&
+                        (peek().kind == TokenKind::Number ||
+                         peek().kind == TokenKind::Character)) {
+                        const std::int64_t value = take().value;
+                        emit("    CMP R0, #" + std::to_string(value));
+                        const std::string inverse = inverse_comparison(
+                            op, is_unsigned_scalar(left));
+                        emit("    " + inverse + " " + branch_false_label_);
+                        branch_false_label_.clear();
+                        condition_branched_ = true;
+                        left = type_int();
+                        matched = true;
+                        continue;
+                    }
                     if (immediate_operator && scalar_left &&
                         !is_long_long_type(left) && !left->is_pointer() &&
                         (peek().kind == TokenKind::Number ||
@@ -5503,6 +5589,21 @@ private:
                         left->kind == Type::Kind::Char ||
                         left->kind == Type::Kind::Short ||
                         left->kind == Type::Kind::Bool;
+                    if (comparison && !branch_false_label_.empty() &&
+                        !is_long_long_type(left) &&
+                        (peek().kind == TokenKind::Number ||
+                         peek().kind == TokenKind::Character)) {
+                        const std::int64_t value = take().value;
+                        emit("    CMP R0, #" + std::to_string(value));
+                        const std::string inverse = inverse_comparison(
+                            op, is_unsigned_scalar(left));
+                        emit("    " + inverse + " " + branch_false_label_);
+                        branch_false_label_.clear();
+                        condition_branched_ = true;
+                        left = type_int();
+                        matched = true;
+                        continue;
+                    }
                     if (immediate_operator && scalar_left &&
                         !is_long_long_type(left) && !left->is_pointer() &&
                         (peek().kind == TokenKind::Number ||
@@ -5651,6 +5752,8 @@ private:
     int suppress_emit_ = 0;
     int frame_size_ = 0;
     int line_counter_ = 0;
+    std::string branch_false_label_;
+    bool condition_branched_ = false;
     int label_counter_ = 0;
     int string_counter_ = 0;
     int counter_value_ = 0;
