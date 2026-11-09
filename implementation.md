@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 00:24 -08:00
+> **Last updated:** 2026-11-09 00:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2584,6 +2584,8 @@ Newest entries at the bottom. Use the local time zone.
       conditional branches on the fallthrough path.
 - **2026-11-09 00:24 -08:00** — Ordered comparison values materialize with
       `SLT`/`SLTU` instead of branches and `0`/`1` moves.
+- **2026-11-09 00:30 -08:00** — C and C++ codegen emit `SLT`/`SLTU` directly
+      for ordered comparison values at `-O0`.
 
 ## 10. Updating this file
 

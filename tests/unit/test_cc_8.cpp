@@ -32,6 +32,14 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("cmpend") == std::string::npos);
 }
 
+TEST_CASE("c comparison values use SLT") {
+    const cc::Result result = cc::compile(
+        "int lt(int a, int b) { return a < b; }\n"
+        "int ge(int a, int b) { return a >= b; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("SLT R0, R1, R0") != std::string::npos);
+}
+
 TEST_CASE("c constant locals propagate") {
     const cc::Result result = cc::compile(
         "int f(void) { const int N = 5; return N; }\n");

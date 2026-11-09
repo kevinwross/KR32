@@ -6577,12 +6577,39 @@ private:
             (op == "==" || op == "!=" || op == "<" || op == "<=" ||
              op == ">" || op == ">=")) {
             const std::int64_t immediate = expression.children[1]->integer;
+            const bool unsigned_compare =
+                is_unsigned_operation(left_type, right_type);
+            bool ordered = op == "<" || op == "<=" ||
+                            op == ">" || op == ">=";
+            if (ordered) {
+                std::int64_t bound = immediate;
+                bool increment = op == "<=" || op == ">";
+                if (increment) {
+                    if ((unsigned_compare &&
+                         immediate >= 0xFFFFFFFFLL) ||
+                        (!unsigned_compare &&
+                         (immediate >= 2147483647LL ||
+                          immediate <= -2147483648LL))) {
+                        ordered = false;
+                    } else {
+                        bound = immediate + 1;
+                    }
+                }
+                if (ordered) {
+                    gen_expr(*expression.children[0]);
+                    emit(std::string("    ") +
+                         (unsigned_compare ? "SLTU" : "SLT") +
+                         " R0, R0, #" + std::to_string(bound));
+                    if (op == ">=" || op == ">") {
+                        emit("    XOR R0, R0, #1");
+                    }
+                    return Type::make_builtin(BuiltinKind::Bool);
+                }
+            }
             gen_expr(*expression.children[0]);
             emit("    CMP R0, #" + std::to_string(immediate));
             const std::string true_label = new_label("true");
             const std::string end_label = new_label("cmpend");
-            const bool unsigned_compare =
-                is_unsigned_operation(left_type, right_type);
             if (op == "==") emit("    JZ " + true_label);
             if (op == "!=") emit("    JNZ " + true_label);
             if (unsigned_compare) {
@@ -6742,6 +6769,24 @@ private:
                                                      : "    SAR R0, R0, R1");
         else if (op == "==" || op == "!=" || op == "<" || op == "<=" ||
                  op == ">" || op == ">=") {
+            const bool ordered = op == "<" || op == "<=" ||
+                                 op == ">" || op == ">=";
+            if (ordered) {
+                const std::string mnemonic =
+                    unsigned_operation ? "SLTU" : "SLT";
+                if (op == "<") {
+                    emit("    " + mnemonic + " R0, R0, R1");
+                } else if (op == ">") {
+                    emit("    " + mnemonic + " R0, R1, R0");
+                } else if (op == "<=") {
+                    emit("    " + mnemonic + " R0, R1, R0");
+                    emit("    XOR R0, R0, #1");
+                } else {
+                    emit("    " + mnemonic + " R0, R0, R1");
+                    emit("    XOR R0, R0, #1");
+                }
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
             const std::string true_label = new_label("true");
             const std::string end_label = new_label("cmpend");
             emit("    CMP R0, R1");

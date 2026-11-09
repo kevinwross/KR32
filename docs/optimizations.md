@@ -29,6 +29,7 @@ target-level cleanup.
      immediate value directly in both C and C++.
    - C and C++ `if` and loop comparisons branch directly from `CMP`
      instead of materializing a 0/1 boolean and testing it again.
+   - Ordered comparison values in both compilers use `SLT`/`SLTU` directly.
    - C branches directly at `-O0` for both immediate and register right
      operands; `-O1` folds remaining boolean materializations.
    - `do`/`while` conditions branch directly to the loop head in both C and

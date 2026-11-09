@@ -56,6 +56,14 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("comparison values use SLT") {
+    const cxx::Result result = cxx::compile(
+        "int lt(int a, int b) { return a < b; }\n"
+        "int ge(int a, int b) { return a >= b; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("SLT R0, R0, R1") != std::string::npos);
+}
+
 TEST_CASE("constant locals propagate") {
     const cxx::Result result = cxx::compile(
         "int f() { const int N = 5; return N; }\n");

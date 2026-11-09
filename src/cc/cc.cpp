@@ -4101,10 +4101,28 @@ private:
         }
         if (op == "==" || op == "!=" || op == "<" || op == "<=" || op == ">" ||
             op == ">=") {
-            const std::string true_label = new_label("true");
-            const std::string end_label = new_label("cmpend");
             const bool unsigned_compare = is_unsigned_scalar(left) ||
                                           is_unsigned_scalar(right);
+            const bool ordered = op == "<" || op == "<=" ||
+                                 op == ">" || op == ">=";
+            if (ordered) {
+                const std::string mnemonic =
+                    unsigned_compare ? "SLTU" : "SLT";
+                if (op == "<") {
+                    emit("    " + mnemonic + " R0, R1, R0");
+                } else if (op == ">") {
+                    emit("    " + mnemonic + " R0, R0, R1");
+                } else if (op == "<=") {
+                    emit("    " + mnemonic + " R0, R0, R1");
+                    emit("    XOR R0, R0, #1");
+                } else {
+                    emit("    " + mnemonic + " R0, R1, R0");
+                    emit("    XOR R0, R0, #1");
+                }
+                return;
+            }
+            const std::string true_label = new_label("true");
+            const std::string end_label = new_label("cmpend");
             emit("    CMP R1, R0");
             if (op == "==") emit("    JZ " + true_label);
             if (op == "!=") emit("    JNZ " + true_label);
@@ -4572,10 +4590,35 @@ private:
                         (peek().kind == TokenKind::Number ||
                          peek().kind == TokenKind::Character)) {
                         const std::int64_t value = take().value;
+                        const bool unsigned_compare = is_unsigned_scalar(left);
+                        const bool ordered = op == "<" || op == "<=" ||
+                                             op == ">" || op == ">=";
+                        bool use_slt = ordered;
+                        std::int64_t bound = value;
+                        if (ordered && (op == "<=" || op == ">")) {
+                            if ((unsigned_compare && value >= 0xFFFFFFFFLL) ||
+                                (!unsigned_compare &&
+                                 (value >= 2147483647LL ||
+                                  value <= -2147483648LL))) {
+                                use_slt = false;
+                            } else {
+                                bound = value + 1;
+                            }
+                        }
+                        if (use_slt) {
+                            emit(std::string("    ") +
+                                 (unsigned_compare ? "SLTU" : "SLT") +
+                                 " R0, R0, #" + std::to_string(bound));
+                            if (op == ">=" || op == ">") {
+                                emit("    XOR R0, R0, #1");
+                            }
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
                         const std::string true_label = new_label("true");
                         const std::string end_label = new_label("cmpend");
                         emit("    CMP R0, #" + std::to_string(value));
-                        const bool unsigned_compare = is_unsigned_scalar(left);
                         if (op == "==") emit("    JZ " + true_label);
                         if (op == "!=") emit("    JNZ " + true_label);
                         if (unsigned_compare) {
@@ -6136,10 +6179,35 @@ private:
                         (peek().kind == TokenKind::Number ||
                          peek().kind == TokenKind::Character)) {
                         const std::int64_t value = take().value;
+                        const bool unsigned_compare = is_unsigned_scalar(left);
+                        const bool ordered = op == "<" || op == "<=" ||
+                                             op == ">" || op == ">=";
+                        bool use_slt = ordered;
+                        std::int64_t bound = value;
+                        if (ordered && (op == "<=" || op == ">")) {
+                            if ((unsigned_compare && value >= 0xFFFFFFFFLL) ||
+                                (!unsigned_compare &&
+                                 (value >= 2147483647LL ||
+                                  value <= -2147483648LL))) {
+                                use_slt = false;
+                            } else {
+                                bound = value + 1;
+                            }
+                        }
+                        if (use_slt) {
+                            emit(std::string("    ") +
+                                 (unsigned_compare ? "SLTU" : "SLT") +
+                                 " R0, R0, #" + std::to_string(bound));
+                            if (op == ">=" || op == ">") {
+                                emit("    XOR R0, R0, #1");
+                            }
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
                         const std::string true_label = new_label("true");
                         const std::string end_label = new_label("cmpend");
                         emit("    CMP R0, #" + std::to_string(value));
-                        const bool unsigned_compare = is_unsigned_scalar(left);
                         if (op == "==") emit("    JZ " + true_label);
                         if (op == "!=") emit("    JNZ " + true_label);
                         if (unsigned_compare) {
