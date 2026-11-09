@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 09:47 -08:00
+> **Last updated:** 2026-11-09 12:00 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2650,6 +2650,10 @@ Newest entries at the bottom. Use the local time zone.
       and Threads/Call Stack with address, basename, line, gutter toggle, and
       scrollbar. Breakpoints now have an enabled/disabled state (red/yellow),
       and RST preserves both addresses and state.
+- **2026-11-09 12:00 -08:00** — Unified gutter behavior: clicking an empty
+      gutter sets an enabled breakpoint, clicking a breakpoint toggles
+      enabled/disabled, and the context menu sets or removes it. F9 follows
+      the same toggle rule.
 
 ## 10. Updating this file
 

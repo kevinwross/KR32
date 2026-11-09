@@ -300,6 +300,7 @@ private:
     struct ContextMenu {
         bool open = false;
         bool source = false;
+        bool has_breakpoint = false;
         int line = 0;
         std::uint32_t address = 0;
         Rect rect{};

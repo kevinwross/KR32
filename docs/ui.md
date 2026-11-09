@@ -145,7 +145,9 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 
 - Source gutter: breakpoint square column, right-aligned line-number column, separators; source text starts after the gutter.
 - Disassembly gutter: breakpoint square column, right-aligned address column with padding, separators; the instruction column starts after the gutter. It mirrors the source gutter geometry.
-- Left-click a gutter row toggles a breakpoint at that line/instruction.
+- Left-click a gutter row with no breakpoint sets an enabled breakpoint.
+  Left-click an existing breakpoint toggles it enabled/disabled. This applies
+  to the source, disassembly, and breakpoints-panel gutters.
 - Disabled breakpoints use a yellow square in the source and disassembly
   gutters; enabled breakpoints use red.
 - The **BREAKPOINTS** panel lists every breakpoint by address, basename, and
@@ -153,8 +155,9 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   source line. The right-hand scrollbar scrolls long lists.
 - **RST** reloads the current image and preserves breakpoint addresses and
   enabled/disabled state.
-- Right-click a source or disassembly gutter row opens the KR16-style menu:
-  **Toggle breakpoint** and **Run to line N** / **Run to 0xADDR**.
+- Right-click a source, disassembly, or breakpoints-panel row opens the
+  KR16-style menu: **Set breakpoint** or **Remove breakpoint**, plus
+  **Run to line N** / **Run to 0xADDR**.
 - Run-to uses a temporary breakpoint, runs the CPU, and removes the temporary
   breakpoint when it stops. Existing user breakpoints are preserved.
 - Run and Run-to honor the instruction limit configured in Settings. Execution
@@ -191,7 +194,8 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   instruction step out.
 - The source-pane **OVER / IN / OUT** buttons step by C source line.
 - The disassembly-pane **OVER / IN / OUT** buttons step by instruction.
-- `F9` toggle a breakpoint at the current source line.
+- `F9` toggle the enabled/disabled state of the breakpoint at the current
+  source line, or set one if none exists.
 - `R` restart/reload; `Esc` quits.
 - Click a core row to select it and toggle its expanded state.
 - Click a GPR/PC/SP cell to edit it; click a Z/N/C/V/I flag to toggle it.
@@ -214,8 +218,8 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 - Click the memory **ADDR** field or label to edit the starting address; Enter
   commits and Escape cancels. **PTR** follows SP; **^** / **v** scroll by 16 bytes.
 - Use the mouse wheel over a panel to scroll it; click a scrollbar track to page.
-- Left-click a source or disassembly gutter row to toggle a breakpoint; right-click
-  it for the gutter menu.
+- Left-click a source or disassembly gutter row to set a breakpoint or toggle
+  its enabled state; right-click it for the gutter menu.
 
 ## Headless checks
 

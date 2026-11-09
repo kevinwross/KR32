@@ -195,6 +195,16 @@ TEST_CASE("breakpoint panel disables and survives reset") {
     debugger.render(restarted);
     CHECK(debugger.breakpoint_count() == 1);
     CHECK(restarted.pixel_at(350, 520) == 0xFFE2BE40U);
+
+    CHECK(debugger.context_menu(400, 520, 1000, 700));
+    CHECK(debugger.click(450, 530, 1000, 700));
+    CHECK(debugger.breakpoint_count() == 0);
+
+    debugger.toggle_breakpoint_at_current_line();
+    CHECK(debugger.breakpoint_count() == 1);
+    ui::Canvas reenabled(1000, 700);
+    debugger.render(reenabled);
+    CHECK(reenabled.pixel_at(350, 520) == 0xFFFF6868U);
     std::filesystem::remove(path);
 }
 

@@ -1275,13 +1275,7 @@ void DebuggerUI::toggle_breakpoint_at_current_line() {
         status_ = "no breakpoint address for the current line";
         return;
     }
-    if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
-        session_.clear_breakpoint(address);
-        status_ = "breakpoint cleared at " + hex(address, 8);
-    } else {
-        session_.set_breakpoint(address);
-        status_ = "breakpoint set at " + hex(address, 8);
-    }
+    toggle_instruction_breakpoint(address);
 }
 
 std::string DebuggerUI::format_hex(std::uint32_t value, int digits) const {
@@ -3186,10 +3180,12 @@ void DebuggerUI::toggle_source_breakpoint(int line) {
 
 void DebuggerUI::toggle_instruction_breakpoint(std::uint32_t address) {
     if (session_.breakpoints().find(address) != session_.breakpoints().end()) {
-        session_.clear_breakpoint(address);
-        status_ = "breakpoint cleared at " + hex(address, 8);
+        const bool enabled = session_.breakpoint_enabled(address);
+        session_.set_breakpoint_enabled(address, !enabled);
+        status_ = enabled ? "breakpoint disabled at " + hex(address, 8)
+                          : "breakpoint enabled at " + hex(address, 8);
     } else {
-        session_.set_breakpoint(address);
+        session_.set_breakpoint(address, true);
         status_ = "breakpoint set at " + hex(address, 8);
     }
 }
@@ -3202,7 +3198,13 @@ void DebuggerUI::run_to(std::uint32_t address) {
         status_ = "already at " + hex(address, 8);
         return;
     }
-    const bool owned = session_.breakpoints().find(address) == session_.breakpoints().end();
+    const bool exists =
+        session_.breakpoints().find(address) != session_.breakpoints().end();
+    if (exists && !session_.breakpoint_enabled(address)) {
+        status_ = "breakpoint is disabled at " + hex(address, 8);
+        return;
+    }
+    const bool owned = !exists;
     if (owned) {
         session_.set_breakpoint(address);
     }
@@ -3249,7 +3251,18 @@ void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
             return;
         }
     } else {
-        return;
+        for (const BreakpointRow& row : breakpoint_rows_) {
+            if (row.row.contains(x, y)) {
+                address = row.address;
+                break;
+            }
+        }
+        if (address == 0) {
+            return;
+        }
+    }
+    if (source && address == 0) {
+        (void)source_line_to_address(line, address);
     }
     const int menu_width = 220;
     const int menu_height = 58;
@@ -3260,6 +3273,8 @@ void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
     menu_.source = source;
     menu_.line = line;
     menu_.address = address;
+    menu_.has_breakpoint =
+        session_.breakpoints().find(address) != session_.breakpoints().end();
     menu_.rect = Rect{menu_x, menu_y, menu_width, menu_height};
     menu_.toggle_rect = Rect{menu_x + 1, menu_y + 2, menu_width - 2, 25};
     menu_.run_rect = Rect{menu_x + 1, menu_y + 29, menu_width - 2, 27};
@@ -3339,8 +3354,9 @@ void DebuggerUI::draw_context_menu(Canvas& canvas) {
     canvas.frame(menu_.rect, kAccent);
     canvas.fill(menu_.toggle_rect, menu_.hover == 0 ? Color{38, 66, 92, 255} : kPanelAlt);
     canvas.fill(menu_.run_rect, menu_.hover == 1 ? Color{38, 66, 92, 255} : kPanelAlt);
-    canvas.text(menu_.rect.x + 10, menu_.toggle_rect.y + 4, "Toggle breakpoint", kText,
-                FontRole::MonoSmall);
+    canvas.text(menu_.rect.x + 10, menu_.toggle_rect.y + 4,
+                menu_.has_breakpoint ? "Remove breakpoint" : "Set breakpoint",
+                kText, FontRole::MonoSmall);
     const std::string run_label = menu_.source
                                       ? "Run to line " + std::to_string(menu_.line)
                                       : "Run to " + hex(menu_.address, 8);
@@ -3357,7 +3373,10 @@ void DebuggerUI::activate_context_menu(bool run_to_address) {
     const std::uint32_t address = menu_.address;
     menu_.open = false;
     if (!run_to_address) {
-        if (source) {
+        if (menu_.has_breakpoint && address != 0) {
+            session_.clear_breakpoint(address);
+            status_ = "breakpoint removed at " + hex(address, 8);
+        } else if (source) {
             toggle_source_breakpoint(line);
         } else {
             toggle_instruction_breakpoint(address);
