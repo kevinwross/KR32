@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 01:25 -08:00
+> **Last updated:** 2026-11-09 01:35 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2598,6 +2598,8 @@ Newest entries at the bottom. Use the local time zone.
       both halves of `long long`.
 - **2026-11-09 01:25 -08:00** — C++ local-vs-local comparison values avoid
       temporary slots; equality against zero skips `XOR #0`.
+- **2026-11-09 01:35 -08:00** — C local-vs-local comparison values use direct
+      loads and `SLT`/`SLTU` without stack temporaries.
 
 ## 10. Updating this file
 

@@ -4035,6 +4035,11 @@ private:
         }
         emit("    LOAD R1, [SP]");
         emit("    ADJSP #8");
+        gen_binary_ready(op, left, right);
+    }
+
+    void gen_binary_ready(const std::string& op, const TypePtr& left,
+                          const TypePtr& right) {
         if (op == "+" || op == "-") {
             if (left->is_pointer() && !right->is_pointer()) {
                 const int size = left->element() ? left->element()->size() : 1;
@@ -4591,6 +4596,64 @@ private:
                         }
                         branch_false_label_.clear();
                         branch_true_label_.clear();
+                        if (peek().kind == TokenKind::Identifier &&
+                            (peek(1).text == ")" || peek(1).text == ";" ||
+                             peek(1).text == "," || peek(1).text == ":" ||
+                             peek(1).text == "?")) {
+                            const Variable* variable = lookup(peek().text);
+                            if (variable != nullptr && !variable->global &&
+                                !variable->is_thread_local &&
+                                !is_long_long_type(variable->type) &&
+                                !is_fp_type(variable->type) &&
+                                !variable->type->is_pointer() &&
+                                !variable->type->is_atomic &&
+                                variable->type->kind != Type::Kind::Array &&
+                                variable->type->kind != Type::Kind::Struct &&
+                                variable->type->kind != Type::Kind::Union) {
+                                take();
+                                const TypePtr type = variable->type;
+                                const std::string frame =
+                                    "[R7 + " +
+                                    std::to_string(variable->offset) + "]";
+                                if (type->kind == Type::Kind::Char ||
+                                    type->kind == Type::Kind::Bool) {
+                                    emit("    LOAD8S R1, " + frame);
+                                } else if (type->kind == Type::Kind::Short) {
+                                    emit("    LOAD16S R1, " + frame);
+                                } else {
+                                    emit("    LOAD R1, " + frame);
+                                }
+                                const bool unsigned_compare =
+                                    is_unsigned_scalar(left) ||
+                                    is_unsigned_scalar(type);
+                                const std::string mnemonic =
+                                    unsigned_compare ? "SLTU" : "SLT";
+                                if (op == "==" || op == "!=") {
+                                    emit("    XOR R0, R0, R1");
+                                    emit("    SLTU R0, R0, #1");
+                                    if (op == "!=") {
+                                        emit("    XOR R0, R0, #1");
+                                    }
+                                } else if (op == "<") {
+                                    emit("    " + mnemonic +
+                                         " R0, R0, R1");
+                                } else if (op == ">") {
+                                    emit("    " + mnemonic +
+                                         " R0, R1, R0");
+                                } else if (op == "<=") {
+                                    emit("    " + mnemonic +
+                                         " R0, R1, R0");
+                                    emit("    XOR R0, R0, #1");
+                                } else {
+                                    emit("    " + mnemonic +
+                                         " R0, R0, R1");
+                                    emit("    XOR R0, R0, #1");
+                                }
+                                left = type_int();
+                                matched = true;
+                                continue;
+                            }
+                        }
                         emit("    PUSH R0");
                         TypePtr right = (this->*next)();
                         if (!is_long_long_type(right) &&
@@ -4735,6 +4798,39 @@ private:
                             emit("    " + mnemonic + " R0, R1, R0");
                             left = is_unsigned_scalar(left) ? type_uint()
                                                             : type_int();
+                            matched = true;
+                            continue;
+                        }
+                    }
+                    if (comparison && scalar_left &&
+                        !is_long_long_type(left) && !is_fp_type(left) &&
+                        peek().kind == TokenKind::Identifier &&
+                        right_operand_complete(ops, peek(1).text)) {
+                        const Variable* variable = lookup(peek().text);
+                        if (variable != nullptr && !variable->global &&
+                            !variable->is_thread_local &&
+                            !is_long_long_type(variable->type) &&
+                            !is_fp_type(variable->type) &&
+                            !variable->type->is_atomic &&
+                            variable->type->kind != Type::Kind::Array &&
+                            variable->type->kind != Type::Kind::Struct &&
+                            variable->type->kind != Type::Kind::Union) {
+                            take();
+                            const TypePtr type = variable->type;
+                            const std::string frame =
+                                "[R7 + " +
+                                std::to_string(variable->offset) + "]";
+                            emit("    MOV R1, R0");
+                            if (type->kind == Type::Kind::Char ||
+                                type->kind == Type::Kind::Bool) {
+                                emit("    LOAD8S R0, " + frame);
+                            } else if (type->kind == Type::Kind::Short) {
+                                emit("    LOAD16S R0, " + frame);
+                            } else {
+                                emit("    LOAD R0, " + frame);
+                            }
+                            gen_binary_ready(op, left, type);
+                            left = type_int();
                             matched = true;
                             continue;
                         }
@@ -6230,6 +6326,64 @@ private:
                         }
                         branch_false_label_.clear();
                         branch_true_label_.clear();
+                        if (peek().kind == TokenKind::Identifier &&
+                            (peek(1).text == ")" || peek(1).text == ";" ||
+                             peek(1).text == "," || peek(1).text == ":" ||
+                             peek(1).text == "?")) {
+                            const Variable* variable = lookup(peek().text);
+                            if (variable != nullptr && !variable->global &&
+                                !variable->is_thread_local &&
+                                !is_long_long_type(variable->type) &&
+                                !is_fp_type(variable->type) &&
+                                !variable->type->is_pointer() &&
+                                !variable->type->is_atomic &&
+                                variable->type->kind != Type::Kind::Array &&
+                                variable->type->kind != Type::Kind::Struct &&
+                                variable->type->kind != Type::Kind::Union) {
+                                take();
+                                const TypePtr type = variable->type;
+                                const std::string frame =
+                                    "[R7 + " +
+                                    std::to_string(variable->offset) + "]";
+                                if (type->kind == Type::Kind::Char ||
+                                    type->kind == Type::Kind::Bool) {
+                                    emit("    LOAD8S R1, " + frame);
+                                } else if (type->kind == Type::Kind::Short) {
+                                    emit("    LOAD16S R1, " + frame);
+                                } else {
+                                    emit("    LOAD R1, " + frame);
+                                }
+                                const bool unsigned_compare =
+                                    is_unsigned_scalar(left) ||
+                                    is_unsigned_scalar(type);
+                                const std::string mnemonic =
+                                    unsigned_compare ? "SLTU" : "SLT";
+                                if (op == "==" || op == "!=") {
+                                    emit("    XOR R0, R0, R1");
+                                    emit("    SLTU R0, R0, #1");
+                                    if (op == "!=") {
+                                        emit("    XOR R0, R0, #1");
+                                    }
+                                } else if (op == "<") {
+                                    emit("    " + mnemonic +
+                                         " R0, R0, R1");
+                                } else if (op == ">") {
+                                    emit("    " + mnemonic +
+                                         " R0, R1, R0");
+                                } else if (op == "<=") {
+                                    emit("    " + mnemonic +
+                                         " R0, R1, R0");
+                                    emit("    XOR R0, R0, #1");
+                                } else {
+                                    emit("    " + mnemonic +
+                                         " R0, R0, R1");
+                                    emit("    XOR R0, R0, #1");
+                                }
+                                left = type_int();
+                                matched = true;
+                                continue;
+                            }
+                        }
                         emit("    PUSH R0");
                         TypePtr right = (this->*next)();
                         if (!is_long_long_type(right) &&
@@ -6374,6 +6528,39 @@ private:
                             emit("    " + mnemonic + " R0, R1, R0");
                             left = is_unsigned_scalar(left) ? type_uint()
                                                             : type_int();
+                            matched = true;
+                            continue;
+                        }
+                    }
+                    if (comparison && scalar_left &&
+                        !is_long_long_type(left) && !is_fp_type(left) &&
+                        peek().kind == TokenKind::Identifier &&
+                        right_operand_complete(ops, peek(1).text)) {
+                        const Variable* variable = lookup(peek().text);
+                        if (variable != nullptr && !variable->global &&
+                            !variable->is_thread_local &&
+                            !is_long_long_type(variable->type) &&
+                            !is_fp_type(variable->type) &&
+                            !variable->type->is_atomic &&
+                            variable->type->kind != Type::Kind::Array &&
+                            variable->type->kind != Type::Kind::Struct &&
+                            variable->type->kind != Type::Kind::Union) {
+                            take();
+                            const TypePtr type = variable->type;
+                            const std::string frame =
+                                "[R7 + " +
+                                std::to_string(variable->offset) + "]";
+                            emit("    MOV R1, R0");
+                            if (type->kind == Type::Kind::Char ||
+                                type->kind == Type::Kind::Bool) {
+                                emit("    LOAD8S R0, " + frame);
+                            } else if (type->kind == Type::Kind::Short) {
+                                emit("    LOAD16S R0, " + frame);
+                            } else {
+                                emit("    LOAD R0, " + frame);
+                            }
+                            gen_binary_ready(op, left, type);
+                            left = type_int();
                             matched = true;
                             continue;
                         }
