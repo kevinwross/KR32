@@ -7388,9 +7388,11 @@ private:
             return Type::make_builtin(BuiltinKind::Int);
         }
         const bool member_call = function->is_member;
-        if (optimize_ && !function->is_member && !function->is_virtual &&
-            !function->variadic && !function->from_template &&
-            function->decl != nullptr && function->decl->body != nullptr &&
+        if (optimize_ && !function->is_virtual &&
+            !function->is_constructor && !function->is_destructor &&
+            !function->variadic &&
+            !function->from_template && function->decl != nullptr &&
+            function->decl->body != nullptr &&
             class_of(resolve_type(function->result)) == nullptr &&
             function->parameters.size() == expression.arguments.size() &&
             function->parameters.size() <= 4 &&
@@ -7422,6 +7424,27 @@ private:
                 }
             }
             if (scalar_parameters) {
+                int inline_this = -1;
+                if (function->is_member && !function->is_static) {
+                    inline_this =
+                        allocate_local(Type::make_pointer(
+                            Type::make_builtin(BuiltinKind::Void)));
+                    if (expression.children[0]->kind == ExprKind::Member) {
+                        const Expr& member = *expression.children[0];
+                        if (member.is_arrow) {
+                            gen_expr(*member.children[0]);
+                        } else {
+                            gen_address(*member.children[0]);
+                        }
+                    } else if (this_offset_ >= 0) {
+                        emit("    LOAD R0, [R7 + " +
+                             std::to_string(this_offset_) + "]");
+                    } else {
+                        emit("    MOV R0, #0");
+                    }
+                    emit("    STORE R0, [R7 + " +
+                         std::to_string(inline_this) + "]");
+                }
                 std::vector<int> slots;
                 slots.reserve(function->parameters.size());
                 for (std::size_t index = 0;
@@ -7445,9 +7468,19 @@ private:
                     local.offset = slots[index];
                     local_scopes_.back()[parameter.name.parts.back()] = local;
                 }
+                ClassInfo* saved_class = current_class_;
+                const int saved_this = this_offset_;
+                if (function->is_member) {
+                    current_class_ = function->owner;
+                    if (!function->is_static) {
+                        this_offset_ = inline_this;
+                    }
+                }
                 inline_stack_.insert(function);
                 const TypePtr result = gen_expr(*ret->expression);
                 inline_stack_.erase(function);
+                current_class_ = saved_class;
+                this_offset_ = saved_this;
                 pop_scope();
                 return result;
             }

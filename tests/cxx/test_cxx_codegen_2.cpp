@@ -63,11 +63,14 @@ TEST_CASE("trivial functions inline at O1") {
         "struct N { int h; N* l; N* r; };\n"
         "int heightOf(N* n) { return n == 0 ? 0 : n->h; }\n"
         "int maximum(int a, int b) { return a > b ? a : b; }\n"
-        "int f(N* n) { return maximum(heightOf(n->l), heightOf(n->r)); }\n",
+        "int f(N* n) { return maximum(heightOf(n->l), heightOf(n->r)); }\n"
+        "struct Box { int value; int get() { return value; } };\n"
+        "int g(Box* b) { return b->get(); }\n",
         options);
     CHECK(result.ok);
     CHECK(result.assembly.find("CALL _Z8heightOf") == std::string::npos);
     CHECK(result.assembly.find("CALL _Z7maximum") == std::string::npos);
+    CHECK(result.assembly.find("CALL _ZN3Box3getEv") == std::string::npos);
 }
 
 TEST_CASE("local compound assignments stay in registers") {
