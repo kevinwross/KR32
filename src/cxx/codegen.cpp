@@ -7433,9 +7433,51 @@ private:
             record_call_site(call_start, call_end, call_landing);
             return resolve_type(function->result);
         }
+        const auto simple_member_argument = [&](const Expr& argument) {
+            if (argument.kind == ExprKind::IntegerLiteral ||
+                argument.kind == ExprKind::CharacterLiteral ||
+                argument.kind == ExprKind::BoolLiteral) {
+                return true;
+            }
+            if (argument.kind != ExprKind::Name) {
+                return false;
+            }
+            Local* local = lookup_local(argument.name);
+            if (local == nullptr || local->is_reference ||
+                local->static_global != nullptr) {
+                return false;
+            }
+            const TypePtr type = resolve_type(local->type);
+            return type != nullptr && is_integer(type) && !is_long_long(type) &&
+                   class_of(type) == nullptr;
+        };
+        bool register_this = member_call && !virtual_dispatch &&
+                             lambda_closure_offset < 0 && !function->variadic &&
+                             class_of(resolve_type(function->result)) == nullptr &&
+                             expression.arguments.size() ==
+                                 function->parameters.size() &&
+                             expression.arguments.size() <= 3;
+        if (register_this) {
+            for (std::size_t index = 0; index < expression.arguments.size();
+                 ++index) {
+                const TypePtr parameter =
+                    resolve_type(function->parameters[index]);
+                if (parameter == nullptr || is_fp(parameter) ||
+                    is_long_long(parameter) ||
+                    parameter->kind == TypeKind::LValueRef ||
+                    parameter->kind == TypeKind::RValueRef ||
+                    class_of(parameter) != nullptr ||
+                    !simple_member_argument(*expression.arguments[index])) {
+                    register_this = false;
+                    break;
+                }
+            }
+        }
         int this_temp = -1;
         if (member_call) {
-            this_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            if (!register_this) {
+                this_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            }
             if (expression.children[0]->kind == ExprKind::Member) {
                 const Expr& member = *expression.children[0];
                 if (member.is_arrow) {
@@ -7449,7 +7491,12 @@ private:
                 diagnose_once(expression, "member call outside a member function");
                 emit("    MOV R0, #0");
             }
-            emit("    STORE R0, [R7 + " + std::to_string(this_temp) + "]");
+            if (register_this) {
+                emit("    MOV R4, R0");
+            } else {
+                emit("    STORE R0, [R7 + " +
+                     std::to_string(this_temp) + "]");
+            }
         }
         struct ArgumentSlot {
             int offset = 0;
@@ -7531,6 +7578,26 @@ private:
                     emit("    MOV R" + std::to_string(index) + ", R0");
                 }
             }
+            const std::string call_start = new_label("cs_start");
+            const std::string call_end = new_label("cs_end");
+            const std::string call_landing = new_label("cs_landing");
+            const std::string call_continue = new_label("cs_continue");
+            emit(call_start + ":");
+            emit("    CALL " + function->symbol);
+            emit(call_end + ":");
+            emit("    JMP " + call_continue);
+            emit_unwind_landing(call_landing);
+            emit(call_continue + ":");
+            record_call_site(call_start, call_end, call_landing);
+            return resolve_type(function->result);
+        }
+        if (register_this) {
+            for (std::size_t index = 0;
+                 index < effective_arguments.size(); ++index) {
+                gen_expr(*effective_arguments[index]);
+                emit("    MOV R" + std::to_string(index + 1) + ", R0");
+            }
+            emit("    MOV R0, R4");
             const std::string call_start = new_label("cs_start");
             const std::string call_end = new_label("cs_end");
             const std::string call_landing = new_label("cs_landing");
