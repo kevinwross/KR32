@@ -9427,8 +9427,23 @@ private:
                 }
                 emit("    MOV R2, R1");
             }
-            emit("    LEA R1, [R7 + " + std::to_string(local.offset) + "]");
-            store_value(type);
+            const std::string frame =
+                "[R7 + " + std::to_string(local.offset) + "]";
+            if (is_long_long(type)) {
+                emit("    STORE R0, " + frame);
+                emit("    STORE R2, [R7 + " +
+                     std::to_string(local.offset + 4) + "]");
+            } else if (type->kind == TypeKind::Builtin &&
+                       (type->builtin == BuiltinKind::Char ||
+                        type->builtin == BuiltinKind::Bool)) {
+                emit("    STORE8 R0, " + frame);
+            } else if (type->kind == TypeKind::Builtin &&
+                       (type->builtin == BuiltinKind::Short ||
+                        type->builtin == BuiltinKind::UnsignedShort)) {
+                emit("    STORE16 R0, " + frame);
+            } else {
+                emit("    STORE R0, " + frame);
+            }
         }
     }
 

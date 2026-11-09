@@ -3247,15 +3247,27 @@ private:
                     gen_zero_object(base_slot, 0, actual->size());
                     gen_initializer_at(actual, base_slot, 0);
                 } else {
-                    gen_lvalue_address(name);
-                    emit("    PUSH R0");
                     TypePtr value_type = gen_expression();
                     convert_value(value_type, actual);
+                    const std::string frame =
+                        "[R7 + " + std::to_string(offset) + "]";
                     if (is_long_long_type(actual)) {
                         emit("    MOV R2, R1");
+                        emit("    STORE R0, " + frame);
+                        emit("    STORE R2, [R7 + " +
+                             std::to_string(offset + 4) + "]");
+                    } else if (actual->kind == Type::Kind::Char ||
+                               actual->kind == Type::Kind::Bool) {
+                        emit("    STORE8 R0, " + frame);
+                    } else if (actual->kind == Type::Kind::Short) {
+                        emit("    STORE16 R0, " + frame);
+                    } else if (actual->kind == Type::Kind::Float) {
+                        emit("    FSTORE.W F0, " + frame);
+                    } else if (actual->kind == Type::Kind::Double) {
+                        emit("    FSTORE.D F0, " + frame);
+                    } else {
+                        emit("    STORE R0, " + frame);
                     }
-                    emit("    POP R1");
-                    gen_store(actual);
                 }
             }
             if (!match(",")) {

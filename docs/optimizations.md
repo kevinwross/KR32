@@ -14,8 +14,8 @@ target-level cleanup.
      register materialization and left-operand spill.
    - Scalar local reads in both C and C++ use `LOAD reg, [R7 + n]`
      directly instead of a `LEA` followed by an indirect load.
-   - Scalar local assignments store directly to `[R7 + n]`, avoiding a
-     temporary address register.
+   - Scalar local assignments and declarations store directly to
+     `[R7 + n]`, avoiding a temporary address register.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.

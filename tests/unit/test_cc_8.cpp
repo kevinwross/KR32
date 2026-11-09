@@ -14,6 +14,7 @@ TEST_CASE("c constant folding") {
     CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
     CHECK(result.assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
     CHECK(result.assembly.find("STORE R0, [R7 + 4]") != std::string::npos);
+    CHECK(result.assembly.find("LEA R0, [R7 + 0]") == std::string::npos);
 }
 
 TEST_CASE("optimized c programs preserve behavior") {
