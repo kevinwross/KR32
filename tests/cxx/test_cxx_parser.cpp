@@ -151,7 +151,7 @@ TEST_CASE("preprocessor conditional directives") {
 
 TEST_CASE("preprocessor reports unavailable includes") {
     std::vector<Diagnostic> diagnostics;
-    const std::string text = preprocess("#include <vector>\nint x;\n", "<test>", diagnostics);
+    const std::string text = preprocess("#include <deque>\nint x;\n", "<test>", diagnostics);
     (void)text;
     REQUIRE_FALSE(diagnostics.empty());
     CHECK(diagnostics.front().message.find("header") != std::string::npos);

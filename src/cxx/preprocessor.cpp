@@ -586,6 +586,61 @@ private:
                 }
                 return;
             }
+            if (header.find("<vector>") != std::string::npos) {
+                if (!vector_header_injected_) {
+                    vector_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "template<typename T> class vector {\n"
+                        "    T* items_;\n"
+                        "    int size_;\n"
+                        "    int capacity_;\n"
+                        "public:\n"
+                        "    vector() { items_ = 0; size_ = 0; capacity_ = 0; }\n"
+                        "    ~vector() { delete[] items_; }\n"
+                        "    int size() const { return size_; }\n"
+                        "    int capacity() const { return capacity_; }\n"
+                        "    bool empty() const { return size_ == 0; }\n"
+                        "    T* data() { return items_; }\n"
+                        "    const T* data() const { return items_; }\n"
+                        "    T* begin() { return items_; }\n"
+                        "    T* end() { return items_ + size_; }\n"
+                        "    const T* begin() const { return items_; }\n"
+                        "    const T* end() const { return items_ + size_; }\n"
+                        "    T& front() { return items_[0]; }\n"
+                        "    T& back() { return items_[size_ - 1]; }\n"
+                        "    const T& front() const { return items_[0]; }\n"
+                        "    const T& back() const { return items_[size_ - 1]; }\n"
+                        "    T& operator[](int index) { return items_[index]; }\n"
+                        "    const T& operator[](int index) const {\n"
+                        "        return items_[index];\n"
+                        "    }\n"
+                        "    void reserve(int wanted) {\n"
+                        "        if (wanted <= capacity_) return;\n"
+                        "        T* fresh = new T[wanted];\n"
+                        "        for (int index = 0; index < size_; ++index) {\n"
+                        "            fresh[index] = items_[index];\n"
+                        "        }\n"
+                        "        delete[] items_;\n"
+                        "        items_ = fresh;\n"
+                        "        capacity_ = wanted;\n"
+                        "    }\n"
+                        "    void push_back(T value) {\n"
+                        "        if (size_ == capacity_) {\n"
+                        "            reserve(capacity_ == 0 ? 2 : capacity_ * 2);\n"
+                        "        }\n"
+                        "        items_[size_] = value;\n"
+                        "        size_ = size_ + 1;\n"
+                        "    }\n"
+                        "    void pop_back() {\n"
+                        "        if (size_ > 0) size_ = size_ - 1;\n"
+                        "    }\n"
+                        "    void clear() { size_ = 0; }\n"
+                        "};\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<atomic>") != std::string::npos) {
                 if (!atomic_header_injected_) {
                     atomic_header_injected_ = true;
@@ -5220,6 +5275,7 @@ private:
     bool cstdlib_header_injected_ = false;
     bool array_header_injected_ = false;
     bool atomic_header_injected_ = false;
+    bool vector_header_injected_ = false;
     bool numeric_header_injected_ = false;
     bool cstring_header_injected_ = false;
     bool cctype_header_injected_ = false;

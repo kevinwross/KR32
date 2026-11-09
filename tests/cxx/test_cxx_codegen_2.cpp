@@ -1088,6 +1088,41 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std vector grows and preserves values") {
+    const ProgramResult program = compile_and_run(
+        "#include <vector>\n"
+        "#include <utility>\n"
+        "int main() {\n"
+        "    std::vector<int> values;\n"
+        "    values.push_back(3);\n"
+        "    values.push_back(5);\n"
+        "    values.push_back(7);\n"
+        "    if (values.size() != 3 || values.empty()) return 1;\n"
+        "    if (values[0] != 3 || values.back() != 7) return 2;\n"
+        "    if (values.end() - values.begin() != 3) return 3;\n"
+        "    values.pop_back();\n"
+        "    if (values.size() != 2 || values.back() != 5) return 4;\n"
+        "    values.clear();\n"
+        "    if (!values.empty()) return 5;\n"
+        "    values.reserve(8);\n"
+        "    values.push_back(11);\n"
+        "    if (values.capacity() < 8 || values[0] != 11) return 6;\n"
+        "    std::vector<double> reals;\n"
+        "    reals.push_back(1.5);\n"
+        "    reals.push_back(2.5);\n"
+        "    if (reals[0] != 1.5 || reals.back() != 2.5) return 7;\n"
+        "    std::vector<std::pair<int, int> > pairs;\n"
+        "    std::pair<int, int> first;\n"
+        "    first.first = 1;\n"
+        "    first.second = 2;\n"
+        "    pairs.push_back(first);\n"
+        "    return pairs[0].first == 1 && pairs[0].second == 2 ? 0 : 8;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std atomic uses ll/sc operations") {
     const ProgramResult program = compile_and_run(
         "#include <atomic>\n"
