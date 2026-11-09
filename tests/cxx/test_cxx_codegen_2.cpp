@@ -1088,6 +1088,52 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("qualified class templates instantiate") {
+    const ProgramResult program = compile_and_run(
+        "namespace N {\n"
+        "template<typename A, typename B> class Box {\n"
+        "public:\n"
+        "    A first;\n"
+        "    B second;\n"
+        "};\n"
+        "}\n"
+        "int main() {\n"
+        "    N::Box<int, char> box;\n"
+        "    box.first = 7;\n"
+        "    box.second = 'x';\n"
+        "    return box.first == 7 && box.second == 'x' ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("std array and pair containers") {
+    const ProgramResult program = compile_and_run(
+        "#include <array>\n"
+        "#include <utility>\n"
+        "int main() {\n"
+        "    std::array<int, 3> values;\n"
+        "    values[0] = 1;\n"
+        "    values[1] = 2;\n"
+        "    values[2] = 3;\n"
+        "    if (values.size() != 3 || values.front() != 1) return 1;\n"
+        "    if (values.back() != 3) return 2;\n"
+        "    if (values.end() - values.begin() != 3) return 3;\n"
+        "    std::array<double, 2> reals;\n"
+        "    reals[0] = 1.5;\n"
+        "    reals[1] = 2.5;\n"
+        "    if (reals[0] != 1.5 || reals.back() != 2.5) return 4;\n"
+        "    std::pair<int, int> pair;\n"
+        "    pair.first = 4;\n"
+        "    pair.second = 5;\n"
+        "    return pair.first + pair.second == 9 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("function templates overload non-template names") {
     const ProgramResult program = compile_and_run(
         "namespace std {\n"

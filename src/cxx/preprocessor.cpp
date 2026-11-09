@@ -568,6 +568,46 @@ private:
                         "inline void swap(double& left, double& right) {\n"
                         "    double temporary = left; left = right; right = temporary;\n"
                         "}\n"
+                        "template<typename First, typename Second> struct pair {\n"
+                        "    First first;\n"
+                        "    Second second;\n"
+                        "    pair() {}\n"
+                        "    pair(const First& a, const Second& b) {\n"
+                        "        first = a;\n"
+                        "        second = b;\n"
+                        "    }\n"
+                        "};\n"
+                        "template<typename First, typename Second>\n"
+                        "pair<First, Second> make_pair(const First& first,\n"
+                        "                              const Second& second) {\n"
+                        "    return pair<First, Second>(first, second);\n"
+                        "}\n"
+                        "}\n");
+                }
+                return;
+            }
+            if (header.find("<array>") != std::string::npos) {
+                if (!array_header_injected_) {
+                    array_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "template<typename T, int N> struct array {\n"
+                        "    T data[N];\n"
+                        "    T& operator[](int index) { return data[index]; }\n"
+                        "    const T& operator[](int index) const {\n"
+                        "        return data[index];\n"
+                        "    }\n"
+                        "    int size() const { return N; }\n"
+                        "    bool empty() const { return N == 0; }\n"
+                        "    T* begin() { return data; }\n"
+                        "    T* end() { return data + N; }\n"
+                        "    const T* begin() const { return data; }\n"
+                        "    const T* end() const { return data + N; }\n"
+                        "    T& front() { return data[0]; }\n"
+                        "    T& back() { return data[N - 1]; }\n"
+                        "    const T& front() const { return data[0]; }\n"
+                        "    const T& back() const { return data[N - 1]; }\n"
+                        "};\n"
                         "}\n");
                 }
                 return;
@@ -5128,6 +5168,7 @@ private:
     bool utility_header_injected_ = false;
     bool algorithm_header_injected_ = false;
     bool cstdlib_header_injected_ = false;
+    bool array_header_injected_ = false;
     bool numeric_header_injected_ = false;
     bool cstring_header_injected_ = false;
     bool cctype_header_injected_ = false;

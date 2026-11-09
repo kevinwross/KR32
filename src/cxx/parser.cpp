@@ -1777,18 +1777,32 @@ private:
                 ++index;
             }
         }
+        bool saw_template = false;
+        std::string_view declared_type = name;
         if (peek(index).text == "<") {
+            saw_template = true;
+            std::size_t name_index = index;
+            while (name_index > 0) {
+                --name_index;
+                const Token& token = peek(name_index);
+                if (token.kind == TokenKind::Identifier ||
+                    token.kind == TokenKind::Keyword) {
+                    declared_type = token.text;
+                    break;
+                }
+            }
             int depth = 0;
             while (index < tokens_.size()) {
-                if (tokens_[index].text == "<") {
+                const std::string_view token = peek(index).text;
+                if (token == "<") {
                     ++depth;
-                } else if (tokens_[index].text == ">") {
+                } else if (token == ">") {
                     --depth;
                     if (depth == 0) {
                         ++index;
                         break;
                     }
-                } else if (tokens_[index].text == ">>") {
+                } else if (token == ">>") {
                     depth -= 2;
                     if (depth <= 0) {
                         ++index;
@@ -1828,6 +1842,9 @@ private:
                 }
             }
             return is_known_type(type_name);
+        }
+        if (saw_template && !is_known_type(declared_type)) {
+            return false;
         }
         return peek(index).kind == TokenKind::Identifier ||
                peek(index).kind == TokenKind::Keyword;

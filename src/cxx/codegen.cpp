@@ -668,6 +668,7 @@ private:
         std::set<std::string> friend_classes;
         std::vector<Function*> vtable;
         std::map<std::string, int> virtual_slots;
+        std::map<std::string, TypePtr> template_bindings;
         bool polymorphic = false;
         bool abstract = false;
         bool vtables_built = false;
@@ -1260,6 +1261,7 @@ private:
         auto info = std::make_unique<ClassInfo>();
         info->decl = clone.get();
         info->qualified = key;
+        info->template_bindings = bindings;
         for (std::size_t index = 0;
              index < source->template_parameters.size() &&
              index < named->template_arguments.size();
@@ -1530,6 +1532,9 @@ private:
         function->defined = declaration.body != nullptr;
         function->variadic = declaration.variadic;
         function->owner = owner;
+        if (owner != nullptr) {
+            function->template_bindings = owner->template_bindings;
+        }
         function->is_member = owner != nullptr && !declaration.is_static;
         function->is_constructor = constructor;
         function->is_explicit = declaration.is_explicit;
@@ -1539,6 +1544,11 @@ private:
         function->is_const = declaration.is_const;
         function->weak = declaration.is_inline;
         function->member_name = base_name;
+        const std::map<std::string, TypePtr> saved_template_bindings =
+            current_template_bindings_;
+        if (owner != nullptr) {
+            current_template_bindings_ = owner->template_bindings;
+        }
         function->result = (constructor || destructor)
                                ? Type::make_builtin(BuiltinKind::Void)
                                : resolve_type(
@@ -1549,6 +1559,7 @@ private:
             function->default_arguments.push_back(
                 parameter.default_value.get());
         }
+        current_template_bindings_ = saved_template_bindings;
         if (owner && (constructor || destructor)) {
             function->symbol = mangle_member(owner->qualified, base_name,
                                              function->parameters, constructor,
@@ -3721,7 +3732,11 @@ private:
     }
 
     void gen_as_fp(const Expr& expression, const TypePtr& target) {
-        const TypePtr source = type_of(expression);
+        TypePtr source = type_of(expression);
+        if (source && (source->kind == TypeKind::LValueRef ||
+                       source->kind == TypeKind::RValueRef)) {
+            source = resolve_type(source->element);
+        }
         gen_expr(expression);
         if (!is_fp(source)) {
             emit(std::string("    FCVT.") + (is_float32(target) ? "S" : "D") +
@@ -6350,6 +6365,12 @@ private:
 
     TypePtr gen_assignment(const Expr& expression) {
         const TypePtr lhs_type = type_of(*expression.children[0], false);
+        TypePtr stored_type = lhs_type;
+        if (stored_type &&
+            (stored_type->kind == TypeKind::LValueRef ||
+             stored_type->kind == TypeKind::RValueRef)) {
+            stored_type = resolve_type(stored_type->element);
+        }
         if (ClassInfo* info = class_of(lhs_type)) {
             if (Function* operation = find_member_operator(
                     info, "operator" + expression.text,
@@ -6391,10 +6412,10 @@ private:
             emit("    CALL memcpy");
             return lhs_type;
         }
-        if (is_fp(lhs_type)) {
-            return gen_fp_assignment(expression, lhs_type);
+        if (is_fp(stored_type)) {
+            return gen_fp_assignment(expression, stored_type);
         }
-        if (is_long_long(lhs_type) && expression.text != "=") {
+        if (is_long_long(stored_type) && expression.text != "=") {
             const std::string op =
                 expression.text.substr(0, expression.text.size() - 1);
             gen_address(*expression.children[0]);
@@ -6402,7 +6423,7 @@ private:
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
             emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
-            load_value(lhs_type);
+            load_value(stored_type);
             const int left_temp =
                 allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
@@ -6501,7 +6522,7 @@ private:
             }
             emit("    MOV R2, R1");
             emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
-            store_value(lhs_type);
+            store_value(stored_type);
             return lhs_type;
         }
         gen_address(*expression.children[0]);
@@ -6513,18 +6534,18 @@ private:
         } else {
             const std::string op = expression.text.substr(0, expression.text.size() - 1);
             emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
-            load_value(lhs_type);
+            load_value(stored_type);
             const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
             emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
             gen_expr(*expression.children[1]);
             emit("    MOV R1, R0");
-            if (is_pointer(lhs_type)) {
+            if (is_pointer(stored_type)) {
                 if (op != "+" && op != "-") {
                     diagnose_once(expression,
                                   "only += and -= are valid for pointer compound assignment");
                 } else {
                     const int element_size =
-                        lhs_type->element ? type_size(lhs_type->element) : 1;
+                        stored_type->element ? type_size(stored_type->element) : 1;
                     if (element_size > 1) {
                         emit("    MUL R1, R1, #" + std::to_string(element_size));
                     }
@@ -6532,7 +6553,7 @@ private:
             }
             emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
             const bool unsigned_operation =
-                is_unsigned_operation(lhs_type, type_of(*expression.children[1]));
+                is_unsigned_operation(stored_type, type_of(*expression.children[1]));
             if (op == "+") emit("    ADD R0, R0, R1");
             else if (op == "-") emit("    SUB R0, R0, R1");
             else if (op == "*") emit("    MUL R0, R0, R1");
@@ -6548,7 +6569,7 @@ private:
                                                          : "    SAR R0, R0, R1");
             else diagnose_once(expression, "unsupported assignment operator");
         }
-        if (is_long_long(lhs_type)) {
+        if (is_long_long(stored_type)) {
             if (expression.text == "=") {
                 const TypePtr value_type = type_of(*expression.children[1]);
                 if (!is_long_long(value_type)) {
@@ -6561,7 +6582,7 @@ private:
             emit("    MOV R2, R1");
         }
         emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
-        store_value(lhs_type);
+        store_value(stored_type);
         return lhs_type;
     }
 

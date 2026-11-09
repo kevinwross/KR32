@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 17:49 -08:00
+> **Last updated:** 2026-11-08 17:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2442,6 +2442,11 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 17:49 -08:00** — Considered function-template candidates even
       when non-template overloads exist, preferring non-templates on ties;
       made comparator `sort` a generic template.
+- **2026-11-08 17:58 -08:00** — Fixed `is_declaration_start` to index the
+      token lookahead relative to the current position, enabling qualified
+      two-argument class templates; propagated class-template bindings into
+      member signatures; unwrapped reference types in assignments and FP
+      conversions. Added `std::pair` and `<array>` (`std::array<T, N>`).
 
 ## 10. Updating this file
 
