@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 18:49 -08:00
+> **Last updated:** 2026-11-08 18:53 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2469,6 +2469,9 @@ Newest entries at the bottom. Use the local time zone.
       arguments in F registers; lambda return inference tracks parameter
       types and arithmetic, enabling double-returning transform lambdas and
       comparator sort on doubles.
+- **2026-11-08 18:53 -08:00** — Added template value initialization `T()`
+      for scalar and class bindings, including default construction and
+      fallback zeroing.
 
 ## 10. Updating this file
 

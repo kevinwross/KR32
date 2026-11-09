@@ -1088,6 +1088,21 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("template value initialization") {
+    const ProgramResult program = compile_and_run(
+        "#include <utility>\n"
+        "template<typename T> T make_value() { return T(); }\n"
+        "int main() {\n"
+        "    if (make_value<int>() != 0) return 1;\n"
+        "    if (make_value<double>() != 0.0) return 2;\n"
+        "    std::pair<int, int> pair = make_value<std::pair<int, int> >();\n"
+        "    return pair.first == 0 && pair.second == 0 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("indirect calls pass floating point arguments") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"

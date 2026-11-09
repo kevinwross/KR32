@@ -2037,6 +2037,23 @@ private:
         return {};
     }
 
+    TypePtr template_value_initialization(const Expr& expression) {
+        if (!expression.arguments.empty() || expression.children.empty()) {
+            return nullptr;
+        }
+        const Expr& callee = *expression.children[0];
+        if (callee.kind != ExprKind::Name ||
+            callee.name.parts.size() != 1) {
+            return nullptr;
+        }
+        const auto found =
+            current_template_bindings_.find(callee.name.parts[0]);
+        if (found == current_template_bindings_.end() || !found->second) {
+            return nullptr;
+        }
+        return resolve_type(found->second);
+    }
+
     TypePtr lambda_function_type(Function* function) {
         auto type = std::make_shared<Type>();
         type->kind = TypeKind::Function;
@@ -2462,6 +2479,9 @@ private:
             return promote(left);
         }
         case ExprKind::Call: {
+            if (TypePtr value_type = template_value_initialization(expression)) {
+                return value_type;
+            }
             if (!expression.children.empty() &&
                 expression.children[0]->kind == ExprKind::Name) {
                 if (ClassInfo* info =
@@ -6663,6 +6683,30 @@ private:
     }
 
     TypePtr gen_call(const Expr& expression) {
+        if (TypePtr value_type = template_value_initialization(expression)) {
+            if (ClassInfo* info = class_of(value_type)) {
+                const int offset = allocate_local(value_type);
+                if (Function* constructor = find_constructor(info, 0)) {
+                    emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+                    emit("    CALL " + constructor->symbol);
+                } else {
+                    emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+                    emit("    MOV R1, #0");
+                    emit("    MOV R2, #" + std::to_string(info->size));
+                    emit("    CALL memset");
+                }
+                emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
+                return value_type;
+            }
+            if (is_fp(value_type)) {
+                emit("    MOV R0, #0");
+                emit(std::string("    FCVT.") +
+                     (is_float32(value_type) ? "S" : "D") + ".W F0, R0");
+                return value_type;
+            }
+            emit("    MOV R0, #0");
+            return value_type;
+        }
         if (!expression.children.empty() &&
             expression.children[0]->kind == ExprKind::Name &&
             expression.children[0]->name.to_string() == "std::move" &&
