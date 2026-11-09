@@ -191,8 +191,13 @@ TEST_CASE("object assembler emits source line records for assembly") {
     REQUIRE(debug != nullptr);
     const std::string text(debug->data.begin(), debug->data.end());
     CHECK(text.find("kr32os/bios/entry.S") != std::string::npos);
-    CHECK(text.find("L .Lsource_0 ") != std::string::npos);
-    CHECK(find_symbol(image, ".Lsource_0") != nullptr);
+    CHECK(text.find("L .Lsource_") != std::string::npos);
+    bool has_source_symbol = false;
+    for (const container::Symbol& symbol : image.symbols) {
+        has_source_symbol =
+            has_source_symbol || symbol.name.rfind(".Lsource_", 0) == 0;
+    }
+    CHECK(has_source_symbol);
 }
 
 TEST_CASE("object assembler encodes bulk stack operations") {

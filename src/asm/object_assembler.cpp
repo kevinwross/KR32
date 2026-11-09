@@ -1487,7 +1487,8 @@ private:
             if (!debug_file_.empty() &&
                 sections_[current_].type == container::SectionType::Text) {
                 const std::string label =
-                    ".Lsource_" + std::to_string(debug_lines_.size());
+                    ".Lsource_" + std::to_string(debug_source_id_) + "_" +
+                    std::to_string(debug_lines_.size());
                 labels_[label] = {static_cast<std::uint32_t>(current_),
                                   instruction_offset, false, false};
                 debug_lines_.push_back({label, statement.line});

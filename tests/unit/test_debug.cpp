@@ -396,6 +396,65 @@ TEST_CASE("libc functions carry switchable source records") {
     CHECK(line->source == libc_source_id);
 }
 
+TEST_CASE("assembly debug line labels are unique per source") {
+    container::Image first;
+    container::Image second;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(
+        assembler::assemble_object(
+            ".file \"first.S\"\n"
+            ".text\n"
+            ".global first\n"
+            "first:\n"
+            "    MOV R0, #1\n"
+            "    RET\n",
+            first, assembly_error),
+        assembly_error.message.c_str());
+    REQUIRE_MESSAGE(
+        assembler::assemble_object(
+            ".file \"second.S\"\n"
+            ".text\n"
+            ".global second\n"
+            "second:\n"
+            "    MOV R0, #2\n"
+            "    RET\n",
+            second, assembly_error),
+        assembly_error.message.c_str());
+
+    container::Image linked;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({first, second}, linker::Options{}, linked,
+                                 map, link_error),
+                    link_error.message.c_str());
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(linked, info, error), error.c_str());
+
+    int first_source = -1;
+    int second_source = -1;
+    for (const debug::Source& source : info.sources) {
+        if (source.path == "first.S") first_source = source.id;
+        if (source.path == "second.S") second_source = source.id;
+    }
+    CHECK(first_source >= 0);
+    CHECK(second_source >= 0);
+
+    std::uint32_t first_line = 0;
+    std::uint32_t second_line = 0;
+    for (const debug::Line& line : info.lines) {
+        if (line.source == first_source && line.line == 5) {
+            first_line = line.address;
+        }
+        if (line.source == second_source && line.line == 5) {
+            second_line = line.address;
+        }
+    }
+    CHECK(first_line != 0);
+    CHECK(second_line != 0);
+    CHECK(first_line != second_line);
+}
+
 TEST_CASE("breakpoints can be disabled") {
     const container::Image image = compile_debug_image(
         "int main(void) {\n"
