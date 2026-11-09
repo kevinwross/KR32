@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 23:30 -08:00
+> **Last updated:** 2026-11-08 23:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2566,6 +2566,8 @@ Newest entries at the bottom. Use the local time zone.
       functions with no locals; an unsafe pointer-address fold was reverted.
 - **2026-11-08 23:30 -08:00** — Restored pointer offset folding for loads only,
       guarded against flag-dependent conditional branches.
+- **2026-11-08 23:36 -08:00** — Added safe pointer store-offset folding when
+      the base register is immediately overwritten.
 
 ## 10. Updating this file
 

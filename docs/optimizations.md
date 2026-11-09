@@ -91,6 +91,8 @@ target-level cleanup.
    - Folds `ADD/SUB reg, reg, #off` followed by `LOAD reg, [reg]` into one
      offset load.
    - Skips the transformation if a conditional branch immediately follows.
+   - Folds `ADD/SUB reg, reg, #off` plus `STORE value, [reg]` only when the
+     register is overwritten immediately afterward.
 
 9. **Zero frame adjustments**
    - Removes `ADJSP #0` and `ADJSP #-0` from functions with no locals.

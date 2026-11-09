@@ -37,6 +37,22 @@ TEST_CASE("assembly optimizer folds pointer load offsets") {
     CHECK(assembly.find("ADD R0, R0, #4") == std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds pointer store offsets") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    ADD R0, R0, #4\n"
+        "    STORE R1, [R0]\n"
+        "    MOV R0, #0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("STORE R1, [R0 + 4]") != std::string::npos);
+    CHECK(assembly.find("ADD R0, R0, #4") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer removes zero frame adjustments") {
     std::string assembly =
         ".text\n"
