@@ -2730,6 +2730,45 @@ private:
         return comparisons == 1;
     }
 
+    bool simple_comparison_before_question() const {
+        int depth = 0;
+        int comparisons = 0;
+        for (std::size_t index = 0;; ++index) {
+            const Token& token = peek(index);
+            if (token.kind == TokenKind::End) {
+                return false;
+            }
+            if (token.text == "(" || token.text == "[") {
+                ++depth;
+                continue;
+            }
+            if (token.text == ")" || token.text == "]") {
+                if (depth == 0) {
+                    return false;
+                }
+                --depth;
+                continue;
+            }
+            if (depth != 0) {
+                continue;
+            }
+            if (token.text == "?") {
+                return comparisons == 1;
+            }
+            if (token.text == "&&" || token.text == "||" ||
+                token.text == "," || token.text == ";" ||
+                token.text == "{" ||
+                is_assignment_operator(token.text)) {
+                return false;
+            }
+            if (token.text == "==" || token.text == "!=" ||
+                token.text == "<" || token.text == "<=" ||
+                token.text == ">" || token.text == ">=") {
+                ++comparisons;
+            }
+        }
+    }
+
     std::string true_comparison(const std::string& op,
                                 bool unsigned_compare) const {
         if (unsigned_compare) {
@@ -4249,15 +4288,23 @@ private:
     }
 
     TypePtr parse_conditional() {
+        const std::string else_label = new_label("condelse");
+        const std::string end_label = new_label("condend");
+        condition_branched_ = false;
+        if (simple_comparison_before_question()) {
+            branch_false_label_ = else_label;
+        }
         TypePtr condition = parse_logical_or();
+        branch_false_label_.clear();
+        branch_true_label_.clear();
         if (!match("?")) {
             return condition;
         }
         value_to_integer(condition);
-        const std::string else_label = new_label("condelse");
-        const std::string end_label = new_label("condend");
-        emit("    CMP R0, #0");
-        emit("    JZ " + else_label);
+        if (!condition_branched_) {
+            emit("    CMP R0, #0");
+            emit("    JZ " + else_label);
+        }
         TypePtr result = gen_expression();
         expect(":");
         emit("    JMP " + end_label);

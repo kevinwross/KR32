@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 22:07 -08:00
+> **Last updated:** 2026-11-08 22:13 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2542,6 +2542,8 @@ Newest entries at the bottom. Use the local time zone.
       also branch directly at `-O0`.
 - **2026-11-08 22:07 -08:00** — C and C++ `do`/`while` comparisons branch
       directly to the loop head.
+- **2026-11-08 22:13 -08:00** — C and C++ ternary conditions branch directly
+      on comparisons instead of materializing a boolean.
 
 ## 10. Updating this file
 

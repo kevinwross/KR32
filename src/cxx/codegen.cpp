@@ -6972,9 +6972,7 @@ private:
         const TypePtr type = type_of(expression);
         const std::string else_label = new_label("else");
         const std::string end_label = new_label("condend");
-        gen_condition(*expression.children[0]);
-        emit("    CMP R0, #0");
-        emit("    JZ " + else_label);
+        gen_condition_jump_false(*expression.children[0], else_label);
         gen_expr(*expression.children[1]);
         emit("    JMP " + end_label);
         emit(else_label + ":");
