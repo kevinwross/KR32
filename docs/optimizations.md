@@ -12,6 +12,8 @@ target-level cleanup.
    - `1 + 2 * 3` becomes a single `MOV R0, #7`.
    - Constant right operands use immediate ALU and `CMP` forms, avoiding a
      register materialization and left-operand spill.
+   - Scalar local reads use `LOAD reg, [R7 + n]` directly instead of a
+     `LEA` followed by an indirect load.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
@@ -58,7 +60,9 @@ target-level cleanup.
 7. **Frame address folding**
    - Folds `LEA R, [R7 + n]` followed by `LOAD Rd, [R]` into a direct
      `LOAD Rd, [R7 + n]`.
-   - Removes the `LEA` when its register is only serving as the address.
+   - Folds `LEA R, [R7 + n]` followed by `STORE Rs, [R]` into a direct
+     `STORE Rs, [R7 + n]`.
+   - Removes the `LEA` only when its register is provably dead.
 
 ## Safety model
 

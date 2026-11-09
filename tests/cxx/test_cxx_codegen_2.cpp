@@ -13,6 +13,13 @@ TEST_CASE("constant folding and dead branches") {
     CHECK(result.assembly.find(".Lwhile") == std::string::npos);
 }
 
+TEST_CASE("local scalar reads load directly") {
+    const cxx::Result result = cxx::compile(
+        "int read() { int value = 3; return value; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
+}
+
 TEST_CASE("immediate comparisons avoid spills") {
     const cxx::Result result = cxx::compile(
         "int is_one(int value) { return value == 1; }\n");

@@ -5263,13 +5263,42 @@ private:
                 return capture_type;
             }
             if (Local* local = lookup_local(expression.name)) {
-                gen_address(expression);
                 TypePtr type = resolve_type(local->type);
                 if (type && type->kind == TypeKind::LValueRef) {
                     type = type->element;
                 }
-                if (type && (type->kind == TypeKind::Array ||
-                             class_of(type) != nullptr)) {
+                const bool address_value =
+                    type && (type->kind == TypeKind::Array ||
+                             class_of(type) != nullptr);
+                if (!local->is_reference && local->static_global == nullptr &&
+                    !address_value) {
+                    const std::string address =
+                        "[R7 + " + std::to_string(local->offset) + "]";
+                    if (is_long_long(type)) {
+                        emit("    LOAD R0, " + address);
+                        emit("    LOAD R1, [R7 + " +
+                             std::to_string(local->offset + 4) + "]");
+                    } else if (is_fp(type)) {
+                        emit(std::string("    FLOAD.") +
+                             (is_float32(type) ? "W" : "D") + " F0, " + address);
+                    } else if (type && type->kind == TypeKind::Builtin &&
+                               (type->builtin == BuiltinKind::Char ||
+                                type->builtin == BuiltinKind::Bool)) {
+                        emit("    LOAD8S R0, " + address);
+                    } else if (type && type->kind == TypeKind::Builtin &&
+                               (type->builtin == BuiltinKind::Short ||
+                                type->builtin == BuiltinKind::UnsignedShort)) {
+                        emit(std::string("    LOAD16") +
+                             (type->builtin == BuiltinKind::UnsignedShort
+                                  ? "U" : "S") +
+                             " R0, " + address);
+                    } else {
+                        emit("    LOAD R0, " + address);
+                    }
+                    return type;
+                }
+                gen_address(expression);
+                if (address_value) {
                     return type;
                 }
                 if (is_fp(type)) {
