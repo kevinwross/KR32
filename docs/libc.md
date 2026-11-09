@@ -38,7 +38,7 @@ source line numbers and debugger line mappings are preserved.
 | `<limits.h>` | `CHAR_BIT`, `SCHAR`/`SHRT`/`INT`/`LONG` limits |
 | `<string>` | compact `std::string`: construction, `c_str`, `size`, `operator[]`, `set`, `append` (C string or `std::string`), `swap`, `clear` |
 | `<utility>` | `std::swap` for integer, character, and floating-point types; `std::pair<First, Second>` with public `first`/`second` |
-| `<optional>` | `std::optional<T>` with `has_value`, `operator bool`, `value`, `value_or`, `set`, and `reset` |
+| `<optional>` | `std::optional<T>` with `has_value`, `operator bool`, `value`, `operator*`, `value_or`, `set`, and `reset` |
 | `<string_view>` | `std::string_view` with C-string construction, `data`, `size`, `empty`, `operator[]`, `front`/`back`, `substr`, `remove_prefix`/`remove_suffix`, and `compare` |
 | `<vector>` | `std::vector<T>` with `push_back`, `pop_back`, `operator[]`, `size`, `empty`, `capacity`, `reserve`, `clear`, `data`, `begin`/`end`, and `front`/`back` |
 | `<atomic>` | `std::atomic<T>` with `load`, `store`, `exchange`, `fetch_add`, `compare_exchange_weak`/`strong`, assignment, and conversion to `T`, backed by LL/SC |

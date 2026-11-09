@@ -600,6 +600,8 @@ private:
                         "    operator bool() const { return has_; }\n"
                         "    T& value() { return value_; }\n"
                         "    const T& value() const { return value_; }\n"
+                        "    T& operator*() { return value_; }\n"
+                        "    const T& operator*() const { return value_; }\n"
                         "    void set(T value) { value_ = value; has_ = true; }\n"
                         "    void reset() { has_ = false; }\n"
                         "    T value_or(T fallback) const {\n"

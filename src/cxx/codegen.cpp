@@ -2339,6 +2339,12 @@ private:
             }
             if (expression.text == "*") {
                 const TypePtr pointer = type_of(*expression.children[0]);
+                if (ClassInfo* info = class_of(pointer)) {
+                    if (Function* operation = find_member_operator(
+                            info, "operator*", nullptr, true)) {
+                        return operation->result;
+                    }
+                }
                 return pointer && pointer->element ? pointer->element
                                                    : Type::make_builtin(BuiltinKind::Int);
             }
@@ -3811,6 +3817,14 @@ private:
         }
         if (expression.kind == ExprKind::Unary && expression.text == "*" &&
             !expression.children.empty()) {
+            if (ClassInfo* info =
+                    class_of(type_of(*expression.children[0], false))) {
+                if (Function* operation = find_member_operator(
+                        info, "operator*", nullptr, true)) {
+                    gen_member_unary(*expression.children[0], operation);
+                    return;
+                }
+            }
             gen_expr(*expression.children[0]);
             return;
         }
@@ -5525,7 +5539,7 @@ private:
 
     TypePtr gen_unary(const Expr& expression) {
         const std::string& op = expression.text;
-        if (op != "&" && op != "*") {
+        if (op != "&") {
             if (!expression.is_prefix && (op == "++" || op == "--")) {
                 if (Function* operation = find_member_operator(
                         class_of(type_of(*expression.children[0], false)),
@@ -5538,7 +5552,20 @@ private:
             if (Function* operation = find_member_operator(
                     class_of(type_of(*expression.children[0], false)),
                     "operator" + op, nullptr, true)) {
-                return gen_member_unary(*expression.children[0], operation);
+                TypePtr result =
+                    gen_member_unary(*expression.children[0], operation);
+                if (op == "*" && result &&
+                    (result->kind == TypeKind::LValueRef ||
+                     result->kind == TypeKind::RValueRef)) {
+                    const TypePtr element = resolve_type(result->element);
+                    if (is_fp(element)) {
+                        load_fp(element);
+                    } else if (class_of(element) == nullptr) {
+                        load_value(element);
+                    }
+                    return element;
+                }
+                return result;
             }
         }
         if (op == "&") {
