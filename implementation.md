@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 21:25 -08:00
+> **Last updated:** 2026-11-08 21:31 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2530,6 +2530,8 @@ Newest entries at the bottom. Use the local time zone.
       directly to their frame slot instead of through a temporary address.
 - **2026-11-08 21:25 -08:00** — Scalar declaration initializers now store
       directly to their frame slot in both C and C++.
+- **2026-11-08 21:31 -08:00** — C++ scalar returns skip the return-value
+      temporary when no destructors or active catch can clobber the registers.
 
 ## 10. Updating this file
 

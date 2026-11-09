@@ -22,6 +22,13 @@ TEST_CASE("local scalar reads load directly") {
     CHECK(result.assembly.find("STORE R0, [R7 + 4]") != std::string::npos);
 }
 
+TEST_CASE("scalar returns avoid spills") {
+    const cxx::Result result = cxx::compile(
+        "int ret() { int value = 2; return value; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("STORE R0, [R7 + 4]") == std::string::npos);
+}
+
 TEST_CASE("immediate comparisons avoid spills") {
     const cxx::Result result = cxx::compile(
         "int is_one(int value) { return value == 1; }\n");

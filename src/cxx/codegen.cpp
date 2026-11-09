@@ -7972,6 +7972,13 @@ private:
                     return;
                 }
             }
+            bool needs_preserve = active_catch_count_ > 0;
+            for (const auto& scope : local_destructors_) {
+                if (!scope.empty()) {
+                    needs_preserve = true;
+                    break;
+                }
+            }
             TypePtr result_type;
             int value_temp = -1;
             if (statement.expression) {
@@ -7991,18 +7998,21 @@ private:
                         emit("    MOV R1, #0");
                     }
                 }
-                value_temp = allocate_local(target_long_long && declared
-                                                ? declared
-                                                : result_type);
-                if (is_fp(result_type)) {
-                    emit(std::string("    FSTORE.") +
-                         (is_float32(result_type) ? "W" : "D") + " F0, [R7 + " +
-                         std::to_string(value_temp) + "]");
-                } else {
-                    emit("    STORE R0, [R7 + " + std::to_string(value_temp) + "]");
-                    if (target_long_long) {
-                        emit("    STORE R1, [R7 + " +
-                             std::to_string(value_temp + 4) + "]");
+                if (needs_preserve) {
+                    value_temp = allocate_local(target_long_long && declared
+                                                    ? declared
+                                                    : result_type);
+                    if (is_fp(result_type)) {
+                        emit(std::string("    FSTORE.") +
+                             (is_float32(result_type) ? "W" : "D") +
+                             " F0, [R7 + " + std::to_string(value_temp) + "]");
+                    } else {
+                        emit("    STORE R0, [R7 + " +
+                             std::to_string(value_temp) + "]");
+                        if (target_long_long) {
+                            emit("    STORE R1, [R7 + " +
+                                 std::to_string(value_temp + 4) + "]");
+                        }
                     }
                 }
             } else {

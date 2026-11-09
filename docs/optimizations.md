@@ -16,6 +16,8 @@ target-level cleanup.
      directly instead of a `LEA` followed by an indirect load.
    - Scalar local assignments and declarations store directly to
      `[R7 + n]`, avoiding a temporary address register.
+   - Scalar C++ returns keep the result in registers when no local
+     destructors or active catch require preserving it across cleanup.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
