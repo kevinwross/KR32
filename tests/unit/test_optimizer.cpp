@@ -19,7 +19,77 @@ TEST_CASE("assembly optimizer forwards frame slots") {
         assembler::optimize_assembly(assembly);
     CHECK(stats.rewritten >= 1);
     CHECK(assembly.find("LOAD R2") == std::string::npos);
-    CHECK(assembly.find("MOV R2, R0") != std::string::npos);
+    CHECK(assembly.find("MOV R2, R0") == std::string::npos);
+    CHECK(assembly.find("CMP R0, R1") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer promotes leaf locals") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    PUSH R7\n"
+        "    ADJSP #-8\n"
+        "    LEA R7, [SP]\n"
+        "    STORE R0, [R7 + 4]\n"
+        "    MOV R0, #9\n"
+        "    LOAD R1, [R7 + 4]\n"
+        "    ADD R0, R1, R0\n"
+        "    MOV R1, #0\n"
+        "    LOAD R2, [R7 + 4]\n"
+        "    ADD R0, R0, R2\n"
+        "    ADJSP #8\n"
+        "    POP R7\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("LOAD R12, [R7 + 4]") != std::string::npos);
+    CHECK(assembly.find("LOAD R1, [R7 + 4]") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer uses CFG liveness for dead stores") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    JZ .Lchoose\n"
+        "    STORE R1, [R7 + 0]\n"
+        "    JMP .Ldone\n"
+        ".Lchoose:\n"
+        "    STORE R2, [R7 + 0]\n"
+        ".Ldone:\n"
+        "    LOAD R3, [R7 + 0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("STORE R0, [R7 + 0]") == std::string::npos);
+    CHECK(assembly.find("STORE R1, [R7 + 0]") != std::string::npos);
+    CHECK(assembly.find("STORE R2, [R7 + 0]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer uses CFG liveness for dead moves") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R1, #1\n"
+        "    JZ .Lchoose\n"
+        "    MOV R1, #2\n"
+        "    JMP .Ldone\n"
+        ".Lchoose:\n"
+        "    MOV R1, #3\n"
+        ".Ldone:\n"
+        "    CMP R1, #0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("MOV R1, #1") == std::string::npos);
+    CHECK(assembly.find("MOV R1, #2") != std::string::npos);
+    CHECK(assembly.find("MOV R1, #3") != std::string::npos);
 }
 
 TEST_CASE("assembly optimizer folds load copies") {

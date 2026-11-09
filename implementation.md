@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 06:03 -08:00
+> **Last updated:** 2026-11-09 06:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2608,6 +2608,10 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-09 06:03 -08:00** — Refreshed the checked-in embedded OS images from
       the rebuilt kernels and relinked `kr32.exe`; embedded build id is
       `bios-7d36f445-kernel-47a4f13a`.
+- **2026-11-09 06:27 -08:00** — Started the P0-P7 optimization program. P0 adds
+      CFG and register/frame-slot liveness; P1 adds liveness dead-store/move
+      elimination, block-local copy coalescing, and leaf scalar promotion to
+      `R12`-`R15`. Full unoptimized suites pass 80/80 on Windows and Linux.
 
 ## 10. Updating this file
 

@@ -123,36 +123,63 @@ target-level cleanup.
      again, and replaces the sequence with one inverse conditional branch.
    - Applies to C condition code and other front ends that materialize booleans.
 
-11. **Unreachable instructions**
+12. **Unreachable instructions**
    - Removes non-label instructions after `RET`, unconditional `JMP`, or
      `HALT` until the next label or directive.
 
-12. **Repeated frame loads**
+13. **Repeated frame loads**
    - Removes a repeated `LOAD` from the same frame slot into the same
      register when no store, call, unconditional jump, or register write
      intervenes.
 
-13. **Symbol address folding**
+14. **Symbol address folding**
    - Folds `LEA R, [symbol]` plus `LOAD R, [R]` into `LOAD R, [symbol]`.
    - Folds stores through a symbol address when the address register is
      immediately overwritten.
 
-14. **Immediate add chains**
+15. **Immediate add chains**
    - Combines adjacent `ADD`/`SUB reg, reg, #imm` pairs into one
      adjustment.
    - Skips the fold when a conditional branch immediately follows.
 
-15. **Load copy folding**
+16. **Load copy folding**
    - Retargets `LOAD R, [mem]` into the destination of a following
      `MOV Rd, R` when `R` is immediately overwritten.
+
+17. **CFG and liveness analysis**
+   - Splits each function into basic blocks and computes register and
+     frame-slot live-in/live-out sets.
+   - Accounts for conditional and unconditional branches, calls, returns,
+     and C++ exception barriers.
+
+18. **Liveness-based dead stores and moves**
+   - Removes frame stores whose slot is not live on any successor path.
+   - Removes `MOV` destinations that are dead after the instruction.
+   - Keeps stores in functions with exception landing paths.
+
+19. **Straight-line copy coalescing**
+   - Propagates a `MOV Rd, Rs` into block-local reads of `Rd` and removes
+     the copy when `Rd` is not live out.
+   - Stops at calls, source-register writes, and block boundaries.
+
+20. **Leaf scalar register promotion**
+   - Promotes eligible scalar frame slots in call-free, exception-free
+     functions to `R12`-`R15`.
+   - Replaces loads and stores with register moves and rewrites adjacent
+     consumers, adding one entry load per promoted slot.
+   - Requires at least one removable load and avoids slots whose address
+     escapes.
 
 ## Safety model
 
 The pass is deliberately conservative:
 
-- No optimization crosses a label, call, or branch boundary.
-- Unknown memory writes clear frame-slot knowledge.
+- CFG-based passes may cross labels and ordinary branches, but not calls or
+  C++ exception landing regions.
+- Unknown memory writes clear local forwarding knowledge.
 - Calls and returns count argument and return registers as reads.
+- Leaf register promotion only runs in functions with no calls or exception
+  landing paths.
 - `-O0` remains the default, so existing debug behavior is unchanged.
 - Line markers are kept so source-level debugging continues to work.
 
@@ -169,6 +196,6 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 
 ## Planned next steps
 
-1. More aggressive spill elimination with local value numbering.
-2. Register allocation across straight-line regions.
-3. Inlining and loop optimizations only after the above are stable.
+1. Loop induction-variable and invariant load optimization.
+2. Broader inlining for C and multi-statement C++ functions.
+3. Tail-call optimization, dead-function removal, and nothrow call metadata.

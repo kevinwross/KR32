@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <array>
 #include <cctype>
+#include <cstdint>
 #include <cstdlib>
 #include <map>
 #include <optional>
@@ -467,6 +468,722 @@ bool is_conditional_jump(const std::string& mnemonic) {
            mnemonic == "JGT" || mnemonic == "JGE" ||
            mnemonic == "JCS" || mnemonic == "JNC" ||
            mnemonic == "JLS" || mnemonic == "JHI";
+}
+
+using RegisterMask = std::uint16_t;
+
+RegisterMask bit_for_register(int reg) {
+    return static_cast<RegisterMask>(1U << reg);
+}
+
+void add_operand_register(const std::string& operand, RegisterMask& mask) {
+    int reg = 0;
+    if (parse_register(operand, reg) ||
+        parse_register_address(operand, reg)) {
+        mask = static_cast<RegisterMask>(mask | bit_for_register(reg));
+    }
+}
+
+void instruction_uses_defs(const Instruction& instruction,
+                           RegisterMask& uses, RegisterMask& defs) {
+    uses = 0;
+    defs = 0;
+    if (instruction.mnemonic == "RET") {
+        uses = bit_for_register(0) | bit_for_register(1);
+        return;
+    }
+    if (is_call(instruction.mnemonic)) {
+        for (const std::string& operand : instruction.operands) {
+            add_operand_register(operand, uses);
+        }
+        for (int reg = 0; reg < 4; ++reg) {
+            uses = static_cast<RegisterMask>(
+                uses | bit_for_register(reg));
+        }
+        for (int reg = 0; reg < 7; ++reg) {
+            defs = static_cast<RegisterMask>(
+                defs | bit_for_register(reg));
+        }
+        for (int reg = 12; reg < 16; ++reg) {
+            defs = static_cast<RegisterMask>(
+                defs | bit_for_register(reg));
+        }
+        return;
+    }
+    const std::size_t first =
+        writes_first_operand(instruction) ? 1 : 0;
+    if (first == 1) {
+        int destination = 0;
+        if (parse_register(instruction.operands[0], destination)) {
+            defs = bit_for_register(destination);
+        }
+    }
+    for (std::size_t index = first;
+         index < instruction.operands.size(); ++index) {
+        add_operand_register(instruction.operands[index], uses);
+    }
+}
+
+void frame_slot_effects(const Instruction& instruction,
+                        std::set<int>& uses, std::set<int>& defs) {
+    if (instruction.operands.size() != 2) {
+        return;
+    }
+    int slot = 0;
+    if (!parse_frame_slot(instruction.operands[1], slot)) {
+        return;
+    }
+    const bool full_load = instruction.mnemonic == "LOAD";
+    const bool partial_load = instruction.mnemonic == "LOAD8S" ||
+                              instruction.mnemonic == "LOAD8U" ||
+                              instruction.mnemonic == "LOAD16S" ||
+                              instruction.mnemonic == "LOAD16U";
+    const bool fp_load = instruction.mnemonic == "FLOAD.W" ||
+                         instruction.mnemonic == "FLOAD.D";
+    const bool full_store = instruction.mnemonic == "STORE";
+    const bool partial_store = instruction.mnemonic == "STORE8" ||
+                               instruction.mnemonic == "STORE16";
+    const bool fp_store = instruction.mnemonic == "FSTORE.W" ||
+                          instruction.mnemonic == "FSTORE.D";
+    if (full_load || partial_load || fp_load) {
+        uses.insert(slot);
+    } else if (full_store) {
+        defs.insert(slot);
+    } else if (partial_store || fp_store) {
+        uses.insert(slot);
+        defs.insert(slot);
+    }
+}
+
+struct CfgBlock {
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    std::vector<std::size_t> successors;
+    RegisterMask uses = 0;
+    RegisterMask defs = 0;
+    RegisterMask live_in = 0;
+    RegisterMask live_out = 0;
+    std::set<int> slot_uses;
+    std::set<int> slot_defs;
+};
+
+struct CfgFunction {
+    std::size_t begin = 0;
+    std::size_t end = 0;
+    std::vector<CfgBlock> blocks;
+    std::map<std::string, std::size_t> labels;
+};
+
+bool is_function_label(std::string_view line) {
+    const std::string text = trim(line);
+    return !text.empty() && text.back() == ':' && text.front() != '.';
+}
+
+std::vector<CfgFunction> build_cfgs(const std::vector<std::string>& lines) {
+    std::vector<std::pair<std::size_t, std::size_t>> ranges;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        if (!is_function_label(lines[index])) {
+            continue;
+        }
+        if (!ranges.empty()) {
+            ranges.back().second = index;
+        }
+        ranges.emplace_back(index, lines.size());
+    }
+    if (ranges.empty()) {
+        ranges.emplace_back(0, lines.size());
+    } else if (ranges.front().first != 0) {
+        ranges.insert(ranges.begin(), {0, ranges.front().first});
+    }
+
+    std::vector<CfgFunction> functions;
+    for (const auto& [function_begin, function_end] : ranges) {
+        if (function_begin >= function_end) {
+            continue;
+        }
+        CfgFunction function;
+        function.begin = function_begin;
+        function.end = function_end;
+
+        std::vector<std::size_t> starts{function_begin};
+        bool previous_terminated = false;
+        for (std::size_t index = function_begin; index < function_end;
+             ++index) {
+            const std::string text = trim(lines[index]);
+            if (text.empty()) {
+                continue;
+            }
+            if (index != function_begin &&
+                (is_label(text) || previous_terminated)) {
+                if (starts.back() != index) {
+                    starts.push_back(index);
+                }
+            }
+            Instruction instruction;
+            if (parse_instruction(text, instruction)) {
+                previous_terminated =
+                    is_branch(instruction.mnemonic) ||
+                    instruction.mnemonic == "RET" ||
+                    instruction.mnemonic == "HALT";
+            } else {
+                previous_terminated = false;
+            }
+        }
+
+        for (std::size_t block_index = 0; block_index < starts.size();
+             ++block_index) {
+            CfgBlock block;
+            block.begin = starts[block_index];
+            block.end = block_index + 1 < starts.size()
+                            ? starts[block_index + 1]
+                            : function_end;
+            function.blocks.push_back(block);
+        }
+        for (std::size_t block_index = 0;
+             block_index < function.blocks.size(); ++block_index) {
+            CfgBlock& block = function.blocks[block_index];
+            for (std::size_t index = block.begin; index < block.end;
+                 ++index) {
+                const std::string text = trim(lines[index]);
+                if (is_label(text)) {
+                    function.labels[text.substr(0, text.size() - 1)] =
+                        block_index;
+                    continue;
+                }
+                Instruction instruction;
+                if (!parse_instruction(text, instruction)) {
+                    continue;
+                }
+                RegisterMask uses = 0;
+                RegisterMask defs = 0;
+                instruction_uses_defs(instruction, uses, defs);
+                block.uses = static_cast<RegisterMask>(block.uses | uses);
+                block.defs = static_cast<RegisterMask>(block.defs | defs);
+                frame_slot_effects(instruction, block.slot_uses,
+                                   block.slot_defs);
+            }
+        }
+        for (std::size_t block_index = 0;
+             block_index < function.blocks.size(); ++block_index) {
+            CfgBlock& block = function.blocks[block_index];
+            Instruction last;
+            bool has_last = false;
+            for (std::size_t index = block.end; index > block.begin;
+                 --index) {
+                if (parse_instruction(lines[index - 1], last)) {
+                    has_last = true;
+                    break;
+                }
+            }
+            const auto add_target = [&](const std::string& label) {
+                const auto found = function.labels.find(trim(label));
+                if (found != function.labels.end()) {
+                    if (std::find(block.successors.begin(),
+                                  block.successors.end(),
+                                  found->second) ==
+                        block.successors.end()) {
+                        block.successors.push_back(found->second);
+                    }
+                }
+            };
+            const std::size_t fallthrough = block_index + 1;
+            if (has_last && is_branch(last.mnemonic)) {
+                if (!last.operands.empty()) {
+                    add_target(last.operands[0]);
+                }
+                if (last.mnemonic != "JMP" &&
+                    fallthrough < function.blocks.size()) {
+                    block.successors.push_back(fallthrough);
+                }
+            } else if (!has_last ||
+                       (last.mnemonic != "RET" &&
+                        last.mnemonic != "HALT")) {
+                if (fallthrough < function.blocks.size()) {
+                    block.successors.push_back(fallthrough);
+                }
+            }
+        }
+        functions.push_back(std::move(function));
+    }
+    return functions;
+}
+
+struct LivenessInfo {
+    std::vector<RegisterMask> live_after;
+};
+
+LivenessInfo compute_register_liveness(
+    const std::vector<std::string>& lines) {
+    LivenessInfo info;
+    info.live_after.assign(lines.size(), 0);
+    const std::vector<CfgFunction> functions = build_cfgs(lines);
+    for (const CfgFunction& function : functions) {
+        std::vector<CfgBlock> blocks = function.blocks;
+        bool changed = true;
+        int rounds = 0;
+        while (changed && rounds++ < 256) {
+            changed = false;
+            for (std::size_t block_index = blocks.size();
+                 block_index > 0; --block_index) {
+                CfgBlock& block = blocks[block_index - 1];
+                RegisterMask live_out = 0;
+                for (const std::size_t successor : block.successors) {
+                    if (successor < blocks.size()) {
+                        live_out = static_cast<RegisterMask>(
+                            live_out | blocks[successor].live_in);
+                    }
+                }
+                const RegisterMask live_in = static_cast<RegisterMask>(
+                    block.uses |
+                    (live_out & static_cast<RegisterMask>(~block.defs)));
+                if (live_in != block.live_in ||
+                    live_out != block.live_out) {
+                    block.live_in = live_in;
+                    block.live_out = live_out;
+                    changed = true;
+                }
+            }
+        }
+        for (const CfgBlock& block : blocks) {
+            RegisterMask live = block.live_out;
+            for (std::size_t index = block.end; index > block.begin;
+                 --index) {
+                info.live_after[index - 1] = live;
+                Instruction instruction;
+                if (!parse_instruction(lines[index - 1], instruction)) {
+                    continue;
+                }
+                RegisterMask uses = 0;
+                RegisterMask defs = 0;
+                instruction_uses_defs(instruction, uses, defs);
+                live = static_cast<RegisterMask>(
+                    uses | (live & static_cast<RegisterMask>(~defs)));
+            }
+        }
+    }
+    return info;
+}
+
+bool register_live_after(const LivenessInfo& info, std::size_t line,
+                         int reg) {
+    if (line >= info.live_after.size() || reg < 0 || reg > 15) {
+        return false;
+    }
+    return (info.live_after[line] & bit_for_register(reg)) != 0;
+}
+
+bool replace_register_operand(std::string& operand, int from, int to) {
+    int reg = 0;
+    if (parse_register(operand, reg)) {
+        if (reg != from) {
+            return false;
+        }
+        operand = "R" + std::to_string(to);
+        return true;
+    }
+    if (operand.size() < 3 || operand.front() != '[' ||
+        operand.back() != ']') {
+        return false;
+    }
+    if (!parse_register_address(operand, reg) || reg != from) {
+        return false;
+    }
+    const std::string original = "R" + std::to_string(from);
+    const std::string replacement = "R" + std::to_string(to);
+    const std::size_t position = operand.find(original);
+    if (position == std::string::npos) {
+        return false;
+    }
+    operand.replace(position, original.size(), replacement);
+    return true;
+}
+
+int coalesce_block_moves(std::vector<std::string>& lines,
+                         const LivenessInfo& liveness,
+                         const CfgBlock& block) {
+    int removed = 0;
+    for (std::size_t index = block.begin; index < block.end; ++index) {
+        Instruction move;
+        if (!parse_instruction(lines[index], move) ||
+            move.mnemonic != "MOV" || move.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int source = 0;
+        if (!parse_register(move.operands[0], destination) ||
+            !parse_register(move.operands[1], source) ||
+            destination == source || destination == 0 ||
+            destination == 7 || destination == 11 ||
+            source == 7 || source == 11) {
+            continue;
+        }
+        if (block.end == 0 ||
+            register_live_after(liveness, block.end - 1, destination)) {
+            continue;
+        }
+        bool removable = true;
+        for (std::size_t next = index + 1; next < block.end; ++next) {
+            Instruction instruction;
+            if (!parse_instruction(lines[next], instruction)) {
+                continue;
+            }
+            if (is_call(instruction.mnemonic)) {
+                removable = false;
+                break;
+            }
+            if (instruction.mnemonic == "RET") {
+                if (destination == 1) {
+                    removable = false;
+                }
+                break;
+            }
+            if (is_branch(instruction.mnemonic)) {
+                break;
+            }
+            const bool writes_first = writes_first_operand(instruction);
+            int first_destination = 0;
+            if (writes_first &&
+                parse_register(instruction.operands[0],
+                               first_destination)) {
+                if (first_destination == source) {
+                    removable = false;
+                    break;
+                }
+            }
+            const std::size_t first_read = writes_first ? 1 : 0;
+            bool changed = false;
+            for (std::size_t operand = first_read;
+                 operand < instruction.operands.size(); ++operand) {
+                if (replace_register_operand(instruction.operands[operand],
+                                             destination, source)) {
+                    changed = true;
+                }
+            }
+            if (changed) {
+                lines[next] = format_instruction(instruction);
+            }
+            if (writes_first && first_destination == destination) {
+                break;
+            }
+        }
+        if (removable) {
+            lines[index].clear();
+            ++removed;
+        }
+    }
+    return removed;
+}
+
+int coalesce_moves(std::vector<std::string>& lines) {
+    const LivenessInfo liveness = compute_register_liveness(lines);
+    const std::vector<CfgFunction> functions = build_cfgs(lines);
+    int removed = 0;
+    for (const CfgFunction& function : functions) {
+        for (const CfgBlock& block : function.blocks) {
+            removed += coalesce_block_moves(lines, liveness, block);
+        }
+    }
+    return removed;
+}
+
+bool operand_reads_register(const std::string& operand, int reg) {
+    int found = -1;
+    if (parse_register(operand, found) ||
+        parse_register_address(operand, found)) {
+        return found == reg;
+    }
+    return false;
+}
+
+bool next_consumer(std::string_view load_line, int destination, int source,
+                   std::size_t consumer_index, const LivenessInfo& liveness,
+                   Instruction& consumer) {
+    if (!parse_instruction(load_line, consumer)) {
+        return false;
+    }
+    (void)load_line;
+    if (consumer.mnemonic == "RET" || consumer.mnemonic == "HALT" ||
+        is_branch(consumer.mnemonic) || is_call(consumer.mnemonic)) {
+        return false;
+    }
+    const bool writes_first = writes_first_operand(consumer);
+    const std::size_t first_read = writes_first ? 1 : 0;
+    bool reads_destination = false;
+    for (std::size_t operand = first_read;
+         operand < consumer.operands.size(); ++operand) {
+        if (operand_reads_register(consumer.operands[operand], destination)) {
+            reads_destination = true;
+            break;
+        }
+    }
+    if (!reads_destination) {
+        return false;
+    }
+    int written = -1;
+    if (writes_first &&
+        !parse_register(consumer.operands[0], written)) {
+        return false;
+    }
+    if (written != destination &&
+        register_live_after(liveness, consumer_index, destination)) {
+        return false;
+    }
+    bool changed = false;
+    for (std::size_t operand = first_read;
+         operand < consumer.operands.size(); ++operand) {
+        if (replace_register_operand(consumer.operands[operand], destination,
+                                     source)) {
+            changed = true;
+        }
+    }
+    return changed;
+}
+
+struct PromotionInsertion {
+    std::size_t after = 0;
+    int reg = 0;
+    int slot = 0;
+};
+
+int promote_leaf_scalars(std::vector<std::string>& lines) {
+    const LivenessInfo liveness = compute_register_liveness(lines);
+    std::vector<PromotionInsertion> insertions;
+    int removed = 0;
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        bool has_call = false;
+        bool has_exception_path = false;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            if (lines[index].find(".Lcs_") != std::string::npos) {
+                has_exception_path = true;
+            }
+            Instruction instruction;
+            if (parse_instruction(lines[index], instruction) &&
+                is_call(instruction.mnemonic)) {
+                has_call = true;
+            }
+        }
+        if (has_call || has_exception_path) {
+            continue;
+        }
+
+        std::size_t prologue_end = function.end;
+        bool saw_push_frame = false;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            if (!saw_push_frame) {
+                int reg = 0;
+                if (instruction.mnemonic != "PUSH" ||
+                    instruction.operands.size() != 1 ||
+                    !parse_register(instruction.operands[0], reg) ||
+                    reg != 7) {
+                    break;
+                }
+                saw_push_frame = true;
+                continue;
+            }
+            if (instruction.mnemonic == "ADJSP") {
+                continue;
+            }
+            if (instruction.mnemonic == "LEA" &&
+                instruction.operands.size() == 2 &&
+                trim(instruction.operands[1]) == "[SP]") {
+                int reg = 0;
+                if (parse_register(instruction.operands[0], reg) && reg == 7) {
+                    prologue_end = index + 1;
+                }
+            }
+            break;
+        }
+        if (!saw_push_frame || prologue_end == function.end) {
+            continue;
+        }
+
+        bool used_register[16] = {};
+        std::map<int, int> load_counts;
+        std::set<int> blocked_slots;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            for (const std::string& operand : instruction.operands) {
+                int reg = -1;
+                if (parse_register(operand, reg) ||
+                    parse_register_address(operand, reg)) {
+                    used_register[reg] = true;
+                }
+            }
+            if (instruction.operands.size() != 2) {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            if (instruction.mnemonic == "LEA") {
+                blocked_slots.insert(slot);
+            } else if (instruction.mnemonic == "LOAD") {
+                ++load_counts[slot];
+            } else if (instruction.mnemonic == "STORE") {
+                int source = 0;
+                if (!parse_register(instruction.operands[0], source)) {
+                    blocked_slots.insert(slot);
+                }
+            } else {
+                blocked_slots.insert(slot);
+            }
+        }
+
+        std::vector<int> free_registers;
+        for (int reg = 12; reg < 16; ++reg) {
+            if (!used_register[reg]) {
+                free_registers.push_back(reg);
+            }
+        }
+        if (free_registers.empty()) {
+            continue;
+        }
+
+        std::vector<std::pair<int, int>> candidates;
+        for (const auto& [slot, count] : load_counts) {
+            if (count >= 2 && blocked_slots.find(slot) == blocked_slots.end()) {
+                candidates.emplace_back(count, slot);
+            }
+        }
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const auto& left, const auto& right) {
+                      if (left.first != right.first) {
+                          return left.first > right.first;
+                      }
+                      return left.second < right.second;
+                  });
+
+        std::size_t free_index = 0;
+        for (const auto& candidate : candidates) {
+            if (free_index >= free_registers.size()) {
+                break;
+            }
+            const int slot = candidate.second;
+            const int reg = free_registers[free_index];
+
+            std::vector<std::size_t> removable_loads;
+            for (std::size_t index = function.begin; index < function.end;
+                 ++index) {
+                Instruction load;
+                if (!parse_instruction(lines[index], load) ||
+                    load.mnemonic != "LOAD" ||
+                    load.operands.size() != 2) {
+                    continue;
+                }
+                int loaded_slot = 0;
+                int destination = 0;
+                if (!parse_frame_slot(load.operands[1], loaded_slot) ||
+                    loaded_slot != slot ||
+                    !parse_register(load.operands[0], destination)) {
+                    continue;
+                }
+                std::size_t consumer_index = index + 1;
+                while (consumer_index < function.end &&
+                       lines[consumer_index].empty()) {
+                    ++consumer_index;
+                }
+                if (consumer_index >= function.end) {
+                    continue;
+                }
+                Instruction consumer;
+                if (next_consumer(lines[consumer_index], destination, reg,
+                                  consumer_index, liveness, consumer)) {
+                    removable_loads.push_back(index);
+                }
+            }
+            if (removable_loads.empty()) {
+                continue;
+            }
+
+            for (std::size_t index = function.begin; index < function.end;
+                 ++index) {
+                Instruction instruction;
+                if (!parse_instruction(lines[index], instruction) ||
+                    instruction.operands.size() != 2) {
+                    continue;
+                }
+                int accessed = 0;
+                if (!parse_frame_slot(instruction.operands[1], accessed) ||
+                    accessed != slot) {
+                    continue;
+                }
+                if (instruction.mnemonic == "STORE") {
+                    int source = 0;
+                    if (parse_register(instruction.operands[0], source)) {
+                        lines[index] = "    MOV R" +
+                                       std::to_string(reg) + ", R" +
+                                       std::to_string(source);
+                    }
+                    continue;
+                }
+                if (instruction.mnemonic != "LOAD") {
+                    continue;
+                }
+                int destination = 0;
+                if (!parse_register(instruction.operands[0], destination)) {
+                    continue;
+                }
+                std::size_t consumer_index = index + 1;
+                while (consumer_index < function.end &&
+                       lines[consumer_index].empty()) {
+                    ++consumer_index;
+                }
+                Instruction consumer;
+                if (consumer_index < function.end &&
+                    next_consumer(lines[consumer_index], destination, reg,
+                                  consumer_index, liveness, consumer)) {
+                    lines[consumer_index] = format_instruction(consumer);
+                    lines[index].clear();
+                    ++removed;
+                } else {
+                    lines[index] = "    MOV R" +
+                                   std::to_string(destination) + ", R" +
+                                   std::to_string(reg);
+                }
+            }
+            insertions.push_back({prologue_end, reg, slot});
+            ++free_index;
+        }
+    }
+    if (insertions.empty()) {
+        return removed;
+    }
+
+    std::sort(insertions.begin(), insertions.end(),
+              [](const PromotionInsertion& left,
+                 const PromotionInsertion& right) {
+                  if (left.after != right.after) {
+                      return left.after < right.after;
+                  }
+                  return left.reg < right.reg;
+              });
+    std::vector<std::string> output;
+    output.reserve(lines.size() + insertions.size());
+    std::size_t insertion_index = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        output.push_back(lines[index]);
+        while (insertion_index < insertions.size() &&
+               insertions[insertion_index].after == index + 1) {
+            const PromotionInsertion& insertion =
+                insertions[insertion_index++];
+            output.push_back("    LOAD R" +
+                             std::to_string(insertion.reg) + ", [R7 + " +
+                             std::to_string(insertion.slot) + "]");
+        }
+    }
+    lines = std::move(output);
+    return removed;
 }
 
 int fold_pointer_load_offsets(std::vector<std::string>& lines) {
@@ -1009,45 +1726,43 @@ int fold_boolean_branches(std::vector<std::string>& lines) {
 
 int remove_dead_frame_stores(std::vector<std::string>& lines) {
     int removed = 0;
-    std::map<int, std::set<int>> used;
-    int function = -1;
+    std::vector<std::set<int>> read_by_group;
+    int group = -1;
     for (const std::string& line : lines) {
         if (trim(line) == ".text") {
-            ++function;
-            used[function];
-            continue;
+            ++group;
+            read_by_group.emplace_back();
         }
-        if (function < 0) {
-            function = 0;
-            used[function];
+        if (group < 0) {
+            group = 0;
+            read_by_group.emplace_back();
         }
         Instruction instruction;
-        if (!parse_instruction(line, instruction)) {
+        if (!parse_instruction(line, instruction) ||
+            instruction.operands.size() < 2) {
             continue;
         }
-        const bool reads_memory =
-            instruction.mnemonic == "LEA" ||
-            instruction.mnemonic == "LOAD" ||
-            instruction.mnemonic == "LOAD8U" ||
-            instruction.mnemonic == "LOAD8S" ||
-            instruction.mnemonic == "LOAD16U" ||
-            instruction.mnemonic == "LOAD16S";
-        if (reads_memory && instruction.operands.size() >= 2) {
-            int slot = 0;
-            if (parse_frame_slot(instruction.operands[1], slot)) {
-                used[function].insert(slot);
-            }
+        if (instruction.mnemonic != "LEA" &&
+            instruction.mnemonic != "LOAD" &&
+            instruction.mnemonic != "LOAD8S" &&
+            instruction.mnemonic != "LOAD8U" &&
+            instruction.mnemonic != "LOAD16S" &&
+            instruction.mnemonic != "LOAD16U") {
+            continue;
+        }
+        int slot = 0;
+        if (parse_frame_slot(instruction.operands[1], slot)) {
+            read_by_group[static_cast<std::size_t>(group)].insert(slot);
         }
     }
-
-    function = -1;
+    group = -1;
     for (std::string& line : lines) {
         if (trim(line) == ".text") {
-            ++function;
+            ++group;
             continue;
         }
-        if (function < 0) {
-            function = 0;
+        if (group < 0) {
+            group = 0;
         }
         Instruction instruction;
         if (!parse_instruction(line, instruction) ||
@@ -1057,9 +1772,101 @@ int remove_dead_frame_stores(std::vector<std::string>& lines) {
         }
         int slot = 0;
         if (parse_frame_slot(instruction.operands[1], slot) &&
-            used[function].find(slot) == used[function].end()) {
+            read_by_group[static_cast<std::size_t>(group)].find(slot) ==
+                read_by_group[static_cast<std::size_t>(group)].end()) {
             line.clear();
             ++removed;
+        }
+    }
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        bool has_exception_path = false;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            if (lines[index].find(".Lcs_") != std::string::npos) {
+                has_exception_path = true;
+                break;
+            }
+        }
+        if (has_exception_path) {
+            continue;
+        }
+
+        std::set<int> escaped;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.mnemonic != "LEA" ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            int slot = 0;
+            if (parse_frame_slot(instruction.operands[1], slot)) {
+                escaped.insert(slot);
+            }
+        }
+
+        const std::vector<CfgBlock>& blocks = function.blocks;
+        std::vector<std::set<int>> live_in(blocks.size());
+        std::vector<std::set<int>> live_out(blocks.size());
+        bool changed = true;
+        int rounds = 0;
+        while (changed && rounds++ < 256) {
+            changed = false;
+            for (std::size_t block_index = blocks.size();
+                 block_index > 0; --block_index) {
+                const CfgBlock& block = blocks[block_index - 1];
+                std::set<int> out;
+                for (const std::size_t successor : block.successors) {
+                    if (successor < live_in.size()) {
+                        out.insert(live_in[successor].begin(),
+                                   live_in[successor].end());
+                    }
+                }
+                std::set<int> in = block.slot_uses;
+                for (const int slot : out) {
+                    if (block.slot_defs.find(slot) ==
+                        block.slot_defs.end()) {
+                        in.insert(slot);
+                    }
+                }
+                if (in != live_in[block_index - 1] ||
+                    out != live_out[block_index - 1]) {
+                    live_in[block_index - 1] = std::move(in);
+                    live_out[block_index - 1] = std::move(out);
+                    changed = true;
+                }
+            }
+        }
+
+        for (std::size_t block_index = 0;
+             block_index < blocks.size(); ++block_index) {
+            const CfgBlock& block = blocks[block_index];
+            std::set<int> live = live_out[block_index];
+            for (std::size_t index = block.end; index > block.begin;
+                 --index) {
+                Instruction instruction;
+                if (!parse_instruction(lines[index - 1], instruction)) {
+                    continue;
+                }
+                int slot = 0;
+                const bool full_store =
+                    instruction.mnemonic == "STORE" &&
+                    instruction.operands.size() == 2 &&
+                    parse_frame_slot(instruction.operands[1], slot);
+                if (full_store && escaped.find(slot) == escaped.end() &&
+                    live.find(slot) == live.end()) {
+                    lines[index - 1].clear();
+                    ++removed;
+                }
+                std::set<int> uses;
+                std::set<int> defs;
+                frame_slot_effects(instruction, uses, defs);
+                for (const int defined : defs) {
+                    live.erase(defined);
+                }
+                live.insert(uses.begin(), uses.end());
+            }
         }
     }
     return removed;
@@ -1112,26 +1919,7 @@ int remove_overwritten_moves(std::vector<std::string>& lines) {
 }
 
 int remove_dead_moves(std::vector<std::string>& lines) {
-    std::vector<RegisterReadCounts> function_counts;
-    std::vector<int> function_of_line(lines.size(), 0);
-    int function = -1;
-    for (std::size_t index = 0; index < lines.size(); ++index) {
-        if (trim(lines[index]) == ".text") {
-            ++function;
-            function_counts.emplace_back();
-        }
-        if (function < 0) {
-            function = 0;
-            function_counts.emplace_back();
-        }
-        function_of_line[index] = function;
-        Instruction instruction;
-        if (parse_instruction(lines[index], instruction)) {
-            count_reads(instruction,
-                        function_counts[static_cast<std::size_t>(function)]);
-        }
-    }
-
+    const LivenessInfo liveness = compute_register_liveness(lines);
     int removed = 0;
     for (std::size_t index = 0; index < lines.size(); ++index) {
         Instruction instruction;
@@ -1145,9 +1933,7 @@ int remove_dead_moves(std::vector<std::string>& lines) {
             destination == 0 || destination == 7 || destination == 11) {
             continue;
         }
-        const RegisterReadCounts& counts =
-            function_counts[static_cast<std::size_t>(function_of_line[index])];
-        if (counts.reads[static_cast<std::size_t>(destination)] == 0) {
+        if (!register_live_after(liveness, index, destination)) {
             lines[index].clear();
             ++removed;
         }
@@ -1495,6 +2281,8 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_comparison_values(lines);
     stats.removed += fold_boolean_branches(lines);
     stats.removed += remove_dead_frame_stores(lines);
+    stats.removed += promote_leaf_scalars(lines);
+    stats.removed += coalesce_moves(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);
     stats.removed += remove_redundant_jumps(lines);

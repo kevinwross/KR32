@@ -32,6 +32,15 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("cmpend") == std::string::npos);
 }
 
+TEST_CASE("c leaf locals stay in registers") {
+    const ProgramResult program = compile_and_run(
+        "int leaf(int a) { int x = a + 1; return x + x + x; }\n"
+        "int main(void) { return leaf(2) == 9 ? 0 : 1; }\n",
+        true);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("c logical not uses SLTU") {
     const cc::Result result = cc::compile(
         "int f(int x) { return !x; }\n"

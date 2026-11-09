@@ -56,6 +56,15 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("leaf locals stay in registers") {
+    const ProgramResult program = compile_and_run(
+        "int leaf(int a) { int x = a + 1; return x + x + x; }\n"
+        "int main() { return leaf(2) == 9 ? 0 : 1; }\n",
+        true);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("logical not uses SLTU") {
     const cxx::Result result = cxx::compile(
         "int f(int x) { return !x; }\n"
