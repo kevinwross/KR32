@@ -2707,6 +2707,32 @@ private:
             if (is_integer(arg) && is_integer(element)) {
                 return 1;
             }
+            if (ClassInfo* element_class = class_of(element)) {
+                for (Function* constructor : element_class->constructors) {
+                    if (constructor->parameters.size() != 1 ||
+                        constructor->is_explicit) {
+                        continue;
+                    }
+                    const TypePtr constructor_parameter =
+                        resolve_type(constructor->parameters[0]);
+                    const TypePtr constructor_element =
+                        constructor_parameter &&
+                                (constructor_parameter->kind ==
+                                     TypeKind::LValueRef ||
+                                 constructor_parameter->kind ==
+                                     TypeKind::RValueRef)
+                            ? resolve_type(constructor_parameter->element)
+                            : constructor_parameter;
+                    if (same_type(constructor_element, element)) {
+                        continue;
+                    }
+                    const int inner = conversion_cost(
+                        argument, constructor->parameters[0], true, false);
+                    if (inner < 100) {
+                        return 4 + inner;
+                    }
+                }
+            }
             return 100;
         }
         if (same_type(arg, param)) {
@@ -6050,20 +6076,27 @@ private:
         if (parameter && (parameter->kind == TypeKind::LValueRef ||
                           parameter->kind == TypeKind::RValueRef)) {
             const TypePtr element = resolve_type(parameter->element);
-            if (!is_lvalue(right) && element != nullptr &&
-                class_of(element) == nullptr) {
-                const int value_temp = allocate_local(element);
-                if (is_fp(element)) {
-                    gen_as_fp(right, element);
-                    emit(std::string("    FSTORE.") +
-                         (is_float32(element) ? "W" : "D") + " F0, [R7 + " +
-                         std::to_string(value_temp) + "]");
+            if (!is_lvalue(right) && element != nullptr) {
+                if (ClassInfo* element_class = class_of(element)) {
+                    const int object = allocate_local(element);
+                    construct_object_from_expression(element_class, object,
+                                                     right);
+                    emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
                 } else {
-                    gen_expr(right);
-                    emit("    LEA R1, [R7 + " + std::to_string(value_temp) + "]");
-                    store_value(element);
+                    const int value_temp = allocate_local(element);
+                    if (is_fp(element)) {
+                        gen_as_fp(right, element);
+                        emit(std::string("    FSTORE.") +
+                             (is_float32(element) ? "W" : "D") + " F0, [R7 + " +
+                             std::to_string(value_temp) + "]");
+                    } else {
+                        gen_expr(right);
+                        emit("    LEA R1, [R7 + " +
+                             std::to_string(value_temp) + "]");
+                        store_value(element);
+                    }
+                    emit("    LEA R0, [R7 + " + std::to_string(value_temp) + "]");
                 }
-                emit("    LEA R0, [R7 + " + std::to_string(value_temp) + "]");
             } else {
                 gen_address(right);
             }
@@ -7080,19 +7113,29 @@ private:
                               parameter->kind == TypeKind::RValueRef)) {
                 const TypePtr element = resolve_type(parameter->element);
                 if (!is_lvalue(*effective_arguments[index]) &&
-                    element != nullptr && class_of(element) == nullptr) {
-                    const int value_temp = allocate_local(element);
-                    if (is_fp(element)) {
-                        gen_as_fp(*effective_arguments[index], element);
-                        emit(std::string("    FSTORE.") +
-                             (is_float32(element) ? "W" : "D") + " F0, [R7 + " +
-                             std::to_string(value_temp) + "]");
+                    element != nullptr) {
+                    if (ClassInfo* element_class = class_of(element)) {
+                        const int object = allocate_local(element);
+                        construct_object_from_expression(
+                            element_class, object,
+                            *effective_arguments[index]);
+                        emit("    LEA R0, [R7 + " + std::to_string(object) + "]");
                     } else {
-                        gen_expr(*effective_arguments[index]);
-                        emit("    LEA R1, [R7 + " + std::to_string(value_temp) + "]");
-                        store_value(element);
+                        const int value_temp = allocate_local(element);
+                        if (is_fp(element)) {
+                            gen_as_fp(*effective_arguments[index], element);
+                            emit(std::string("    FSTORE.") +
+                                 (is_float32(element) ? "W" : "D") + " F0, [R7 + " +
+                                 std::to_string(value_temp) + "]");
+                        } else {
+                            gen_expr(*effective_arguments[index]);
+                            emit("    LEA R1, [R7 + " +
+                                 std::to_string(value_temp) + "]");
+                            store_value(element);
+                        }
+                        emit("    LEA R0, [R7 + " +
+                             std::to_string(value_temp) + "]");
                     }
-                    emit("    LEA R0, [R7 + " + std::to_string(value_temp) + "]");
                 } else {
                     gen_address(*effective_arguments[index]);
                 }

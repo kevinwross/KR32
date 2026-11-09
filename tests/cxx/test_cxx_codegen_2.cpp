@@ -1152,6 +1152,21 @@ TEST_CASE("class methods bind const reference temporaries") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("class methods accept string temporaries") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "struct Reader {\n"
+        "    int length(const std::string& text) const { return text.size(); }\n"
+        "};\n"
+        "int main() {\n"
+        "    Reader reader;\n"
+        "    return reader.length(\"hello\") == 5 ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std map inserts updates and counts") {
     const ProgramResult program = compile_and_run(
         "#include <map>\n"

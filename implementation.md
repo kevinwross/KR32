@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 19:44 -08:00
+> **Last updated:** 2026-11-08 19:48 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2500,6 +2500,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 19:44 -08:00** — Preserved const/volatile qualifiers when
       substituting template parameters, so `const T&` methods accept
       temporaries and `std::map::count` uses its standard signature.
+- **2026-11-08 19:48 -08:00** — Allowed constructor conversions for class
+      `const&` parameters and constructed class temporaries at call sites;
+      methods can now accept string literals as `const std::string&`.
 
 ## 10. Updating this file
 
