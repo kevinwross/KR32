@@ -115,6 +115,10 @@ target-level cleanup.
    - Removes non-label instructions after `RET`, unconditional `JMP`, or
      `HALT` until the next label or directive.
 
+12. **Repeated frame loads**
+   - Removes a repeated `LOAD` from the same frame slot into the same
+     register when no store, call, branch, or register write intervenes.
+
 ## Safety model
 
 The pass is deliberately conservative:

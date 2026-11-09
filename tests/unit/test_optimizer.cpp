@@ -37,6 +37,22 @@ TEST_CASE("assembly optimizer folds pointer load offsets") {
     CHECK(assembly.find("ADD R0, R0, #4") == std::string::npos);
 }
 
+TEST_CASE("assembly optimizer removes repeated frame loads") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    CMP R0, #0\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LOAD R0, [R7 + 4]") ==
+          assembly.rfind("LOAD R0, [R7 + 4]"));
+}
+
 TEST_CASE("assembly optimizer removes unreachable instructions") {
     std::string assembly =
         ".text\n"

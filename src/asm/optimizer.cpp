@@ -1017,6 +1017,70 @@ int remove_unreachable_after_terminators(std::vector<std::string>& lines) {
     return removed;
 }
 
+int remove_repeated_frame_loads(std::vector<std::string>& lines) {
+    int removed = 0;
+    std::map<int, std::string> loaded;
+    const auto clear = [&]() { loaded.clear(); };
+    for (std::string& line : lines) {
+        Instruction instruction;
+        if (!parse_instruction(line, instruction)) {
+            clear();
+            continue;
+        }
+        if (is_call(instruction.mnemonic) ||
+            is_branch(instruction.mnemonic)) {
+            clear();
+            continue;
+        }
+        if (instruction.mnemonic == "STORE" ||
+            instruction.mnemonic == "STORE8" ||
+            instruction.mnemonic == "STORE16" ||
+            instruction.mnemonic == "FSTORE.W" ||
+            instruction.mnemonic == "FSTORE.D") {
+            clear();
+            continue;
+        }
+        if (instruction.mnemonic == "LOAD" &&
+            instruction.operands.size() == 2) {
+            int destination = 0;
+            int slot = 0;
+            if (parse_register(instruction.operands[0], destination) &&
+                parse_frame_slot(instruction.operands[1], slot)) {
+                const auto found = loaded.find(slot);
+                if (found != loaded.end() &&
+                    found->second == instruction.operands[0]) {
+                    line.clear();
+                    ++removed;
+                    continue;
+                }
+                const std::string destination_text =
+                    instruction.operands[0];
+                for (auto entry = loaded.begin(); entry != loaded.end();) {
+                    if (entry->second == destination_text) {
+                        entry = loaded.erase(entry);
+                    } else {
+                        ++entry;
+                    }
+                }
+                loaded[slot] = destination_text;
+            }
+            continue;
+        }
+        if (writes_first_operand(instruction) &&
+            !instruction.operands.empty()) {
+            const std::string& destination = instruction.operands[0];
+            for (auto entry = loaded.begin(); entry != loaded.end();) {
+                if (entry->second == destination) {
+                    entry = loaded.erase(entry);
+                } else {
+                    ++entry;
+                }
+            }
+        }
+    }
+    return removed;
+}
+
 int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -1088,6 +1152,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_noop_moves(lines);
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
+    stats.removed += remove_repeated_frame_loads(lines);
     stats.removed += remove_unreachable_after_terminators(lines);
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += fold_frame_address_arithmetic(lines);
