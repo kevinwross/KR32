@@ -242,8 +242,8 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 | `balanced-tree.cpp` | `-O0` | 184,725 | `0x15894` |
 | `balanced-tree.cpp` | `-O1` | 166,336 | `0x15654` |
 
-## Planned next steps
+## Future work beyond P0-P7
 
-1. Loop-invariant load hoisting for loops with calls outside the body.
-2. Nothrow call metadata and exception landing-pad removal.
-3. Final benchmark, regression, and documentation pass.
+1. Loop-invariant load hoisting for loops that contain calls.
+2. C++ tail calls that must preserve exception call-site metadata.
+3. Inlining functions with branches or multiple returns.
