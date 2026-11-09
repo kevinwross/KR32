@@ -44,7 +44,9 @@ TEST_CASE("assembly optimizer removes repeated frame loads") {
         "probe:\n"
         "    LOAD R0, [R7 + 4]\n"
         "    CMP R0, #0\n"
+        "    JZ .Lkeep\n"
         "    LOAD R0, [R7 + 4]\n"
+        ".Lkeep:\n"
         "    RET\n";
     const assembler::OptimizeStats stats =
         assembler::optimize_assembly(assembly);

@@ -117,7 +117,8 @@ target-level cleanup.
 
 12. **Repeated frame loads**
    - Removes a repeated `LOAD` from the same frame slot into the same
-     register when no store, call, branch, or register write intervenes.
+     register when no store, call, unconditional jump, or register write
+     intervenes.
 
 ## Safety model
 

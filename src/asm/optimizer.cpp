@@ -1028,7 +1028,7 @@ int remove_repeated_frame_loads(std::vector<std::string>& lines) {
             continue;
         }
         if (is_call(instruction.mnemonic) ||
-            is_branch(instruction.mnemonic)) {
+            instruction.mnemonic == "JMP") {
             clear();
             continue;
         }
