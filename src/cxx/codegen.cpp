@@ -5900,9 +5900,39 @@ private:
             return false;
         }
         gen_expr(*expression.children[0]);
+        Local* right_local = nullptr;
+        TypePtr right_local_type;
+        if (expression.children[1]->kind == ExprKind::Name) {
+            Local* candidate = lookup_local(expression.children[1]->name);
+            if (candidate != nullptr && !candidate->is_reference &&
+                candidate->static_global == nullptr) {
+                const TypePtr type = resolve_type(candidate->type);
+                if (type != nullptr && is_integer(type) &&
+                    !is_long_long(type)) {
+                    right_local = candidate;
+                    right_local_type = type;
+                }
+            }
+        }
         if (expression.children[1]->kind == ExprKind::IntegerLiteral) {
             emit("    CMP R0, #" +
                  std::to_string(expression.children[1]->integer));
+        } else if (right_local != nullptr) {
+            const std::string frame =
+                "[R7 + " + std::to_string(right_local->offset) + "]";
+            if (right_local_type->kind == TypeKind::Builtin &&
+                (right_local_type->builtin == BuiltinKind::Char ||
+                 right_local_type->builtin == BuiltinKind::Bool)) {
+                emit("    LOAD8S R1, " + frame);
+            } else if (right_local_type->kind == TypeKind::Builtin &&
+                       (right_local_type->builtin == BuiltinKind::Short ||
+                        right_local_type->builtin ==
+                            BuiltinKind::UnsignedShort)) {
+                emit("    LOAD16S R1, " + frame);
+            } else {
+                emit("    LOAD R1, " + frame);
+            }
+            emit("    CMP R0, R1");
         } else {
             emit("    PUSH R0");
             gen_expr(*expression.children[1]);

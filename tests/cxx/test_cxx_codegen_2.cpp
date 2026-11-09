@@ -56,6 +56,14 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("local comparisons avoid stack temporaries") {
+    const cxx::Result result = cxx::compile(
+        "int cmp(int a, int b) { if (a < b) return 1; return 2; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("LOAD R1, [R7 + 4]") != std::string::npos);
+    CHECK(result.assembly.find("CMP R0, R1") != std::string::npos);
+}
+
 TEST_CASE("equality values avoid branches") {
     const cxx::Result result = cxx::compile(
         "int eq(int a, int b) { return a == b; }\n"

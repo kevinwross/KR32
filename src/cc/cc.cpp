@@ -4547,6 +4547,48 @@ private:
                         const bool jump_true = !branch_true_label_.empty();
                         const std::string target = jump_true
                             ? branch_true_label_ : branch_false_label_;
+                        if (peek().kind == TokenKind::Identifier &&
+                            (peek(1).text == ")" || peek(1).text == ";" ||
+                             peek(1).text == "," || peek(1).text == ":" ||
+                             peek(1).text == "?")) {
+                            const Variable* variable = lookup(peek().text);
+                            if (variable != nullptr && !variable->global &&
+                                !variable->is_thread_local &&
+                                !is_long_long_type(variable->type) &&
+                                !is_fp_type(variable->type) &&
+                                !variable->type->is_atomic &&
+                                variable->type->kind != Type::Kind::Array &&
+                                variable->type->kind != Type::Kind::Struct &&
+                                variable->type->kind != Type::Kind::Union) {
+                                take();
+                                const TypePtr type = variable->type;
+                                const std::string frame =
+                                    "[R7 + " +
+                                    std::to_string(variable->offset) + "]";
+                                if (type->kind == Type::Kind::Char ||
+                                    type->kind == Type::Kind::Bool) {
+                                    emit("    LOAD8S R1, " + frame);
+                                } else if (type->kind == Type::Kind::Short) {
+                                    emit("    LOAD16S R1, " + frame);
+                                } else {
+                                    emit("    LOAD R1, " + frame);
+                                }
+                                emit("    CMP R0, R1");
+                                const bool unsigned_compare =
+                                    is_unsigned_scalar(left) ||
+                                    is_unsigned_scalar(type);
+                                const std::string branch = jump_true
+                                    ? true_comparison(op, unsigned_compare)
+                                    : inverse_comparison(op, unsigned_compare);
+                                emit("    " + branch + " " + target);
+                                branch_false_label_.clear();
+                                branch_true_label_.clear();
+                                condition_branched_ = true;
+                                left = type_int();
+                                matched = true;
+                                continue;
+                            }
+                        }
                         branch_false_label_.clear();
                         branch_true_label_.clear();
                         emit("    PUSH R0");
@@ -6147,6 +6189,48 @@ private:
                         const bool jump_true = !branch_true_label_.empty();
                         const std::string target = jump_true
                             ? branch_true_label_ : branch_false_label_;
+                        if (peek().kind == TokenKind::Identifier &&
+                            (peek(1).text == ")" || peek(1).text == ";" ||
+                             peek(1).text == "," || peek(1).text == ":" ||
+                             peek(1).text == "?")) {
+                            const Variable* variable = lookup(peek().text);
+                            if (variable != nullptr && !variable->global &&
+                                !variable->is_thread_local &&
+                                !is_long_long_type(variable->type) &&
+                                !is_fp_type(variable->type) &&
+                                !variable->type->is_atomic &&
+                                variable->type->kind != Type::Kind::Array &&
+                                variable->type->kind != Type::Kind::Struct &&
+                                variable->type->kind != Type::Kind::Union) {
+                                take();
+                                const TypePtr type = variable->type;
+                                const std::string frame =
+                                    "[R7 + " +
+                                    std::to_string(variable->offset) + "]";
+                                if (type->kind == Type::Kind::Char ||
+                                    type->kind == Type::Kind::Bool) {
+                                    emit("    LOAD8S R1, " + frame);
+                                } else if (type->kind == Type::Kind::Short) {
+                                    emit("    LOAD16S R1, " + frame);
+                                } else {
+                                    emit("    LOAD R1, " + frame);
+                                }
+                                emit("    CMP R0, R1");
+                                const bool unsigned_compare =
+                                    is_unsigned_scalar(left) ||
+                                    is_unsigned_scalar(type);
+                                const std::string branch = jump_true
+                                    ? true_comparison(op, unsigned_compare)
+                                    : inverse_comparison(op, unsigned_compare);
+                                emit("    " + branch + " " + target);
+                                branch_false_label_.clear();
+                                branch_true_label_.clear();
+                                condition_branched_ = true;
+                                left = type_int();
+                                matched = true;
+                                continue;
+                            }
+                        }
                         branch_false_label_.clear();
                         branch_true_label_.clear();
                         emit("    PUSH R0");
