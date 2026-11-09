@@ -1088,6 +1088,28 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std atomic uses ll/sc operations") {
+    const ProgramResult program = compile_and_run(
+        "#include <atomic>\n"
+        "int main() {\n"
+        "    std::atomic<int> counter;\n"
+        "    counter.store(5);\n"
+        "    if (counter.load() != 5) return 1;\n"
+        "    counter = 7;\n"
+        "    if (counter.load() != 7) return 2;\n"
+        "    if (counter.fetch_add(3) != 7) return 3;\n"
+        "    if (counter.load() != 10) return 4;\n"
+        "    int expected = 10;\n"
+        "    if (!counter.compare_exchange_weak(expected, 20)) return 5;\n"
+        "    if (counter.load() != 20) return 6;\n"
+        "    if (counter.exchange(30) != 20) return 7;\n"
+        "    return counter.load() == 30 ? 0 : 8;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("qualified class templates instantiate") {
     const ProgramResult program = compile_and_run(
         "namespace N {\n"

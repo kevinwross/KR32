@@ -586,6 +586,56 @@ private:
                 }
                 return;
             }
+            if (header.find("<atomic>") != std::string::npos) {
+                if (!atomic_header_injected_) {
+                    atomic_header_injected_ = true;
+                    append_line(
+                        "namespace std {\n"
+                        "enum memory_order {\n"
+                        "    memory_order_relaxed,\n"
+                        "    memory_order_consume,\n"
+                        "    memory_order_acquire,\n"
+                        "    memory_order_release,\n"
+                        "    memory_order_acq_rel,\n"
+                        "    memory_order_seq_cst\n"
+                        "};\n"
+                        "template<typename T> struct atomic {\n"
+                        "    T value;\n"
+                        "    atomic() {}\n"
+                        "    T load() const {\n"
+                        "        return __atomic_load_n(&value, 0);\n"
+                        "    }\n"
+                        "    void store(T desired) {\n"
+                        "        __atomic_store_n(&value, desired, 0);\n"
+                        "    }\n"
+                        "    T exchange(T desired) {\n"
+                        "        T old = load();\n"
+                        "        while (!__atomic_compare_exchange_n(&value, &old,\n"
+                        "                                            desired, 0)) {\n"
+                        "        }\n"
+                        "        return old;\n"
+                        "    }\n"
+                        "    bool compare_exchange_weak(T& expected, T desired) {\n"
+                        "        return __atomic_compare_exchange_n(&value, &expected,\n"
+                        "                                           desired, 0);\n"
+                        "    }\n"
+                        "    bool compare_exchange_strong(T& expected, T desired) {\n"
+                        "        return __atomic_compare_exchange_n(&value, &expected,\n"
+                        "                                           desired, 0);\n"
+                        "    }\n"
+                        "    T fetch_add(T amount) {\n"
+                        "        return __atomic_fetch_add(&value, amount, 0);\n"
+                        "    }\n"
+                        "    T operator=(T desired) {\n"
+                        "        store(desired);\n"
+                        "        return desired;\n"
+                        "    }\n"
+                        "    operator T() const { return load(); }\n"
+                        "};\n"
+                        "}\n");
+                }
+                return;
+            }
             if (header.find("<array>") != std::string::npos) {
                 if (!array_header_injected_) {
                     array_header_injected_ = true;
@@ -5169,6 +5219,7 @@ private:
     bool algorithm_header_injected_ = false;
     bool cstdlib_header_injected_ = false;
     bool array_header_injected_ = false;
+    bool atomic_header_injected_ = false;
     bool numeric_header_injected_ = false;
     bool cstring_header_injected_ = false;
     bool cctype_header_injected_ = false;
