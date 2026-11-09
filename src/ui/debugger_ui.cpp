@@ -445,6 +445,18 @@ std::string format_scalar_value(const std::string& type,
     return "0x" + hex(value, 8);
 }
 
+int scroll_offset_for_drag(int origin_offset, int origin_y, int y,
+                           int max_offset, int span) {
+    if (max_offset <= 0) {
+        return 0;
+    }
+    if (span <= 0) {
+        return std::clamp(origin_offset, 0, max_offset);
+    }
+    const int next = origin_offset + (y - origin_y) * max_offset / span;
+    return std::clamp(next, 0, max_offset);
+}
+
 int console_scroll_after_output(int scroll, int previous_line_count,
                                 int line_count, int visible) {
     visible = std::max(1, visible);
@@ -1506,7 +1518,7 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
                     source_role);
     }
     draw_scrollbar(canvas, rect, source_scroll_, static_cast<int>(source_lines_.size()),
-                   visible, source_scroll_track_, source_scroll_thumb_);
+                   visible, source_scroll_track_, source_scroll_thumb_, 0);
 }
 
 void DebuggerUI::draw_source_menu(Canvas& canvas) {
@@ -1726,7 +1738,7 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
     draw_scrollbar(canvas, rect,
                    static_cast<int>(start_row),
                    static_cast<int>(kAddressRows), rows, asm_scroll_track_,
-                   asm_scroll_thumb_);
+                   asm_scroll_thumb_, 1);
 }
 
 void DebuggerUI::draw_cores(Canvas& canvas, Rect rect) {
@@ -1772,7 +1784,7 @@ void DebuggerUI::draw_cores(Canvas& canvas, Rect rect) {
         }
     }
     draw_scrollbar(canvas, rect, cores_scroll_ / 14, total_rows, visible_rows,
-                   cores_scroll_track_, cores_scroll_thumb_);
+                   cores_scroll_track_, cores_scroll_thumb_, 2);
 }
 
 int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_index) {
@@ -2229,7 +2241,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         canvas.text(rect.x + 6, rect.y + 24, "(no variables)", kDim, FontRole::MonoSmall);
     }
     draw_scrollbar(canvas, rect, variables_scroll_, static_cast<int>(entries.size()), visible,
-                   variables_scroll_track_, variables_scroll_thumb_);
+                   variables_scroll_track_, variables_scroll_thumb_, 3);
 }
 
 void DebuggerUI::begin_register_edit(int index) {
@@ -2822,7 +2834,7 @@ void DebuggerUI::draw_breakpoints(Canvas& canvas, Rect rect) {
     breakpoints_scroll_ =
         std::clamp(breakpoints_scroll_, 0, std::max(0, total - visible));
     draw_scrollbar(canvas, rect, breakpoints_scroll_, total, visible,
-                   breakpoints_scroll_track_, breakpoints_scroll_thumb_);
+                   breakpoints_scroll_track_, breakpoints_scroll_thumb_, 5);
     if (breakpoints.empty()) {
         canvas.text(rect.x + 8, top + 2, "(no breakpoints)", kDim,
                     FontRole::MonoSmall);
@@ -2929,7 +2941,7 @@ void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
         canvas.text(rect.x + 6, frames_top, "(no frames)", kDim, FontRole::MonoSmall);
     }
     draw_scrollbar(canvas, rect, stack_scroll_, static_cast<int>(frames.size()), visible,
-                   stack_scroll_track_, stack_scroll_thumb_);
+                   stack_scroll_track_, stack_scroll_thumb_, 4);
 }
 
 void DebuggerUI::draw_memory(Canvas& canvas, Rect rect) {
@@ -3054,7 +3066,8 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
         console_scroll_ = 0;
         console_line_count_ = 0;
         canvas.text(rect.x + 6, rect.y + 24, "(no console output)", kDim, FontRole::MonoSmall);
-        draw_scrollbar(canvas, rect, 0, 0, 1, console_scroll_track_, console_scroll_thumb_);
+        draw_scrollbar(canvas, rect, 0, 0, 1, console_scroll_track_,
+                       console_scroll_thumb_, 6);
         return;
     }
     const int row_height = 16;
@@ -3072,8 +3085,8 @@ void DebuggerUI::draw_console(Canvas& canvas, Rect rect) {
                             static_cast<std::size_t>((rect.width - 20) / 8)),
                     kText, FontRole::MonoSmall);
     }
-    draw_scrollbar(canvas, rect, console_scroll_, static_cast<int>(lines.size()), visible,
-                   console_scroll_track_, console_scroll_thumb_);
+    draw_scrollbar(canvas, rect, console_scroll_, static_cast<int>(lines.size()),
+                   visible, console_scroll_track_, console_scroll_thumb_, 6);
 }
 
 DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
@@ -3114,7 +3127,8 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
 }
 
 void DebuggerUI::draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total,
-                                int visible, Rect& track, Rect& thumb) {
+                                int visible, Rect& track, Rect& thumb,
+                                int panel_id) {
     const int max_offset = std::max(0, total - visible);
     track = Rect{panel.x + panel.width - 10, panel.y + 24, 7,
                  std::max(1, panel.height - 26)};
@@ -3130,6 +3144,8 @@ void DebuggerUI::draw_scrollbar(Canvas& canvas, Rect panel, int offset, int tota
     } else {
         thumb = track;
     }
+    scroll_metrics_[panel_id] =
+        ScrollMetrics{max_offset, std::max(0, track.height - thumb.height)};
     canvas.fill(track, kPanelAlt);
     canvas.fill(thumb, max_offset > 0 ? Color{74, 98, 118, 255} : kBorder);
 }
@@ -3403,25 +3419,43 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     mouse_x_ = x;
     mouse_y_ = y;
     if (scroll_dragging_) {
-        const int rows = (y - scroll_drag_last_y_) / 14;
-        if (rows != 0) {
-            scroll_drag_last_y_ = y;
-            if (scroll_drag_panel_ == 0) {
-                source_follow_ = false;
-                source_scroll_ = std::max(0, source_scroll_ + rows);
-            } else if (scroll_drag_panel_ == 1) {
+        if (scroll_drag_panel_ == 1) {
+            // The disassembly scrollbar covers the full address space; use a
+            // row-rate drag rather than mapping the thumb across 4 GiB.
+            const int rows = (y - scroll_drag_last_y_) / 14;
+            if (rows != 0) {
+                scroll_drag_last_y_ = y;
                 asm_scroll_ += rows;
-            } else if (scroll_drag_panel_ == 2) {
-                cores_scroll_ = std::max(0, cores_scroll_ + rows * 14);
-            } else if (scroll_drag_panel_ == 3) {
-                variables_scroll_ = std::max(0, variables_scroll_ + rows);
-            } else if (scroll_drag_panel_ == 4) {
-                stack_scroll_ = std::max(0, stack_scroll_ + rows);
-            } else if (scroll_drag_panel_ == 5) {
-                breakpoints_scroll_ =
-                    std::max(0, breakpoints_scroll_ + rows);
-            } else if (scroll_drag_panel_ == 6) {
-                console_scroll_ = std::max(0, console_scroll_ + rows);
+            }
+            return;
+        }
+        const auto metrics = scroll_metrics_.find(scroll_drag_panel_);
+        if (metrics != scroll_metrics_.end() && metrics->second.span > 0) {
+            const int next = scroll_offset_for_drag(
+                scroll_drag_origin_offset_, scroll_drag_origin_y_, y,
+                metrics->second.max_offset, metrics->second.span);
+            switch (scroll_drag_panel_) {
+            case 0:
+                source_follow_ = false;
+                source_scroll_ = next;
+                break;
+            case 2:
+                cores_scroll_ = next * 14;
+                break;
+            case 3:
+                variables_scroll_ = next;
+                break;
+            case 4:
+                stack_scroll_ = next;
+                break;
+            case 5:
+                breakpoints_scroll_ = next;
+                break;
+            case 6:
+                console_scroll_ = next;
+                break;
+            default:
+                break;
             }
         }
         return;
@@ -3833,9 +3867,15 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         if (thumb.contains(x, y)) {
             scroll_dragging_ = true;
             scroll_drag_panel_ = panel_id;
+            scroll_drag_origin_y_ = y;
+            scroll_drag_origin_offset_ = offset;
             scroll_drag_last_y_ = y;
         } else {
+            const auto metrics = scroll_metrics_.find(panel_id);
             offset += y < thumb.y ? -page : page;
+            if (metrics != scroll_metrics_.end()) {
+                offset = std::clamp(offset, 0, metrics->second.max_offset);
+            }
         }
         return true;
     };

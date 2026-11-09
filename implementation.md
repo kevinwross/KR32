@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 13:13 -08:00
+> **Last updated:** 2026-11-09 13:39 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2669,6 +2669,10 @@ Newest entries at the bottom. Use the local time zone.
       it now stops at the caller instruction following CALL instead of
       advancing an extra source line. Added a called-function step-out
       regression test.
+- **2026-11-09 13:39 -08:00** — Scrollbar dragging now maps the mouse delta
+      through the thumb travel to the scroll range, so the thumb tracks the
+      cursor instead of moving in 14-pixel jumps. Track paging is clamped to
+      the current range. Added a drag-mapping regression test.
 
 ## 10. Updating this file
 

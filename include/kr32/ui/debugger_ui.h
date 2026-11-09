@@ -120,8 +120,8 @@ private:
     [[nodiscard]] std::string format_fpr(std::uint64_t value, bool scientific) const;
     [[nodiscard]] std::string format_fpr_float(std::uint32_t value, bool scientific) const;
     void draw_variable_tooltip(Canvas& canvas);
-    void draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total, int visible,
-                        Rect& track, Rect& thumb);
+    void draw_scrollbar(Canvas& canvas, Rect panel, int offset, int total,
+                        int visible, Rect& track, Rect& thumb, int panel_id);
     void draw_asm_tooltip(Canvas& canvas);
     void draw_settings(Canvas& canvas);
     void draw_gear(Canvas& canvas, Rect rect, bool hover);
@@ -178,6 +178,8 @@ private:
     int console_line_count_ = 0;
     bool scroll_dragging_ = false;
     int scroll_drag_panel_ = -1;
+    int scroll_drag_origin_y_ = 0;
+    int scroll_drag_origin_offset_ = 0;
     int scroll_drag_last_y_ = 0;
     Rect source_scroll_track_{};
     Rect source_scroll_thumb_{};
@@ -191,6 +193,12 @@ private:
     Rect stack_scroll_thumb_{};
     Rect console_scroll_track_{};
     Rect console_scroll_thumb_{};
+
+    struct ScrollMetrics {
+        int max_offset = 0;
+        int span = 0;
+    };
+    std::map<int, ScrollMetrics> scroll_metrics_;
 
     int editing_register_ = -1;
     std::string register_edit_;
@@ -341,6 +349,11 @@ private:
 [[nodiscard]] std::string format_scalar_value(const std::string& type,
                                               std::uint32_t value,
                                               bool available);
+
+// Maps a drag position to a scrollbar offset. `span` is the thumb travel in
+// pixels and `max_offset` is the scrollable item count.
+[[nodiscard]] int scroll_offset_for_drag(int origin_offset, int origin_y,
+                                        int y, int max_offset, int span);
 
 // Keeps the console pinned to the newest line when it was already at the
 // bottom, while preserving the offset when the user has scrolled upward.
