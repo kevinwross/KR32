@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm copies ranges without values") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[5] = { 1, 2, 1, 3, 1 };\n"
+        "    int target[5] = { 0, 0, 0, 0, 0 };\n"
+        "    int* end = std::remove_copy(source, source + 5, target, 1);\n"
+        "    if (end != target + 2) return 1;\n"
+        "    if (target[0] != 2 || target[1] != 3) return 2;\n"
+        "    char text[6] = \"abaca\";\n"
+        "    char letters[6] = { 0, 0, 0, 0, 0, 0 };\n"
+        "    if (std::remove_copy(text, text + 5, letters, 'a') != letters + 2) return 3;\n"
+        "    if (letters[0] != 'b' || letters[1] != 'c') return 4;\n"
+        "    double reals[3] = { 1.5, 2.5, 1.5 };\n"
+        "    double copied[3] = { 0.0, 0.0, 0.0 };\n"
+        "    return std::remove_copy(reals, reals + 3, copied, 1.5) == copied + 1 ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm copies unique values") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
