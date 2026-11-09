@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 22:19 -08:00
+> **Last updated:** 2026-11-08 22:28 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2544,8 +2544,10 @@ Newest entries at the bottom. Use the local time zone.
       directly to the loop head.
 - **2026-11-08 22:13 -08:00** — C and C++ ternary conditions branch directly
       on comparisons instead of materializing a boolean.
-- **2026-11-08 22:19 -08:00** — C++ arithmetic on two simple locals keeps
-      the left operand in `R1` instead of spilling it to a frame slot.
+- **2026-11-08 22:19 -08:00** — C and C++ arithmetic on two simple locals
+      keeps the left operand in `R1` instead of spilling it to a frame slot.
+- **2026-11-08 22:28 -08:00** — C now uses the register-resident shortcut only
+      when the right operand is a complete higher-precedence expression.
 
 ## 10. Updating this file
 

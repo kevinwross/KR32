@@ -2730,6 +2730,45 @@ private:
         return comparisons == 1;
     }
 
+    static int binary_precedence(std::string_view text) {
+        if (text == "*" || text == "/" || text == "%") return 10;
+        if (text == "+" || text == "-") return 9;
+        if (text == "<<" || text == ">>") return 8;
+        if (text == "<" || text == "<=" || text == ">" || text == ">=") return 7;
+        if (text == "==" || text == "!=") return 6;
+        if (text == "&") return 5;
+        if (text == "^") return 4;
+        if (text == "|") return 3;
+        if (text == "&&") return 2;
+        if (text == "||") return 1;
+        return 0;
+    }
+
+    bool right_operand_complete(const std::vector<std::string>& ops,
+                                const std::string& next) const {
+        if (next == "(" || next == "[" || next == "." ||
+            next == "->" || next == "++" || next == "--") {
+            return false;
+        }
+        if (ops.empty()) {
+            return false;
+        }
+        const int current = binary_precedence(ops.front());
+        const int following = binary_precedence(next);
+        if (following > current) {
+            return false;
+        }
+        if (following == current) {
+            for (const std::string& op : ops) {
+                if (op == next) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        return true;
+    }
+
     bool simple_comparison_before_question() const {
         int depth = 0;
         int comparisons = 0;
@@ -4438,6 +4477,41 @@ private:
                         matched = true;
                         continue;
                     }
+                    if (immediate_operator && scalar_left &&
+                        !is_long_long_type(left) && !left->is_pointer() &&
+                        peek().kind == TokenKind::Identifier &&
+                        right_operand_complete(ops, peek(1).text)) {
+                        const Variable* variable = lookup(peek().text);
+                        if (variable != nullptr &&
+                            !is_long_long_type(variable->type) &&
+                            !is_fp_type(variable->type) &&
+                            !variable->type->is_atomic &&
+                            !variable->type->is_pointer() &&
+                            !variable->is_thread_local &&
+                            variable->type->kind != Type::Kind::Array &&
+                            variable->type->kind != Type::Kind::Struct &&
+                            variable->type->kind != Type::Kind::Union) {
+                            const std::string name = take().text;
+                            emit("    MOV R1, R0");
+                            gen_lvalue_address(name);
+                            gen_load(variable->type);
+                            std::string mnemonic;
+                            if (op == "+") mnemonic = "ADD";
+                            else if (op == "-") mnemonic = "SUB";
+                            else if (op == "*") mnemonic = "MUL";
+                            else if (op == "&") mnemonic = "AND";
+                            else if (op == "|") mnemonic = "OR";
+                            else if (op == "^") mnemonic = "XOR";
+                            else if (op == "<<") mnemonic = "SHL";
+                            else mnemonic =
+                                is_unsigned_scalar(left) ? "SHR" : "SAR";
+                            emit("    " + mnemonic + " R0, R1, R0");
+                            left = is_unsigned_scalar(left) ? type_uint()
+                                                            : type_int();
+                            matched = true;
+                            continue;
+                        }
+                    }
                     push_value(left);
                     TypePtr right = (this->*next)();
                     gen_binary(op, left, right);
@@ -5811,6 +5885,41 @@ private:
                         left = type_int();
                         matched = true;
                         continue;
+                    }
+                    if (immediate_operator && scalar_left &&
+                        !is_long_long_type(left) && !left->is_pointer() &&
+                        peek().kind == TokenKind::Identifier &&
+                        right_operand_complete(ops, peek(1).text)) {
+                        const Variable* variable = lookup(peek().text);
+                        if (variable != nullptr &&
+                            !is_long_long_type(variable->type) &&
+                            !is_fp_type(variable->type) &&
+                            !variable->type->is_atomic &&
+                            !variable->type->is_pointer() &&
+                            !variable->is_thread_local &&
+                            variable->type->kind != Type::Kind::Array &&
+                            variable->type->kind != Type::Kind::Struct &&
+                            variable->type->kind != Type::Kind::Union) {
+                            const std::string name = take().text;
+                            emit("    MOV R1, R0");
+                            gen_lvalue_address(name);
+                            gen_load(variable->type);
+                            std::string mnemonic;
+                            if (op == "+") mnemonic = "ADD";
+                            else if (op == "-") mnemonic = "SUB";
+                            else if (op == "*") mnemonic = "MUL";
+                            else if (op == "&") mnemonic = "AND";
+                            else if (op == "|") mnemonic = "OR";
+                            else if (op == "^") mnemonic = "XOR";
+                            else if (op == "<<") mnemonic = "SHL";
+                            else mnemonic =
+                                is_unsigned_scalar(left) ? "SHR" : "SAR";
+                            emit("    " + mnemonic + " R0, R1, R0");
+                            left = is_unsigned_scalar(left) ? type_uint()
+                                                            : type_int();
+                            matched = true;
+                            continue;
+                        }
                     }
                     push_value(left);
                     TypePtr right = (this->*next)();
