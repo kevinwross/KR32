@@ -7453,6 +7453,68 @@ private:
             effective_arguments.size() > named_parameters) {
             effective_arguments.resize(named_parameters);
         }
+        const auto simple_argument = [&](const Expr& argument) {
+            if (argument.kind == ExprKind::IntegerLiteral ||
+                argument.kind == ExprKind::CharacterLiteral ||
+                argument.kind == ExprKind::BoolLiteral) {
+                return true;
+            }
+            if (argument.kind != ExprKind::Name) {
+                return false;
+            }
+            Local* local = lookup_local(argument.name);
+            if (local == nullptr || local->is_reference ||
+                local->static_global != nullptr) {
+                return false;
+            }
+            const TypePtr type = resolve_type(local->type);
+            return type != nullptr &&
+                   (is_integer(type) || is_pointer(type)) &&
+                   !is_long_long(type) && class_of(type) == nullptr;
+        };
+        bool simple_call = !member_call && !virtual_dispatch &&
+                           lambda_closure_offset < 0 && !function->variadic &&
+                           class_of(resolve_type(function->result)) == nullptr &&
+                           effective_arguments.size() ==
+                               function->parameters.size() &&
+                           effective_arguments.size() <= 4;
+        if (simple_call) {
+            for (std::size_t index = 0;
+                 index < effective_arguments.size(); ++index) {
+                const TypePtr parameter =
+                    resolve_type(function->parameters[index]);
+                if (parameter == nullptr || is_fp(parameter) ||
+                    is_long_long(parameter) ||
+                    parameter->kind == TypeKind::LValueRef ||
+                    parameter->kind == TypeKind::RValueRef ||
+                    class_of(parameter) != nullptr ||
+                    !simple_argument(*effective_arguments[index])) {
+                    simple_call = false;
+                    break;
+                }
+            }
+        }
+        if (simple_call) {
+            for (std::size_t index = effective_arguments.size();
+                 index-- > 0;) {
+                gen_expr(*effective_arguments[index]);
+                if (index != 0) {
+                    emit("    MOV R" + std::to_string(index) + ", R0");
+                }
+            }
+            const std::string call_start = new_label("cs_start");
+            const std::string call_end = new_label("cs_end");
+            const std::string call_landing = new_label("cs_landing");
+            const std::string call_continue = new_label("cs_continue");
+            emit(call_start + ":");
+            emit("    CALL " + function->symbol);
+            emit(call_end + ":");
+            emit("    JMP " + call_continue);
+            emit_unwind_landing(call_landing);
+            emit(call_continue + ":");
+            record_call_site(call_start, call_end, call_landing);
+            return resolve_type(function->result);
+        }
         for (std::size_t index = 0; index < effective_arguments.size(); ++index) {
             if (index >= named_parameters) {
                 if (!function->variadic) {
