@@ -6597,6 +6597,50 @@ private:
                                       false, op)) {
             return Type::make_builtin(BuiltinKind::Int);
         }
+        const auto simple_operand = [&](const Expr& operand) {
+            if (operand.kind == ExprKind::IntegerLiteral ||
+                operand.kind == ExprKind::CharacterLiteral ||
+                operand.kind == ExprKind::BoolLiteral) {
+                return true;
+            }
+            if (operand.kind != ExprKind::Name) {
+                return false;
+            }
+            Local* local = lookup_local(operand.name);
+            if (local == nullptr || local->is_reference ||
+                local->static_global != nullptr) {
+                return false;
+            }
+            const TypePtr type = resolve_type(local->type);
+            return type != nullptr && is_integer(type) &&
+                   !is_long_long(type) &&
+                   type->kind != TypeKind::Array &&
+                   class_of(type) == nullptr;
+        };
+        if (arithmetic && !is_pointer(left_type) && !is_pointer(right_type) &&
+            is_integer(left_type) && is_integer(right_type) &&
+            !is_long_long(left_type) && !is_long_long(right_type) &&
+            simple_operand(*expression.children[0]) &&
+            simple_operand(*expression.children[1])) {
+            const bool unsigned_operation =
+                is_unsigned_operation(left_type, right_type);
+            std::string mnemonic;
+            if (op == "+") mnemonic = "ADD";
+            else if (op == "-") mnemonic = "SUB";
+            else if (op == "*") mnemonic = "MUL";
+            else if (op == "/") mnemonic = unsigned_operation ? "DIV" : "DIVS";
+            else if (op == "%") mnemonic = unsigned_operation ? "MOD" : "MODS";
+            else if (op == "&") mnemonic = "AND";
+            else if (op == "|") mnemonic = "OR";
+            else if (op == "^") mnemonic = "XOR";
+            else if (op == "<<") mnemonic = "SHL";
+            else mnemonic = unsigned_operation ? "SHR" : "SAR";
+            gen_expr(*expression.children[0]);
+            emit("    MOV R1, R0");
+            gen_expr(*expression.children[1]);
+            emit("    " + mnemonic + " R0, R1, R0");
+            return type_of(expression);
+        }
         gen_expr(*expression.children[0]);
         const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
         emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");

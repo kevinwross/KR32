@@ -25,6 +25,8 @@ target-level cleanup.
    - `do`/`while` conditions branch directly to the loop head in both C and
      C++.
    - Ternary conditions branch directly on a comparison in both languages.
+   - C++ arithmetic on two simple locals keeps the left operand in `R1`,
+     avoiding a temporary frame slot.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
