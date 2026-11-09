@@ -148,11 +148,16 @@ public:
         host_.set_file_dialog(std::move(callback));
     }
 
-    void set_breakpoint(std::uint32_t address);
+    void set_breakpoint(std::uint32_t address, bool enabled = true);
+    void set_breakpoint_enabled(std::uint32_t address, bool enabled);
     void clear_breakpoint(std::uint32_t address);
     void clear_breakpoints();
     [[nodiscard]] bool at_breakpoint() const;
+    [[nodiscard]] bool breakpoint_enabled(std::uint32_t address) const;
     [[nodiscard]] const std::set<std::uint32_t>& breakpoints() const { return breakpoints_; }
+    [[nodiscard]] const std::set<std::uint32_t>& disabled_breakpoints() const {
+        return disabled_breakpoints_;
+    }
 
     [[nodiscard]] core::StepResult step();
     [[nodiscard]] core::StepResult step_line_in();
@@ -194,6 +199,7 @@ private:
     vm::Host host_;
     Info info_;
     std::set<std::uint32_t> breakpoints_;
+    std::set<std::uint32_t> disabled_breakpoints_;
     std::vector<ThreadInfo> threads_;
     std::function<std::vector<ThreadInfo>()> thread_provider_;
     std::uint32_t selected_thread_ = 0;

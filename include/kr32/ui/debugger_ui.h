@@ -46,6 +46,9 @@ public:
     [[nodiscard]] bool quit_requested() const { return quit_; }
     [[nodiscard]] const std::string& status() const { return status_; }
     [[nodiscard]] const std::string& source_path() const { return source_view_path_; }
+    [[nodiscard]] std::size_t breakpoint_count() const {
+        return session_.breakpoints().size();
+    }
     [[nodiscard]] const std::string& error() const { return error_; }
 
     [[nodiscard]] bool headless(const std::string& ppm_path);
@@ -59,6 +62,7 @@ private:
         Rect cores;
         Rect memory;
         Rect variables;
+        Rect breakpoints;
         Rect call_stack;
         Rect console;
     };
@@ -93,6 +97,7 @@ private:
     void draw_cores(Canvas& canvas, Rect rect);
     int draw_core_state(Canvas& canvas, Rect rect, std::size_t core_index);
     void draw_variables(Canvas& canvas, Rect rect);
+    void draw_breakpoints(Canvas& canvas, Rect rect);
     void draw_call_stack(Canvas& canvas, Rect rect);
     void draw_memory(Canvas& canvas, Rect rect);
     void draw_console(Canvas& canvas, Rect rect);
@@ -305,6 +310,16 @@ private:
     ContextMenu menu_;
     int hover_row_ = -1;
     bool hover_source_ = false;
+
+    struct BreakpointRow {
+        std::uint32_t address = 0;
+        Rect row{};
+        Rect gutter{};
+    };
+    std::vector<BreakpointRow> breakpoint_rows_;
+    Rect breakpoints_scroll_track_{};
+    Rect breakpoints_scroll_thumb_{};
+    int breakpoints_scroll_ = 0;
 
     struct AsmRow {
         std::uint32_t address = 0;

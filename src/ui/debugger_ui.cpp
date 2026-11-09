@@ -965,11 +965,19 @@ void DebuggerUI::restart() {
     if (!loaded_ || path_.empty()) {
         return;
     }
+    std::vector<std::pair<std::uint32_t, bool>> saved_breakpoints;
+    for (const std::uint32_t address : session_.breakpoints()) {
+        saved_breakpoints.push_back(
+            {address, session_.breakpoint_enabled(address)});
+    }
     std::string error;
     const bool reloaded = os_mode_ ? reload_os(error) : load(path_, error);
     if (!reloaded) {
         error_ = error;
         return;
+    }
+    for (const auto& [address, enabled] : saved_breakpoints) {
+        session_.set_breakpoint(address, enabled);
     }
     status_ = "restarted at " + hex(session_.machine().pc(), 8);
     error_.clear();
@@ -1487,7 +1495,10 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
             source_line_to_address(line_number, address) &&
             session_.breakpoints().find(address) != session_.breakpoints().end();
         if (has_breakpoint) {
-            canvas.fill(Rect{rect.x + 7, y + 5, 7, 8}, kBad);
+            canvas.fill(Rect{rect.x + 7, y + 5, 7, 8},
+                        session_.breakpoint_enabled(address)
+                            ? kBad
+                            : Color{226, 190, 64, 255});
         }
         const std::string number = std::to_string(line_number);
         const int number_width = Canvas::text_width(number, source_role);
@@ -1681,7 +1692,10 @@ void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
         const bool has_breakpoint =
             session_.breakpoints().find(address) != session_.breakpoints().end();
         if (has_breakpoint) {
-            canvas.fill(Rect{rect.x + 8, y + 5, 7, 8}, kBad);
+            canvas.fill(Rect{rect.x + 8, y + 5, 7, 8},
+                        session_.breakpoint_enabled(address)
+                            ? kBad
+                            : Color{226, 190, 64, 255});
         }
         const std::size_t split = text.find(' ');
         const std::string mnemonic =
@@ -2800,6 +2814,86 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
     }
 }
 
+void DebuggerUI::draw_breakpoints(Canvas& canvas, Rect rect) {
+    const auto& breakpoints = session_.breakpoints();
+    draw_panel(canvas, rect,
+               "BREAKPOINTS (" + std::to_string(breakpoints.size()) + ")");
+    breakpoint_rows_.clear();
+    const int line_height = 18;
+    const int top = rect.y + 24;
+    const int visible = std::max(1, (rect.height - 28) / line_height);
+    canvas.fill(Rect{rect.x + 1, top, 22, rect.height - 26}, kPanelAlt);
+    canvas.fill(Rect{rect.x + 22, top, 1, rect.height - 26}, kBorder);
+    const int total = static_cast<int>(breakpoints.size());
+    breakpoints_scroll_ =
+        std::clamp(breakpoints_scroll_, 0, std::max(0, total - visible));
+    draw_scrollbar(canvas, rect, breakpoints_scroll_, total, visible,
+                   breakpoints_scroll_track_, breakpoints_scroll_thumb_);
+    if (breakpoints.empty()) {
+        canvas.text(rect.x + 8, top + 2, "(no breakpoints)", kDim,
+                    FontRole::MonoSmall);
+        return;
+    }
+    int row_index = 0;
+    for (const std::uint32_t address : breakpoints) {
+        if (row_index++ < breakpoints_scroll_) {
+            continue;
+        }
+        const int row = row_index - 1 - breakpoints_scroll_;
+        if (row >= visible) {
+            break;
+        }
+        const int y = top + row * line_height;
+        const bool enabled = session_.breakpoint_enabled(address);
+        const bool hovered =
+            mouse_x_ >= rect.x + 1 && mouse_x_ < rect.x + rect.width - 12 &&
+            mouse_y_ >= y - 1 && mouse_y_ < y + line_height - 1;
+        if (hovered) {
+            canvas.fill(Rect{rect.x + 1, y - 1, rect.width - 14,
+                             line_height},
+                        Color{34, 46, 58, 255});
+        }
+        const Color color =
+            enabled ? kBad : Color{226, 190, 64, 255};
+        canvas.fill(Rect{rect.x + 7, y + 4, 9, 10}, color);
+        canvas.text(rect.x + 25, y + 2, "0x" + hex(address, 8),
+                    enabled ? kText : Color{190, 180, 120, 255},
+                    FontRole::MonoSmall);
+        std::string filename;
+        int source_line = 0;
+        for (const debug::Line& line : session_.info().lines) {
+            if (line.address != address) {
+                continue;
+            }
+            source_line = line.line;
+            const std::string path = source_path_for(line.source);
+            if (!path.empty()) {
+                filename = std::filesystem::path(path).filename().string();
+            }
+            break;
+        }
+        if (filename.empty()) {
+            filename = "<no source>";
+        }
+        const int filename_width =
+            std::max(20, rect.width - 108 - 40);
+        canvas.text(rect.x + 108, y + 2,
+                    trim_to(filename,
+                            static_cast<std::size_t>(filename_width / 7)),
+                    kDim, FontRole::MonoSmall);
+        if (source_line > 0) {
+            const std::string number = std::to_string(source_line);
+            const int number_width =
+                Canvas::text_width(number, FontRole::MonoSmall);
+            canvas.text(rect.x + rect.width - 12 - number_width, y + 2,
+                        number, kDim, FontRole::MonoSmall);
+        }
+        breakpoint_rows_.push_back(
+            {address, Rect{rect.x + 1, y - 1, rect.width - 14, line_height},
+             Rect{rect.x + 4, y + 2, 14, 14}});
+    }
+}
+
 void DebuggerUI::draw_call_stack(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "THREADS / CALL STACK");
     session_.refresh_threads();
@@ -3003,9 +3097,11 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
     const int top_height = bottom_top - kToolbarHeight;
     constexpr int memory_height = 112;
     const int source_height = std::max(120, top_height - memory_height);
-    const int variables_width = width * 42 / 100;
-    const int stack_width = width * 28 / 100;
-    const int console_width = width - variables_width - stack_width;
+    const int variables_width = width * 34 / 100;
+    const int breakpoints_width = width * 22 / 100;
+    const int stack_width = width * 22 / 100;
+    const int console_width =
+        width - variables_width - breakpoints_width - stack_width;
 
     Layout result;
     result.source = Rect{0, kToolbarHeight, source_width, source_height};
@@ -3014,9 +3110,12 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
                         top_height};
     result.memory = Rect{0, kToolbarHeight + source_height, source_width, memory_height};
     result.variables = Rect{0, bottom_top, variables_width, bottom_height};
-    result.call_stack = Rect{variables_width, bottom_top, stack_width, bottom_height};
-    result.console = Rect{variables_width + stack_width, bottom_top, console_width,
-                          bottom_height};
+    result.breakpoints =
+        Rect{variables_width, bottom_top, breakpoints_width, bottom_height};
+    result.call_stack = Rect{variables_width + breakpoints_width, bottom_top,
+                             stack_width, bottom_height};
+    result.console = Rect{variables_width + breakpoints_width + stack_width,
+                          bottom_top, console_width, bottom_height};
     return result;
 }
 
@@ -3300,6 +3399,9 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
             } else if (scroll_drag_panel_ == 4) {
                 stack_scroll_ = std::max(0, stack_scroll_ + rows);
             } else if (scroll_drag_panel_ == 5) {
+                breakpoints_scroll_ =
+                    std::max(0, breakpoints_scroll_ + rows);
+            } else if (scroll_drag_panel_ == 6) {
                 console_scroll_ = std::max(0, console_scroll_ + rows);
             }
         }
@@ -3446,6 +3548,7 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_cores(canvas, areas.cores);
     draw_memory(canvas, areas.memory);
     draw_variables(canvas, areas.variables);
+    draw_breakpoints(canvas, areas.breakpoints);
     draw_call_stack(canvas, areas.call_stack);
     if (os_mode_) {
         std::string output = devices_.serial().take_output();
@@ -3722,8 +3825,10 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         scroll_bar_click(cores_scroll_track_, cores_scroll_thumb_, cores_scroll_, 70, 2) ||
         scroll_bar_click(variables_scroll_track_, variables_scroll_thumb_, variables_scroll_,
                          5, 3) ||
+        scroll_bar_click(breakpoints_scroll_track_,
+                         breakpoints_scroll_thumb_, breakpoints_scroll_, 5, 5) ||
         scroll_bar_click(stack_scroll_track_, stack_scroll_thumb_, stack_scroll_, 5, 4) ||
-        scroll_bar_click(console_scroll_track_, console_scroll_thumb_, console_scroll_, 5, 5)) {
+        scroll_bar_click(console_scroll_track_, console_scroll_thumb_, console_scroll_, 5, 6)) {
         return true;
     }
     if (y < kToolbarHeight) {
@@ -3820,6 +3925,31 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
             return true;
         }
     }
+    for (const BreakpointRow& row : breakpoint_rows_) {
+        if (row.gutter.contains(x, y)) {
+            session_.set_breakpoint_enabled(
+                row.address,
+                !session_.breakpoint_enabled(row.address));
+            status_ = session_.breakpoint_enabled(row.address)
+                          ? "breakpoint enabled at " + hex(row.address, 8)
+                          : "breakpoint disabled at " + hex(row.address, 8);
+            return true;
+        }
+        if (row.row.contains(x, y)) {
+            for (const debug::Line& line : session_.info().lines) {
+                if (line.address != row.address) {
+                    continue;
+                }
+                select_source(line.source);
+                source_scroll_ = std::max(0, line.line - 3);
+                source_follow_ = false;
+                status_ = "breakpoint source: " + source_view_path_ +
+                          ":" + std::to_string(line.line);
+                return true;
+            }
+            return true;
+        }
+    }
     if (x < areas.source.x + kSourceGutter && y >= areas.source.y + 24 &&
         y < areas.source.y + areas.source.height) {
         const int row = (y - (areas.source.y + 24)) / source_line_height(areas.source.width);
@@ -3873,6 +4003,11 @@ bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
     }
     if (areas.variables.contains(x, y)) {
         variables_scroll_ = std::max(0, variables_scroll_ + direction * 1);
+        return true;
+    }
+    if (areas.breakpoints.contains(x, y)) {
+        breakpoints_scroll_ =
+            std::max(0, breakpoints_scroll_ + direction * 1);
         return true;
     }
     if (areas.call_stack.contains(x, y)) {

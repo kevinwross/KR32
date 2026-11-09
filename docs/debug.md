@@ -49,7 +49,8 @@ guest memory.
 and captured console output. It exposes:
 
 - `load`, `machine`, `info`, `dump`
-- `set_breakpoint`, `clear_breakpoint`, `clear_breakpoints`, `at_breakpoint`
+- `set_breakpoint`, `set_breakpoint_enabled`, `clear_breakpoint`,
+  `clear_breakpoints`, `at_breakpoint`, `breakpoint_enabled`
 - `step`, `run`, `step_over`, `step_out`
 - `line_at`, `function_at`, `call_stack`
 - `read_variable`, `read_global`, `read_memory`

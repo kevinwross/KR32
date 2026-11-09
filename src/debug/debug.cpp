@@ -168,6 +168,7 @@ bool Session::load(const container::Image& image, std::string& error) {
         return false;
     }
     breakpoints_.clear();
+    disabled_breakpoints_.clear();
     return true;
 }
 
@@ -213,6 +214,7 @@ bool Session::load_os(const container::Image& kernel,
     info_error.clear();
     (void)set_debug_info(bios, info_error);
     breakpoints_.clear();
+    disabled_breakpoints_.clear();
     return true;
 }
 
@@ -238,6 +240,7 @@ bool Session::load_raw(const std::vector<std::uint8_t>& kernel,
     info_ = {};
     console_.clear();
     breakpoints_.clear();
+    disabled_breakpoints_.clear();
     return true;
 }
 
@@ -366,20 +369,43 @@ void Session::select_thread(std::uint32_t id) {
     }
 }
 
-void Session::set_breakpoint(std::uint32_t address) {
+void Session::set_breakpoint(std::uint32_t address, bool enabled) {
     breakpoints_.insert(address);
+    if (enabled) {
+        disabled_breakpoints_.erase(address);
+    } else {
+        disabled_breakpoints_.insert(address);
+    }
+}
+
+void Session::set_breakpoint_enabled(std::uint32_t address, bool enabled) {
+    if (breakpoints_.find(address) == breakpoints_.end()) {
+        return;
+    }
+    if (enabled) {
+        disabled_breakpoints_.erase(address);
+    } else {
+        disabled_breakpoints_.insert(address);
+    }
 }
 
 void Session::clear_breakpoint(std::uint32_t address) {
     breakpoints_.erase(address);
+    disabled_breakpoints_.erase(address);
 }
 
 void Session::clear_breakpoints() {
     breakpoints_.clear();
+    disabled_breakpoints_.clear();
+}
+
+bool Session::breakpoint_enabled(std::uint32_t address) const {
+    return breakpoints_.find(address) != breakpoints_.end() &&
+           disabled_breakpoints_.find(address) == disabled_breakpoints_.end();
 }
 
 bool Session::at_breakpoint() const {
-    return breakpoints_.find(machine_.pc()) != breakpoints_.end();
+    return breakpoint_enabled(machine_.pc());
 }
 
 core::StepResult Session::step() {
@@ -455,8 +481,7 @@ core::StepResult Session::step_line_out() {
 
 core::StepResult Session::run(std::uint64_t max_steps) {
     core::StepResult result;
-    const std::uint32_t initial_pc = machine_.pc();
-    bool skipped_initial = breakpoints_.find(initial_pc) == breakpoints_.end();
+    bool skipped_initial = !at_breakpoint();
     const bool unlimited = max_steps == 0;
     std::uint64_t step_index = 0;
     while (unlimited || step_index < max_steps) {

@@ -396,6 +396,39 @@ TEST_CASE("libc functions carry switchable source records") {
     CHECK(line->source == libc_source_id);
 }
 
+TEST_CASE("breakpoints can be disabled") {
+    const container::Image image = compile_debug_image(
+        "int main(void) {\n"
+        "    return 0;\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    const debug::Line* line = find_line(info, 2);
+    REQUIRE(line != nullptr);
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const std::uint32_t initial_pc = session.machine().pc();
+    session.set_breakpoint(initial_pc, false);
+    session.set_breakpoint(line->address);
+    (void)session.run();
+    CHECK(session.machine().pc() == line->address);
+    CHECK(session.at_breakpoint());
+    session.clear_breakpoints();
+    session.machine().set_pc(initial_pc);
+    session.set_breakpoint(line->address, false);
+    CHECK(session.breakpoints().count(line->address) == 1);
+    CHECK(!session.breakpoint_enabled(line->address));
+    session.machine().set_pc(line->address);
+    CHECK(!session.at_breakpoint());
+    session.set_breakpoint_enabled(line->address, true);
+    CHECK(session.breakpoint_enabled(line->address));
+    CHECK(session.at_breakpoint());
+    session.clear_breakpoint(line->address);
+    CHECK(session.breakpoints().empty());
+    CHECK(session.disabled_breakpoints().empty());
+}
+
 TEST_CASE("DebugSession stops at breakpoints and inspects frames") {
     const container::Image image = compile_debug_image(
         "int add(int a, int b) {\n"

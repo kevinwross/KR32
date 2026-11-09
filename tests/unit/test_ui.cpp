@@ -172,6 +172,32 @@ TEST_CASE("the settings dialog renders and closes without a loaded image") {
     CHECK(closed.hash() == baseline_hash);
 }
 
+TEST_CASE("breakpoint panel disables and survives reset") {
+    const std::string path = build_ui_test_image();
+    ui::DebuggerUI debugger;
+    std::string error;
+    REQUIRE_MESSAGE(debugger.load(path, error), error.c_str());
+    debugger.toggle_breakpoint_at_current_line();
+    REQUIRE(debugger.breakpoint_count() == 1);
+
+    ui::Canvas enabled(1000, 700);
+    debugger.render(enabled);
+    CHECK(enabled.pixel_at(350, 520) == 0xFFFF6868U);
+
+    CHECK(debugger.click(350, 520, 1000, 700));
+    ui::Canvas disabled(1000, 700);
+    debugger.render(disabled);
+    CHECK(disabled.pixel_at(350, 520) == 0xFFE2BE40U);
+    CHECK(debugger.breakpoint_count() == 1);
+
+    CHECK(debugger.click(320, 15, 1000, 700));
+    ui::Canvas restarted(1000, 700);
+    debugger.render(restarted);
+    CHECK(debugger.breakpoint_count() == 1);
+    CHECK(restarted.pixel_at(350, 520) == 0xFFE2BE40U);
+    std::filesystem::remove(path);
+}
+
 TEST_CASE("source filename opens a source picker and selection follows steps") {
     const std::string path = build_ui_two_source_image();
     ui::DebuggerUI debugger;
@@ -251,12 +277,12 @@ TEST_CASE("running uses the responsive sliced path and clears the RUN highlight"
     debugger.render(before);
     CHECK(before.pixel_at(84, 6) != green);
 
-    debugger.hover(600, 430, 800, 600);
+    debugger.hover(700, 430, 800, 600);
     ui::Canvas hovered(800, 600);
     debugger.render(hovered);
     int green_title_pixels = 0;
     for (int y = 389; y < 409; ++y) {
-        for (int x = 561; x < 680; ++x) {
+        for (int x = 630; x < 795; ++x) {
             if (hovered.pixel_at(x, y) == title_green) {
                 ++green_title_pixels;
             }

@@ -46,6 +46,7 @@ executables load directly.
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
 | Memory | Four-line address/hex/ASCII dump docked under the source pane |
 | Variables | Current function, locals, and globals, always visible |
+| Breakpoints | Address, source filename, and line for every breakpoint; red enabled / yellow disabled |
 | Call stack | Current frames, always visible |
 | Console | Guest console output, always visible |
 
@@ -77,8 +78,8 @@ T0 matrix cell to edit it as a floating-point value. Hovering a T0 cell, the TSP
 pointer, a control register, or PTBR shows a tooltip with the value and its
 meaning. Click a core row to select it or collapse/expand its details. The
 **MEMORY** panel is docked beneath the source pane and shows four
-address/hex/ASCII lines. **VARIABLES**, **CALL STACK**, and **CONSOLE** remain
-visible along the bottom row.
+address/hex/ASCII lines. **VARIABLES**, **BREAKPOINTS**, **CALL STACK**, and
+**CONSOLE** remain visible along the bottom row.
 
 When the pointer is over the **CONSOLE** panel, printable keys, Enter,
 Backspace, and Ctrl-V are routed to the guest serial tty. Enter sends LF,
@@ -145,6 +146,13 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 - Source gutter: breakpoint square column, right-aligned line-number column, separators; source text starts after the gutter.
 - Disassembly gutter: breakpoint square column, right-aligned address column with padding, separators; the instruction column starts after the gutter. It mirrors the source gutter geometry.
 - Left-click a gutter row toggles a breakpoint at that line/instruction.
+- Disabled breakpoints use a yellow square in the source and disassembly
+  gutters; enabled breakpoints use red.
+- The **BREAKPOINTS** panel lists every breakpoint by address, basename, and
+  line. Its left gutter toggles enabled/disabled; clicking the row opens the
+  source line. The right-hand scrollbar scrolls long lists.
+- **RST** reloads the current image and preserves breakpoint addresses and
+  enabled/disabled state.
 - Right-click a source or disassembly gutter row opens the KR16-style menu:
   **Toggle breakpoint** and **Run to line N** / **Run to 0xADDR**.
 - Run-to uses a temporary breakpoint, runs the CPU, and removes the temporary
