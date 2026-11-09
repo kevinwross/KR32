@@ -1,5 +1,28 @@
 #include "cc_test_support.h"
 
+TEST_CASE("c atomic read modify write operations") {
+    const ProgramResult program = compile_and_run(
+        "_Atomic int counter = 3;\n"
+        "int main(void) {\n"
+        "    int old = counter++;\n"
+        "    if (old != 3 || counter != 4) return 1;\n"
+        "    int now = ++counter;\n"
+        "    if (now != 5) return 2;\n"
+        "    counter += 4;\n"
+        "    if (counter != 9) return 3;\n"
+        "    counter -= 2;\n"
+        "    if (counter != 7) return 4;\n"
+        "    counter |= 8;\n"
+        "    if (counter != 15) return 5;\n"
+        "    counter &= 12;\n"
+        "    if (counter != 12) return 6;\n"
+        "    counter ^= 5;\n"
+        "    return counter == 9 ? 0 : 7;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("c atomic declarations use atomic loads and stores") {
     const ProgramResult program = compile_and_run(
         "_Atomic int counter = 3;\n"

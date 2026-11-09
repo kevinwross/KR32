@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 19:04 -08:00
+> **Last updated:** 2026-11-08 19:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2478,6 +2478,8 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-08 19:04 -08:00** — Implemented C `_Atomic` declarations for
       integer, character, and short objects with atomic loads, stores, and
       fences.
+- **2026-11-08 19:08 -08:00** — Added LL/SC read-modify-write for atomic
+      increments, decrements, and integer compound assignments.
 
 ## 10. Updating this file
 

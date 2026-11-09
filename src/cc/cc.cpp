@@ -3843,6 +3843,22 @@ private:
             type->kind == Type::Kind::Union) {
             error("increment/decrement requires a scalar lvalue");
         }
+        if (type->is_atomic && type->kind == Type::Kind::Int &&
+            !is_long_long_type(type)) {
+            const int address_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
+            const std::string loop = new_label("atomic_inc");
+            emit(loop + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+            emit("    LL R1, [R0]");
+            emit("    MOV R2, R1");
+            emit(std::string("    ") + (delta > 0 ? "ADD" : "SUB") +
+                 " R2, R2, #" + std::to_string(delta > 0 ? delta : -delta));
+            emit("    SC R2, [R0]");
+            emit("    JNZ " + loop);
+            emit("    MOV R0, R" + std::string(prefix ? "2" : "1"));
+            return;
+        }
         if (is_fp_type(type)) {
             const int address_slot = allocate_local(type_int());
             emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
@@ -3899,6 +3915,30 @@ private:
     }
 
     void gen_compound_assignment(const TypePtr& type, const std::string& op) {
+        if (type->is_atomic && type->kind == Type::Kind::Int &&
+            !is_long_long_type(type)) {
+            const int address_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
+            TypePtr right = gen_expression();
+            convert_value(right, type);
+            const int value_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(value_slot) + "]");
+            const std::string loop = new_label("atomic_rmw");
+            emit(loop + ":");
+            emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+            emit("    LL R1, [R0]");
+            emit("    LOAD R2, [R7 + " + std::to_string(value_slot) + "]");
+            if (op == "+") emit("    ADD R2, R1, R2");
+            else if (op == "-") emit("    SUB R2, R1, R2");
+            else if (op == "&") emit("    AND R2, R1, R2");
+            else if (op == "|") emit("    OR R2, R1, R2");
+            else if (op == "^") emit("    XOR R2, R1, R2");
+            else error("unsupported atomic compound assignment");
+            emit("    SC R2, [R0]");
+            emit("    JNZ " + loop);
+            emit("    MOV R0, R2");
+            return;
+        }
         if (type->kind == Type::Kind::Array || type->kind == Type::Kind::Struct ||
             type->kind == Type::Kind::Union) {
             error("compound assignment requires a scalar lvalue");
