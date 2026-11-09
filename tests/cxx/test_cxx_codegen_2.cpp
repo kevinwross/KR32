@@ -281,6 +281,28 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm sorts heaps") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 3, 1, 4, 1, 5 };\n"
+        "    std::make_heap(values, values + 5);\n"
+        "    std::sort_heap(values, values + 5);\n"
+        "    if (values[0] != 1 || values[1] != 1 || values[4] != 5) return 1;\n"
+        "    char text[3] = \"cab\";\n"
+        "    std::make_heap(text, text + 3);\n"
+        "    std::sort_heap(text, text + 3);\n"
+        "    if (text[0] != 'a' || text[2] != 'c') return 2;\n"
+        "    double reals[3] = { 1.5, 3.5, 2.5 };\n"
+        "    std::make_heap(reals, reals + 3);\n"
+        "    std::sort_heap(reals, reals + 3);\n"
+        "    return reals[0] == 1.5 && reals[2] == 3.5 ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm builds heaps") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
