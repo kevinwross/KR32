@@ -4270,6 +4270,31 @@ private:
                         matched = true;
                         continue;
                     }
+                    if (comparison && !branch_false_label_.empty() &&
+                        !is_long_long_type(left) && !is_fp_type(left)) {
+                        const std::string false_label = branch_false_label_;
+                        branch_false_label_.clear();
+                        emit("    PUSH R0");
+                        TypePtr right = (this->*next)();
+                        if (!is_long_long_type(right) &&
+                            !is_fp_type(right) && !is_fp_type(left)) {
+                            emit("    MOV R1, R0");
+                            emit("    POP R0");
+                            emit("    CMP R0, R1");
+                            const std::string inverse = inverse_comparison(
+                                op, is_unsigned_scalar(left) ||
+                                        is_unsigned_scalar(right));
+                            emit("    " + inverse + " " + false_label);
+                            condition_branched_ = true;
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
+                        gen_binary(op, left, right);
+                        left = type_int();
+                        matched = true;
+                        continue;
+                    }
                     if (immediate_operator && scalar_left &&
                         !is_long_long_type(left) && !left->is_pointer() &&
                         (peek().kind == TokenKind::Number ||
@@ -5600,6 +5625,31 @@ private:
                         emit("    " + inverse + " " + branch_false_label_);
                         branch_false_label_.clear();
                         condition_branched_ = true;
+                        left = type_int();
+                        matched = true;
+                        continue;
+                    }
+                    if (comparison && !branch_false_label_.empty() &&
+                        !is_long_long_type(left) && !is_fp_type(left)) {
+                        const std::string false_label = branch_false_label_;
+                        branch_false_label_.clear();
+                        emit("    PUSH R0");
+                        TypePtr right = (this->*next)();
+                        if (!is_long_long_type(right) &&
+                            !is_fp_type(right) && !is_fp_type(left)) {
+                            emit("    MOV R1, R0");
+                            emit("    POP R0");
+                            emit("    CMP R0, R1");
+                            const std::string inverse = inverse_comparison(
+                                op, is_unsigned_scalar(left) ||
+                                        is_unsigned_scalar(right));
+                            emit("    " + inverse + " " + false_label);
+                            condition_branched_ = true;
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
+                        gen_binary(op, left, right);
                         left = type_int();
                         matched = true;
                         continue;

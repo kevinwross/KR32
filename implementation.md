@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-08 21:50 -08:00
+> **Last updated:** 2026-11-08 21:56 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2538,6 +2538,8 @@ Newest entries at the bottom. Use the local time zone.
       comparisons branch directly after materializing `0`/`1`.
 - **2026-11-08 21:50 -08:00** — C `if` and `while` comparisons with immediate
       right operands branch directly at `-O0`.
+- **2026-11-08 21:56 -08:00** — C comparisons with register right operands
+      also branch directly at `-O0`.
 
 ## 10. Updating this file
 

@@ -20,8 +20,8 @@ target-level cleanup.
      destructors or active catch require preserving it across cleanup.
    - C and C++ `if` and loop comparisons branch directly from `CMP`
      instead of materializing a 0/1 boolean and testing it again.
-   - C handles immediate right operands at `-O0`; `-O1` folds other C
-     boolean materializations.
+   - C branches directly at `-O0` for both immediate and register right
+     operands; `-O1` folds remaining boolean materializations.
    - C and C++ `if (0)` bodies and `while (0)` loops are not emitted.
    - Only the required language constant-evaluation contexts were previously
      folded; ordinary expressions now use the same evaluation.
