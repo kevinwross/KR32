@@ -1088,6 +1088,23 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std vector resize insert and erase") {
+    const ProgramResult program = compile_and_run(
+        "#include <vector>\n"
+        "int main() {\n"
+        "    std::vector<int> values;\n"
+        "    values.push_back(1);\n"
+        "    values.push_back(3);\n"
+        "    values.insert(1, 2);\n"
+        "    if (values.size() != 3 || values[1] != 2) return 1;\n"
+        "    values.erase(1);\n"
+        "    return values.size() == 2 && values[0] == 1 && values[1] == 3 ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std optional and string view") {
     const ProgramResult program = compile_and_run(
         "#include <optional>\n"
