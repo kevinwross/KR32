@@ -764,6 +764,80 @@ std::string inverse_condition(const std::string& mnemonic) {
     return {};
 }
 
+int fold_comparison_values(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 6 < lines.size(); ++index) {
+        Instruction compare;
+        Instruction branch;
+        if (!parse_instruction(lines[index], compare) ||
+            compare.mnemonic != "CMP" || compare.operands.size() != 2 ||
+            !parse_instruction(lines[index + 1], branch) ||
+            branch.operands.size() != 1) {
+            continue;
+        }
+        const std::string& jump = branch.mnemonic;
+        const bool signed_less = jump == "JLT" || jump == "JLE" ||
+                                 jump == "JGT" || jump == "JGE";
+        const bool unsigned_less = jump == "JNC" || jump == "JLS" ||
+                                   jump == "JHI" || jump == "JCS";
+        if (!signed_less && !unsigned_less) {
+            continue;
+        }
+        const std::string true_label = trim(branch.operands[0]);
+        if (trim(lines[index + 2]) != "MOV R0, #0") {
+            continue;
+        }
+        Instruction skip;
+        if (!parse_instruction(lines[index + 3], skip) ||
+            skip.mnemonic != "JMP" || skip.operands.size() != 1) {
+            continue;
+        }
+        const std::string end_label = trim(skip.operands[0]);
+        if (trim(lines[index + 4]) != true_label + ":" ||
+            trim(lines[index + 5]) != "MOV R0, #1" ||
+            trim(lines[index + 6]) != end_label + ":") {
+            continue;
+        }
+        std::size_t after = index + 7;
+        while (after < lines.size() && lines[after].empty()) {
+            ++after;
+        }
+        if (after < lines.size()) {
+            Instruction following;
+            if (parse_instruction(lines[after], following) &&
+                is_conditional_jump(following.mnemonic)) {
+                continue;
+            }
+        }
+        const std::string mnemonic = unsigned_less ? "SLTU" : "SLT";
+        std::string result;
+        if (jump == "JLT" || jump == "JNC" || jump == "JGE" ||
+            jump == "JCS") {
+            result = "    " + mnemonic + " R0, " + compare.operands[0] +
+                     ", " + compare.operands[1];
+        } else {
+            int right = 0;
+            if (!parse_register(compare.operands[1], right)) {
+                continue;
+            }
+            result = "    " + mnemonic + " R0, " + compare.operands[1] +
+                     ", " + compare.operands[0];
+        }
+        lines[index] = result;
+        if (jump == "JLE" || jump == "JGT" || jump == "JGE" ||
+            jump == "JLS" || jump == "JHI" || jump == "JCS") {
+            lines[index + 1] = "    XOR R0, R0, #1";
+        } else {
+            lines[index + 1].clear();
+        }
+        for (std::size_t clear = index + 2; clear <= index + 6; ++clear) {
+            lines[clear].clear();
+        }
+        removed += 5;
+    }
+    return removed;
+}
+
 int fold_boolean_branches(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 8 < lines.size(); ++index) {
@@ -1159,6 +1233,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_frame_addresses(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
     stats.removed += fold_immediate_consumers(lines);
+    stats.removed += fold_comparison_values(lines);
     stats.removed += fold_boolean_branches(lines);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += remove_dead_moves(lines);

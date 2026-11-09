@@ -37,6 +37,26 @@ TEST_CASE("assembly optimizer folds pointer load offsets") {
     CHECK(assembly.find("ADD R0, R0, #4") == std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds comparison values") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    CMP R0, R1\n"
+        "    JLT .Ltrue_1\n"
+        "    MOV R0, #0\n"
+        "    JMP .Lcmpend_2\n"
+        ".Ltrue_1:\n"
+        "    MOV R0, #1\n"
+        ".Lcmpend_2:\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 5);
+    CHECK(assembly.find("SLT R0, R0, R1") != std::string::npos);
+    CHECK(assembly.find("JLT .Ltrue_1") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer removes repeated frame loads") {
     std::string assembly =
         ".text\n"

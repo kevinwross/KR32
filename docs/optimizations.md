@@ -106,7 +106,12 @@ target-level cleanup.
 9. **Zero frame adjustments**
    - Removes `ADJSP #0` and `ADJSP #-0` from functions with no locals.
 
-10. **Boolean branch folding**
+10. **Comparison value folding**
+   - Rewrites ordered comparisons materialized as `0`/`1` into `SLT`/`SLTU`
+     plus an optional `XOR #1`.
+   - Equality comparisons keep the branch form.
+
+11. **Boolean branch folding**
    - Recognizes a comparison materialized to `0`/`1` and immediately tested
      again, and replaces the sequence with one inverse conditional branch.
    - Applies to C condition code and other front ends that materialize booleans.
