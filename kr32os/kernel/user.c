@@ -1,31 +1,36 @@
 #include "console.h"
 #include "initrd.h"
 #include "memory.h"
+#include "page.h"
 #include "process.h"
+#include "syscall.h"
 #include "user_memory.h"
 
 const unsigned char *initrd_address(void);
 
 void kernel_enter_user(unsigned int entry, unsigned int stack);
 
-#define USER_MAX_PAGES 16
+typedef mem_phys_t user_frame_list_t[16]; /* USER_MAX_PAGES */
 
 mem_phys_t user_virt_to_phys(mem_virt_t address) {
     unsigned int *directory =
         (unsigned int *)mem_phys_to_virt(USER_PAGE_DIRECTORY_PHYS);
-    const unsigned int directory_index = address >> 22;
+    const unsigned int directory_index = address >> PAGE_DIRECTORY_SHIFT;
     const unsigned int directory_entry = directory[directory_index];
-    if ((directory_entry & 5) != 5) {
+    if ((directory_entry & (PAGE_PRESENT | PAGE_USER)) !=
+        (PAGE_PRESENT | PAGE_USER)) {
         return MEM_PHYS_NONE;
     }
     unsigned int *table =
-        (unsigned int *)mem_phys_to_virt(directory_entry & 0xFFFFF000U);
-    const unsigned int table_index = (address >> 12) & 0x3FF;
+        (unsigned int *)mem_phys_to_virt(directory_entry & PAGE_FRAME_MASK);
+    const unsigned int table_index =
+        (address >> PAGE_TABLE_SHIFT) & PAGE_TABLE_INDEX_MASK;
     const unsigned int table_entry = table[table_index];
-    if ((table_entry & 5) != 5) {
+    if ((table_entry & (PAGE_PRESENT | PAGE_USER)) !=
+        (PAGE_PRESENT | PAGE_USER)) {
         return MEM_PHYS_NONE;
     }
-    return (table_entry & 0xFFFFF000U) | (address & 0xFFFU);
+    return (table_entry & PAGE_FRAME_MASK) | (address & PAGE_OFFSET_MASK);
 }
 
 static void setup_user_pages(void) {
@@ -37,19 +42,23 @@ static void setup_user_pages(void) {
         (unsigned int *)mem_phys_to_virt(USER_STACK_PAGE_TABLE_PHYS);
 
     unsigned int index = 0;
-    while (index < 1024) {
+    while (index < PAGE_TABLE_ENTRIES) {
         code[index] = 0;
         ++index;
     }
-    directory[1] = USER_CODE_PAGE_TABLE_PHYS | 5; // V | U
+    directory[USER_CODE_PDE_INDEX] =
+        USER_CODE_PAGE_TABLE_PHYS | PAGE_PRESENT | PAGE_USER;
 
     // Stack virtual pages 0x07E01000..0x07EFFFFF map the same physical
     // window; 0x07E00000 remains the guard page.
-    for (index = 0x201; index < 0x300; ++index) {
-        stack[index] = (USER_STACK_PHYS_BASE + index * 4096) | 7; // V | W | U
+    for (index = USER_STACK_FIRST_PTE_INDEX;
+         index < USER_STACK_LAST_PTE_INDEX; ++index) {
+        stack[index] =
+            (USER_STACK_PHYS_BASE + index * PAGE_SIZE) | PAGE_USER_RW;
     }
-    stack[0x200] = 0;
-    directory[0x1F] = USER_STACK_PAGE_TABLE_PHYS | 5; // V | U
+    stack[USER_STACK_GUARD_PTE_INDEX] = 0;
+    directory[USER_STACK_PDE_INDEX] =
+        USER_STACK_PAGE_TABLE_PHYS | PAGE_PRESENT | PAGE_USER;
 }
 
 int run_named(const char *name);
@@ -67,23 +76,30 @@ static int name_equal(const char *left, const char *right) {
     return *left == '\0' && *right == '\0';
 }
 
-static const struct initrd_entry *initrd_entries(void) {
-    const unsigned char *initrd = initrd_address();
-    const struct initrd_header *header = (const struct initrd_header *)initrd;
-    if (header->magic != 0x4932334B || header->version != 1) {
+static const struct initrd_header *initrd_header(void) {
+    const struct initrd_header *header =
+        (const struct initrd_header *)initrd_address();
+    if (header->magic != INITRD_MAGIC || header->version != INITRD_VERSION) {
         return 0;
     }
-    return (const struct initrd_entry *)(initrd + sizeof(struct initrd_header));
+    return header;
+}
+
+static const struct initrd_entry *initrd_entries(void) {
+    const struct initrd_header *header = initrd_header();
+    if (header == 0) {
+        return 0;
+    }
+    return (const struct initrd_entry *)((const unsigned char *)header +
+                                         sizeof(struct initrd_header));
 }
 
 static const struct initrd_entry *find_entry(const char *name) {
-    const unsigned char *initrd = initrd_address();
-    const struct initrd_header *header = (const struct initrd_header *)initrd;
-    if (header->magic != 0x4932334B || header->version != 1) {
+    const struct initrd_header *header = initrd_header();
+    const struct initrd_entry *entries = initrd_entries();
+    if (header == 0 || entries == 0) {
         return 0;
     }
-    const struct initrd_entry *entries =
-        (const struct initrd_entry *)(initrd + sizeof(struct initrd_header));
     unsigned int index = 0;
     while (index < header->count) {
         if (name_equal(entries[index].name, name)) {
@@ -95,12 +111,11 @@ static const struct initrd_entry *find_entry(const char *name) {
 }
 
 void initrd_list(void) {
+    const struct initrd_header *header = initrd_header();
     const struct initrd_entry *entries = initrd_entries();
-    if (entries == 0) {
+    if (header == 0 || entries == 0) {
         return;
     }
-    const struct initrd_header *header =
-        (const struct initrd_header *)initrd_address();
     unsigned int index = 0;
     while (index < header->count) {
         console_write(entries[index].name);
@@ -131,17 +146,19 @@ int run_named(const char *name) {
     if (entry == 0) {
         return -1;
     }
-    if (entry->size == 0 || entry->size > USER_MAX_PAGES * 4096 ||
+    const unsigned int code_limit = USER_MAX_PAGES * PAGE_SIZE;
+    if (entry->size == 0 || entry->size > code_limit ||
         entry->entry < USER_CODE_VA ||
-        entry->entry >= USER_CODE_VA + USER_MAX_PAGES * 4096) {
+        entry->entry >= USER_CODE_VA + code_limit) {
         return -1;
     }
 
     setup_user_pages();
     unsigned int *code =
         (unsigned int *)mem_phys_to_virt(USER_CODE_PAGE_TABLE_PHYS);
-    const unsigned int pages = (entry->size + 4095) / 4096;
-    mem_phys_t frames[16];
+    const unsigned int pages =
+        (entry->size + PAGE_OFFSET_MASK) / PAGE_SIZE;
+    user_frame_list_t frames;
     const unsigned char *source = initrd_address() + entry->offset;
 
     unsigned int index = 0;
@@ -157,22 +174,23 @@ int run_named(const char *name) {
         frames[index] = frame;
         // Map the frame writable just long enough for the kernel to copy the
         // image through the user virtual address; then drop W before entry.
-        code[index] = frame | 15; // V | W | U | X
+        code[index] = frame | PAGE_USER_RWX;
 
         unsigned char *destination =
-            (unsigned char *)(USER_CODE_VA + index * 4096);
-        const unsigned int start = index * 4096;
+            (unsigned char *)(USER_CODE_VA + (index << PAGE_TABLE_SHIFT));
+        const unsigned int start = index << PAGE_TABLE_SHIFT;
         unsigned int offset = 0;
-        while (offset < 4096 && start + offset < entry->size) {
+        while (offset < PAGE_SIZE && start + offset < entry->size) {
             destination[offset] = source[start + offset];
             ++offset;
         }
-        code[index] = frame | 13; // V | U | X
+        code[index] = frame | PAGE_USER_RX;
         ++index;
     }
 
-    unsigned int *exit_status = (unsigned int *)0x0006F000;
-    *exit_status = 0;
+    volatile struct syscall_scratch *scratch =
+        (volatile struct syscall_scratch *)SYSCALL_SCRATCH_PHYS;
+    scratch->result = 0;
     int pid = process_spawn(name);
     if (pid < 0) {
         index = 0;
@@ -183,7 +201,7 @@ int run_named(const char *name) {
         return pid;
     }
     kernel_enter_user(entry->entry, USER_STACK_TOP_VA);
-    int status = (int)*exit_status;
+    int status = (int)scratch->result;
     (void)process_exit(pid, status);
     (void)process_reap(pid);
 

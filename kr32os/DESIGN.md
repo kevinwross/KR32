@@ -26,6 +26,28 @@ notes:
   sources.
 
 
+### Layout and MMIO constants
+
+The C sources keep hardware and memory-layout knowledge out of call sites:
+
+- `kernel/page.h` defines page size, table geometry, frame masks, and PTE/PDE
+  permission bits.
+- `kernel/memory_map.h` defines the bitmap size, low-memory reservation, heap
+  window, and identity-mapped user-stack window.
+- `kernel/user_memory.h` defines user virtual addresses, page-table frames,
+  PDE/PTE indices, and the user image limit.
+- `kernel/mmio.h` overlays `struct serial_registers`, `struct timer_registers`,
+  and `struct irq_router` on the fixed MMIO windows.
+- `kernel/syscall.h` owns the scratch-page layout and vector numbers.
+- `kernel/trap.h` names the trap-frame words and user-mode flag.
+- `kernel/errno.h` names the negative errno values used by syscalls and process
+  management.
+
+The BIOS and assembly stubs mirror the same names with `.equ` directives where
+the assembler cannot include C headers. The OS C compiler currently accepts only
+literal array bounds, so fixed-size arrays use small typedefs with the named
+limit in a comment (for example, `process_name_t[32]`).
+
 ## Confirmed decisions
 
 - KR32OS targets KR32 only; host compilers never build its sources.

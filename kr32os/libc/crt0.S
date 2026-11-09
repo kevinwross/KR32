@@ -1,6 +1,8 @@
+.equ SYSCALL_EXIT, 64
+
     .text
     .global _start
 _start:
     CALL main
-    SYSCALL #64
+    SYSCALL #SYSCALL_EXIT
     HALT

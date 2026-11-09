@@ -3,6 +3,9 @@
 #include "process.h"
 #include "timer.h"
 
+#define SHELL_LINE_MAX 128
+#define SHELL_BACKSPACE 0x7FU
+
 void kernel_halt(int status);
 void kernel_break(void);
 void initrd_list(void);
@@ -39,7 +42,7 @@ static void read_line(char *buffer, int capacity) {
             buffer[length] = '\0';
             return;
         }
-        if (character == 0x7F || character == '\b') {
+        if (character == SHELL_BACKSPACE || character == '\b') {
             if (length > 0) {
                 --length;
                 console_putc('\b');
@@ -63,7 +66,7 @@ static void run_command(const char *line) {
     if (string_equal(line, "help")) {
         console_write("help echo clear mem ps ls cat run exit\n");
     } else if (starts_with(line, "echo")) {
-        const char *argument = line + 4;
+        const char *argument = line + (sizeof("echo") - 1);
         while (*argument == ' ') ++argument;
         console_write(argument);
         console_putc('\n');
@@ -82,12 +85,12 @@ static void run_command(const char *line) {
     } else if (string_equal(line, "ls")) {
         initrd_list();
     } else if (starts_with(line, "cat ")) {
-        const char *name = line + 4;
+        const char *name = line + (sizeof("cat") - 1);
         if (initrd_cat(name) != 0) {
             console_write("cat: file not found\n");
         }
     } else if (starts_with(line, "run")) {
-        const char *name = line + 3;
+        const char *name = line + (sizeof("run") - 1);
         while (*name == ' ') ++name;
         if (*name == '\0') name = "init";
         int status = run_named(name);
@@ -109,8 +112,10 @@ static void run_command(const char *line) {
     }
 }
 
+typedef char shell_line_t[128]; /* SHELL_LINE_MAX */
+
 void shell_run(void) {
-    char line[128];
+    shell_line_t line;
     for (;;) {
         console_write("> ");
         read_line(line, (int)sizeof(line));

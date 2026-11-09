@@ -3,6 +3,11 @@ import struct
 import sys
 import zlib
 
+META_MAGIC = 0x4D32334B
+META_VERSION = 1
+META_HEADER = struct.Struct("<IIIIII")
+KERNEL_BASE = 0x00020000
+
 kernel_path, map_path, meta_path = sys.argv[1:4]
 addresses = {}
 with open(map_path, "r", encoding="utf-8") as handle:
@@ -13,12 +18,11 @@ with open(map_path, "r", encoding="utf-8") as handle:
 start = addresses["__initrd_start"]
 end = addresses["__initrd_end"]
 image = open(kernel_path, "rb").read()
-meta = struct.pack(
-    "<IIIIII",
-    0x4D32334B,
-    1,
-    0x00020000,
-    start - 0x00020000,
+meta = META_HEADER.pack(
+    META_MAGIC,
+    META_VERSION,
+    KERNEL_BASE,
+    start - KERNEL_BASE,
     end - start,
     zlib.crc32(image) & 0xFFFFFFFF,
 )

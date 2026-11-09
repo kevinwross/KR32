@@ -1,21 +1,26 @@
+#include "mmio.h"
 #include "timer.h"
+
+#define TIMER_RELOAD_TICKS 10000U
 
 static unsigned int ticks = 0;
 
 void timer_init(void) {
-    unsigned int *reload = (unsigned int *)0xFFF00004;
-    unsigned int *irq = (unsigned int *)0xFFF00010;
-    unsigned int *control = (unsigned int *)0xFFF00000;
-    unsigned int *route = (unsigned int *)0xFFF03000;
-    *route = 1;
-    *reload = 10000;
-    *irq = 0;
-    *control = 7;
+    volatile struct timer_registers *timer =
+        (volatile struct timer_registers *)TIMER_BASE;
+    volatile struct irq_router *router =
+        (volatile struct irq_router *)IRQ_ROUTER_BASE;
+    router->route[IRQ_ROUTE_TIMER] = IRQ_CORE1;
+    timer->reload = TIMER_RELOAD_TICKS;
+    timer->irq = 0;
+    timer->control =
+        TIMER_CONTROL_ENABLE | TIMER_CONTROL_PERIODIC | TIMER_CONTROL_IRQ;
 }
 
 void timer_tick(void) {
-    unsigned int *status = (unsigned int *)0xFFF0000C;
-    *status = 1;
+    volatile struct timer_registers *timer =
+        (volatile struct timer_registers *)TIMER_BASE;
+    timer->status = TIMER_STATUS_PENDING;
     ++ticks;
 }
 

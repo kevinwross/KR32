@@ -1,14 +1,12 @@
 #include "console.h"
-
-#define SERIAL_RX_READY 1
-#define SERIAL_TX_READY 2
+#include "mmio.h"
 
 void console_putc(char character) {
-    unsigned int *status = (unsigned int *)0xFFF05004;
-    unsigned int *data = (unsigned int *)0xFFF05000;
-    while ((*status & SERIAL_TX_READY) == 0) {
+    volatile struct serial_registers *serial =
+        (volatile struct serial_registers *)SERIAL_BASE;
+    while ((serial->status & SERIAL_TX_READY) == 0) {
     }
-    *data = (unsigned int)character;
+    serial->data = (unsigned int)character;
 }
 
 void console_write(const char *text) {
@@ -37,12 +35,12 @@ void console_write_uint(unsigned int value) {
 }
 
 int console_getc(void) {
-    unsigned int *status = (unsigned int *)0xFFF05004;
-    unsigned int *data = (unsigned int *)0xFFF05000;
-    if ((*status & SERIAL_RX_READY) == 0) {
+    volatile struct serial_registers *serial =
+        (volatile struct serial_registers *)SERIAL_BASE;
+    if ((serial->status & SERIAL_RX_READY) == 0) {
         return -1;
     }
-    return (int)(*data & 0xFF);
+    return (int)(serial->data & SERIAL_DATA_MASK);
 }
 
 void console_clear(void) {

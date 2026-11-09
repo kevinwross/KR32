@@ -1,19 +1,27 @@
 import struct
 import sys
 
+INITRD_MAGIC = 0x4932334B
+INITRD_VERSION = 1
+INITRD_NAME_SIZE = 32
+USER_CODE_BASE = 0x00400000
+HEADER = struct.Struct("<III")
+ENTRY = struct.Struct("<32sIII")
+
 user_path, fault_path, wx_path, archive_path, assembly_path = sys.argv[1:6]
 programs = [
     ("init", open(user_path, "rb").read()),
     ("fault", open(fault_path, "rb").read()),
     ("wx", open(wx_path, "rb").read()),
 ]
-header = struct.pack("<III", 0x4932334B, 1, len(programs))
-payload_offset = 12 + len(programs) * 44
+header = HEADER.pack(INITRD_MAGIC, INITRD_VERSION, len(programs))
+payload_offset = HEADER.size + len(programs) * ENTRY.size
 table = b""
 payload = b""
 for name, data in programs:
-    table += name.encode("ascii").ljust(32, b"\0")
-    table += struct.pack("<III", payload_offset + len(payload), len(data), 0x00400000)
+    encoded = name.encode("ascii").ljust(INITRD_NAME_SIZE, b"\0")
+    table += ENTRY.pack(encoded, payload_offset + len(payload), len(data),
+                        USER_CODE_BASE)
     payload += data
 archive = header + table + payload
 with open(archive_path, "wb") as handle:

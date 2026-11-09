@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 12:00 -08:00
+> **Last updated:** 2026-11-09 12:31 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2654,6 +2654,11 @@ Newest entries at the bottom. Use the local time zone.
       gutter sets an enabled breakpoint, clicking a breakpoint toggles
       enabled/disabled, and the context menu sets or removes it. F9 follows
       the same toggle rule.
+- **2026-11-09 12:31 -08:00** — Refactored KR32OS layout and MMIO access around
+      `page.h`, `memory_map.h`, `user_memory.h`, `mmio.h`, `syscall.h`,
+      `trap.h`, and `errno.h`. Serial/timer/IRQ registers now use volatile
+      structs; BIOS and assembly constants use `.equ`; syscall/initrd/build
+      helpers use named ABI constants. Rebuilt and re-embedded both OS images.
 
 ## 10. Updating this file
 

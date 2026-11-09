@@ -5,6 +5,9 @@ here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 root="$(dirname "$here")"
 build="${KR32OS_BUILD_DIR:-$here/build/linux}"
 opt="${KR32OS_OPT:--O1}"
+bios_base=0xFFFF0000
+kernel_base=0x00020000
+user_base=0x00400000
 
 if [[ -z "${KR32:-}" ]]; then
     for candidate in \
@@ -27,8 +30,8 @@ fi
 
 mkdir -p "$build"
 "$KR32" as "$here/bios/entry.S" --object -o "$build/bios.o"
-"$KR32" ld "$build/bios.o" --flat --base 0xFFFF0000 --sym "$build/bios.sym" -o "$build/bios.bin"
-"$KR32" ld "$build/bios.o" --base 0xFFFF0000 -o "$build/bios.k32"
+"$KR32" ld "$build/bios.o" --flat --base "$bios_base" --sym "$build/bios.sym" -o "$build/bios.bin"
+"$KR32" ld "$build/bios.o" --base "$bios_base" -o "$build/bios.k32"
 "$KR32" cc "$here/kernel/main.c" --source-id 1 $opt -S -o "$build/kernel.s"
 "$KR32" as "$build/kernel.s" --object -o "$build/kernel.o"
 "$KR32" cc "$here/kernel/console.c" --source-id 2 $opt -S -o "$build/console.s"
@@ -60,22 +63,22 @@ mkdir -p "$build"
 "$KR32" cc "$here/user/wx.c" $opt -S -o "$build/user_wx.s"
 "$KR32" as "$build/user_wx.s" --object -o "$build/user_wx.o"
 "$KR32" ld "$build/crt0.o" "$build/user_init.o" "$build/user_syscall.o" \
-    --flat --base 0x00400000 -o "$build/init.bin"
+    --flat --base "$user_base" -o "$build/init.bin"
 "$KR32" ld "$build/crt0.o" "$build/user_fault.o" "$build/user_syscall.o" \
-    --flat --base 0x00400000 -o "$build/fault.bin"
+    --flat --base "$user_base" -o "$build/fault.bin"
 "$KR32" ld "$build/crt0.o" "$build/user_wx.o" "$build/user_syscall.o" \
-    --flat --base 0x00400000 -o "$build/wx.bin"
+    --flat --base "$user_base" -o "$build/wx.bin"
 python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/wx.bin" "$build/initrd.bin" "$build/initrd.s"
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
-    --flat --base 0x00020000 --map "$build/kernel.map" --sym "$build/kernel.sym" -o "$build/kernel.bin"
+    --flat --base "$kernel_base" --map "$build/kernel.map" --sym "$build/kernel.sym" -o "$build/kernel.bin"
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
-    --base 0x00020000 -o "$build/kernel.k32"
+    --base "$kernel_base" -o "$build/kernel.k32"
 python3 "$here/tools/mkmeta.py" "$build/kernel.bin" "$build/kernel.map" "$build/kernel.meta"
 
 echo "KR32OS M4 built:"

@@ -44,6 +44,9 @@ if (-not $Out) { $Out = Join-Path $here 'build\windows' }
 if (-not $Opt) { $Opt = $env:KR32OS_OPT }
 if (-not $Opt) { $Opt = '-O1' }
 $build = $Out
+$biosBase = '0xFFFF0000'
+$kernelBase = '0x00020000'
+$userBase = '0x00400000'
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
 function Invoke-Kr32 {
@@ -94,8 +97,8 @@ $kernelSym = Join-Path $build 'kernel.sym'
 $kernelMeta = Join-Path $build 'kernel.meta'
 
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'bios\entry.S'), '--object', '-o', $biosObject)
-Invoke-Kr32 -Arguments @('ld', $biosObject, '--flat', '--base', '0xFFFF0000', '--sym', $biosSym, '-o', $bios)
-Invoke-Kr32 -Arguments @('ld', $biosObject, '--base', '0xFFFF0000', '-o', $biosK32)
+Invoke-Kr32 -Arguments @('ld', $biosObject, '--flat', '--base', $biosBase, '--sym', $biosSym, '-o', $bios)
+Invoke-Kr32 -Arguments @('ld', $biosObject, '--base', $biosBase, '-o', $biosK32)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '--source-id', '1', $Opt, '-S', '-o', $kernelAssembly)
 Invoke-Kr32 -Arguments @('as', $kernelAssembly, '--object', '-o', $kernelObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '--source-id', '2', $Opt, '-S', '-o', $consoleAssembly)
@@ -124,7 +127,7 @@ Invoke-Kr32 -Arguments @('as', $userInitAssembly, '--object', '-o', $userInitObj
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\crt0.S'), '--object', '-o', $userCrtObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\syscall.S'), '--object', '-o', $userSyscallObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userInitObject, $userSyscallObject,
-                        '--flat', '--base', '0x00400000', '-o', $userImage)
+                        '--flat', '--base', $userBase, '-o', $userImage)
 
 $userFaultAssembly = Join-Path $build 'user_fault.s'
 $userFaultObject = Join-Path $build 'user_fault.o'
@@ -135,33 +138,43 @@ $userWxImage = Join-Path $build 'wx.bin'
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\fault.c'), $Opt, '-S', '-o', $userFaultAssembly)
 Invoke-Kr32 -Arguments @('as', $userFaultAssembly, '--object', '-o', $userFaultObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userFaultObject, $userSyscallObject,
-                        '--flat', '--base', '0x00400000', '-o', $userFaultImage)
+                        '--flat', '--base', $userBase, '-o', $userFaultImage)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\wx.c'), $Opt, '-S', '-o', $userWxAssembly)
 Invoke-Kr32 -Arguments @('as', $userWxAssembly, '--object', '-o', $userWxObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userWxObject, $userSyscallObject,
-                        '--flat', '--base', '0x00400000', '-o', $userWxImage)
+                        '--flat', '--base', $userBase, '-o', $userWxImage)
 
 # Build the K32I initrd with init and fault entries.
 $userBytes = [System.IO.File]::ReadAllBytes($userImage)
 $faultBytes = [System.IO.File]::ReadAllBytes($userFaultImage)
 $wxBytes = [System.IO.File]::ReadAllBytes($userWxImage)
-$payloadOffset = 12 + 3 * 44
+$initrdMagic = [uint32]0x4932334B
+$initrdVersion = [uint32]1
+$initrdHeaderSize = 12
+$initrdEntrySize = 44
+$initrdNameSize = 32
+$initrdEntryOffsetOffset = 32
+$initrdEntryOffsetSize = 36
+$initrdEntryOffsetEntry = 40
+$userCodeBase = [uint32]$userBase
+$initrdEntryCount = 3
+$payloadOffset = $initrdHeaderSize + $initrdEntryCount * $initrdEntrySize
 $initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length)
-[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]0x4932334B), 0, $initrdBytes, 0, 4)
-[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]1), 0, $initrdBytes, 4, 4)
-[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]3), 0, $initrdBytes, 8, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes($initrdMagic), 0, $initrdBytes, 0, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes($initrdVersion), 0, $initrdBytes, 4, 4)
+[System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$initrdEntryCount), 0, $initrdBytes, 8, 4)
 $entries = @(
     @{ Name = 'init'; Offset = $payloadOffset; Size = $userBytes.Length; Bytes = $userBytes },
     @{ Name = 'fault'; Offset = $payloadOffset + $userBytes.Length; Size = $faultBytes.Length; Bytes = $faultBytes },
     @{ Name = 'wx'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length; Size = $wxBytes.Length; Bytes = $wxBytes }
 )
-for ($index = 0; $index -lt 3; ++$index) {
-    $entryOffset = 12 + $index * 44
+for ($index = 0; $index -lt $initrdEntryCount; ++$index) {
+    $entryOffset = $initrdHeaderSize + $index * $initrdEntrySize
     $nameBytes = [System.Text.Encoding]::ASCII.GetBytes($entries[$index].Name)
     [System.Array]::Copy($nameBytes, 0, $initrdBytes, $entryOffset, $nameBytes.Length)
-    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$entries[$index].Offset), 0, $initrdBytes, $entryOffset + 32, 4)
-    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$entries[$index].Size), 0, $initrdBytes, $entryOffset + 36, 4)
-    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]0x00400000), 0, $initrdBytes, $entryOffset + 40, 4)
+    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$entries[$index].Offset), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetOffset, 4)
+    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$entries[$index].Size), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetSize, 4)
+    [System.Array]::Copy([System.BitConverter]::GetBytes($userCodeBase), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetEntry, 4)
     [System.Array]::Copy($entries[$index].Bytes, 0, $initrdBytes, $entries[$index].Offset, $entries[$index].Size)
 }
 [System.IO.File]::WriteAllBytes($initrd, $initrdBytes)
@@ -185,12 +198,12 @@ Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
-                        '--flat', '--base', '0x00020000', '--map', $kernelMap,
+                        '--flat', '--base', $kernelBase, '--map', $kernelMap,
                         '--sym', $kernelSym, '-o', $kernel)
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
-                        '--base', '0x00020000', '-o', $kernelK32)
+                        '--base', $kernelBase, '-o', $kernelK32)
 
 # Generate kernel.meta from the linker map and kernel image.
 $mapLines = Get-Content -LiteralPath $kernelMap

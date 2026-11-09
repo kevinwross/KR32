@@ -1,30 +1,33 @@
 #include "console.h"
+#include "errno.h"
 #include "memory.h"
+#include "syscall.h"
 #include "user_memory.h"
 
 void sys_exit(int status) {
-    // Kernel scratch page, identity-mapped low memory.
-    unsigned int *result = (unsigned int *)0x0006F000;
-    *result = (unsigned int)status;
+    volatile struct syscall_scratch *scratch =
+        (volatile struct syscall_scratch *)SYSCALL_SCRATCH_PHYS;
+    scratch->result = (unsigned int)status;
 }
 
 int sys_write(int descriptor, const char *buffer, int length) {
-    if (descriptor != 1 && descriptor != 2) {
-        return -9; // EBADF
+    if (descriptor != SYSCALL_FD_STDOUT &&
+        descriptor != SYSCALL_FD_STDERR) {
+        return -ERRNO_EBADF;
     }
     if (length < 0) {
-        return -22; // EINVAL
+        return -ERRNO_EINVAL;
     }
     const mem_virt_t address = (mem_virt_t)buffer;
     if (address < USER_CODE_VA || address >= USER_STACK_TOP_VA) {
-        return -14; // EFAULT
+        return -ERRNO_EFAULT;
     }
     int index = 0;
     while (index < length) {
         const mem_virt_t current = address + (mem_virt_t)index;
         const mem_phys_t physical = user_virt_to_phys(current);
         if (physical == MEM_PHYS_NONE) {
-            return -14; // EFAULT
+            return -ERRNO_EFAULT;
         }
         console_putc(*(const char *)mem_phys_to_virt(physical));
         ++index;
@@ -53,18 +56,19 @@ int sys_brk(unsigned int address) {
 }
 
 int sys_dispatch(int argument0, int argument1, int argument2) {
-    unsigned int *vector = (unsigned int *)0x0006F004;
-    if (*vector == 66) {
+    volatile struct syscall_scratch *scratch =
+        (volatile struct syscall_scratch *)SYSCALL_SCRATCH_PHYS;
+    if (scratch->vector == SYSCALL_READ) {
         return sys_read(argument0, (char *)argument1, argument2);
     }
-    if (*vector == 67) {
+    if (scratch->vector == SYSCALL_YIELD) {
         return sys_yield();
     }
-    if (*vector == 68) {
+    if (scratch->vector == SYSCALL_GETPID) {
         return sys_getpid();
     }
-    if (*vector == 69) {
+    if (scratch->vector == SYSCALL_BRK) {
         return sys_brk((unsigned int)argument0);
     }
-    return -38; // ENOSYS
+    return -ERRNO_ENOSYS;
 }

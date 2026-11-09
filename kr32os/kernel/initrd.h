@@ -1,5 +1,10 @@
 #pragma once
 
+#define INITRD_MAGIC 0x4932334BU
+#define INITRD_VERSION 1U
+#define INITRD_NAME_SIZE 32U
+#define INITRD_MAX_ENTRIES 64U
+
 /*
  * K32I initrd on-disk layout.
  *
@@ -19,8 +24,10 @@ struct initrd_header {
     unsigned int count;
 };
 
+typedef char initrd_name_t[32]; /* INITRD_NAME_SIZE */
+
 struct initrd_entry {
-    char name[32];
+    initrd_name_t name;
     unsigned int offset;
     unsigned int size;
     unsigned int entry;
