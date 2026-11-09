@@ -466,17 +466,9 @@ core::StepResult Session::step_line_over() {
 }
 
 core::StepResult Session::step_line_out() {
-    if (function_at(machine_.pc()) == nullptr) {
-        return machine_.step();
-    }
-    const core::StepResult result = step_out();
-    if (result.kind != core::StepResult::Kind::Retired) {
-        return result;
-    }
-    if (function_at(machine_.pc()) == nullptr) {
-        return result;
-    }
-    return step_line_in();
+    // Stop at the caller instruction following the CALL. Advancing another
+    // source line here would skip the call site line entirely.
+    return step_out();
 }
 
 core::StepResult Session::run(std::uint64_t max_steps) {

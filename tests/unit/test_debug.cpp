@@ -595,6 +595,40 @@ TEST_CASE("DebugSession steps over and out by source line") {
     CHECK(out.kind == core::StepResult::Kind::Retired);
 }
 
+TEST_CASE("DebugSession steps out of a called function") {
+    const container::Image image = compile_debug_image(
+        "int add(int a, int b) {\n"
+        "    return a + b;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    int x = 1;\n"
+        "    int y = add(2, 3);\n"
+        "    return y + x;\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Line* inside = find_line(info, 2);
+    REQUIRE(inside != nullptr);
+    session.set_breakpoint(inside->address);
+    (void)session.run();
+    REQUIRE(session.at_breakpoint());
+    const debug::Function* callee = session.function_at(session.machine().pc());
+    REQUIRE(callee != nullptr);
+    CHECK(callee->name == "add");
+    const core::StepResult out = session.step_line_out();
+    CHECK(out.kind == core::StepResult::Kind::Retired);
+    const debug::Function* caller = session.function_at(session.machine().pc());
+    REQUIRE(caller != nullptr);
+    CHECK(caller->name == "main");
+    const debug::Line* caller_line =
+        session.line_at(session.machine().pc());
+    REQUIRE(caller_line != nullptr);
+    CHECK(caller_line->line == 6);
+}
+
 TEST_CASE("DebugSession steps over a false if-body") {
     const container::Image image = compile_debug_image(
         "int main(void) {\n"

@@ -59,6 +59,8 @@ and captured console output. It exposes:
 `step_over` decodes the current instruction and runs through a `CALL` to its
 return address. `step_out` reads the return address from the current frame at
 `R7 + frame + 4`. Call frames unwind through the saved `R7` at `R7 + frame`.
+`step_line_out` uses the same return address and stops at the caller
+instruction after `CALL`, without advancing an additional source line.
 
 ## CLI
 
