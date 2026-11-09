@@ -3,6 +3,7 @@
 #include <chrono>
 #include <map>
 #include <string>
+#include <utility>
 #include <vector>
 
 #include "kr32/container/container.h"
@@ -44,6 +45,7 @@ public:
     [[nodiscard]] bool key(int key, bool shift, bool control = false);
     [[nodiscard]] bool quit_requested() const { return quit_; }
     [[nodiscard]] const std::string& status() const { return status_; }
+    [[nodiscard]] const std::string& source_path() const { return source_view_path_; }
     [[nodiscard]] const std::string& error() const { return error_; }
 
     [[nodiscard]] bool headless(const std::string& ppm_path);
@@ -84,6 +86,9 @@ private:
     void draw_toolbar(Canvas& canvas);
     void draw_status_bar(Canvas& canvas);
     void draw_source(Canvas& canvas, Rect rect);
+    void draw_source_menu(Canvas& canvas);
+    void open_source_menu();
+    void select_source(int source_id);
     void draw_disassembly(Canvas& canvas, Rect rect);
     void draw_cores(Canvas& canvas, Rect rect);
     int draw_core_state(Canvas& canvas, Rect rect, std::size_t core_index);
@@ -140,6 +145,12 @@ private:
     std::map<int, std::vector<std::string>> source_cache_;
     int source_view_id_ = -1;
     std::string source_view_path_;
+    bool source_pinned_ = false;
+    bool source_menu_open_ = false;
+    Rect source_file_rect_{};
+    Rect source_menu_rect_{};
+    std::vector<std::pair<Rect, int>> source_menu_items_;
+    int source_menu_scroll_ = 0;
     std::vector<CoreRow> core_rows_;
     std::size_t expanded_core_ = 0;
     std::size_t selected_core_ = 0;

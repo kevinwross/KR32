@@ -57,6 +57,10 @@ loaded source.
 The **SOURCE** panel follows the current PC across debug source files. Stepping
 into libc functions such as `printf` or `malloc` switches the title and text to
 `src/cc/libc.c`, and the **VARIABLES** panel shows the active libc locals.
+Click the filename in the **SOURCE** title to open a list of every source file
+in the debug symbols. Selecting a file pins it in the source pane, where its
+gutter can set and clear breakpoints; a later step, run, or restart returns the
+pane to the file containing the new PC.
 For OS boots, `gui --os` loads `kernel.sym` and `bios.sym` beside the raw
 images; those CRC-checked sidecars provide C and assembly source lines, so the
 panel follows BIOS, boot entry, and kernel code as the PC moves.

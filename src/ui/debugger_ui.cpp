@@ -711,6 +711,8 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     source_cache_.clear();
     source_view_id_ = -1;
     source_view_path_.clear();
+    source_pinned_ = false;
+    source_menu_open_ = false;
     load_source_files();
     int initial_source = -1;
     if (!session_.info().sources.empty()) {
@@ -886,6 +888,8 @@ bool DebuggerUI::load_os_memory(const std::vector<std::uint8_t>& kernel,
     source_cache_.clear();
     source_view_id_ = -1;
     source_view_path_.clear();
+    source_pinned_ = false;
+    source_menu_open_ = false;
     load_source_files();
     if (!session_.info().sources.empty()) {
         const int initial_source = session_.info().sources.front().id;
@@ -1119,6 +1123,9 @@ void DebuggerUI::step_line_out() {
 }
 
 void DebuggerUI::set_status_from_result(const core::StepResult& result) {
+    source_pinned_ = false;
+    source_menu_open_ = false;
+    ensure_source_for_current();
     source_follow_ = true;
     // Keep the instruction view centered on the new PC after every step/run.
     asm_scroll_ = 0;
@@ -1172,6 +1179,9 @@ void DebuggerUI::load_source_files() {
 }
 
 void DebuggerUI::ensure_source_for_current() {
+    if (source_pinned_) {
+        return;
+    }
     const debug::Line* line = session_.line_at(session_.machine().pc());
     if (line == nullptr) {
         return;
@@ -1196,12 +1206,41 @@ void DebuggerUI::ensure_source_for_current() {
     source_follow_ = true;
 }
 
+void DebuggerUI::select_source(int source_id) {
+    auto cached = source_cache_.find(source_id);
+    if (cached == source_cache_.end()) {
+        load_source_files();
+        cached = source_cache_.find(source_id);
+    }
+    source_view_id_ = source_id;
+    source_view_path_ = source_path_for(source_id);
+    source_lines_ = cached == source_cache_.end()
+                        ? std::vector<std::string>{}
+                        : cached->second;
+    source_pinned_ = true;
+    source_menu_open_ = false;
+    source_menu_scroll_ = 0;
+    source_scroll_ = 0;
+    source_follow_ = true;
+    status_ = source_view_path_.empty() ? "source selected"
+                                        : "source: " + source_view_path_;
+}
+
+void DebuggerUI::open_source_menu() {
+    source_menu_open_ = !source_menu_open_;
+    source_menu_scroll_ = 0;
+    source_menu_items_.clear();
+}
+
 int DebuggerUI::current_source_line() const {
     if (!loaded_) {
         return 0;
     }
     const debug::Line* line = session_.line_at(session_.machine().pc());
-    return line == nullptr ? 0 : line->line;
+    if (line == nullptr || line->source != source_view_id_) {
+        return 0;
+    }
+    return line->line;
 }
 
 bool DebuggerUI::source_line_to_address(int line, std::uint32_t& address) const {
@@ -1369,17 +1408,38 @@ void DebuggerUI::draw_status_bar(Canvas& canvas) {
 
 void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
     ensure_source_for_current();
-    std::string title = "SOURCE";
-    if (!source_view_path_.empty()) {
-        title += "  " + source_view_path_;
-    } else if (!session_.info().sources.empty()) {
-        title += "  " + session_.info().sources.front().path;
-    }
-    draw_panel(canvas, rect, title);
+    draw_panel(canvas, rect, "SOURCE");
     const int button_width = 40;
     const int button_start = rect.x + rect.width - 3 * (button_width + 2) - 4;
     canvas.fill(Rect{button_start - 1, rect.y + 1, rect.width - (button_start - rect.x) + 1, 20},
                 kPanelAlt);
+    std::string source_path = source_view_path_;
+    if (source_path.empty() && !session_.info().sources.empty()) {
+        source_path = session_.info().sources.front().path;
+    }
+    source_file_rect_ = Rect{};
+    if (!source_path.empty()) {
+        const int path_x = rect.x + 6 +
+            Canvas::text_width("SOURCE  ", FontRole::UiBold);
+        const int path_width = button_start - path_x - 8;
+        if (path_width > 16) {
+            const std::string shown =
+                trim_to(source_path, static_cast<std::size_t>(path_width / 7));
+            const int text_width = Canvas::text_width(shown, FontRole::UiBold);
+            const Rect area{path_x - 2, rect.y + 2,
+                            std::min(path_width, text_width + 16), 18};
+            const bool hovered =
+                mouse_x_ >= area.x && mouse_x_ < area.x + area.width &&
+                mouse_y_ >= area.y && mouse_y_ < area.y + area.height;
+            if (hovered || source_menu_open_) {
+                canvas.fill(area, Color{42, 58, 74, 255});
+            }
+            canvas.text(path_x, rect.y + 3, shown, kAccent, FontRole::UiBold);
+            canvas.text(area.x + area.width - 10, rect.y + 4, "v", kDim,
+                        FontRole::MonoSmall);
+            source_file_rect_ = area;
+        }
+    }
     const char* labels[] = {"OVER", "IN", "OUT"};
     for (int index = 0; index < 3; ++index) {
         const int x = button_start + index * (button_width + 2);
@@ -1442,6 +1502,72 @@ void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
     }
     draw_scrollbar(canvas, rect, source_scroll_, static_cast<int>(source_lines_.size()),
                    visible, source_scroll_track_, source_scroll_thumb_);
+}
+
+void DebuggerUI::draw_source_menu(Canvas& canvas) {
+    if (!source_menu_open_) {
+        return;
+    }
+    std::vector<const debug::Source*> sources;
+    for (const debug::Source& source : session_.info().sources) {
+        if (!source.path.empty()) {
+            sources.push_back(&source);
+        }
+    }
+    source_menu_items_.clear();
+    if (sources.empty() || source_file_rect_.width <= 0) {
+        return;
+    }
+    const int visible = std::min<int>(14, static_cast<int>(sources.size()));
+    const int item_height = 18;
+    const int menu_width = std::min(720, canvas.width() - source_file_rect_.x - 8);
+    int x = source_file_rect_.x;
+    if (menu_width < 320) {
+        x = std::max(4, canvas.width() - 328);
+    }
+    const int width = std::max(320, menu_width);
+    const int height = visible * item_height + 8;
+    int y = source_file_rect_.y + source_file_rect_.height + 2;
+    if (y + height > canvas.height() - kStatusBarHeight) {
+        y = source_file_rect_.y - height - 2;
+    }
+    source_menu_rect_ = Rect{x, y, width, height};
+    canvas.fill(Rect{x + 3, y + 3, width, height}, Color{0, 0, 0, 90});
+    canvas.fill(source_menu_rect_, Color{26, 34, 42, 255});
+    canvas.frame(source_menu_rect_, kAccent, 1);
+    const int max_scroll = std::max(0, static_cast<int>(sources.size()) - visible);
+    source_menu_scroll_ = std::clamp(source_menu_scroll_, 0, max_scroll);
+    for (int row = 0; row < visible; ++row) {
+        const int index = source_menu_scroll_ + row;
+        if (index >= static_cast<int>(sources.size())) {
+            break;
+        }
+        const debug::Source* source = sources[static_cast<std::size_t>(index)];
+        const Rect item{x + 2, y + 4 + row * item_height, width - 4, item_height};
+        const bool current = source->id == source_view_id_;
+        const bool hovered =
+            mouse_x_ >= item.x && mouse_x_ < item.x + item.width &&
+            mouse_y_ >= item.y && mouse_y_ < item.y + item.height;
+        if (current || hovered) {
+            canvas.fill(item, current ? Color{38, 66, 92, 255}
+                                      : Color{34, 48, 60, 255});
+        }
+        canvas.text(item.x + 4, item.y + 2,
+                    trim_to(source->path,
+                            static_cast<std::size_t>((item.width - 22) / 7)),
+                    current ? kText : Color{190, 204, 216, 255},
+                    FontRole::MonoSmall);
+        if (current) {
+            canvas.text(item.x + item.width - 10, item.y + 2, "*", kAccent,
+                        FontRole::MonoSmall);
+        }
+        source_menu_items_.push_back({item, source->id});
+    }
+    if (max_scroll > 0) {
+        canvas.text(x + width - 12, y + 4, "^", kDim, FontRole::MonoSmall);
+        canvas.text(x + width - 12, y + height - 14, "v", kDim,
+                    FontRole::MonoSmall);
+    }
 }
 
 void DebuggerUI::draw_disassembly(Canvas& canvas, Rect rect) {
@@ -3343,6 +3469,7 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_control_tooltip(canvas);
     draw_asm_tooltip(canvas);
     draw_context_menu(canvas);
+    draw_source_menu(canvas);
     draw_fpr_popup(canvas);
     draw_tile_popup(canvas);
     if (settings_open_) {
@@ -3399,7 +3526,25 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
         }
         return true;
     }
+    if (source_menu_open_) {
+        if (source_file_rect_.contains(x, y)) {
+            source_menu_open_ = false;
+            return true;
+        }
+        for (const auto& item : source_menu_items_) {
+            if (item.first.contains(x, y)) {
+                select_source(item.second);
+                return true;
+            }
+        }
+        source_menu_open_ = false;
+        return true;
+    }
     const Layout areas = layout(width, height);
+    if (source_file_rect_.contains(x, y)) {
+        open_source_menu();
+        return true;
+    }
     if (editing_tile_ >= 0) {
         if (tile_ok_rect_.contains(x, y)) {
             finish_tile_edit(true);
@@ -3696,6 +3841,19 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
 }
 
 bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
+    if (source_menu_open_ && source_menu_rect_.contains(x, y)) {
+        int count = 0;
+        for (const debug::Source& source : session_.info().sources) {
+            if (!source.path.empty()) {
+                ++count;
+            }
+        }
+        const int visible = std::min(14, count);
+        source_menu_scroll_ = std::clamp(
+            source_menu_scroll_ + (delta > 0 ? -1 : 1), 0,
+            std::max(0, count - visible));
+        return true;
+    }
     const Layout areas = layout(width, height);
     const int direction = delta > 0 ? -1 : 1;
     if (areas.source.contains(x, y)) {
@@ -3775,6 +3933,11 @@ bool DebuggerUI::key(int key_value, bool shift, bool control) {
                 return true;
             }
         }
+        return true;
+    }
+    if (source_menu_open_ &&
+        key_value == kr32::platform::key::Escape) {
+        source_menu_open_ = false;
         return true;
     }
     if (console_hover_ && os_mode_ && !menu_.open && editing_tile_ < 0 &&

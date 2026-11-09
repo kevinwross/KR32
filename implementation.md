@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 08:58 -08:00
+> **Last updated:** 2026-11-09 09:19 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2642,6 +2642,10 @@ Newest entries at the bottom. Use the local time zone.
       PUSH/POP pair folding, and made frame slot zero parse as `[R7]`.
       Rebuilt kernels are 81,064 bytes (Windows) and 81,100 bytes (Linux);
       embedded id is `bios-7d36f445-kernel-e2891091`.
+- **2026-11-09 09:19 -08:00** — Debugger SOURCE filename is now a picker for
+      every source path in the symbols. Selecting a file pins it for
+      breakpoint work; stepping, running, or restarting returns to the file
+      containing the new PC.
 
 ## 10. Updating this file
 

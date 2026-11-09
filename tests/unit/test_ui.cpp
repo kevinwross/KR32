@@ -46,6 +46,58 @@ std::string build_ui_test_image() {
     return path;
 }
 
+std::string build_ui_two_source_image() {
+    const std::string main_source =
+        "int helper(void);\n"
+        "int main(void) { return helper(); }\n";
+    const std::string helper_source =
+        "int helper(void) { return 0; }\n";
+    {
+        std::ofstream main_file("ui-main.c", std::ios::binary);
+        main_file << main_source;
+        std::ofstream helper_file("ui-helper.c", std::ios::binary);
+        helper_file << helper_source;
+    }
+    const cc::Result main_compiled =
+        cc::compile(main_source, "ui-main.c");
+    const cc::Result helper_compiled =
+        cc::compile(helper_source, "ui-helper.c");
+    REQUIRE(main_compiled.ok);
+    REQUIRE(helper_compiled.ok);
+    container::Image main_image;
+    container::Image helper_image;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(main_compiled.assembly,
+                                               main_image, assembly_error),
+                    assembly_error.message);
+    REQUIRE_MESSAGE(assembler::assemble_object(helper_compiled.assembly,
+                                               helper_image, assembly_error),
+                    assembly_error.message);
+    container::Image runtime;
+    REQUIRE_MESSAGE(
+        assembler::assemble_object(cc::runtime_assembly(), runtime,
+                                   assembly_error),
+        assembly_error.message);
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    linker::Options options;
+    options.stack_top = 0x0011'0000;
+    options.stack_limit = 0x0001'0000;
+    REQUIRE_MESSAGE(linker::link({main_image, helper_image, runtime},
+                                 options, image, map, link_error),
+                    link_error.message);
+    std::vector<std::uint8_t> bytes;
+    container::Error container_error;
+    REQUIRE_MESSAGE(container::write(image, bytes, container_error),
+                    container_error.message);
+    const std::string path = "kr32-ui-two-sources.k32";
+    std::ofstream output(path, std::ios::binary);
+    output.write(reinterpret_cast<const char*>(bytes.data()),
+                 static_cast<std::streamsize>(bytes.size()));
+    return path;
+}
+
 } // namespace
 
 TEST_CASE("the portable canvas renders deterministic frames") {
@@ -118,6 +170,34 @@ TEST_CASE("the settings dialog renders and closes without a loaded image") {
     ui::Canvas closed(800, 600);
     debugger.render(closed);
     CHECK(closed.hash() == baseline_hash);
+}
+
+TEST_CASE("source filename opens a source picker and selection follows steps") {
+    const std::string path = build_ui_two_source_image();
+    ui::DebuggerUI debugger;
+    std::string error;
+    REQUIRE_MESSAGE(debugger.load(path, error), error.c_str());
+    ui::Canvas baseline(1000, 700);
+    debugger.render(baseline);
+    CHECK(!debugger.source_path().empty());
+
+    const int filename_x =
+        6 + ui::Canvas::text_width("SOURCE  ", ui::FontRole::UiBold) + 10;
+    CHECK(debugger.click(filename_x, 38, 1000, 700));
+    ui::Canvas menu(1000, 700);
+    debugger.render(menu);
+    CHECK(menu.hash() != baseline.hash());
+
+    // The first menu row starts below the source header.
+    CHECK(debugger.click(filename_x, 62, 1000, 700));
+    CHECK(debugger.status().rfind("source:", 0) == 0);
+    CHECK(!debugger.source_path().empty());
+
+    debugger.step_line_over();
+    CHECK(debugger.source_path() == "ui-main.c");
+    std::filesystem::remove(path);
+    std::filesystem::remove("ui-main.c");
+    std::filesystem::remove("ui-helper.c");
 }
 
 TEST_CASE("debugger variable values format floats and scalar types") {
