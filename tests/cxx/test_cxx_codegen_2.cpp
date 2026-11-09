@@ -281,6 +281,26 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm detects heaps") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int heap[5] = { 9, 7, 8, 3, 4 };\n"
+        "    if (!std::is_heap(heap, heap + 5)) return 1;\n"
+        "    int broken[3] = { 1, 9, 8 };\n"
+        "    if (std::is_heap(broken, broken + 3)) return 2;\n"
+        "    char text[4] = \"zyxw\";\n"
+        "    if (!std::is_heap(text, text + 4)) return 3;\n"
+        "    double reals[3] = { 3.5, 1.5, 2.5 };\n"
+        "    if (!std::is_heap(reals, reals + 3)) return 4;\n"
+        "    int empty[1] = { 0 };\n"
+        "    return std::is_heap(empty, empty) ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm detects permutations") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
