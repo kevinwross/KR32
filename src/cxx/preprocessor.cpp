@@ -719,7 +719,7 @@ private:
                         "    int size() const { return size_; }\n"
                         "    bool empty() const { return size_ == 0; }\n"
                         "    void clear() { size_ = 0; }\n"
-                        "    int count(Key key) const {\n"
+                        "    int count(const Key& key) const {\n"
                         "        for (int index = 0; index < size_; ++index) {\n"
                         "            if (keys_[index] == key) return 1;\n"
                         "        }\n"

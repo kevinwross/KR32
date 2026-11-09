@@ -1137,10 +1137,15 @@ TEST_CASE("class methods bind const reference temporaries") {
         "    int add(const int& value) { return value + 1; }\n"
         "    double scale(const double& value) { return value * 2.0; }\n"
         "};\n"
+        "template<typename T> struct Holder {\n"
+        "    T echo(const T& value) const { return value; }\n"
+        "};\n"
         "int main() {\n"
         "    Accumulator accumulator;\n"
         "    if (accumulator.add(3) != 4) return 1;\n"
-        "    return accumulator.scale(1.5) == 3.0 ? 0 : 2;\n"
+        "    if (accumulator.scale(1.5) != 3.0) return 2;\n"
+        "    Holder<int> holder;\n"
+        "    return holder.echo(5) == 5 ? 0 : 3;\n"
         "}\n");
     INFO(program.diagnostics);
     CHECK(program.ok);

@@ -1566,6 +1566,14 @@ private:
                                : resolve_type(
                                      qualify_self_type(declaration.type, owner));
         for (const Param& parameter : declaration.parameters) {
+            if (owner != nullptr && owner->qualified.find("M__") != std::string::npos) {
+                const TypePtr fixed = qualify_self_type(parameter.type, owner);
+                std::fprintf(stderr, "M PARAM owner=%s raw=%s fixed=%s resolved=%s\\n",
+                             owner->qualified.c_str(),
+                             parameter.type ? parameter.type->to_string().c_str() : "null",
+                             fixed ? fixed->to_string().c_str() : "null",
+                             fixed ? resolve_type(fixed)->to_string().c_str() : "null");
+            }
             function->parameters.push_back(decay(resolve_type(
                 qualify_self_type(parameter.type, owner))));
             function->default_arguments.push_back(
@@ -3146,7 +3154,12 @@ private:
         if (type->kind == TypeKind::Named && type->name.parts.size() == 1) {
             const auto found = bindings.find(type->name.parts[0]);
             if (found != bindings.end()) {
-                return found->second->clone();
+                TypePtr replacement = found->second->clone();
+                replacement->is_const =
+                    replacement->is_const || type->is_const;
+                replacement->is_volatile =
+                    replacement->is_volatile || type->is_volatile;
+                return replacement;
             }
         }
         if (type->kind == TypeKind::Pointer || type->kind == TypeKind::LValueRef ||
