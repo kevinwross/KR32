@@ -281,6 +281,29 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm detects permutations") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int left[4] = { 1, 2, 3, 4 };\n"
+        "    int right[4] = { 4, 3, 2, 1 };\n"
+        "    if (!std::is_permutation(left, left + 4, right)) return 1;\n"
+        "    int other[4] = { 1, 2, 3, 5 };\n"
+        "    if (std::is_permutation(left, left + 4, other)) return 2;\n"
+        "    char text[5] = \"aabc\";\n"
+        "    char letters[5] = \"cbaa\";\n"
+        "    if (!std::is_permutation(text, text + 4, letters)) return 3;\n"
+        "    char mismatch[5] = \"abcc\";\n"
+        "    if (std::is_permutation(text, text + 4, mismatch)) return 4;\n"
+        "    double x[2] = { 1.5, 2.5 };\n"
+        "    double y[2] = { 2.5, 1.5 };\n"
+        "    return std::is_permutation(x, x + 2, y) ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm retreats permutations") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
