@@ -1448,14 +1448,26 @@ private:
     }
 
     TypePtr qualify_self_type(const TypePtr& type, ClassInfo* owner) {
-        if (!type || type->kind != TypeKind::Named || owner == nullptr ||
-            type->name.parts.size() != 1) {
+        if (!type || owner == nullptr) {
+            return type;
+        }
+        if ((type->kind == TypeKind::Pointer ||
+             type->kind == TypeKind::LValueRef ||
+             type->kind == TypeKind::RValueRef ||
+             type->kind == TypeKind::Array) &&
+            type->element) {
+            auto copy = std::make_shared<Type>(*type);
+            copy->element = qualify_self_type(type->element, owner);
+            return copy;
+        }
+        if (type->kind != TypeKind::Named || type->name.parts.size() != 1) {
             return type;
         }
         const std::string& qualified = owner->qualified;
         const std::string& name = type->name.parts[0];
         const bool self =
             qualified == name ||
+            qualified.find(name + "__") != std::string::npos ||
             (qualified.size() > name.size() + 2 &&
              qualified.compare(qualified.size() - name.size(), name.size(),
                                name) == 0 &&
@@ -9239,8 +9251,7 @@ private:
             }
         }
         bool has_class_parameter = false;
-        for (const Param& parameter : function.decl->parameters) {
-            const TypePtr parameter_type = resolve_type(parameter.type);
+        for (const TypePtr& parameter_type : function.parameters) {
             if (parameter_type &&
                 parameter_type->kind != TypeKind::LValueRef &&
                 parameter_type->kind != TypeKind::RValueRef &&
@@ -9261,7 +9272,9 @@ private:
         for (std::size_t index = 0; index < function.decl->parameters.size(); ++index) {
             const Param& parameter = function.decl->parameters[index];
             Local local;
-            local.type = resolve_type(parameter.type);
+            local.type = index < function.parameters.size()
+                             ? resolve_type(function.parameters[index])
+                             : resolve_type(parameter.type);
             local.is_reference = local.type &&
                                  (local.type->kind == TypeKind::LValueRef ||
                                   local.type->kind == TypeKind::RValueRef);

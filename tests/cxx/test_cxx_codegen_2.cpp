@@ -1131,6 +1131,34 @@ TEST_CASE("indirect calls pass floating point arguments") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("std vector copies and assigns") {
+    const ProgramResult program = compile_and_run(
+        "#include <vector>\n"
+        "#include <utility>\n"
+        "int main() {\n"
+        "    std::vector<int> first;\n"
+        "    first.push_back(1);\n"
+        "    first.push_back(2);\n"
+        "    std::vector<int> second = first;\n"
+        "    if (second.size() != 2 || second[1] != 2) return 1;\n"
+        "    std::vector<int> third;\n"
+        "    third = first;\n"
+        "    if (third.size() != 2 || third[0] != 1) return 2;\n"
+        "    third.push_back(3);\n"
+        "    if (third.size() != 3 || second.size() != 2) return 3;\n"
+        "    std::vector<std::pair<int, int> > pairs;\n"
+        "    std::pair<int, int> value;\n"
+        "    value.first = 4;\n"
+        "    value.second = 5;\n"
+        "    pairs.push_back(value);\n"
+        "    std::vector<std::pair<int, int> > copied = pairs;\n"
+        "    return copied[0].first == 4 && copied[0].second == 5 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("std vector resize preserves and zero fills") {
     const ProgramResult program = compile_and_run(
         "#include <vector>\n"
