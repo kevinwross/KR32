@@ -281,6 +281,26 @@ TEST_CASE("string inserts substrings") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm reports heap prefixes") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[5] = { 9, 7, 3, 8, 4 };\n"
+        "    if (std::is_heap_until(values, values + 5) != values + 3) return 1;\n"
+        "    char text[4] = \"zyxw\";\n"
+        "    if (std::is_heap_until(text, text + 4) != text + 4) return 2;\n"
+        "    char broken[4] = \"ayzw\";\n"
+        "    if (std::is_heap_until(broken, broken + 4) != broken + 1) return 3;\n"
+        "    double reals[3] = { 3.5, 1.5, 2.5 };\n"
+        "    if (std::is_heap_until(reals, reals + 3) != reals + 3) return 4;\n"
+        "    int empty[1] = { 0 };\n"
+        "    return std::is_heap_until(empty, empty) == empty ? 0 : 5;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm detects heaps") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
