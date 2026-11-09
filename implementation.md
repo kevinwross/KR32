@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 06:46 -08:00
+> **Last updated:** 2026-11-09 06:57 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2621,6 +2621,9 @@ Newest entries at the bottom. Use the local time zone.
 - **2026-11-09 06:46 -08:00** — P3 also folds C calls to constant/global
       return-only functions. P4 folds adjacent C tail calls into a frame
       restore plus `JMP`.
+- **2026-11-09 06:57 -08:00** — P5 removes unreachable local functions and
+      their debug records. P6 strength-reduces immediate multiply, divide, and
+      modulo by powers of two. Full suites remain 80/80 on all four configs.
 
 ## 10. Updating this file
 

@@ -194,6 +194,16 @@ target-level cleanup.
    - Leaves the shared return label and epilogue in place for other returns.
    - Skips indirect calls and calls with stack-argument cleanup.
 
+25. **Dead local-function removal**
+   - Builds a call/data reference graph for local functions and removes
+     unreachable ones together with their debug records.
+   - Keeps `.global`, `.weak`, and externally referenced symbols.
+
+26. **Strength reduction**
+   - Rewrites `MUL`/`DIV`/`MOD` by powers of two into `SHL`/`SHR`/`AND`.
+   - Folds multiply/modulo by zero and multiply/divide by one.
+   - Skips rewrites when a flag-dependent branch immediately follows.
+
 ## Safety model
 
 The pass is deliberately conservative:
@@ -221,5 +231,5 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 ## Planned next steps
 
 1. Loop-invariant load hoisting for loops with calls outside the body.
-2. Dead-function removal and nothrow call metadata.
-3. Instruction selection and strength reduction.
+2. Nothrow call metadata and exception landing-pad removal.
+3. Final benchmark, regression, and documentation pass.

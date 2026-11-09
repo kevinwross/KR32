@@ -23,6 +23,42 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("CMP R0, R1") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer strength-reduces immediates") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MUL R0, R1, #4\n"
+        "    DIV R2, R3, #8\n"
+        "    MOD R4, R5, #8\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.rewritten >= 3);
+    CHECK(assembly.find("SHL R0, R1, #2") != std::string::npos);
+    CHECK(assembly.find("SHR R2, R3, #3") != std::string::npos);
+    CHECK(assembly.find("AND R4, R5, #7") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer removes dead local functions") {
+    std::string assembly =
+        ".text\n"
+        ".global main\n"
+        "main:\n"
+        "    RET\n"
+        "unused_local:\n"
+        "    RET\n"
+        ".debug_info\n"
+        "    .asciz \"F unused_local unused_local .Lend_unused 0 int\"\n"
+        "    .asciz \"V unused_local x 0 int 4\"\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("unused_local:") == std::string::npos);
+    CHECK(assembly.find("F unused_local") == std::string::npos);
+    CHECK(assembly.find("V unused_local") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer folds comparison branches") {
     std::string assembly =
         ".text\n"

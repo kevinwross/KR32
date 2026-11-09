@@ -2390,6 +2390,276 @@ int fold_tail_calls(std::vector<std::string>& lines, int& rewritten) {
     return 0;
 }
 
+bool is_symbol_character(char character) {
+    return std::isalnum(static_cast<unsigned char>(character)) != 0 ||
+           character == '_' || character == '$' || character == '.';
+}
+
+bool contains_symbol(std::string_view line, std::string_view symbol) {
+    if (symbol.empty() || symbol.size() > line.size()) {
+        return false;
+    }
+    std::size_t position = line.find(symbol);
+    while (position != std::string_view::npos) {
+        const bool left_ok =
+            position == 0 ||
+            !is_symbol_character(line[position - 1]);
+        const std::size_t after = position + symbol.size();
+        const bool right_ok =
+            after >= line.size() || !is_symbol_character(line[after]);
+        if (left_ok && right_ok) {
+            return true;
+        }
+        position = line.find(symbol, position + 1);
+    }
+    return false;
+}
+
+int remove_dead_functions(std::vector<std::string>& lines) {
+    std::size_t debug_start = lines.size();
+    std::set<std::string> external;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        const std::string text = trim(lines[index]);
+        if (text == ".debug_info") {
+            debug_start = index;
+        } else if (text.rfind(".global ", 0) == 0) {
+            external.insert(trim(text.substr(8)));
+        } else if (text.rfind(".weak ", 0) == 0) {
+            external.insert(trim(text.substr(6)));
+        }
+    }
+
+    struct FunctionRange {
+        std::string name;
+        std::size_t begin = 0;
+        std::size_t end = 0;
+        bool local = false;
+    };
+    std::vector<FunctionRange> functions;
+    for (std::size_t index = 0; index < debug_start; ++index) {
+        if (!is_function_label(lines[index])) {
+            continue;
+        }
+        std::string name = trim(lines[index]);
+        name.pop_back();
+        if (!functions.empty()) {
+            functions.back().end = index;
+        }
+        FunctionRange range;
+        range.name = name;
+        range.begin = index;
+        range.end = debug_start;
+        range.local = external.find(name) == external.end();
+        functions.push_back(std::move(range));
+    }
+    if (functions.empty()) {
+        return 0;
+    }
+
+    std::map<std::string, std::size_t> local_index;
+    for (std::size_t index = 0; index < functions.size(); ++index) {
+        if (functions[index].local) {
+            local_index[functions[index].name] = index;
+        }
+    }
+    if (local_index.empty()) {
+        return 0;
+    }
+
+    std::vector<std::set<std::size_t>> edges(functions.size());
+    std::set<std::size_t> roots;
+    for (std::size_t line_index = 0; line_index < debug_start;
+         ++line_index) {
+        std::size_t owner = functions.size();
+        for (std::size_t index = 0; index < functions.size(); ++index) {
+            if (line_index >= functions[index].begin &&
+                line_index < functions[index].end) {
+                owner = index;
+                break;
+            }
+        }
+        for (const auto& entry : local_index) {
+            if (line_index == functions[entry.second].begin ||
+                !contains_symbol(lines[line_index], entry.first)) {
+                continue;
+            }
+            if (owner < functions.size() && functions[owner].local) {
+                edges[owner].insert(entry.second);
+            } else {
+                roots.insert(entry.second);
+            }
+        }
+    }
+
+    std::vector<bool> reachable(functions.size(), false);
+    std::vector<std::size_t> work(roots.begin(), roots.end());
+    for (const std::size_t root : roots) {
+        reachable[root] = true;
+    }
+    while (!work.empty()) {
+        const std::size_t current = work.back();
+        work.pop_back();
+        for (const std::size_t next : edges[current]) {
+            if (!reachable[next]) {
+                reachable[next] = true;
+                work.push_back(next);
+            }
+        }
+    }
+
+    std::set<std::string> removed;
+    int removed_lines = 0;
+    for (std::size_t index = 0; index < functions.size(); ++index) {
+        if (!functions[index].local || reachable[index]) {
+            continue;
+        }
+        removed.insert(functions[index].name);
+        std::size_t preserve = functions[index].end;
+        while (preserve > functions[index].begin) {
+            const std::string text = trim(lines[preserve - 1]);
+            if (text.rfind(".text", 0) == 0 ||
+                text.rfind(".global ", 0) == 0 ||
+                text.rfind(".weak ", 0) == 0 ||
+                text.rfind(".section ", 0) == 0) {
+                --preserve;
+            } else {
+                break;
+            }
+        }
+        for (std::size_t line = functions[index].begin; line < preserve;
+             ++line) {
+            if (!lines[line].empty()) {
+                lines[line].clear();
+                ++removed_lines;
+            }
+        }
+    }
+    if (removed.empty()) {
+        return 0;
+    }
+
+    bool remove_members = false;
+    for (std::size_t index = debug_start; index < lines.size(); ++index) {
+        const std::string text = trim(lines[index]);
+        if (text.rfind(".asciz \"F ", 0) == 0) {
+            remove_members = false;
+            for (const std::string& name : removed) {
+                if (contains_symbol(text, name)) {
+                    remove_members = true;
+                    break;
+                }
+            }
+            if (remove_members) {
+                lines[index].clear();
+            }
+            continue;
+        }
+        if (remove_members &&
+            (text.rfind(".asciz \"V ", 0) == 0 ||
+             text.rfind(".asciz \"L ", 0) == 0)) {
+            lines[index].clear();
+        }
+    }
+    return removed_lines;
+}
+
+int strength_reduce_immediates(std::vector<std::string>& lines,
+                               int& rewritten) {
+    int changed = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        Instruction instruction;
+        if (!parse_instruction(lines[index], instruction) ||
+            instruction.operands.size() != 3) {
+            continue;
+        }
+        const bool multiply = instruction.mnemonic == "MUL";
+        const bool divide = instruction.mnemonic == "DIV";
+        const bool modulo = instruction.mnemonic == "MOD";
+        if (!multiply && !divide && !modulo) {
+            continue;
+        }
+        int destination = 0;
+        int source = 0;
+        if (!parse_register(instruction.operands[0], destination) ||
+            !parse_register(instruction.operands[1], source) ||
+            instruction.operands[2].empty() ||
+            instruction.operands[2].front() != '#') {
+            continue;
+        }
+        long long value = 0;
+        try {
+            value = std::stoll(instruction.operands[2].substr(1));
+        } catch (...) {
+            continue;
+        }
+        if (value < 0) {
+            continue;
+        }
+        std::size_t after = index + 1;
+        while (after < lines.size() && lines[after].empty()) {
+            ++after;
+        }
+        if (after < lines.size()) {
+            Instruction following;
+            if (parse_instruction(lines[after], following) &&
+                is_conditional_jump(following.mnemonic)) {
+                continue;
+            }
+        }
+        if (value == 0) {
+            if (multiply || modulo) {
+                lines[index] = "    MOV R" +
+                               std::to_string(destination) + ", #0";
+                ++rewritten;
+                ++changed;
+            }
+            continue;
+        }
+        const bool power_of_two =
+            (value & (value - 1)) == 0 && value <= 0x80000000LL;
+        if (!power_of_two) {
+            continue;
+        }
+        int shift = 0;
+        long long remaining = value;
+        while (remaining > 1) {
+            remaining >>= 1;
+            ++shift;
+        }
+        const std::string destination_name =
+            "R" + std::to_string(destination);
+        const std::string source_name = "R" + std::to_string(source);
+        if (multiply) {
+            if (value == 1) {
+                lines[index] = "    MOV " + destination_name + ", " +
+                               source_name;
+            } else {
+                lines[index] = "    SHL " + destination_name + ", " +
+                               source_name + ", #" + std::to_string(shift);
+            }
+            ++rewritten;
+            ++changed;
+        } else if (divide) {
+            if (value == 1) {
+                lines[index] = "    MOV " + destination_name + ", " +
+                               source_name;
+            } else {
+                lines[index] = "    SHR " + destination_name + ", " +
+                               source_name + ", #" + std::to_string(shift);
+            }
+            ++rewritten;
+            ++changed;
+        } else {
+            lines[index] = "    AND " + destination_name + ", " +
+                           source_name + ", #" +
+                           std::to_string(value - 1);
+            ++rewritten;
+            ++changed;
+        }
+    }
+    return changed;
+}
+
 int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -2482,10 +2752,12 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_boolean_branches(lines);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
+    stats.removed += strength_reduce_immediates(lines, stats.rewritten);
     stats.removed += coalesce_moves(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);
     stats.removed += remove_redundant_jumps(lines);
+    stats.removed += remove_dead_functions(lines);
     assembly = join_lines(lines);
     return stats;
 }
