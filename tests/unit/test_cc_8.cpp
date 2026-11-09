@@ -32,6 +32,15 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("cmpend") == std::string::npos);
 }
 
+TEST_CASE("c logical not uses SLTU") {
+    const cc::Result result = cc::compile(
+        "int f(int x) { return !x; }\n"
+        "long long g(long long y) { return !y; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("SLTU R0, R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("OR R0, R0, R1") != std::string::npos);
+}
+
 TEST_CASE("c local comparisons avoid stack temporaries") {
     const cc::Result result = cc::compile(
         "int cmp(int a, int b) { if (a < b) return 1; return 2; }\n");

@@ -56,6 +56,15 @@ TEST_CASE("simple calls avoid argument temporaries") {
     CHECK(result.assembly.find("CALL _Z3addii") != std::string::npos);
 }
 
+TEST_CASE("logical not uses SLTU") {
+    const cxx::Result result = cxx::compile(
+        "int f(int x) { return !x; }\n"
+        "long long g(long long y) { return !y; }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("SLTU R0, R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("OR R0, R0, R1") != std::string::npos);
+}
+
 TEST_CASE("local comparisons avoid stack temporaries") {
     const cxx::Result result = cxx::compile(
         "int cmp(int a, int b) { if (a < b) return 1; return 2; }\n");

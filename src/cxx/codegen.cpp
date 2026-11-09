@@ -5869,12 +5869,10 @@ private:
                 emit("    NOT R0, R0");
             }
         } else if (op == "!") {
-            emit("    CMP R0, #0");
-            emit("    MOV R0, #0");
-            const std::string done = new_label("not");
-            emit("    JNZ " + done);
-            emit("    MOV R0, #1");
-            emit(done + ":");
+            if (is_long_long(operand_type)) {
+                emit("    OR R0, R0, R1");
+            }
+            emit("    SLTU R0, R0, #1");
         }
         return promote(type);
     }

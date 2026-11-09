@@ -33,6 +33,7 @@ target-level cleanup.
    - Equality values use `XOR` plus `SLT #1` instead of branches.
    - Conditions comparing two local scalars load both into `R0`/`R1`
      directly instead of using `PUSH`/`POP`.
+   - Logical `!` uses `SLTU #1`, checking both halves of a 64-bit value.
    - C branches directly at `-O0` for both immediate and register right
      operands; `-O1` folds remaining boolean materializations.
    - `do`/`while` conditions branch directly to the loop head in both C and

@@ -5321,15 +5321,10 @@ private:
                 emit(type->kind == Type::Kind::Double ? "    FCVT.W.D R0, F0"
                                                       : "    FCVT.W.S R0, F0");
             }
-            const std::string true_label = new_label("nottrue");
-            const std::string end_label = new_label("notend");
-            emit("    CMP R0, #0");
-            emit("    JZ " + true_label);
-            emit("    MOV R0, #0");
-            emit("    JMP " + end_label);
-            emit(true_label + ":");
-            emit("    MOV R0, #1");
-            emit(end_label + ":");
+            if (is_long_long_type(type)) {
+                emit("    OR R0, R0, R1");
+            }
+            emit("    SLTU R0, R0, #1");
             return type_int();
         }
         if (match("~")) {
