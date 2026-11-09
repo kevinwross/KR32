@@ -31,7 +31,10 @@ bash kr32os/build.sh
 ```
 
 Both scripts accept `KR32` through the environment; `build.ps1` also accepts
-`-Kr32 <path>`. The default is the host Debug build.
+`-Kr32 <path>`. The default is the host Debug build. Kernel and user C sources
+are compiled with `-O1` by default; set `KR32OS_OPT` (or pass `-Opt` to
+`build.ps1`) to choose a different optimization level, for example
+`-Opt "-O0"` on PowerShell or `KR32OS_OPT=-O0` on Linux.
 
 Windows writes to `kr32os/build/windows`; WSL/Linux writes to
 `kr32os/build/linux`. Keeping them separate prevents a Linux test build from

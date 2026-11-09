@@ -5,7 +5,8 @@ select another kr32 executable.
 #>
 param(
     [string]$Kr32 = "",
-    [string]$Out = ""
+    [string]$Out = "",
+    [string]$Opt = ""
 )
 
 $ErrorActionPreference = 'Stop'
@@ -40,6 +41,8 @@ if (-not $Kr32 -or -not (Test-Path -LiteralPath $Kr32)) {
 $Kr32 = (Resolve-Path -LiteralPath $Kr32).Path
 if (-not $Out) { $Out = $env:KR32OS_BUILD_DIR }
 if (-not $Out) { $Out = Join-Path $here 'build\windows' }
+if (-not $Opt) { $Opt = $env:KR32OS_OPT }
+if (-not $Opt) { $Opt = '-O1' }
 $build = $Out
 New-Item -ItemType Directory -Force -Path $build | Out-Null
 
@@ -93,30 +96,30 @@ $kernelMeta = Join-Path $build 'kernel.meta'
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'bios\entry.S'), '--object', '-o', $biosObject)
 Invoke-Kr32 -Arguments @('ld', $biosObject, '--flat', '--base', '0xFFFF0000', '--sym', $biosSym, '-o', $bios)
 Invoke-Kr32 -Arguments @('ld', $biosObject, '--base', '0xFFFF0000', '-o', $biosK32)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '--source-id', '1', '-S', '-o', $kernelAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '--source-id', '1', $Opt, '-S', '-o', $kernelAssembly)
 Invoke-Kr32 -Arguments @('as', $kernelAssembly, '--object', '-o', $kernelObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '--source-id', '2', '-S', '-o', $consoleAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '--source-id', '2', $Opt, '-S', '-o', $consoleAssembly)
 Invoke-Kr32 -Arguments @('as', $consoleAssembly, '--object', '-o', $consoleObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '--source-id', '3', '-S', '-o', $shellAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '--source-id', '3', $Opt, '-S', '-o', $shellAssembly)
 Invoke-Kr32 -Arguments @('as', $shellAssembly, '--object', '-o', $shellObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '--source-id', '4', '-S', '-o', $timerAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '--source-id', '4', $Opt, '-S', '-o', $timerAssembly)
 Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '--source-id', '5', '-S', '-o', $trapsAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '--source-id', '5', $Opt, '-S', '-o', $trapsAssembly)
 Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps-asm.S'), '--object', '-o', $trapStubsObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '--source-id', '6', '-S', '-o', $userAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '--source-id', '6', $Opt, '-S', '-o', $userAssembly)
 Invoke-Kr32 -Arguments @('as', $userAssembly, '--object', '-o', $userObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '--source-id', '9', '-S', '-o', $memoryAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '--source-id', '9', $Opt, '-S', '-o', $memoryAssembly)
 Invoke-Kr32 -Arguments @('as', $memoryAssembly, '--object', '-o', $memoryObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '--source-id', '8', '-S', '-o', $processAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '--source-id', '8', $Opt, '-S', '-o', $processAssembly)
 Invoke-Kr32 -Arguments @('as', $processAssembly, '--object', '-o', $processObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '--source-id', '7', '-S', '-o', $syscallAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '--source-id', '7', $Opt, '-S', '-o', $syscallAssembly)
 Invoke-Kr32 -Arguments @('as', $syscallAssembly, '--object', '-o', $syscallObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user-asm.S'), '--object', '-o', $userBridgeObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
 
 # Build the first user program.
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\init.c'), '-S', '-o', $userInitAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\init.c'), $Opt, '-S', '-o', $userInitAssembly)
 Invoke-Kr32 -Arguments @('as', $userInitAssembly, '--object', '-o', $userInitObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\crt0.S'), '--object', '-o', $userCrtObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\syscall.S'), '--object', '-o', $userSyscallObject)
@@ -129,11 +132,11 @@ $userFaultImage = Join-Path $build 'fault.bin'
 $userWxAssembly = Join-Path $build 'user_wx.s'
 $userWxObject = Join-Path $build 'user_wx.o'
 $userWxImage = Join-Path $build 'wx.bin'
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\fault.c'), '-S', '-o', $userFaultAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\fault.c'), $Opt, '-S', '-o', $userFaultAssembly)
 Invoke-Kr32 -Arguments @('as', $userFaultAssembly, '--object', '-o', $userFaultObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userFaultObject, $userSyscallObject,
                         '--flat', '--base', '0x00400000', '-o', $userFaultImage)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\wx.c'), '-S', '-o', $userWxAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\wx.c'), $Opt, '-S', '-o', $userWxAssembly)
 Invoke-Kr32 -Arguments @('as', $userWxAssembly, '--object', '-o', $userWxObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userWxObject, $userSyscallObject,
                         '--flat', '--base', '0x00400000', '-o', $userWxImage)
