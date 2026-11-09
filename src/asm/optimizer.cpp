@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -382,6 +383,64 @@ int fold_immediate_consumers(std::vector<std::string>& lines) {
     return removed;
 }
 
+int remove_dead_frame_stores(std::vector<std::string>& lines) {
+    int removed = 0;
+    std::map<int, std::set<int>> used;
+    int function = -1;
+    for (const std::string& line : lines) {
+        if (trim(line) == ".text") {
+            ++function;
+            used[function];
+            continue;
+        }
+        if (function < 0) {
+            function = 0;
+            used[function];
+        }
+        Instruction instruction;
+        if (!parse_instruction(line, instruction)) {
+            continue;
+        }
+        const bool reads_memory =
+            instruction.mnemonic == "LEA" ||
+            instruction.mnemonic == "LOAD" ||
+            instruction.mnemonic == "LOAD8U" ||
+            instruction.mnemonic == "LOAD8S" ||
+            instruction.mnemonic == "LOAD16U" ||
+            instruction.mnemonic == "LOAD16S";
+        if (reads_memory && instruction.operands.size() >= 2) {
+            int slot = 0;
+            if (parse_frame_slot(instruction.operands[1], slot)) {
+                used[function].insert(slot);
+            }
+        }
+    }
+
+    function = -1;
+    for (std::string& line : lines) {
+        if (trim(line) == ".text") {
+            ++function;
+            continue;
+        }
+        if (function < 0) {
+            function = 0;
+        }
+        Instruction instruction;
+        if (!parse_instruction(line, instruction) ||
+            instruction.mnemonic != "STORE" ||
+            instruction.operands.size() != 2) {
+            continue;
+        }
+        int slot = 0;
+        if (parse_frame_slot(instruction.operands[1], slot) &&
+            used[function].find(slot) == used[function].end()) {
+            line.clear();
+            ++removed;
+        }
+    }
+    return removed;
+}
+
 int remove_overwritten_moves(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -553,6 +612,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_noop_moves(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
     stats.removed += fold_immediate_consumers(lines);
+    stats.removed += remove_dead_frame_stores(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);
     stats.removed += remove_redundant_jumps(lines);

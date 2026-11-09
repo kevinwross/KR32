@@ -48,6 +48,11 @@ target-level cleanup.
 5. **Redundant jumps**
    - Removes an unconditional jump whose target is the next label.
 
+6. **Dead frame stores**
+   - Removes a `STORE` to a frame slot that is never loaded or addressed in the
+     function.
+   - Keeps stores to slots whose address is taken with `LEA`.
+
 ## Safety model
 
 The pass is deliberately conservative:
