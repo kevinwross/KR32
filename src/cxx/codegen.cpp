@@ -601,6 +601,7 @@ private:
         TypePtr result;
         bool extern_c = false;
         bool variadic = false;
+        bool is_noexcept = false;
         bool from_template = false;
         std::map<std::string, TypePtr> template_bindings;
         bool defined = false;
@@ -1544,6 +1545,7 @@ private:
         function->access = declaration.access;
         function->defined = declaration.body != nullptr;
         function->variadic = declaration.variadic;
+        function->is_noexcept = declaration.is_noexcept;
         function->owner = owner;
         if (owner != nullptr) {
             function->template_bindings = owner->template_bindings;
@@ -7727,6 +7729,10 @@ private:
                 diagnose_once(expression, "member call outside a member function");
                 emit("    MOV R0, #0");
             }
+            if (function->is_noexcept) {
+                emit("    CALL " + function->symbol);
+                return resolve_type(function->result);
+            }
             const std::string call_start = new_label("cs_start");
             const std::string call_end = new_label("cs_end");
             const std::string call_landing = new_label("cs_landing");
@@ -7885,6 +7891,10 @@ private:
                     emit("    MOV R" + std::to_string(index) + ", R0");
                 }
             }
+            if (function->is_noexcept) {
+                emit("    CALL " + function->symbol);
+                return resolve_type(function->result);
+            }
             const std::string call_start = new_label("cs_start");
             const std::string call_end = new_label("cs_end");
             const std::string call_landing = new_label("cs_landing");
@@ -7905,6 +7915,10 @@ private:
                 emit("    MOV R" + std::to_string(index + 1) + ", R0");
             }
             emit("    MOV R0, R4");
+            if (function->is_noexcept) {
+                emit("    CALL " + function->symbol);
+                return resolve_type(function->result);
+            }
             const std::string call_start = new_label("cs_start");
             const std::string call_end = new_label("cs_end");
             const std::string call_landing = new_label("cs_landing");
@@ -8224,8 +8238,12 @@ private:
             class_result_temp = allocate_local(call_result);
             emit("    LEA R4, [R7 + " + std::to_string(class_result_temp) + "]");
         }
+        const bool skip_unwind =
+            function->is_noexcept && !virtual_dispatch;
         const std::string call_start = new_label("cs_start");
-        emit(call_start + ":");
+        if (!skip_unwind) {
+            emit(call_start + ":");
+        }
         if (virtual_dispatch) {
             emit("    LOAD R4, [R0]");
             emit("    LOAD R4, [R4 + " +
@@ -8240,11 +8258,13 @@ private:
         const std::string call_end = new_label("cs_end");
         const std::string call_landing = new_label("cs_landing");
         const std::string call_continue = new_label("cs_continue");
-        emit(call_end + ":");
-        emit("    JMP " + call_continue);
-        emit_unwind_landing(call_landing);
-        emit(call_continue + ":");
-        record_call_site(call_start, call_end, call_landing);
+        if (!skip_unwind) {
+            emit(call_end + ":");
+            emit("    JMP " + call_continue);
+            emit_unwind_landing(call_landing);
+            emit(call_continue + ":");
+            record_call_site(call_start, call_end, call_landing);
+        }
         if (register_result) {
             const int result_object =
                 aggregate_abi(call_result_class) == AggregateAbi::Floating

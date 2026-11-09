@@ -57,6 +57,7 @@ struct Declarator {
     bool is_function = false;
     bool is_const = false;
     bool is_volatile = false;
+    bool is_noexcept = false;
     bool is_override = false;
     bool is_final = false;
     bool is_pure = false;
@@ -979,6 +980,7 @@ private:
             } else if (at("&") || at("&&")) {
                 advance();
             } else if (at("noexcept")) {
+                declarator.is_noexcept = true;
                 advance();
                 if (at("(")) {
                     skip_balanced("(", ")");
@@ -1266,6 +1268,7 @@ private:
             declaration->variadic = declarator.variadic;
             declaration->is_const = declarator.is_const || specifiers.is_const;
             declaration->is_volatile = declarator.is_volatile || specifiers.is_volatile;
+            declaration->is_noexcept = declarator.is_noexcept;
             declaration->is_static = specifiers.is_static;
             declaration->is_virtual = specifiers.is_virtual;
             declaration->is_inline = specifiers.is_inline;

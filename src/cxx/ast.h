@@ -274,6 +274,7 @@ struct Decl {
     bool variadic = false;
     bool is_const = false;
     bool is_volatile = false;
+    bool is_noexcept = false;
     bool is_static = false;
     bool is_virtual = false;
     bool is_inline = false;

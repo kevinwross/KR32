@@ -204,6 +204,11 @@ target-level cleanup.
    - Folds multiply/modulo by zero and multiply/divide by one.
    - Skips rewrites when a flag-dependent branch immediately follows.
 
+27. **`noexcept` call-site elision**
+   - Calls to functions declared `noexcept` skip exception call-site
+     labels, landing pads, and LSDA entries.
+   - Virtual calls remain wrapped because the dynamic target is unknown.
+
 ## Safety model
 
 The pass is deliberately conservative:
@@ -214,6 +219,7 @@ The pass is deliberately conservative:
 - Calls and returns count argument and return registers as reads.
 - Leaf register promotion only runs in functions with no calls or exception
   landing paths.
+- Unwind landing pads are omitted only for direct `noexcept` calls.
 - `-O0` remains the default, so existing debug behavior is unchanged.
 - Line markers are kept so source-level debugging continues to work.
 
@@ -227,6 +233,14 @@ ctest --test-dir build/windows-msvc -C Debug -j24 --output-on-failure
 ```
 
 Unset the variable (or run without it) to exercise the normal `-O0` path.
+
+## Current benchmark results
+
+| Program | Build | Ticks | `.text` |
+|---|---:|---:|---:|
+| `strings.c` | `-O0` | 30,243 | — |
+| `balanced-tree.cpp` | `-O0` | 184,725 | `0x15894` |
+| `balanced-tree.cpp` | `-O1` | 166,336 | `0x15654` |
 
 ## Planned next steps
 

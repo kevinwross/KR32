@@ -126,6 +126,21 @@ TEST_CASE("trivial functions inline at O1") {
     CHECK(result.assembly.find("CALL _ZN3Box3getEv") == std::string::npos);
 }
 
+TEST_CASE("noexcept calls skip unwind landing pads") {
+    const cxx::Result noexcept_result = cxx::compile(
+        "struct S { int f() const noexcept { return 1; } };\n"
+        "int g(S* s) { return s->f(); }\n");
+    CHECK(noexcept_result.ok);
+    CHECK(noexcept_result.assembly.find(".Lcs_landing") ==
+          std::string::npos);
+    const cxx::Result throwing_result = cxx::compile(
+        "struct S { int f() const { return 1; } };\n"
+        "int g(S* s) { return s->f(); }\n");
+    CHECK(throwing_result.ok);
+    CHECK(throwing_result.assembly.find(".Lcs_landing") !=
+          std::string::npos);
+}
+
 TEST_CASE("multi-statement functions inline at O1") {
     cxx::Options options;
     options.optimize = true;
