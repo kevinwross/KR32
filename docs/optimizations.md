@@ -70,6 +70,11 @@ target-level cleanup.
      `STORE Rs, [R7 + n]`.
    - Removes the `LEA` only when its register is provably dead.
 
+8. **Boolean branch folding**
+   - Recognizes a comparison materialized to `0`/`1` and immediately tested
+     again, and replaces the sequence with one inverse conditional branch.
+   - Applies to C condition code and other front ends that materialize booleans.
+
 ## Safety model
 
 The pass is deliberately conservative:

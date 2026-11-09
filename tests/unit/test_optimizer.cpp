@@ -37,6 +37,30 @@ TEST_CASE("assembly optimizer folds frame addresses into loads") {
     CHECK(assembly.find("LOAD R0, [R7 + 4]") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer folds boolean branches") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    CMP R0, #1\n"
+        "    JZ .Ltrue_1\n"
+        "    MOV R0, #0\n"
+        "    JMP .Lcmpend_2\n"
+        ".Ltrue_1:\n"
+        "    MOV R0, #1\n"
+        ".Lcmpend_2:\n"
+        "    CMP R0, #0\n"
+        "    JZ .Lelse_3\n"
+        ".Lelse_3:\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 7);
+    CHECK(assembly.find("JNZ .Lelse_3") != std::string::npos);
+    CHECK(assembly.find("MOV R0, #0") == std::string::npos);
+    CHECK(assembly.find(".Lcmpend_2") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer removes dead frame stores") {
     std::string assembly =
         ".text\n"

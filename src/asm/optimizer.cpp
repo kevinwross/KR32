@@ -497,6 +497,71 @@ int fold_frame_addresses(std::vector<std::string>& lines) {
     return removed;
 }
 
+std::string inverse_condition(const std::string& mnemonic) {
+    if (mnemonic == "JZ") return "JNZ";
+    if (mnemonic == "JNZ") return "JZ";
+    if (mnemonic == "JLT") return "JGE";
+    if (mnemonic == "JLE") return "JGT";
+    if (mnemonic == "JGT") return "JLE";
+    if (mnemonic == "JGE") return "JLT";
+    if (mnemonic == "JNC") return "JCS";
+    if (mnemonic == "JCS") return "JNC";
+    if (mnemonic == "JLS") return "JHI";
+    if (mnemonic == "JHI") return "JLS";
+    return {};
+}
+
+int fold_boolean_branches(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 8 < lines.size(); ++index) {
+        Instruction compare;
+        Instruction branch;
+        if (!parse_instruction(lines[index], compare) ||
+            compare.mnemonic != "CMP" ||
+            !parse_instruction(lines[index + 1], branch) ||
+            branch.operands.size() != 1) {
+            continue;
+        }
+        const std::string inverse = inverse_condition(branch.mnemonic);
+        if (inverse.empty()) {
+            continue;
+        }
+        const std::string true_label = trim(branch.operands[0]);
+        if (true_label.rfind(".Ltrue_", 0) != 0 ||
+            trim(lines[index + 2]) != "MOV R0, #0") {
+            continue;
+        }
+        Instruction skip;
+        if (!parse_instruction(lines[index + 3], skip) ||
+            skip.mnemonic != "JMP" || skip.operands.size() != 1) {
+            continue;
+        }
+        const std::string end_label = trim(skip.operands[0]);
+        if (end_label.rfind(".Lcmpend_", 0) != 0 ||
+            trim(lines[index + 4]) != true_label + ":" ||
+            trim(lines[index + 5]) != "MOV R0, #1" ||
+            trim(lines[index + 6]) != end_label + ":") {
+            continue;
+        }
+        Instruction test;
+        Instruction false_branch;
+        if (!parse_instruction(lines[index + 7], test) ||
+            trim(lines[index + 7]) != "CMP R0, #0" ||
+            !parse_instruction(lines[index + 8], false_branch) ||
+            false_branch.mnemonic != "JZ" ||
+            false_branch.operands.size() != 1) {
+            continue;
+        }
+        lines[index + 1] =
+            "    " + inverse + " " + trim(false_branch.operands[0]);
+        for (std::size_t clear = index + 2; clear <= index + 8; ++clear) {
+            lines[clear].clear();
+        }
+        removed += 7;
+    }
+    return removed;
+}
+
 int remove_dead_frame_stores(std::vector<std::string>& lines) {
     int removed = 0;
     std::map<int, std::set<int>> used;
@@ -727,6 +792,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_frame_addresses(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
     stats.removed += fold_immediate_consumers(lines);
+    stats.removed += fold_boolean_branches(lines);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);
