@@ -15,9 +15,11 @@ TEST_CASE("constant folding and dead branches") {
 
 TEST_CASE("local scalar reads load directly") {
     const cxx::Result result = cxx::compile(
-        "int read() { int value = 3; return value; }\n");
+        "int read() { int value = 3; return value; }\n"
+        "int assign(int value) { int result = 0; result = value + 2; return result; }\n");
     CHECK(result.ok);
     CHECK(result.assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
+    CHECK(result.assembly.find("STORE R0, [R7 + 4]") != std::string::npos);
 }
 
 TEST_CASE("immediate comparisons avoid spills") {

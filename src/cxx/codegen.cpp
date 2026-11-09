@@ -6800,6 +6800,30 @@ private:
             store_value(stored_type);
             return lhs_type;
         }
+        if (expression.text == "=" &&
+            expression.children[0]->kind == ExprKind::Name &&
+            stored_type && !is_fp(stored_type) &&
+            !is_long_long(stored_type) && class_of(stored_type) == nullptr) {
+            Local* local = lookup_local(expression.children[0]->name);
+            if (local != nullptr && !local->is_reference &&
+                local->static_global == nullptr) {
+                gen_expr(*expression.children[1]);
+                const std::string frame =
+                    "[R7 + " + std::to_string(local->offset) + "]";
+                if (stored_type->kind == TypeKind::Builtin &&
+                    (stored_type->builtin == BuiltinKind::Char ||
+                     stored_type->builtin == BuiltinKind::Bool)) {
+                    emit("    STORE8 R0, " + frame);
+                } else if (stored_type->kind == TypeKind::Builtin &&
+                           (stored_type->builtin == BuiltinKind::Short ||
+                            stored_type->builtin == BuiltinKind::UnsignedShort)) {
+                    emit("    STORE16 R0, " + frame);
+                } else {
+                    emit("    STORE R0, " + frame);
+                }
+                return lhs_type;
+            }
+        }
         gen_address(*expression.children[0]);
         const int address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
         emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");

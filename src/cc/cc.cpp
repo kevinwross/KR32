@@ -4059,6 +4059,39 @@ private:
     }
 
     TypePtr gen_assignment_expression() {
+        if (peek().kind == TokenKind::Identifier && peek(1).text == "=") {
+            const Variable* variable = lookup(peek().text);
+            if (variable != nullptr && !variable->global &&
+                !variable->is_thread_local && !variable->type->is_atomic &&
+                variable->type->kind != Type::Kind::Struct &&
+                variable->type->kind != Type::Kind::Union &&
+                variable->type->kind != Type::Kind::Array) {
+                take();
+                take();
+                const TypePtr type = variable->type;
+                TypePtr value_type = gen_expression();
+                convert_value(value_type, type);
+                const std::string frame =
+                    "[R7 + " + std::to_string(variable->offset) + "]";
+                if (is_long_long_type(type)) {
+                    emit("    STORE R0, " + frame);
+                    emit("    STORE R1, [R7 + " +
+                         std::to_string(variable->offset + 4) + "]");
+                } else if (is_fp_type(type)) {
+                    emit(std::string("    FSTORE.") +
+                         (type->kind == Type::Kind::Double ? "D" : "W") +
+                         " F0, " + frame);
+                } else if (type->kind == Type::Kind::Char ||
+                           type->kind == Type::Kind::Bool) {
+                    emit("    STORE8 R0, " + frame);
+                } else if (type->kind == Type::Kind::Short) {
+                    emit("    STORE16 R0, " + frame);
+                } else {
+                    emit("    STORE R0, " + frame);
+                }
+                return type;
+            }
+        }
         const bool looks_lvalue =
             (peek().kind == TokenKind::Identifier &&
              (is_assignment_operator(peek(1).text) || peek(1).text == "[" ||
