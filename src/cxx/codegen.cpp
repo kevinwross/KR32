@@ -2027,6 +2027,76 @@ private:
         return Type::make_pointer(type);
     }
 
+    TypePtr infer_lambda_value_type(const Expr& expression, bool& found) {
+        switch (expression.kind) {
+        case ExprKind::BoolLiteral:
+            found = true;
+            return Type::make_builtin(BuiltinKind::Bool);
+        case ExprKind::FloatLiteral:
+            found = true;
+            return Type::make_builtin(BuiltinKind::Double);
+        case ExprKind::IntegerLiteral:
+        case ExprKind::CharacterLiteral:
+            found = true;
+            return Type::make_builtin(BuiltinKind::Int);
+        case ExprKind::Unary:
+            if (expression.text == "!") {
+                found = true;
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
+            if (!expression.children.empty()) {
+                return infer_lambda_value_type(*expression.children[0], found);
+            }
+            break;
+        case ExprKind::Binary:
+            if (expression.text == "==" || expression.text == "!=" ||
+                expression.text == "<" || expression.text == "<=" ||
+                expression.text == ">" || expression.text == ">=" ||
+                expression.text == "&&" || expression.text == "||") {
+                found = true;
+                return Type::make_builtin(BuiltinKind::Bool);
+            }
+            break;
+        default:
+            break;
+        }
+        found = false;
+        return Type::make_builtin(BuiltinKind::Int);
+    }
+
+    TypePtr infer_lambda_return_type(const Stmt* statement, bool& found) {
+        if (statement == nullptr) {
+            found = false;
+            return Type::make_builtin(BuiltinKind::Int);
+        }
+        if (statement->kind == StmtKind::Return && statement->expression) {
+            return infer_lambda_value_type(*statement->expression, found);
+        }
+        if (statement->kind == StmtKind::Compound) {
+            for (const StmtPtr& child : statement->statements) {
+                TypePtr type = infer_lambda_return_type(child.get(), found);
+                if (found) {
+                    return type;
+                }
+            }
+        }
+        if (statement->body) {
+            TypePtr type = infer_lambda_return_type(statement->body.get(), found);
+            if (found) {
+                return type;
+            }
+        }
+        if (statement->else_body) {
+            TypePtr type =
+                infer_lambda_return_type(statement->else_body.get(), found);
+            if (found) {
+                return type;
+            }
+        }
+        found = false;
+        return Type::make_builtin(BuiltinKind::Int);
+    }
+
     Function* materialize_lambda(const Expr& expression) {
         const auto existing = lambda_functions_.find(&expression);
         if (existing != lambda_functions_.end()) {
@@ -2114,9 +2184,12 @@ private:
         declaration->name.parts.push_back(
             "__lambda_" + std::to_string(lambda_counter_++));
         declaration->body = expression.body;
-        declaration->type = expression.type
-                                ? resolve_type(expression.type)
-                                : Type::make_builtin(BuiltinKind::Int);
+        if (expression.type) {
+            declaration->type = resolve_type(expression.type);
+        } else {
+            bool inferred = false;
+            declaration->type = infer_lambda_return_type(expression.body.get(), inferred);
+        }
         for (const DeclPtr& parameter : expression.parameters) {
             if (!parameter) {
                 continue;
@@ -2811,7 +2884,7 @@ private:
         }
         const std::vector<std::string> parts =
             split_qualified(call.children[0]->name.to_string());
-        if (parts.empty()) {
+        if (parts.empty() || (parts.size() > 1 && parts.front() != "kr32")) {
             return false;
         }
         name = parts.back();

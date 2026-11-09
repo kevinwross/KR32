@@ -1088,6 +1088,37 @@ TEST_CASE("algorithm binary searches sorted ranges") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("algorithm predicate callbacks") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "bool positive(int value) { return value > 0; }\n"
+        "int main() {\n"
+        "    int values[5] = { -1, 2, -3, 4, 5 };\n"
+        "    if (!std::any_of(values, values + 5, positive)) return 1;\n"
+        "    if (std::all_of(values, values + 5, positive)) return 2;\n"
+        "    if (!std::none_of(values, values + 5,\n"
+        "                      [](int value) { return value == 0; })) return 3;\n"
+        "    if (std::find_if(values, values + 5, positive) != values + 1) return 4;\n"
+        "    if (std::find_if_not(values, values + 5, positive) != values) return 5;\n"
+        "    if (std::count_if(values, values + 5, positive) != 3) return 6;\n"
+        "    int output[5] = { 0, 0, 0, 0, 0 };\n"
+        "    std::transform(values, values + 5, output,\n"
+        "                   [](int value) { return value * 2; });\n"
+        "    if (output[1] != 4 || output[4] != 10) return 7;\n"
+        "    int* end = std::remove_if(values, values + 5, positive);\n"
+        "    if (end != values + 2 || values[0] != -1 || values[1] != -3) return 8;\n"
+        "    std::replace_if(values, values + 5,\n"
+        "                    [](int value) { return value < 0; }, 0);\n"
+        "    if (values[0] != 0 || values[1] != 0) return 9;\n"
+        "    std::sort(values, values + 5,\n"
+        "              [](int left, int right) { return right < left; });\n"
+        "    return values[0] == 5 && values[4] == 0 ? 0 : 10;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("algorithm finds unsigned and float extremes") {
     const ProgramResult program = compile_and_run(
         "#include <algorithm>\n"
