@@ -1223,7 +1223,7 @@ struct Variable {
     std::string label;
     bool global = false;
     bool is_thread_local = false;
-    std::string tls_slot;
+    std::string tls_slot{};
 };
 
 struct FunctionSignature {

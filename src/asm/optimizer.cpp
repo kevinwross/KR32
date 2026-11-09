@@ -33,11 +33,6 @@ bool is_label(std::string_view line) {
     return !text.empty() && text.back() == ':';
 }
 
-bool is_directive(std::string_view line) {
-    const std::string text = trim(line);
-    return !text.empty() && text.front() == '.' && text.back() != ':';
-}
-
 bool parse_register(std::string_view text, int& reg) {
     const std::string value = trim(text);
     if (value.size() < 2 || (value[0] != 'R' && value[0] != 'r')) {
@@ -179,12 +174,6 @@ bool is_branch(std::string_view mnemonic) {
 
 bool is_call(std::string_view mnemonic) {
     return mnemonic == "CALL" || mnemonic == "SYSCALL";
-}
-
-bool is_frame_boundary(std::string_view text) {
-    const std::string value = trim(text);
-    return value == ".text" || value == ".data" || value == ".bss" ||
-           value == ".tls" || value == ".rodata" || value == ".debug_info";
 }
 
 bool writes_first_operand(const Instruction& instruction) {
