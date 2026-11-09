@@ -1202,6 +1202,8 @@ TEST_CASE("std optional and string view") {
         "    std::string_view view(\"hello\");\n"
         "    if (view.size() != 5 || view.empty()) return 5;\n"
         "    if (view[0] != 'h' || view.back() != 'o') return 6;\n"
+        "    if (!view.starts_with(\"hell\") || !view.starts_with('h')) return 7;\n"
+        "    if (!view.ends_with(\"llo\") || !view.ends_with('o')) return 8;\n"
         "    std::string_view tail = view.substr(1, 3);\n"
         "    if (tail.size() != 3 || tail[0] != 'e') return 7;\n"
         "    view.remove_prefix(1);\n"

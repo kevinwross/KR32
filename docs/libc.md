@@ -39,7 +39,7 @@ source line numbers and debugger line mappings are preserved.
 | `<string>` | `std::string` with construction, assignment, `c_str`/`data`, `size`/`capacity`, `operator[]`, `at`, `front`/`back`, `append`/`push_back`, `insert`, `erase`, `replace`, `substr`, `find`/`rfind` and related searches, `compare`, `starts_with`/`ends_with`/`contains`, `resize`, `reserve`, `shrink_to_fit`, `clear`, `swap`, iterators, and numeric conversions |
 | `<utility>` | `std::swap` for integer, character, and floating-point types; `std::pair<First, Second>` with public `first`/`second` |
 | `<optional>` | `std::optional<T>` with `has_value`, `operator bool`, `value`, `operator*`, `operator->`, `value_or`, `set`, assignment from `T`, `emplace`, and `reset` |
-| `<string_view>` | `std::string_view` with C-string construction, `data`, `size`, `empty`, `operator[]`, `front`/`back`, `substr`, `remove_prefix`/`remove_suffix`, and `compare` |
+| `<string_view>` | `std::string_view` with C-string construction, `data`, `size`, `empty`, `operator[]`, `front`/`back`, `substr`, `remove_prefix`/`remove_suffix`, `starts_with`/`ends_with`, and `compare` |
 | `<vector>` | `std::vector<T>` with `push_back`, `pop_back`, `insert`, `erase`, `resize`, `operator[]`, `size`, `empty`, `capacity`, `reserve`, `clear`, `data`, `begin`/`end`, and `front`/`back` |
 | `<atomic>` | `std::atomic<T>` with `load`, `store`, `exchange`, `fetch_add`, `compare_exchange_weak`/`strong`, assignment, and conversion to `T`, backed by LL/SC |
 | `<array>` | `std::array<T, N>` with `operator[]`, `size`, `empty`, `begin`/`end`, and `front`/`back` |
