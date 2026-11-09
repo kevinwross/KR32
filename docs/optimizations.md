@@ -87,7 +87,8 @@ target-level cleanup.
      the next label.
 
 5. **Redundant jumps**
-   - Removes an unconditional jump whose target is the next label.
+   - Removes an unconditional jump whose target label is reachable by
+     falling through zero or more consecutive labels.
 
 6. **Dead frame stores**
    - Removes a `STORE` to a frame slot that is never loaded or addressed in the

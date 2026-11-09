@@ -2041,13 +2041,21 @@ int remove_redundant_jumps(std::vector<std::string>& lines) {
             continue;
         }
         std::size_t next = index + 1;
-        while (next < lines.size() && trim(lines[next]).empty()) {
+        while (next < lines.size()) {
+            const std::string text = trim(lines[next]);
+            if (text.empty()) {
+                ++next;
+                continue;
+            }
+            if (text == instruction.operands[0] + ":") {
+                lines[index].clear();
+                ++removed;
+                break;
+            }
+            if (!is_label(text)) {
+                break;
+            }
             ++next;
-        }
-        if (next < lines.size() &&
-            trim(lines[next]) == instruction.operands[0] + ":") {
-            lines[index].clear();
-            ++removed;
         }
     }
     return removed;

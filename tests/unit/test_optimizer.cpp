@@ -23,6 +23,21 @@ TEST_CASE("assembly optimizer forwards frame slots") {
     CHECK(assembly.find("CMP R0, R1") != std::string::npos);
 }
 
+TEST_CASE("assembly optimizer removes jumps across labels") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    JMP .Ltarget\n"
+        ".Lother:\n"
+        ".Ltarget:\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("JMP .Ltarget") == std::string::npos);
+}
+
 TEST_CASE("assembly optimizer strength-reduces immediates") {
     std::string assembly =
         ".text\n"
