@@ -2282,6 +2282,114 @@ int remove_repeated_frame_loads(std::vector<std::string>& lines) {
     return removed;
 }
 
+struct TailReplacement {
+    std::size_t call = 0;
+    std::size_t jump = 0;
+    std::string adjust;
+    std::string target;
+};
+
+int fold_tail_calls(std::vector<std::string>& lines, int& rewritten) {
+    std::map<std::string, std::size_t> labels;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        if (is_label(lines[index])) {
+            const std::string text = trim(lines[index]);
+            labels[text.substr(0, text.size() - 1)] = index;
+        }
+    }
+    std::vector<TailReplacement> replacements;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        Instruction call;
+        if (!parse_instruction(lines[index], call) ||
+            call.mnemonic != "CALL" || call.operands.size() != 1) {
+            continue;
+        }
+        int indirect = 0;
+        if (parse_register(call.operands[0], indirect)) {
+            continue;
+        }
+        std::size_t jump_index = index + 1;
+        while (jump_index < lines.size() && lines[jump_index].empty()) {
+            ++jump_index;
+        }
+        Instruction jump;
+        if (jump_index >= lines.size() ||
+            !parse_instruction(lines[jump_index], jump) ||
+            jump.mnemonic != "JMP" || jump.operands.size() != 1) {
+            continue;
+        }
+        const std::string return_label = trim(jump.operands[0]);
+        if (return_label.rfind(".Lreturn_", 0) != 0) {
+            continue;
+        }
+        const auto label = labels.find(return_label);
+        if (label == labels.end()) {
+            continue;
+        }
+        std::size_t epilogue = label->second + 1;
+        while (epilogue < lines.size() && lines[epilogue].empty()) {
+            ++epilogue;
+        }
+        std::string adjust;
+        if (epilogue < lines.size()) {
+            Instruction instruction;
+            if (parse_instruction(lines[epilogue], instruction) &&
+                instruction.mnemonic == "ADJSP" &&
+                instruction.operands.size() == 1) {
+                adjust = format_instruction(instruction);
+                ++epilogue;
+                while (epilogue < lines.size() &&
+                       lines[epilogue].empty()) {
+                    ++epilogue;
+                }
+            }
+        }
+        Instruction pop;
+        if (epilogue >= lines.size() ||
+            !parse_instruction(lines[epilogue], pop) ||
+            pop.mnemonic != "POP" || pop.operands.size() != 1 ||
+            trim(pop.operands[0]) != "R7") {
+            continue;
+        }
+        std::size_t ret_index = epilogue + 1;
+        while (ret_index < lines.size() && lines[ret_index].empty()) {
+            ++ret_index;
+        }
+        Instruction ret;
+        if (ret_index >= lines.size() ||
+            !parse_instruction(lines[ret_index], ret) ||
+            ret.mnemonic != "RET") {
+            continue;
+        }
+        replacements.push_back({index, jump_index, adjust,
+                                trim(call.operands[0])});
+    }
+    if (replacements.empty()) {
+        return 0;
+    }
+    std::vector<std::string> output;
+    output.reserve(lines.size() + replacements.size() * 2);
+    std::size_t replacement = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        if (replacement < replacements.size() &&
+            replacements[replacement].call == index) {
+            const TailReplacement& item = replacements[replacement];
+            if (!item.adjust.empty()) {
+                output.push_back(item.adjust);
+            }
+            output.push_back("    POP R7");
+            output.push_back("    JMP " + item.target);
+            ++rewritten;
+            index = item.jump;
+            ++replacement;
+            continue;
+        }
+        output.push_back(lines[index]);
+    }
+    lines = std::move(output);
+    return 0;
+}
+
 int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -2356,6 +2464,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
     stats.removed += remove_repeated_frame_loads(lines);
+    fold_tail_calls(lines, stats.rewritten);
     stats.removed += fold_load_copy_overwrites(lines);
     int add_chain = 0;
     do {

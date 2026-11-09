@@ -1232,6 +1232,10 @@ struct FunctionSignature {
     std::vector<TypePtr> parameters;
     bool variadic = false;
     bool defined = false;
+    bool inline_constant = false;
+    std::int64_t inline_value = 0;
+    std::string inline_global;
+    TypePtr inline_global_type;
 };
 
 std::string compile_time_stamp(const char* format) {
@@ -2555,7 +2559,8 @@ private:
         auto found = functions_.find(name);
         if (found == functions_.end()) {
             functions_.emplace(
-                name, FunctionSignature{name, result_type, parameters, variadic, false});
+                name, FunctionSignature{name, result_type, parameters, variadic, false,
+                                          false, 0, {}, nullptr});
         } else if (found->second.defined) {
             error("function already defined: " + name);
         } else {
@@ -2570,6 +2575,46 @@ private:
             error("expected '{' or ';'");
         }
         functions_[name].defined = true;
+        if (parameters.size() <= 4 && !variadic &&
+            (result_type->kind == Type::Kind::Int ||
+             result_type->kind == Type::Kind::Pointer)) {
+            const std::size_t saved = position_;
+            if (peek().text == "return") {
+                take();
+                std::int64_t value = 0;
+                if (try_fold_constant(value) && peek().text == ";" &&
+                    peek(1).text == "}") {
+                    functions_[name].inline_constant = true;
+                    functions_[name].inline_value = value;
+                } else {
+                    position_ = saved;
+                    if (peek().text == "return") {
+                        take();
+                        if (peek().kind == TokenKind::Identifier) {
+                            const std::string global_name = peek().text;
+                            take();
+                            if (peek().text == ";" &&
+                                peek(1).text == "}") {
+                                const auto global =
+                                    globals_.find(global_name);
+                                if (global != globals_.end() &&
+                                    !global->second.is_thread_local &&
+                                    (global->second.type->kind ==
+                                         Type::Kind::Int ||
+                                     global->second.type->kind ==
+                                         Type::Kind::Pointer)) {
+                                    functions_[name].inline_global =
+                                        global_name;
+                                    functions_[name].inline_global_type =
+                                        global->second.type;
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            position_ = saved;
+        }
         current_function_ = name;
         current_result_type_ = result_type;
         frame_size_ = 0;
@@ -3539,6 +3584,23 @@ private:
             return &global->second;
         }
         return nullptr;
+    }
+
+    bool emit_inlined_call_result(const std::string& name) {
+        const auto signature = functions_.find(name);
+        if (signature == functions_.end()) {
+            return false;
+        }
+        if (signature->second.inline_constant) {
+            emit("    MOV R0, #" +
+                 std::to_string(signature->second.inline_value));
+            return true;
+        }
+        if (!signature->second.inline_global.empty()) {
+            emit("    LOAD R0, [" + signature->second.inline_global + "]");
+            return true;
+        }
+        return false;
     }
 
     void gen_load(const TypePtr& type) {
@@ -6026,6 +6088,9 @@ private:
                                      ", R0");
                             }
                         }
+                        if (emit_inlined_call_result(name)) {
+                            return signature->second.result;
+                        }
                         emit("    CALL " + name);
                         return signature->second.result;
                     }
@@ -6139,6 +6204,13 @@ private:
                              ", [R7 + " + std::to_string(slots[index]) + "]");
                         ++integer_register;
                     }
+                }
+                if (indirect_function == nullptr && stack_count == 0 &&
+                    emit_inlined_call_result(name)) {
+                    if (signature != functions_.end()) {
+                        return signature->second.result;
+                    }
+                    return type_int();
                 }
                 emit(indirect_function != nullptr ? "    CALL R6"
                                                   : "    CALL " + name);

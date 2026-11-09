@@ -182,6 +182,18 @@ target-level cleanup.
    - Prefixes with calls, declarations, control flow, or class construction
      are rejected.
 
+23. **C trivial call folding**
+   - Records zero-to-four-parameter C functions whose body is exactly
+     `return <constant>;` or `return <global>;`.
+   - Replaces direct calls with the corresponding immediate move or global
+     load after evaluating call arguments normally.
+
+24. **C tail-call folding**
+   - Rewrites `CALL target` immediately followed by `JMP .Lreturn_fn` into
+     the function epilogue plus `JMP target`.
+   - Leaves the shared return label and epilogue in place for other returns.
+   - Skips indirect calls and calls with stack-argument cleanup.
+
 ## Safety model
 
 The pass is deliberately conservative:
@@ -209,5 +221,5 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 ## Planned next steps
 
 1. Loop-invariant load hoisting for loops with calls outside the body.
-2. Broader inlining for C and multi-statement C++ functions.
-3. Tail-call optimization, dead-function removal, and nothrow call metadata.
+2. Dead-function removal and nothrow call metadata.
+3. Instruction selection and strength reduction.

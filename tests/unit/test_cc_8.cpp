@@ -32,6 +32,44 @@ TEST_CASE("c comparisons branch directly") {
     CHECK(result.assembly.find("cmpend") == std::string::npos);
 }
 
+TEST_CASE("c tail calls use jumps") {
+    const cc::Result result = cc::compile(
+        "int leaf(int x) { return x + 1; }\n"
+        "int tail(int x) { return leaf(x); }\n"
+        "int main(void) { return tail(4) == 5 ? 0 : 1; }\n",
+        "<input>", 0, true);
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CALL leaf") == std::string::npos);
+    CHECK(result.assembly.find("JMP leaf") != std::string::npos);
+    const ProgramResult program = compile_and_run(
+        "int leaf(int x) { return x + 1; }\n"
+        "int tail(int x) { return leaf(x); }\n"
+        "int main(void) { return tail(4) == 5 ? 0 : 1; }\n",
+        true);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("c trivial calls inline") {
+    const cc::Result result = cc::compile(
+        "int five(void) { return 5; }\n"
+        "int g = 7;\n"
+        "int getg(void) { return g; }\n"
+        "int main(void) { return five() + getg() == 12 ? 0 : 1; }\n",
+        "<input>", 0, true);
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CALL five") == std::string::npos);
+    CHECK(result.assembly.find("CALL getg") == std::string::npos);
+    const ProgramResult program = compile_and_run(
+        "int five(void) { return 5; }\n"
+        "int g = 7;\n"
+        "int getg(void) { return g; }\n"
+        "int main(void) { return five() + getg() == 12 ? 0 : 1; }\n",
+        true);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("c leaf locals stay in registers") {
     const ProgramResult program = compile_and_run(
         "int leaf(int a) { int x = a + 1; return x + x + x; }\n"
