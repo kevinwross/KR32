@@ -19,6 +19,7 @@ struct Options {
     std::string source_name = "<input>";
     bool exceptions = true;
     bool threads = true;
+    bool optimize = false;
 };
 
 struct Diagnostic {

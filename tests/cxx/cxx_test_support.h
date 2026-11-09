@@ -13,6 +13,7 @@
 #include "kr32/vm/threads.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -156,8 +157,10 @@ bool build_cluster_image(std::string_view source, container::Image& image,
     return true;
 }
 
-ProgramResult compile_and_run(std::string_view source) {
-    const cxx::Result compiled = cxx::compile(source);
+ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
+    cxx::Options options;
+    options.optimize = optimize;
+    const cxx::Result compiled = cxx::compile(source, options);
     if (!compiled.ok) {
         ProgramResult failed;
         for (const cxx::Diagnostic& diagnostic : compiled.diagnostics) {

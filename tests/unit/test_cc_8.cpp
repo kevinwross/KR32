@@ -1,5 +1,24 @@
 #include "cc_test_support.h"
 
+TEST_CASE("optimized c programs preserve behavior") {
+    const ProgramResult program = compile_and_run(
+        "int add(int left, int right) { return left + right; }\n"
+        "int is_one(int value) { return value == 1; }\n"
+        "int main(void) {\n"
+        "    int total = 0;\n"
+        "    for (int index = 0; index < 5; ++index) total += index;\n"
+        "    if (total != 10) return 1;\n"
+        "    if (!is_one(1) || is_one(2)) return 2;\n"
+        "    int value = 3;\n"
+        "    int *pointer = &value;\n"
+        "    *pointer = add(value, 4);\n"
+        "    return value == 7 ? 0 : 3;\n"
+        "}\n",
+        true);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
 TEST_CASE("c atomic read modify write operations") {
     const ProgramResult program = compile_and_run(
         "_Atomic int counter = 3;\n"

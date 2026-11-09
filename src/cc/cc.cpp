@@ -2,6 +2,8 @@
 
 #include "libc_runtime.h"
 
+#include "kr32/asm/optimizer.h"
+
 #include <algorithm>
 #include <bit>
 #include <cctype>
@@ -5378,13 +5380,20 @@ private:
 
 } // namespace
 
-Result compile(std::string_view source, std::string_view source_name, int source_id) {
+Result compile(std::string_view source, std::string_view source_name, int source_id,
+                bool optimize) {
     Compiler compiler(source, source_name, source_id);
-    return compiler.run();
+    Result result = compiler.run();
+    if (optimize && result.ok) {
+        const assembler::OptimizeStats stats =
+            assembler::optimize_assembly(result.assembly);
+        (void)stats;
+    }
+    return result;
 }
 
 Result compile(std::string_view source, std::string_view source_name) {
-    return compile(source, source_name, 0);
+    return compile(source, source_name, 0, false);
 }
 
 std::string libc_assembly() {

@@ -1,5 +1,41 @@
 #include "cxx_test_support.h"
 
+TEST_CASE("optimized programs preserve behavior") {
+    const ProgramResult program = compile_and_run(
+        "#include <vector>\n"
+        "int add(int left, int right) { return left + right; }\n"
+        "int main() {\n"
+        "    int total = 0;\n"
+        "    for (int index = 0; index < 5; ++index) total = total + index;\n"
+        "    if (total != 10) return 1;\n"
+        "    total = add(total, 5);\n"
+        "    if (total != 15) return 2;\n"
+        "    int value = 3;\n"
+        "    int* pointer = &value;\n"
+        "    *pointer = 7;\n"
+        "    if (value != 7) return 3;\n"
+        "    std::vector<int> values;\n"
+        "    values.push_back(2);\n"
+        "    values.push_back(4);\n"
+        "    return values[0] + values[1] == 6 ? 0 : 4;\n"
+        "}\n",
+        true);
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("optimized assembly folds immediate compares") {
+    cxx::Options options;
+    options.optimize = true;
+    const cxx::Result result = cxx::compile(
+        "int is_one(int value) { if (value == 1) return 1; return 0; }\n",
+        options);
+    CHECK(result.ok);
+    CHECK(result.assembly.find("CMP R0, #1") != std::string::npos);
+    CHECK(result.assembly.find("MOV R4, #1") == std::string::npos);
+}
+
 TEST_CASE("call diagnostics name the target") {
     const cxx::Result result =
         cxx::compile("int main() { missing(1); return 0; }\n");

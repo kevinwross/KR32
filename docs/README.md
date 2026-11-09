@@ -14,6 +14,7 @@ Start here, then follow the topic.
 | [container.md](container.md) | `.k32` object/executable format. |
 | [libc.md](libc.md) | Freestanding C libc and runtime. |
 | [templates.md](templates.md) | C++ template support and limits. |
+| [optimizations.md](optimizations.md) | `-O1` peephole passes, safety model, and optimized test runs. |
 | [roadmap.md](roadmap.md) | Compiler roadmap status. |
 | [testing.md](testing.md) | Test layout, fast edit loop, and full-suite cadence. |
 | [debug.md](debug.md) | Debug information format. |

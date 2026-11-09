@@ -4,6 +4,7 @@
 #include "cxx/parser.h"
 
 #include "kr32/asm/object_assembler.h"
+#include "kr32/asm/optimizer.h"
 #include "kr32/container/container.h"
 
 #include <memory>
@@ -23,6 +24,11 @@ Result compile(std::string_view source, const Options& options) {
     if (!result.diagnostics.empty()) {
         result.assembly.clear();
         return result;
+    }
+    if (options.optimize) {
+        const assembler::OptimizeStats stats =
+            assembler::optimize_assembly(result.assembly);
+        (void)stats;
     }
     if (options.emit == Emit::Object) {
         container::Image object_image;

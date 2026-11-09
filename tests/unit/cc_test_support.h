@@ -8,6 +8,7 @@
 #include "kr32/link/linker.h"
 
 #include <cstdint>
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
 #include <string>
@@ -24,9 +25,9 @@ struct ProgramResult {
     bool ok = false;
 };
 
-ProgramResult compile_and_run(std::string_view source) {
+ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
     ProgramResult program;
-    const cc::Result compiled = cc::compile(source);
+    const cc::Result compiled = cc::compile(source, "<input>", 0, optimize);
     const std::string diagnostic =
         compiled.diagnostics.empty() ? "compile failed" : compiled.diagnostics.front().message;
     INFO(diagnostic);

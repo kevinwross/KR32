@@ -48,7 +48,8 @@ endfunction()
 
 kr32_add_library(kr32_core src/core/encoding.cpp src/core/machine.cpp src/core/devices.cpp)
 
-kr32_add_library(kr32_asm src/asm/assembler.cpp src/asm/object_assembler.cpp)
+kr32_add_library(kr32_asm src/asm/assembler.cpp src/asm/object_assembler.cpp
+                         src/asm/optimizer.cpp)
 target_link_libraries(kr32_asm PUBLIC kr32_core kr32_container)
 
 kr32_add_library(kr32_container src/container/container.cpp)

@@ -30,6 +30,7 @@ set(KR32_TEST_SOURCES
     unit/test_host.cpp
     unit/test_threads.cpp
     unit/test_assembler.cpp
+    unit/test_optimizer.cpp
     unit/test_disassembler.cpp
     cxx/test_cxx_abi.cpp
     cxx/test_cxx_api.cpp

@@ -20,7 +20,7 @@ struct Result {
 
 [[nodiscard]] Result compile(std::string_view source,
                              std::string_view source_name = "<input>",
-                             int source_id = 0);
+                             int source_id = 0, bool optimize = false);
 
 // The M4 runtime: _start, putchar, and exit. It is assembled as a separate
 // relocatable object and linked with the user object.
