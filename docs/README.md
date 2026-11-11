@@ -18,6 +18,7 @@ Start here, then follow the topic.
 | [roadmap.md](roadmap.md) | Compiler roadmap status. |
 | [testing.md](testing.md) | Test layout, fast edit loop, and full-suite cadence. |
 | [debug.md](debug.md) | Debug information format. |
+| [HowToDebugUsingKR32.md](../HowToDebugUsingKR32.md) | Running/debugging externally compiled flat `.bin` and `.k32` test programs with the CLI, DAP, and GUI. |
 
 ## Active work streams
 
