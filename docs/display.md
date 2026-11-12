@@ -1,6 +1,6 @@
 # Display, console, and keyboard (proposal)
 
-**Status:** proposal, 2026-11-08. No source changes have been made. This
+**Status:** proposal, reviewed 2026-11-12T14:55:40-08:00. No source changes have been made. This
 document specifies the display device contract, the host presentation model,
 the windowed system console, and the keyboard device. It supersedes the
 framebuffer section of [devices.md](devices.md) once implemented; until then
@@ -127,7 +127,7 @@ Offsets not listed read as zero and ignore writes.
 | `0x1C` | `STATUS` | RO/W1C | `0` | bit 0: committed enable. bit 1: current registers form a valid mode. bit 2: sticky `FLIP_ERROR`, write 1 to clear. |
 | `0x20` | `FLIP` | WO | `0` | Write bit 0 set to commit and swap. Reads as 0. |
 | `0x24` | `FRAME` | RO | `0` | Committed-frame counter; increments on every successful flip. |
-| `0x28` | `ID` | RO | `0x4642_5231` | `"FBR1"`. Guests probe this before using the device. |
+| `0x28` | `ID` | RO | `0x4642_5231` | Magic. Guests compare the 32-bit word; the bytes in memory are `31 52 42 46` (`1RBF`), so a byte compare against `FBR1` fails. |
 
 `WIDTH` and `HEIGHT` maxima are the 1920x1080 surface capacity, not a
 recommendation. The default mode for the console is 800x600 (section 7).
@@ -175,8 +175,9 @@ and a guest can always read back what it wrote. Reads return the written
    registers, and `FRAME` untouched. The display keeps showing the previous
    committed frame.
 3. On success: the committed frame becomes
-   `{CONTROL.bit0, WIDTH, HEIGHT, STRIDE, FORMAT, FRONT}`; then swap the
-   `FRONT` and `BACK` registers; then increment `FRAME`; clear `FLIP_ERROR`.
+   `{CONTROL.bit0, WIDTH, HEIGHT, STRIDE, FORMAT, BACK}` — the surface the
+   guest just drew; then swap the `FRONT` and `BACK` registers; then increment
+   `FRAME`; clear `FLIP_ERROR`.
 
 After a successful flip, reading `FRONT` returns the offset that was just
 displayed and `BACK` returns the surface the guest should draw into next.
@@ -247,10 +248,13 @@ struct DisplayFrame {
 `frame_pixels()` is `height * stride` bytes starting at
 `kFramebufferBase + offset`. It is valid whether or not `enabled` is set; the
 host decides what to paint when disabled. The host must not read `WIDTH`,
-`FRONT`, or other live registers.
+`FRONT`, or other live registers, and there is no dirty-rectangle channel in
+v1: `fb_present_rect` (graphics.md §3.1) is a guest-side hint reserved for a
+later host.
 
-Hosts copy when `number` changes, when the geometry changes, on first show,
-and after a reset. A 32-bit wrap is harmless for equality comparison.
+Hosts copy the whole committed frame when `number` changes, when the geometry
+changes, on first show, and after a reset. A 32-bit wrap is harmless for
+equality comparison.
 
 ### 6.2 Display-only window (first host target)
 
@@ -360,7 +364,10 @@ CONSOLE panel           SCREEN pane / display window
   cells dirty; `present` redraws that rectangle, flips, and clears it. A
   screen clear or scroll marks the whole grid.
 - **Scrolling.** When the cursor passes the last row, move the grid up one row,
-  clear the last row, mark the full grid dirty. Scrollback is a later phase.
+  clear the last row, mark the full grid dirty.
+- **Scrollback.** The kernel keeps the last 256 lines in a ring buffer owned by
+  `con_state`, so history is identical in the display window and the debugger.
+  Host-side capture is not used; D4 adds navigation.
 - **Cursor.** A filled block drawn in inverse video over the cell. No blink in
   v1: blinking needs a timer and makes frame hashes time-dependent. A
   timer-driven blink is a later, opt-out option.
@@ -400,8 +407,10 @@ The shell must not know which transport is active.
 - **Input** is polled from both: keyboard first, then serial. In tests the
   keyboard FIFO is empty, so serial remains the scripted path.
 - **Line discipline** is shared: echo, backspace, Enter, `Ctrl-C` (cancel
-  line), `Ctrl-U` (erase line), `Ctrl-L` (clear screen). History and tab
-  completion are later phases.
+  line), `Ctrl-U` (erase line), `Ctrl-L` (clear screen). `Ctrl-C` cancels a line
+  only while the shell is the foreground consumer; while a user program owns the
+  console the kernel terminates that process instead (see graphics.md §3.2).
+  History and tab completion are later phases.
 - **Form feed.** The existing `console_clear()` emits `\f` to serial, and the
   debugger console treats `\f` as clear. The framebuffer console keeps that
   contract: `\f` clears the grid and homes the cursor.
@@ -510,8 +519,41 @@ The platform layer translates:
   ASCII, dead keys, and IME use `SDL_TEXTINPUT` in a later phase; v1 targets
   ASCII input for a shell.
 - Scancode from a fixed table keyed by `SDL_Scancode`, so layout changes do not
-  move physical keys. The table is a pure function in the platform-free UI
-  layer so it can be unit tested without SDL.
+  move physical keys. The table lives in `src/platform` — the only layer that
+  may include SDL headers (section 9.5) — and is exposed as a pure lookup so it
+  can be unit tested without opening a window; `tests/unit/test_ui.cpp` may
+  include SDL because the boundary check scans `src/ui` only.
+
+### 8.5 Pointer device (page 7)
+
+Page 7 at `0xFFF0_7000` carries a pointer. It has its own FIFO and event word
+because the keyboard word has no room for 11-bit coordinates (section 8.1).
+
+| Offset | Name | Access | Reset | Meaning |
+| --- | --- | --- | --- | --- |
+| `0x00` | `DATA` | RO | 0 | Pop one event word; reads 0 when empty. |
+| `0x04` | `STATUS` | RO/W1C | 0 | bit 0: event available. bit 1: overrun, write 1 to clear. bits 8..15: FIFO count. |
+| `0x08` | `CONTROL` | RW | 0 | bit 0: IRQ enable. |
+| `0x0C` | `IRQ` | RW | 0 | IRQ line 0..15. |
+
+Event word:
+
+| Bits | Field |
+| --- | --- |
+| 0..11 | x, in active-mode pixels, `0..4095` |
+| 12..23 | y, in active-mode pixels, `0..4095` |
+| 24..27 | buttons: bit 0 left, bit 1 right, bit 2 middle, bits 3..4 reserved |
+| 28..30 | type: 0 motion, 1 button down, 2 button up, 3 enter, 4 leave |
+| 31 | reserved, zero |
+
+Coordinates are absolute and already inside the active mode when the host sends
+them; the device stores them unchanged. A word of 0 is a legal event (motion at
+the origin with no buttons), so unlike the keyboard (section 8.1) a zero word
+does not mean empty: guests test `STATUS.bit0`.
+
+The FIFO holds 64 events and shares the overrun and IRQ rules of section 8.3.
+Nothing injects pointer events until a guest consumer exists; the layout is
+fixed here so the device table does not change when one arrives.
 
 ## 9. Changes to the current implementation
 
@@ -525,6 +567,8 @@ The platform layer translates:
   the span and validate 4-byte fit.
 - Add `KeyboardDevice final : Device` with `push_event`, `pop_event`,
   `status`, and IRQ handling.
+- Add the pointer page constants and event packing; the device itself is
+  implemented when a guest consumer exists (section 8.5).
 - Add `keyboard()` to `DeviceBus`.
 
 ### 9.2 `src/core/devices.cpp`
@@ -574,7 +618,8 @@ The platform layer translates:
   `fb_surface`.
 - `kernel/font8x16.c`: generated table plus attribution.
 - `kernel/console.c`: keep the serial writers, add the framebuffer grid,
-  dirty rectangle, renderer, and cursor. `console_getc` polls both transports.
+  dirty rectangle, renderer, cursor, and the 256-line ring buffer.
+  `console_getc` polls both transports.
 - `kernel/keyboard.h`, `kernel/keyboard.c`: FIFO pop and decoding helpers.
 - `kernel/shell.c`: remove direct transport assumptions; it already only calls
   `console_*`, so this should be small.
@@ -657,12 +702,15 @@ Exit: examples build and run; the API is documented and tested.
 Framebuffer:
 
 - Reset state: registers, committed frame, `FRAME == 0`, VRAM zero.
-- `ID` reads `0x46425231`.
+- `ID` reads the word `0x46425231`; compare the word, not a `memcmp` against
+  the string `FBR1`.
 - `WIDTH` write sets `STRIDE = WIDTH*4`; out-of-range writes are ignored and
   read back unchanged.
 - `STRIDE` accepts padding and rejects `< WIDTH*4` and non-multiples of 4.
 - `FORMAT` accepts 1, ignores everything else.
 - `FLIP` with a valid bundle commits, swaps `FRONT`/`BACK`, increments `FRAME`.
+- The committed descriptor names the surface that was `BACK` before the flip;
+  `FRONT` after the flip is that surface, not the one displayed before.
 - `FLIP` with `FRONT + HEIGHT*STRIDE == 32 MiB` succeeds; one byte more fails.
 - `FLIP` failure sets `FLIP_ERROR`, leaves `FRAME` and the committed frame
   unchanged; writing 1 to `STATUS.bit2` clears it.
@@ -729,17 +777,24 @@ Bus:
 
 ### 11.5 Performance budgets
 
-Measure on the Windows Debug build as the slow reference:
+Gate on emulated instruction counts, which are deterministic for a given
+program (section 3, rule 5). Record the ceiling in the phase log when the phase
+lands, and assert it in the headless tests.
 
-- Guest full-screen fill of an 800x600 surface: under 5 ms of wall time in the
-  display-only loop (not instruction count).
-- Host copy and present of 800x600: under 2 ms per changed frame.
-- Console redraw of a 100-column line: under 1 ms.
-- Aperture fast path, if added: full-screen fill at least 2x faster than the
-  bus path, and byte-for-byte identical results under a randomized comparison.
+- Guest full-screen fill of an 800x600 surface: an instruction-count ceiling
+  recorded at D2. The Windows Debug build fills it in under 5 ms as an
+  observation, not a threshold.
+- Host copy and present of 800x600: one full-frame copy per committed frame,
+  because v1 has no partial-upload channel (section 6.1). Observed per frame,
+  never a pass/fail value.
+- Console redraw of a 100-column line: the guest cost is the dirty cells plus
+  one flip; record the instruction count, do not gate on milliseconds.
+- Aperture fast path, if added: at least 2x fewer instructions than the bus
+  path for a full-screen fill, and byte-for-byte identical results under a
+  randomized comparison.
 
-Record numbers here, or in the phase log when the phase lands, but do not gate
-on machine-specific values beyond these ratios.
+Wall-clock figures vary by machine and build; only instruction counts and
+ratios gate.
 
 ### 11.6 CI
 
@@ -753,26 +808,15 @@ on machine-specific values beyond these ratios.
 
 ## 12. Open questions
 
-1. **Default mode.** 800x600 (100x37 cells) or 640x480 (80x30)? 800x600 is
-   proposed because it fills a typical window and still leaves a usable cell
-   count; 640x480 gives larger text at 1:1.
-2. **Font size.** 8x16 is proposed. 9x16 or 8x12 change the column count at
-   every mode; decide before generating the table.
-3. **Cursor blink.** Static cursor is deterministic and simpler. Is a blinking
-   cursor worth a timer dependency and test opt-out?
-4. **Serial mirroring.** Always mirror both ways, or only output? Mirroring
-   output keeps tests working; mirroring input is harmless but could surprise a
-   guest reading both.
-5. **Scrollback.** Kernel ring buffer or host-side capture? Kernel keeps the
-   guest self-contained; host keeps kernel memory small.
-6. **Focus model.** Click-to-focus for `SCREEN` while `CONSOLE` stays
-   hover-to-type is inconsistent. Should the serial console also move to
-   click-to-focus?
-7. **Pointer device.** Page 7 is reserved for a pointer. Should the event type
-   field grow a pointer variant, or should pointer events use a separate FIFO?
-8. **User-mode display.** Direct mapping of a window surface versus a
-   copy-on-present syscall; see [graphics.md](graphics.md) section 3.2.
-9. **Stride padding.** Keep padded strides for future alignment, or require
-   `STRIDE == WIDTH*4` in v1? The proposal allows padding; nothing uses it yet.
-10. **Display ID in `BootInfo`.** The guest can probe `0xFFF0_4028`. Is probing
-    enough, or should `BootInfo` carry a display capability word?
+None outstanding; the D0 exit condition (section 10) is met as of
+2026-11-12T14:55:40-08:00. Add new questions here rather than editing a
+normative table.
+
+Resolved in this review: scrollback is a 256-line kernel ring buffer
+(section 7.2); pointer events use a separate FIFO and event word on page 7
+(section 8.5); `Ctrl-C` terminates a foreground user program (section 7.4); the
+display `ID` is compared as a 32-bit word (section 5); the dirty rectangle is a
+guest-side hint with no v1 host channel (section 6.1); the SDL scancode table
+lives in `src/platform` (section 8.4); performance gates on instruction counts
+(section 11.5); and `FLIP` commits the surface that was `BACK` before the call
+(section 5.3).

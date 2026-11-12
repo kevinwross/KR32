@@ -1,6 +1,6 @@
 # Graphics and console API (proposal)
 
-**Status:** proposal, 2026-11-08. This document defines the API presented to
+**Status:** proposal, reviewed 2026-11-12T14:55:40-08:00. This document defines the API presented to
 people writing KR32 programs. It builds on the display contract in
 [display.md](display.md). No source changes have been made.
 
@@ -106,9 +106,13 @@ in pixels, matching how drawing code indexes rows. They are related by
 
 `fb_present()` is one `FLIP`: it commits the frame and swaps the surfaces.
 When `FRONT == BACK` it is a publish, which is how the console works.
-`fb_present_rect` adds a host hint: the device commits the whole frame, but the
-host may copy only the rectangle. Keeping both makes the shell cheap without
-inventing a partial-flip hardware feature.
+
+`fb_present_rect` commits the whole frame exactly like `fb_present` and passes
+the touched rectangle as a hint. There is no device register for it and no host
+channel in v1, so the host copies the whole committed frame (display.md §6.1);
+the rectangle costs nothing and is reserved for a later host that uploads a
+sub-rectangle with `SDL_UpdateTexture`. It must not be relied on for
+performance.
 
 ### 3.2 User side (`<kr32/display.h>`)
 
@@ -136,6 +140,11 @@ The kernel validates: the pointer range is inside the process user region, the
 surface geometry is sane, the rectangle is clipped to the active mode, and the
 stride is at least `width`. It copies only the clipped rectangle into the
 framebuffer and flips once per call.
+
+A user program that presents owns the console until it exits. The kernel
+intercepts `Ctrl-C` and terminates the foreground process through the existing
+`process_exit`/`sys_exit` path, so a program that stops polling input cannot
+lock the shell; `input_pending()` is advisory, not the only exit path.
 
 Rationale: this is safe, needs no shared mapping, and the drawing library is
 unchanged. The cost is one copy of the dirty rectangle. For a shell that
@@ -315,6 +324,11 @@ Proposed header names and contents:
 | `<kr32/con.h>` | `con_*` |
 | `<kr32/input.h>` | `kr32_event`, `input_*` |
 
+Prefixes stay short: `fb_`, `gfx_`, `con_`, `input_`. The headers are already
+scoped by their `<kr32/...>` names, and the freestanding libc exposes
+unprefixed names such as `printf` and `malloc`; there is no `kr32_` symbol
+prefix.
+
 Rules for the front ends:
 
 - Each header is idempotent and self-contained; include guards are implicit
@@ -340,8 +354,9 @@ The CPU is emulated, so instruction count is the real budget.
   screens, not every animation frame.
 - An animation should track the union of the old and new object rectangles and
   present that union.
-- `con_present` presents only the dirty cell rectangle. Typing one character
-  should cost one cell, not a screen.
+- `con_present` passes only the dirty cell rectangle to `fb_present_rect` and
+  redraws only those cells. Typing one character costs one cell of guest
+  drawing; the v1 host still copies the whole frame (section 3.1).
 - No drawing function allocates, blocks, or calls a syscall; only the named
   wrappers do (`gfx_create`, `gfx_present`, `con_getc`, `input_wait`).
 
@@ -467,22 +482,15 @@ the documentation examples are the tests.
 
 ## 13. Open questions
 
-1. **Prefixes.** `fb_`/`gfx_`/`con_` are proposed. Is `kr32_` preferred for
-   everything to avoid collisions with future user libraries?
-2. **Clip in the surface.** Convenient, but it is hidden state and a caller can
-   corrupt it. The alternative is an explicit clip argument on every call.
-3. **`fb_present_rect` value.** Is it worth having if the host cannot do a
-   partial texture upload? It can, but it complicates the presenter. Start with
-   a hint only.
-4. **User-mode ownership.** Does a user program own the whole screen while it
-   runs, or does the shell keep the console and give the program a rectangle?
-   The second needs a compositor.
-5. **Input ownership.** A foreground user program consuming keys can starve the
-   shell if it does not exit. Is there a kernel-level `Ctrl-C` that kills it?
-6. **Text encoding.** ASCII first. Is UTF-8 worth the table size later?
-7. **Console scrollback.** Kernel ring or host capture? This decides whether
-   the shell can scroll history without redrawing.
-8. **`gfx_create` failure.** Return `NULL` and let callers check, or also expose
-   a `gfx_last_error()`? `NULL` is enough for C.
-9. **Font.** Reuse the OFL JetBrains Mono rasterization for the 8x16 table, or
-   hand-author a pixel font with a clearer license story?
+None outstanding; the D0 exit condition is met as of
+2026-11-12T14:55:40-08:00. Add new questions here rather than editing a
+normative table.
+
+Resolved in this review: prefixes stay short (section 8); clip lives in
+`gfx_surface` (section 2); `fb_present_rect` is a guest-side hint with no v1
+host channel (section 3.1); a user program owns the whole screen while it runs
+(section 3.2); `Ctrl-C` terminates the foreground process (section 3.2); text
+is ASCII in v1 (section 5); scrollback is a 256-line kernel ring buffer
+(display.md section 7.2); `gfx_create` returns `NULL` on failure (section 3.2);
+and the font is the OFL JetBrains Mono 8x16 rasterization (display.md
+section 7.3).
