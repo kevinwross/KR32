@@ -19,7 +19,7 @@ Related documents, each the owner of its subject:
 | Instruction encodings and the machine memory map, as designed | [isa-v1.md](isa-v1.md) |
 | Guest calling convention, structures, threads | [abi.md](abi.md) |
 | `.k32` object and executable format | [container.md](container.md) |
-| Devices, timer, block, console, framebuffer, keyboard, IRQs | [devices.md](devices.md) |
+| Devices, timer, block, console, framebuffer, keyboard, terminal, graphics, IRQs | [devices.md](devices.md) |
 | Host syscalls, file sandbox, shell, DAP | [host.md](host.md) |
 | Debug records and the debugger | [debug.md](debug.md), [ui.md](ui.md) |
 | C and C++ compilers, libc, templates | [libc.md](libc.md), [templates.md](templates.md), [roadmap.md](roadmap.md) |
@@ -803,12 +803,15 @@ Each device owns one 4 KiB page:
 | `0xFFF0_5000` | serial tty |
 | `0xFFF0_6000` | keyboard |
 | `0xFFF0_7000` | reserved for a pointer device, no device behind it |
+| `0xFFF0_8000` | terminal (host-rendered console) |
+| `0xFFF0_9000` | graphics commands (host-executed drawing) |
 
 Register layouts, bits, and semantics are owned by [devices.md](devices.md).
 Access device registers with aligned 32-bit loads and stores; a byte access
 becomes a read/modify/write of the containing word. On a device page that has
-no register at the offset the access raises `#GP`, except the framebuffer
-control page, which reads zero for unknown offsets and ignores such writes.
+no register at the offset the access raises `#GP`, except the framebuffer,
+terminal, and graphics command pages, which read zero for unknown offsets and
+ignore such writes.
 
 The device window and the framebuffer aperture are decoded only when paging is
 enabled: with paging off the machine resolves the guard, RAM, and ROM, and
@@ -935,8 +938,10 @@ result is in `R0`. Errors are small negative values.
 | 51 | file dialog | mode, flags, path, capacity | path length or error |
 | 52..59 | unlink, rename, stat, truncate, getcwd, chdir, dup, dup2 | see host.md | 0 or error |
 
-Vector 32 halts with the exit code. Vector 33 is the console: each character is
-echoed to the CLI's stdout immediately. There are no pre-opened descriptors
+Vector 32 halts with the exit code. Vector 33 is the host debug console: each
+character is echoed to the CLI's stdout immediately. This is not the guest
+screen; a program that wants the screen writes to the terminal device (page 8)
+or uses `con_*`. There are no pre-opened descriptors
 `1` and `2`; `write` only works on descriptors returned by `open`. Guest paths
 must be relative and stay under `--fs-root`; absolute paths and `..` are
 rejected. Open flags: bits 0..1 read/write (`0` read, `1` write, `2` both),
