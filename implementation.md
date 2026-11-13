@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 07:53 -08:00
+> **Last updated:** 2026-11-13 09:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -876,15 +876,56 @@ path now folds a constant operand with `try_fold_constant` and emits
 `unit_test_cc_8` covers `if (x < (8))` and `return x < (8)`, requiring no
 `PUSH R0` and a `MOV R1, #8`.
 
+### M10.5 — Host terminal and renderer
+
+**Goal:** replace the kernel framebuffer console with a host-implemented terminal
+device, and give programs host-executed drawing through a graphics command
+device. Specification: [docs/terminal.md](docs/terminal.md).
+
+**Status:** approved 2026-11-13; implementation not started. Decisions taken:
+10x20 cells (80x30 grid), one host renderer shared by the terminal and the
+graphics device, the terminal as a host-side client that draws last with an
+explicit hide/show, immediate-register graphics commands first (a FIFO only if
+measured), no escape sequences in v1, and scrollback kept internal.
+
+**Why:** the guest cannot move framebuffer data at interactive speed. Measured:
+a scroll is 473,600 pixels, at least ~1.9M ticks even at four instructions per
+pixel; a 41-line print took 10M ticks after the panning prototype, and 45M for
+85 lines. The host runs about 4.5G ticks/s.
+
+**Tasks**
+
+- [ ] Host `Renderer`: surface, clip, palette, fill, copy, line, text blit;
+      deterministic integer rasterisation.
+- [ ] Terminal device (page 8 at `0xFFF0_8000`): `DATA`, `STATUS`, `CONTROL`,
+      `COMMAND`, `COLOR`, `ID`; 10x20 font table; 80x30 grid; 256-line
+      scrollback ring.
+- [ ] Graphics command device (page 9): `SET_CLIP`, `SET_COLOR`, `FILL_RECT`,
+      `COPY_RECT`, `DRAW_LINE`, `DRAW_TEXT`, `FLIP`; immediate registers.
+- [ ] Kernel `console.c` reduced to a device driver; `font8x16.c` and the grids
+      deleted; both build scripts updated.
+- [ ] Embedded images regenerated; boot screen checked at 80x30.
+- [ ] Documentation: `devices.md` pages 8 and 9, `display.md` §11 pointer,
+      `graphics.md` §7 note.
+
+**Test plan and gate**
+
+- [ ] Host unit tests for the terminal (putc, wrap, scroll, clear, control
+      characters, colours, hide/show, geometry, no-framebuffer) and per
+      graphics primitive (fill, copy, line, text, clip, validation).
+- [ ] `os_console_screen` and `run_os_*` stay green; the screenshot is 800x600.
+- [ ] Windows and WSL gates pass.
+
 ### M11 — Graphics and console API
 
 **Goal:** the programmer-facing API in [docs/graphics.md](docs/graphics.md):
 `gfx_*` drawing, `con_*` console, `input_*`, with guest headers.
 
-**Status:** blocked on the compiler stream. Guest headers are synthesised
-inside the C and C++ front ends, and adding `<kr32/*.h>` there is deferred
-([docs/graphics.md](docs/graphics.md) §8); do not start until that work is
-scheduled and agreed by both streams.
+**Status:** blocked on the compiler stream and on M10.5. Guest headers are
+synthesised inside the C and C++ front ends, and adding `<kr32/*.h>` there is
+deferred ([docs/graphics.md](docs/graphics.md) §8); do not start until that work
+is scheduled and agreed by both streams. The console and drawing backends land
+in M10.5 first.
 
 **Tasks**
 
@@ -3101,6 +3142,20 @@ Newest entries at the bottom. Use the local time zone.
       type here, unlike the standard where they are distinct and Itanium uses
       `a`. Left as is; the note sits with the `UnsignedChar` entry so the next
       reader does not treat it as an oversight.
+
+- **2026-11-13 09:55 -08:00** — Approved the host terminal service and recorded
+      the decisions in [docs/terminal.md](docs/terminal.md) and a new M10.5
+      milestone: 10x20 cells (80x30 grid), one host renderer shared by the
+      terminal and a graphics command device, the terminal as a host-side client
+      drawing last with an explicit hide/show, immediate-register graphics
+      commands first, no escape sequences in v1, scrollback internal. M11 is now
+      also blocked on M10.5.
+
+      Prototyped the font sizes with a `--sample` mode added to
+      `tools/font8x16`: three 800x600 renders at 8x16 (100x37), 10x20 (80x30),
+      and 12x24 (66x25). The default table output is byte-identical to the
+      committed `font8x16.c`, so the generator change is safe. The host console
+      itself remains unchanged; the earlier view-panning prototype was reverted.
 
 ## 10. Updating this file
 

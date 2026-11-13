@@ -7,6 +7,7 @@ Start here, then follow the topic.
 | [KR32ProgrammersReference.md](KR32ProgrammersReference.md) | **Start here to write a program.** Tools, running images, assembly syntax, architecture, memory map, and the instruction reference. |
 | [display.md](display.md) | **Proposal.** Display memory, framebuffer v2 registers, host presentation, the windowed system console, and the keyboard device. |
 | [graphics.md](graphics.md) | **Proposal.** The graphics and console API presented to programmers writing KR32 programs. |
+| [terminal.md](terminal.md) | **Proposal.** Host terminal device: the guest sends characters, the host renders the console. |
 | [devices.md](devices.md) | Implemented v1 devices: MMIO map, timer, block, console, serial, framebuffer, IRQ routing, multicore. |
 | [isa-v1.md](isa-v1.md) | Instruction encodings and the machine memory map. |
 | [abi.md](abi.md) | Guest ABI: calling convention, thread control block, structures. |
