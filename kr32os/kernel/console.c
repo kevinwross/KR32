@@ -188,8 +188,6 @@ void console_present(void) {
 
 int console_init(void) {
     struct fb_info info;
-    int row;
-    int column;
 
     if (fb_probe() != 0) {
         return -1;
@@ -216,13 +214,14 @@ int console_init(void) {
     scroll_count = 0;
     display_ready = 1;
 
-    fast_ByteFill(row*columns, (void *) &grid_chars, ' ');
-    fast_ByteFill(row*columns, (void *) &grid_attributes, (unsigned char)(pen_foreground | (pen_background << 4)));
+    fast_ByteFill(rows * columns, grid_chars, ' ');
+    fast_ByteFill(rows * columns, grid_attributes,
+                  (unsigned char)(pen_foreground | (pen_background << 4)));
 
     fill_surface(palette[pen_background]);
     clear_dirty();
     cursor_drawn = 0;
-    console_present(); 
+    console_present();
     return 0;
 }
 
