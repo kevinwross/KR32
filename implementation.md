@@ -792,6 +792,15 @@ Follow-up: drive `ls` and Enter through the keyboard FIFO in a windowed test.
 
 **D4 — Debugger integration**
 
+Integration points, so the phase can be executed in one pass:
+`Layout` gains `Rect screen` and `Rect tabs` carved from `source`; state gains
+`screen_tab_active_`, `screen_focus_`, a cached `DisplayFrame`, and a cached
+pixel copy refreshed when `frame().number` changes. `draw_screen` blits with
+integer scale or fit; `click` selects the tab and toggles focus; `key` routes to
+`devices_.keyboard()` while focused except for F5/F6/F9-F11, and `Esc` releases
+focus before quitting; `hover` maps a pixel to `0xFC00_0000 + FRONT + y*STRIDE +
+x*4` for the tooltip. `render_headless` draws the active tab.
+
 - [ ] `SOURCE | SCREEN` tab strip over the top-left region; integer scale or
       fit with nearest-neighbour, centered and letterboxed.
 - [ ] Focus: click to give the guest keyboard focus, green dot, `Esc` releases
@@ -802,6 +811,11 @@ Follow-up: drive `ls` and Enter through the keyboard FIFO in a windowed test.
       screen.
 - Aperture fast path: conditional on profiling, recorded if taken, and never
   part of this milestone's exit gate.
+
+**Prerequisite before D4 closes:** the console redraw cost recorded under D3.
+A 7M-step boot and a 7M-step scroll make the SCREEN tab unusable in the
+debugger, so fix the fill/redraw first — either a tighter blit (the kernel front
+end's ~14 instructions per store is the problem) or a smaller console mode.
 
 **Test plan and gate**
 
