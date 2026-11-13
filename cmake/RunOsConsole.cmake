@@ -35,4 +35,16 @@ if(NOT first STREQUAL second)
     message(FATAL_ERROR "console screen shots differ between identical runs")
 endif()
 
-message(STATUS "console screen shot stable (${size} bytes)")
+# The console paints the palette background and draws glyphs in the palette
+# foreground, so both colour words must appear in the frame's RGB triples.
+string(TOLOWER "${first}" first_lower)
+string(FIND "${first_lower}" "e6edf3" foreground_at)
+string(FIND "${first_lower}" "101820" background_at)
+if(foreground_at LESS 0)
+    message(FATAL_ERROR "console frame has no foreground pixels; nothing was drawn")
+endif()
+if(background_at LESS 0)
+    message(FATAL_ERROR "console frame has no theme background pixels")
+endif()
+
+message(STATUS "console screen shot stable (${size} bytes, text and background present)")
