@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 05:36 -08:00
+> **Last updated:** 2026-11-13 07:53 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -856,6 +856,15 @@ compound assignment overflow, `++`, parameter passing, arrays, `(unsigned char)-
 `sizeof`, and globals. The unit-bucket watchdog moved from 300 s to 600 s because
 `test_cxx_codegen_2` alone runs about 214 s and crossed 300 s under parallel
 load.
+
+**`signed char` mangles as `c`, deliberately (2026-11-13).** The parser ignores
+`signed`, so `char` and `signed char` are one type in this compiler and share
+the mangling `c`; the Itanium ABI uses `a` for `signed char` because the
+standard makes them distinct types. Keeping one type is consistent with the
+type model and costs only standard type identity: overloading `char` against
+`signed char` is impossible. A distinct `SignedChar` kind would repeat the
+`UnsignedChar` change across the same sites; revisit only if a program needs
+the distinction.
 
 **Comparison codegen, fixed 2026-11-13.** The `PUSH R0` / `MOV R1, R0` /
 `POP R0` sequence did not come from call arguments (those already evaluate
@@ -3086,6 +3095,12 @@ Newest entries at the bottom. Use the local time zone.
       comparisons, overflow, `++`, parameters, arrays, casts, `sizeof`, and
       globals. The unit-bucket watchdog is now 600 s: `test_cxx_codegen_2`
       takes about 214 s alone and crossed the old 300 s limit under `-j4`.
+
+- **2026-11-13 07:53 -08:00** — Recorded that `signed char` mangles as `c` on
+      purpose: the parser ignores `signed`, so `char` and `signed char` are one
+      type here, unlike the standard where they are distinct and Itanium uses
+      `a`. Left as is; the note sits with the `UnsignedChar` entry so the next
+      reader does not treat it as an oversight.
 
 ## 10. Updating this file
 
