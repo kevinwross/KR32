@@ -65,6 +65,10 @@ $kernelAssembly = Join-Path $build 'kernel.s'
 $kernelObject = Join-Path $build 'kernel.o'
 $consoleAssembly = Join-Path $build 'console.s'
 $consoleObject = Join-Path $build 'console.o'
+$fbAssembly = Join-Path $build 'fb.s'
+$fbObject = Join-Path $build 'fb.o'
+$fontAssembly = Join-Path $build 'font8x16.s'
+$fontObject = Join-Path $build 'font8x16.o'
 $shellAssembly = Join-Path $build 'shell.s'
 $shellObject = Join-Path $build 'shell.o'
 $timerAssembly = Join-Path $build 'timer.s'
@@ -103,6 +107,10 @@ Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '--source-id',
 Invoke-Kr32 -Arguments @('as', $kernelAssembly, '--object', '-o', $kernelObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '--source-id', '2', $Opt, '-S', '-o', $consoleAssembly)
 Invoke-Kr32 -Arguments @('as', $consoleAssembly, '--object', '-o', $consoleObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\fb.c'), '--source-id', '10', $Opt, '-S', '-o', $fbAssembly)
+Invoke-Kr32 -Arguments @('as', $fbAssembly, '--object', '-o', $fbObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\font8x16.c'), '--source-id', '11', $Opt, '-S', '-o', $fontAssembly)
+Invoke-Kr32 -Arguments @('as', $fontAssembly, '--object', '-o', $fontObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '--source-id', '3', $Opt, '-S', '-o', $shellAssembly)
 Invoke-Kr32 -Arguments @('as', $shellAssembly, '--object', '-o', $shellObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '--source-id', '4', $Opt, '-S', '-o', $timerAssembly)
@@ -195,12 +203,12 @@ for ($index = 0; $index -lt $initrdBytes.Length; $index += 16) {
 Set-Content -LiteralPath $initrdAssembly -Value $initrdText.ToString() -NoNewline -Encoding ascii
 Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
 
-Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
+Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $fontObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
                         '--flat', '--base', $kernelBase, '--map', $kernelMap,
                         '--sym', $kernelSym, '-o', $kernel)
-Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $shellObject,
+Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $fontObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
                         '--base', $kernelBase, '-o', $kernelK32)

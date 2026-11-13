@@ -25,7 +25,7 @@ endif()
 
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
-            --bios "${_osdir}/bios.bin"
+            --bios "${_osdir}/bios.bin" --max-steps 12000000
             --serial-input "exit\n"
     OUTPUT_VARIABLE _output
     RESULT_VARIABLE _result)

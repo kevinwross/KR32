@@ -26,7 +26,7 @@ endif()
 set(_input "ls\nrun init\nrun wx\nrun fault\nexit\n")
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
-            --bios "${_osdir}/bios.bin"
+            --bios "${_osdir}/bios.bin" --max-steps 12000000
             --serial-input "${_input}"
     OUTPUT_VARIABLE _output
     RESULT_VARIABLE _result)

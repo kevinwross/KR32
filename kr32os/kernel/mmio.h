@@ -37,3 +37,39 @@ struct irq_router {
 
 #define IRQ_ROUTE_TIMER 0U
 #define IRQ_CORE1 1U
+
+/* Framebuffer: 32 MiB aperture plus the control page. */
+#define FRAMEBUFFER_BASE 0xFC000000U
+#define FRAMEBUFFER_CONTROL_BASE 0xFFF04000U
+
+struct framebuffer_registers {
+    volatile unsigned int control;
+    volatile unsigned int width;
+    volatile unsigned int height;
+    volatile unsigned int stride;
+    volatile unsigned int format;
+    volatile unsigned int front;
+    volatile unsigned int back;
+    volatile unsigned int status;
+    volatile unsigned int flip;
+    volatile unsigned int frame;
+    volatile unsigned int id;
+};
+
+#define FRAMEBUFFER_STATUS_ENABLED 1U
+#define FRAMEBUFFER_STATUS_MODE_OK 2U
+#define FRAMEBUFFER_STATUS_FLIP_ERROR 4U
+#define FRAMEBUFFER_ID_VALUE 0x46425231U
+
+/* Keyboard: packed events, pop by reading DATA. */
+#define KEYBOARD_BASE 0xFFF06000U
+
+struct keyboard_registers {
+    volatile unsigned int data;
+    volatile unsigned int status;
+    volatile unsigned int control;
+    volatile unsigned int irq;
+};
+
+#define KEYBOARD_STATUS_AVAILABLE 1U
+#define KEYBOARD_STATUS_OVERRUN 2U

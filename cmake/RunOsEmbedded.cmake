@@ -12,7 +12,7 @@ file(REMOVE "${_work}/bios.bin" "${_work}/kernel.bin")
 execute_process(
     COMMAND "${CMAKE_COMMAND}" -E env
             --unset=KR32OS_BIN --unset=KR32OS_BIOS
-            "${KR32}" os --embedded --serial-input "exit\n"
+            "${KR32}" os --embedded --max-steps 12000000 --serial-input "exit\n"
     WORKING_DIRECTORY "${_work}"
     OUTPUT_VARIABLE _output
     ERROR_VARIABLE _error

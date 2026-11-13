@@ -26,7 +26,7 @@ endif()
 set(_fault_input "crash\n")
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
-            --bios "${_osdir}/bios.bin"
+            --bios "${_osdir}/bios.bin" --max-steps 24000000
             --serial-input "${_fault_input}"
     OUTPUT_VARIABLE _fault_output
     RESULT_VARIABLE _fault_result)
@@ -37,14 +37,12 @@ if(NOT _fault_output MATCHES "panic vector=3")
     message(FATAL_ERROR "KR32OS panic output missing: ${_fault_output}")
 endif()
 
-set(_timer_input "mem\n")
-foreach(_index RANGE 1 100)
-    string(APPEND _timer_input "echo x\n")
-endforeach()
-string(APPEND _timer_input "mem\nexit\n")
+# Boot runs millions of steps with interrupts enabled, so the timer has
+# advanced before the shell prompt; one mem query observes it.
+set(_timer_input "mem\nexit\n")
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
-            --bios "${_osdir}/bios.bin"
+            --bios "${_osdir}/bios.bin" --max-steps 24000000
             --serial-input "${_timer_input}"
     OUTPUT_VARIABLE _timer_output
     RESULT_VARIABLE _timer_result)

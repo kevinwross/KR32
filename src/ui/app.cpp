@@ -3,6 +3,7 @@
 #include "kr32/container/container.h"
 #include "kr32/core/devices.h"
 #include "kr32/core/machine.h"
+#include "kr32/os/bootinfo.h"
 #include "kr32/os/defaults.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/debugger_ui.h"
@@ -274,7 +275,37 @@ bool load_os_machine(core::Machine& machine, const os::ImagePaths& paths,
         !container::load_into(machine, bios, loaded, error)) {
         return false;
     }
+
+    std::uint32_t kernel_size = 0;
+    for (const container::Section& section : kernel.sections) {
+        if ((section.flags & container::Alloc) == 0) {
+            continue;
+        }
+        const std::uint32_t end = section.address + section.size;
+        if (end > 0x0002'0000U && end - 0x0002'0000U > kernel_size) {
+            kernel_size = end - 0x0002'0000U;
+        }
+    }
+
     machine.reset();
+    os::BootInfo boot{};
+    boot.magic = os::kBootInfoMagic;
+    boot.version = os::kBootInfoVersion;
+    boot.size = sizeof(os::BootInfo);
+    boot.ram_base = core::kRamBase;
+    boot.ram_size = core::kDefaultRamSize;
+    boot.kernel_base = 0x0002'0000U;
+    boot.kernel_size = kernel_size;
+    boot.kernel_entry = 0x0002'0000U;
+    boot.framebuffer_base = core::kFramebufferBase;
+    boot.framebuffer_size = core::kFramebufferSize;
+    boot.framebuffer_stride = core::kFramebufferStride;
+    boot.framebuffer_format = 1;
+    std::string boot_error;
+    if (!os::write_boot_info(machine, boot, boot_error)) {
+        error = boot_error;
+        return false;
+    }
     return true;
 }
 

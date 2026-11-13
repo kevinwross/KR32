@@ -48,6 +48,7 @@ static void read_line(char *buffer, int capacity) {
                 console_putc('\b');
                 console_putc(' ');
                 console_putc('\b');
+                console_present();
             }
             continue;
         }
@@ -55,6 +56,7 @@ static void read_line(char *buffer, int capacity) {
             buffer[length] = (char)character;
             ++length;
             console_putc((char)character);
+            console_present();
         }
     }
 }
@@ -118,6 +120,7 @@ void shell_run(void) {
     shell_line_t line;
     for (;;) {
         console_write("> ");
+        console_present();
         read_line(line, (int)sizeof(line));
         run_command(line);
     }

@@ -10,6 +10,7 @@ void process_init(void);
 int run_init(void);
 
 void kmain(void) {
+    (void)console_init();
     console_write("KR32OS M4\n");
     traps_install();
     user_install_syscalls();

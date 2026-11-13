@@ -125,6 +125,14 @@ file(MAKE_DIRECTORY "${KR32_EMBEDDED_OS_DIR}")
 add_executable(kr32_embed_os tools/embed_os/main.cpp)
 target_compile_features(kr32_embed_os PRIVATE cxx_std_20)
 
+# Host-side generator for the kernel's 8x16 console font. Run it by hand and
+# commit kr32os/kernel/font8x16.c; the kernel build stays freestanding.
+add_executable(kr32_font8x16 tools/font8x16/main.cpp)
+target_include_directories(kr32_font8x16 PRIVATE
+    "${CMAKE_CURRENT_SOURCE_DIR}/third_party/stb")
+target_compile_features(kr32_font8x16 PRIVATE cxx_std_20)
+target_link_libraries(kr32_font8x16 PRIVATE kr32_warnings)
+
 set(KR32_EMBED_OS_ARGS --output "${KR32_EMBEDDED_OS_SOURCE}")
 set(KR32_EMBED_OS_DEPENDS kr32_embed_os)
 if(KR32_EMBED_OS)
