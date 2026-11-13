@@ -42,6 +42,8 @@ executables load directly.
 | Toolbar | Run, Step, Over, Out, Breakpoint, Reset, Load, Build, status, instruction/time/IPS counters, stats reset |
 | Status bar | Current status on the left; active mode key hints on the lower right |
 | Source | Gutter with line numbers and breakpoint squares, source text, current-line highlight, line-step Over/In/Out |
+| Tabs | `SOURCE | SCREEN` strip above the top-left pane |
+| Screen | Committed framebuffer frame, integer-scaled or fit with nearest-neighbour, letterboxed |
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
 | Memory | Four-line address/hex/ASCII dump docked under the source pane |
@@ -54,6 +56,14 @@ executables load directly.
 `zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
 a selected `.c` or `.cpp` source. **Build** reloads/recompiles the currently
 loaded source.
+
+The **SCREEN** tab shows the committed framebuffer frame. It is selected by
+default when an OS image is loaded. Clicking the pane gives the guest keyboard
+focus (a green dot marks it); `Esc` releases focus before it quits, and
+`F5`/`F6`/`F9`-`F11` always reach the debugger. Hovering a pixel shows its
+coordinates, guest address, and colour; clicking it points the memory panel at
+that address. The title carries the frame geometry and counter, or says
+"no committed frame" before the guest's first flip.
 
 The **SOURCE** panel follows the current PC across debug source files. Stepping
 into libc functions such as `printf` or `malloc` switches the title and text to

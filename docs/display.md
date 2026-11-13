@@ -1,10 +1,10 @@
-# Display, console, and keyboard (proposal)
+# Display, console, and keyboard
 
-**Status:** proposal, reviewed 2026-11-12T14:55:40-08:00. No source changes have been made. This
-document specifies the display device contract, the host presentation model,
-the windowed system console, and the keyboard device. It supersedes the
-framebuffer section of [devices.md](devices.md) once implemented; until then
-`devices.md` remains normative for the shipped v1.
+**Status:** implemented. Framebuffer v2, the keyboard device, the host surface,
+and the framebuffer console shipped on 2026-11-12. The device contract is now
+normative in [devices.md](devices.md); this document keeps the design rationale
+and specifies the host presentation model, the windowed console, and the
+keyboard mapping that sit on top of it.
 
 **Owner:** display/hardware stream. The C/C++ compiler and libc stream works
 independently in `src/cc/`, `src/cxx/`, and its own docs; see
@@ -111,6 +111,10 @@ enable bit. Different modes can use different offsets; a guest is free to keep
 several surface pairs for different purposes.
 
 ## 5. Frame buffer control registers (v2)
+
+The normative register table is in [devices.md](devices.md). This section keeps
+the design rationale and the commit/validation reasoning; if the two disagree,
+`devices.md` wins and this section is the one to fix.
 
 Control page base `0xFFF0_4000`. Registers are 32-bit, little-endian.
 Offsets not listed read as zero and ignore writes.

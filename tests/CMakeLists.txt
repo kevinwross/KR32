@@ -360,6 +360,13 @@ if(KR32_BUILD_UI)
             --screenshot ${CMAKE_BINARY_DIR}/os-ui.ppm)
     set_tests_properties(ui_headless_os PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")
+
+    add_test(NAME os_console_screen
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-console
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunOsConsole.cmake)
+    set_tests_properties(os_console_screen PROPERTIES LABELS "integration")
 endif()
 
 add_test(NAME boundary_clean

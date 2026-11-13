@@ -109,3 +109,16 @@ Add a new `tests/**/test_*.cpp` file to `KR32_TEST_SOURCES` in
 `tests/CMakeLists.txt`; the per-source-file loop registers it automatically.
 Keep a file under roughly a minute of runtime, or split it into numbered
 buckets with a shared support header.
+
+## Display and console
+
+| Test | What it covers |
+| --- | --- |
+| `display_screen_shot` | Builds `examples/color-bars.asm`, captures the committed frame twice with `kr32 display --screen-shot`, and requires byte-identical PPMs |
+| `ui_headless_os` | Renders the debugger with an OS image so the `SCREEN` tab and its "no committed frame" path are exercised without booting |
+
+The OS tests build KR32OS and run it with `--max-steps 12000000` (`24000000`
+for `run_os_fault_timer`). The kernel's console redraw is the reason: a
+full-screen fill or scroll is hundreds of thousands of pixel stores at roughly
+14 instructions each, so boot alone takes about 7M steps. Lower the budgets
+once the redraw is faster.

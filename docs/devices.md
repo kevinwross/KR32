@@ -1,12 +1,9 @@
 # Devices, time, and multicore (M8)
 
-> **Display contract is being revised.** [display.md](display.md) is the
-> proposal for framebuffer v2 (commit on `FLIP`, a frame counter, an explicit
-> XRGB8888 format) and for a keyboard device. This document describes the
-> implemented v1 and remains authoritative for it until v2 lands. Do not edit
-> the framebuffer section from another stream; add a note under **Open
-> questions** in `display.md` instead. See [README.md](README.md) for the
-> active work streams.
+> **Framebuffer v2 and the keyboard are implemented.** This document is
+> normative for the shipped device contract; [display.md](display.md) keeps the
+> host-presentation and console design that sits on top of it. See
+> [README.md](README.md) for the active work streams.
 
 ## MMIO map
 
@@ -20,7 +17,8 @@ Devices live in the 960 KiB window at `0xFFF0_0000`:
 | `0xFFF0_3000` | IRQ router | 3 |
 | `0xFFF0_4000` | framebuffer control | 4 |
 | `0xFFF0_5000` | serial tty | 5 |
-| `0xFFF0_6000` | keyboard (proposed, see [display.md](display.md)) | 6 |
+| `0xFFF0_6000` | keyboard | 6 |
+| `0xFFF0_7000` | pointer (reserved, no device) | 7 |
 
 Accesses go through the normal load/store path. `Machine` checks the device
 window before RAM/ROM and forwards aligned 32-bit accesses to the `DeviceBus`;
@@ -42,35 +40,67 @@ remains available for host/debug output.
 
 ## Framebuffer
 
-The 32 MiB framebuffer aperture lives at `0xFC00_0000..0xFDFF_FFFF`, separate
-from the MMIO window:
+The 32 MiB aperture at `0xFC00_0000..0xFDFF_FFFF` is VRAM, not one surface: a
+surface is `height` rows of `stride` bytes starting at a 4-byte-aligned offset
+the guest chooses. The default 1920x1080 surface is 8,294,400 bytes
+(`0x7E_9000`), so two default surfaces fit with room to spare. Off-screen
+regions are scratch memory, not an error.
 
-| Base | Contents |
-| --- | --- |
-| `0xFC00_0000` | surface 0: 1920×1080, 32-bit XRGB8888, 7680-byte stride |
-| `0xFC7E_9000` | surface 1: same geometry |
+A pixel is one little-endian 32-bit word `0x00RRGGBB` (XRGB8888), so its bytes
+in memory are `B, G, R, 0`. The top byte is ignored and the host presents
+opaque.
 
-Pixel accesses use normal little-endian 32-bit storage. A pixel word is
-`0x00RRGGBB`, so its bytes in memory are `B, G, R, 0`. The earlier
-"RGBA8888" wording was ambiguous about byte order; `display.md` names the
-format explicitly and supersedes it. Control registers are in the MMIO page at
-`0xFFF0_4000`:
+Control registers live at `0xFFF0_4000`:
 
-| Offset | Register |
-| --- | --- |
-| `0x00` | enable |
-| `0x04` | width |
-| `0x08` | height |
-| `0x0C` | stride |
-| `0x10` | format (`1` = XRGB8888) |
-| `0x14` | front-buffer offset |
-| `0x18` | back-buffer offset |
-| `0x1C` | status |
+| Offset | Name | Access | Reset | Meaning |
+| --- | --- | --- | --- | --- |
+| `0x00` | `CONTROL` | RW | 0 | bit 0 enable; other bits ignored |
+| `0x04` | `WIDTH` | RW | 1920 | 1..1920; a successful write sets `STRIDE = WIDTH*4` |
+| `0x08` | `HEIGHT` | RW | 1080 | 1..1080 |
+| `0x0C` | `STRIDE` | RW | 7680 | `WIDTH*4..7680`, multiple of 4 |
+| `0x10` | `FORMAT` | RW | 1 | 1 = XRGB8888; nothing else accepted |
+| `0x14` | `FRONT` | RW | 0 | 4-byte-aligned byte offset in VRAM |
+| `0x18` | `BACK` | RW | `0x7E_9000` | 4-byte-aligned byte offset in VRAM |
+| `0x1C` | `STATUS` | RO/W1C | 0 | bit 0 committed enable, bit 1 `MODE_OK`, bit 2 sticky `FLIP_ERROR` (write 1 to clear) |
+| `0x20` | `FLIP` | WO | 0 | write bit 0 to commit; reads 0 |
+| `0x24` | `FRAME` | RO | 0 | committed-frame counter |
+| `0x28` | `ID` | RO | `0x4642_5231` | magic; compare the 32-bit word, not a byte string |
 
-In v1 `FRONT` and `BACK` are ordinary offsets, `STATUS` only reports the enable
-bit, and there is no flip or frame counter. [display.md](display.md) section 5
-specifies the proposed v2 contract: commit on `FLIP`, a committed-frame
-counter, an `ID` register, and `FLIP`-time bounds validation.
+Writes never fault: an out-of-range value leaves the register unchanged, and
+unknown offsets read zero and ignore writes. Reads return the written values,
+except `STATUS`, which is computed.
+
+`FLIP` is the only transition. Writing bit 0 validates the bundle (`WIDTH`,
+`HEIGHT`, `FORMAT`, `STRIDE` alignment, and `FRONT`/`BACK` plus
+`HEIGHT*STRIDE` within 32 MiB, in 64-bit arithmetic). On success the committed
+frame becomes `{CONTROL.bit0, WIDTH, HEIGHT, STRIDE, FORMAT, BACK}` — the
+surface the guest just drew — then `FRONT` and `BACK` swap and `FRAME`
+increments. On failure `FLIP_ERROR` is set and nothing else changes. A flip
+while disabled commits `ENABLED = 0`.
+
+Reset restores control 0, 1920x1080, stride 7680, format 1, front 0, back
+`0x7E_9000`, frame counter 0, no error, and clears VRAM.
+
+Hosts read the committed frame only, through `frame()` and `frame_pixels()` in
+`include/kr32/core/devices.h`. There is no dirty-rectangle channel.
+
+## Keyboard
+
+Page 6 at `0xFFF0_6000`:
+
+| Offset | Name | Access | Reset | Meaning |
+| --- | --- | --- | --- | --- |
+| `0x00` | `DATA` | RO | 0 | pop one event word; 0 when empty |
+| `0x04` | `STATUS` | RO/W1C | 0 | bit 0 available, bit 1 overrun (write 1 to clear), bits 8..15 count |
+| `0x08` | `CONTROL` | RW | 0 | bit 0 IRQ enable |
+| `0x0C` | `IRQ` | RW | 0 | IRQ line 0..15 |
+
+An event word carries ASCII in bits 0..7 (0 when the key has no character),
+modifiers in 8..15 (shift, control, alt, caps), a KR32 scancode in 16..23, and
+the type in 24..31 (0 down, 1 up). The FIFO holds 64 events; the 65th is
+dropped and sets overrun. The IRQ line is asserted while the FIFO is non-empty
+and `CONTROL.bit0` is set. Page 7 (`0xFFF0_7000`) is reserved for the pointer
+and has no device behind it.
 
 ## Timer
 
@@ -134,7 +164,8 @@ The machine tab displays the current core id and control state; a full
 multi-core selector/per-core panel layout is a UI follow-up. DMA is
 synchronous rather than tick-scheduled.
 
-The framebuffer has no host presentation path: nothing renders the aperture, so
-pixels are only observable through memory reads. It also has no flip, no frame
-counter, and no bounds validation of a whole surface. Those gaps are the
-subject of [display.md](display.md).
+The framebuffer is presented by the `kr32 display` window and the debugger's
+`SCREEN` tab; the committed frame is the only host-visible state. The 32 MiB
+aperture is reached through the device bus one word at a time, so bulk pixel
+stores are slow; a direct fast path is a possible later optimisation. The
+pointer page is reserved and has no device behind it.

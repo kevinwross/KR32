@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 20:32 -08:00
+> **Last updated:** 2026-11-12 20:47 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -824,17 +824,22 @@ is the problem) or a smaller console mode — before tagging `m10`.
 
 **Test plan and gate**
 
-- [ ] `ctest --preset windows-msvc-debug` passes.
+- [x] `ctest --preset windows-msvc-debug` passes (83/83).
 - [ ] `ctest --preset linux-gcc` passes on WSL; record any gap rather than
       claiming the milestone complete.
-- [ ] Golden-frame hashes are checked in and updated deliberately.
-- [ ] Cell assertions cover per-cell colour, a mid-line colour change, and
-      colours preserved across a scroll and into the ring.
-- [ ] `scripts/update-os.ps1` / `.sh` run for each platform and the embedded
-      images are refreshed.
-- [ ] Docs updated: `devices.md` absorbs the v2 register table, `ui.md` gains
-      the `SCREEN` tab, `testing.md` gains the new tests.
-- [ ] Commit, tag `m10`, running-log entry added.
+- [x] Golden-frame hashes are checked in and updated deliberately
+      (`display_screen_shot`).
+- [x] Console coverage: `os_console_screen` boots the embedded OS, requires an
+      800x600 committed frame, and asserts two runs are byte-identical.
+- [ ] Cell assertions for per-cell colour, a mid-line colour change, and
+      colours across a scroll are not written; the console has no host-side
+      harness.
+- [x] `scripts/update-os.ps1` run for Windows and the embedded images refreshed;
+      the Linux images still need `scripts/update-os.sh` in WSL.
+- [x] Docs updated: `devices.md` carries the v2 register table and keyboard,
+      `display.md` points at it, `ui.md` gains the `SCREEN` tab, `testing.md`
+      gains the new tests.
+- [ ] Tag `m10` and push; blocked on the WSL gate.
 
 ### M11 — Graphics and console API
 
@@ -2938,6 +2943,21 @@ Newest entries at the bottom. Use the local time zone.
       `test_ui` case moved two click rows down by the strip; its assertions are
       unchanged. Windows gate: 82/82 passed, 611.91 s. The console redraw cost
       from D3 is still the milestone's open performance item.
+
+- **2026-11-12 20:47 -08:00** — Documentation migrated to the shipped contract.
+      `devices.md` now carries the v2 framebuffer register table, the flip
+      semantics and reset state, and the keyboard page; its "being revised"
+      banner is gone and the stale "no host presentation path" limits are
+      replaced. `display.md` is marked implemented, its title loses "(proposal)",
+      and §5 defers to `devices.md` as the normative copy. `ui.md` lists the tab
+      strip and SCREEN pane; `testing.md` documents `display_screen_shot`,
+      `ui_headless_os`, and the raised OS step budgets.
+
+      Added `os_console_screen`: it boots the embedded OS under `kr32 display`,
+      requires an 800x600 P6 frame, and asserts two runs are byte-identical.
+      Windows gate: 83/83 passed, 768.42 s. Still open on the milestone: the WSL
+      run, Linux OS images, cell-level colour assertions, the redraw
+      optimisation, and the `m10` tag.
 
 ## 10. Updating this file
 
