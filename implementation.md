@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 00:21 -08:00
+> **Last updated:** 2026-11-13 00:38 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -845,6 +845,20 @@ is the problem) or a smaller console mode — before tagging `m10`.
 - Deferred: the console redraw optimisation. Boot costs ~7M steps and a scroll
   about the same; the test budgets absorb it and the milestone is not gated on
   it. Recorded under D3 for a later performance pass.
+
+**Known gap, C++ `unsigned char`.** `BuiltinKind` has `Char`, `Short`, and
+`UnsignedShort` but no `UnsignedChar`, and `load_value` always emits `LOAD8S`
+(`src/cxx/codegen.cpp:3877`). So `unsigned char g = 200; (g > 100)` is false in
+C++ and true in C: the value is sign-extended on load and compared signed.
+Closing it needs a new builtin kind, parsing for `unsigned char`/`signed char`,
+`LOAD8U` at the load sites, and unsigned conversions and comparisons. Not
+started; it is a C++ front-end change of its own.
+
+**Known gap, call-argument codegen.** A constant argument after the first is
+evaluated into `R0` and then copied to its register, so the first argument is
+saved around it: `PUSH R0; MOV R0, #8; MOV R1, R0; POP R0; CALL`. The assembly
+optimizer could fold that to `MOV R1, #8`; a codegen fix would evaluate each
+argument into its final register directly. Not started.
 
 ### M11 — Graphics and console API
 
