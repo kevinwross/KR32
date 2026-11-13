@@ -33,6 +33,24 @@ fast_ByteFill:
     MOV R4, R3
     SHL R4, R4, #16
     OR R3, R3, R4
+    ; Bytes before the buffer reaches a word boundary go through STORE8, so
+    ; the word loop only ever writes aligned addresses.
+    MOV R5, R1
+    AND R5, R5, #3
+    CMP R5, #0
+    JZ .Lbyte_words_setup
+    MOV R4, #4
+    SUB R4, R4, R5
+    CMP R4, R0
+    JLE .Lbyte_head
+    MOV R4, R0
+.Lbyte_head:
+    STORE8 R2, [R1]
+    ADD R1, R1, #1
+    SUB R0, R0, #1
+    SUB R4, R4, #1
+    JNZ .Lbyte_head
+.Lbyte_words_setup:
     MOV R4, R0
     SHR R4, R4, #2
     AND R0, R0, #3

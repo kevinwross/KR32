@@ -41,6 +41,16 @@ int main(void) {
     if (buffer[3] != 0xAB) return 9;
     fast_ByteFill(0, buffer, 0xCD);
     if (buffer[0] != 0x5A) return 10;
+    for (i = 0; i < 64; ++i) { buffer[i] = 0; }
+    fast_ByteFill(6, buffer + 1, 0x5A);
+    if (buffer[0] != 0x00) return 11;
+    for (i = 1; i <= 6; ++i) { if (buffer[i] != 0x5A) return 12; }
+    if (buffer[7] != 0x00) return 13;
+    for (i = 0; i < 64; ++i) { buffer[i] = 0; }
+    fast_ByteFill(9, buffer + 3, 0xC3);
+    if (buffer[2] != 0x00) return 14;
+    for (i = 3; i < 12; ++i) { if (buffer[i] != 0xC3) return 15; }
+    if (buffer[12] != 0x00) return 16;
     fast_WordFill(0, buffer, 0xFFFF);
     return 0;
 }

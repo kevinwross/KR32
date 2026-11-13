@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 23:37 -08:00
+> **Last updated:** 2026-11-13 00:21 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3036,6 +3036,24 @@ Newest entries at the bottom. Use the local time zone.
       132,736 bytes). `unit_test_fast` assembles `fast.S`, links it with a C
       driver, runs it, and checks word order, byte replication, the 0-3 byte tail,
       and zero-length calls.
+
+- **2026-11-12 23:51 -08:00** — Console init now clears both grids with
+      `fast_ByteFill` instead of the nested loop (author's change), and the count
+      was corrected from the uninitialised `row * columns` to
+      `rows * columns`: the generated code had been loading a stack slot nothing
+      wrote, so the fill ranged from a no-op to an out-of-bounds write. The
+      unused `column` local, a trailing space, and an array-address cast were
+      removed at the same time, and `fast.h` states the 4-byte alignment
+      precondition. Boot plus `exit` is 3,032,182 ticks; the embedded image is
+      regenerated.
+
+- **2026-11-13 00:21 -08:00** — `fast_ByteFill` now accepts an unaligned
+      buffer: it emits byte stores for the 0-3 bytes up to the next word
+      boundary, then the word loop, then the tail. `fast.h` drops the alignment
+      precondition for the byte fill (`fast_WordFill` still requires it), and
+      `unit_test_fast` covers `buffer + 1` (6 bytes) and `buffer + 3` (9 bytes),
+      checking the bytes on both sides stay untouched. The embedded image is
+      regenerated (132,752 bytes); the OS and integration tests pass against it.
 
 ## 10. Updating this file
 
