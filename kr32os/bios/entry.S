@@ -27,7 +27,7 @@
 .equ LOW_GUARD_PAGES, 16
 .equ LOW_GUARD_PTE, 0x00041180
 .equ HIGH_MMIO_LEAF, 0x00042C00
-.equ MMIO_PAGE_COUNT, 8
+.equ MMIO_PAGE_COUNT, 10
 .equ HIGH_ROM_LEAF, 0x00042FC0
 .equ ROM_PAGE_COUNT, 16
 .equ HIGH_PAGE_DIRECTORY_ENTRY, 0x00040FFC
@@ -110,7 +110,8 @@ bios_entry:
     ADD R1, R1, #4
     ADD R3, R3, #PAGE_SIZE
     ADD R2, R2, #1
-    CMP R2, #MMIO_PAGE_COUNT        ; timer, block, console, IRQ, fb control, serial
+    CMP R2, #MMIO_PAGE_COUNT        ; timer, block, console, IRQ, fb control, serial,
+                                    ; keyboard, pointer, terminal, graphics
     JLT .Lmmio_pages
 
     ; ROM pages at leaf index 0x3F0.

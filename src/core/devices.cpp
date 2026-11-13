@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <utility>
 
+#include "kr32/core/font10x20.h"
 #include "kr32/core/machine.h"
 
 namespace kr32::core {
@@ -523,10 +524,649 @@ std::uint32_t IrqRouter::route(std::uint32_t line) const {
     return line < routes_.size() ? routes_[line] : 0;
 }
 
+namespace {
+
+constexpr std::uint32_t kTerminalPalette[16] = {
+    0x00101820U, 0x00A03030U, 0x0030A030U, 0x00A0A030U,
+    0x003040A0U, 0x00A030A0U, 0x0030A0A0U, 0x00E6EDF3U,
+    0x00506070U, 0x00F06060U, 0x0060F060U, 0x00F0F060U,
+    0x006080F0U, 0x00F060F0U, 0x0060F0F0U, 0x00FFFFFFU,
+};
+
+} // namespace
+
+TerminalDevice::TerminalDevice() {
+    reset();
+}
+
+void TerminalDevice::attach(FramebufferDevice* framebuffer) {
+    framebuffer_ = framebuffer;
+    columns_ = 0;
+    rows_ = 0;
+    sync_geometry();
+}
+
+void TerminalDevice::reset() {
+    cursor_x_ = 0;
+    cursor_y_ = 0;
+    cursor_drawn_x_ = -1;
+    cursor_drawn_y_ = -1;
+    control_ = ControlCursor;
+    color_ = 0x07;
+    scrollback_head_ = 0;
+    scrollback_count_ = 0;
+    columns_ = 0;
+    rows_ = 0;
+    sync_geometry();
+    if (framebuffer_ == nullptr) {
+        columns_ = 80;
+        rows_ = 30;
+        chars_.assign(static_cast<std::size_t>(columns_) * rows_, ' ');
+        attributes_.assign(static_cast<std::size_t>(columns_) * rows_,
+                           static_cast<std::uint8_t>(color_));
+    }
+}
+
+void TerminalDevice::sync_geometry() {
+    int columns = 80;
+    int rows = 30;
+    if (framebuffer_ != nullptr) {
+        const std::uint32_t width = framebuffer_->width();
+        const std::uint32_t height = framebuffer_->height();
+        if (width >= kTerminalCellWidth && height >= kTerminalCellHeight) {
+            columns = static_cast<int>(width / kTerminalCellWidth);
+            rows = static_cast<int>(height / kTerminalCellHeight);
+        }
+    }
+    columns = std::clamp(columns, 1, 200);
+    rows = std::clamp(rows, 1, 100);
+    if (columns == columns_ && rows == rows_) {
+        return;
+    }
+    columns_ = columns;
+    rows_ = rows;
+    chars_.assign(static_cast<std::size_t>(columns_) * rows_, ' ');
+    attributes_.assign(static_cast<std::size_t>(columns_) * rows_,
+                       static_cast<std::uint8_t>(color_));
+    scrollback_.assign(ScrollbackLines * static_cast<std::size_t>(columns_), ' ');
+    scrollback_head_ = 0;
+    scrollback_count_ = 0;
+    cursor_x_ = 0;
+    cursor_y_ = 0;
+    cursor_drawn_x_ = -1;
+    cursor_drawn_y_ = -1;
+    render_all();
+}
+
+bool TerminalDevice::read(std::uint32_t offset, std::uint32_t& value) {
+    switch (offset) {
+    case Status:
+        value = StatusReady | (static_cast<std::uint32_t>(columns_) << 8) |
+                (static_cast<std::uint32_t>(rows_) << 16);
+        return true;
+    case Control: value = control_; return true;
+    case Color: value = color_; return true;
+    case Id: value = IdValue; return true;
+    case Data:
+    case Command:
+    default:
+        value = 0;
+        return true;
+    }
+}
+
+bool TerminalDevice::write(std::uint32_t offset, std::uint32_t value) {
+    switch (offset) {
+    case Data:
+        putc(static_cast<char>(value & 0xFF));
+        return true;
+    case Control: {
+        const std::uint32_t next = value & (ControlCursor | ControlHidden);
+        const std::uint32_t previous = control_;
+        // Remove the cursor while the terminal is still visible, so hiding does
+        // not leave the block painted on the surface.
+        if ((next & ControlHidden) != 0 && (previous & ControlHidden) == 0) {
+            erase_cursor();
+        }
+        control_ = next;
+        if ((previous & ControlHidden) != 0 && (control_ & ControlHidden) == 0) {
+            cursor_drawn_x_ = -1;
+            cursor_drawn_y_ = -1;
+            render_all();
+            draw_cursor();
+        } else if ((previous & ControlCursor) != 0 && (control_ & ControlCursor) == 0) {
+            erase_cursor();
+        } else if ((previous & ControlCursor) == 0 && (control_ & ControlCursor) != 0) {
+            draw_cursor();
+        }
+        return true;
+    }
+    case Command: {
+        const std::uint32_t command = value & 0xFF;
+        if (command == CommandClear) {
+            clear();
+        } else if (command == CommandReset) {
+            control_ = ControlCursor;
+            color_ = 0x07;
+            sync_geometry();
+            clear();
+        }
+        return true;
+    }
+    case Color:
+        color_ = value & 0xFF;
+        return true;
+    default:
+        return true;
+    }
+}
+
+char TerminalDevice::cell(int column, int row) const {
+    if (column < 0 || column >= columns_ || row < 0 || row >= rows_) {
+        return ' ';
+    }
+    return chars_[static_cast<std::size_t>(row) * columns_ + column];
+}
+
+std::uint8_t TerminalDevice::attribute(int column, int row) const {
+    if (column < 0 || column >= columns_ || row < 0 || row >= rows_) {
+        return 0;
+    }
+    return attributes_[static_cast<std::size_t>(row) * columns_ + column];
+}
+
+void TerminalDevice::clear() {
+    chars_.assign(static_cast<std::size_t>(columns_) * rows_, ' ');
+    attributes_.assign(static_cast<std::size_t>(columns_) * rows_,
+                       static_cast<std::uint8_t>(color_));
+    cursor_x_ = 0;
+    cursor_y_ = 0;
+    cursor_drawn_x_ = -1;
+    cursor_drawn_y_ = -1;
+    render_all();
+    draw_cursor();
+}
+
+void TerminalDevice::newline() {
+    cursor_x_ = 0;
+    if (cursor_y_ + 1 >= rows_) {
+        cursor_y_ = rows_ - 1;
+        scroll_up();
+    } else {
+        ++cursor_y_;
+    }
+}
+
+void TerminalDevice::scroll_up() {
+    erase_cursor();
+    if (columns_ > 0 && rows_ > 0) {
+        std::copy_n(chars_.begin(), columns_,
+                    scrollback_.begin() + static_cast<std::ptrdiff_t>(scrollback_head_) *
+                                              columns_);
+        scrollback_head_ = (scrollback_head_ + 1) % static_cast<int>(ScrollbackLines);
+        if (scrollback_count_ < static_cast<int>(ScrollbackLines)) {
+            ++scrollback_count_;
+        }
+    }
+    for (int row = 1; row < rows_; ++row) {
+        std::copy_n(chars_.begin() + static_cast<std::ptrdiff_t>(row) * columns_,
+                    columns_,
+                    chars_.begin() + static_cast<std::ptrdiff_t>(row - 1) * columns_);
+        std::copy_n(attributes_.begin() + static_cast<std::ptrdiff_t>(row) * columns_,
+                    columns_,
+                    attributes_.begin() +
+                        static_cast<std::ptrdiff_t>(row - 1) * columns_);
+    }
+    std::fill_n(chars_.begin() + static_cast<std::ptrdiff_t>(rows_ - 1) * columns_,
+                columns_, ' ');
+    std::fill_n(attributes_.begin() +
+                    static_cast<std::ptrdiff_t>(rows_ - 1) * columns_,
+                columns_, static_cast<std::uint8_t>(color_));
+    cursor_drawn_x_ = -1;
+    cursor_drawn_y_ = -1;
+    render_all();
+}
+
+void TerminalDevice::putc(char character) {
+    if (character == '\n') {
+        erase_cursor();
+        newline();
+        draw_cursor();
+        return;
+    }
+    if (character == '\r') {
+        erase_cursor();
+        cursor_x_ = 0;
+        draw_cursor();
+        return;
+    }
+    if (character == '\b') {
+        erase_cursor();
+        if (cursor_x_ > 0) {
+            --cursor_x_;
+        } else if (cursor_y_ > 0) {
+            --cursor_y_;
+            cursor_x_ = columns_ - 1;
+        }
+        draw_cursor();
+        return;
+    }
+    if (character == '\t') {
+        erase_cursor();
+        const int next = (cursor_x_ / 8 + 1) * 8;
+        if (next >= columns_) {
+            cursor_x_ = 0;
+            newline();
+        } else {
+            cursor_x_ = next;
+        }
+        draw_cursor();
+        return;
+    }
+    if (character == '\f') {
+        clear();
+        return;
+    }
+    if (character < 0x20 || character > 0x7E) {
+        return;
+    }
+    erase_cursor();
+    write_cell(cursor_x_, cursor_y_, character);
+    ++cursor_x_;
+    if (cursor_x_ >= columns_) {
+        newline();
+    }
+    draw_cursor();
+}
+
+void TerminalDevice::write_cell(int column, int row, char character) {
+    if (column < 0 || column >= columns_ || row < 0 || row >= rows_) {
+        return;
+    }
+    chars_[static_cast<std::size_t>(row) * columns_ + column] = character;
+    attributes_[static_cast<std::size_t>(row) * columns_ + column] =
+        static_cast<std::uint8_t>((color_ & 0x0FU) | ((color_ >> 4) << 4));
+    render_cell(column, row);
+}
+
+void TerminalDevice::render_cell(int column, int row, bool inverse) {
+    if (framebuffer_ == nullptr || hidden() || !framebuffer_->enabled()) {
+        return;
+    }
+    if (column < 0 || column >= columns_ || row < 0 || row >= rows_) {
+        return;
+    }
+    const std::size_t index = static_cast<std::size_t>(row) * columns_ + column;
+    const unsigned char character = static_cast<unsigned char>(chars_[index]);
+    int glyph = 0;
+    if (character >= 0x20 && character <= 0x7E) {
+        glyph = character - kFont10x20First;
+    } else if (character != ' ') {
+        glyph = '?' - kFont10x20First;
+    }
+    const std::uint8_t attribute_value = attributes_[index];
+    std::uint32_t foreground = kTerminalPalette[attribute_value & 0x0FU];
+    std::uint32_t background = kTerminalPalette[(attribute_value >> 4) & 0x0FU];
+    if (inverse) {
+        std::swap(foreground, background);
+    }
+    const int origin_x = column * static_cast<int>(kTerminalCellWidth);
+    const int origin_y = row * static_cast<int>(kTerminalCellHeight);
+    const std::uint16_t* rows = &kFont10x20[glyph * kFont10x20Height];
+    for (int line = 0; line < kFont10x20Height; ++line) {
+        const std::uint16_t bits = rows[line];
+        for (int pixel = 0; pixel < kFont10x20Width; ++pixel) {
+            const bool set = (bits & (1U << (kFont10x20Width - 1 - pixel))) != 0;
+            paint(origin_x + pixel, origin_y + line, set ? foreground : background);
+        }
+    }
+}
+
+void TerminalDevice::render_all() {
+    if (framebuffer_ == nullptr || hidden() || !framebuffer_->enabled()) {
+        return;
+    }
+    const std::uint32_t background = kTerminalPalette[(color_ >> 4) & 0x0FU];
+    const int width = static_cast<int>(framebuffer_->width());
+    const int height = static_cast<int>(framebuffer_->height());
+    for (int y = 0; y < height; ++y) {
+        for (int x = 0; x < width; ++x) {
+            paint(x, y, background);
+        }
+    }
+    for (int row = 0; row < rows_; ++row) {
+        for (int column = 0; column < columns_; ++column) {
+            render_cell(column, row);
+        }
+    }
+    cursor_drawn_x_ = -1;
+    cursor_drawn_y_ = -1;
+}
+
+void TerminalDevice::draw_cursor() {
+    if (hidden() || (control_ & ControlCursor) == 0) {
+        return;
+    }
+    render_cell(cursor_x_, cursor_y_, true);
+    cursor_drawn_x_ = cursor_x_;
+    cursor_drawn_y_ = cursor_y_;
+}
+
+void TerminalDevice::erase_cursor() {
+    if (cursor_drawn_x_ < 0 || cursor_drawn_y_ < 0) {
+        return;
+    }
+    render_cell(cursor_drawn_x_, cursor_drawn_y_);
+    cursor_drawn_x_ = -1;
+    cursor_drawn_y_ = -1;
+}
+
+void TerminalDevice::paint(int x, int y, std::uint32_t color) {
+    if (framebuffer_ == nullptr) {
+        return;
+    }
+    const std::uint32_t width = framebuffer_->width();
+    const std::uint32_t height = framebuffer_->height();
+    if (x < 0 || y < 0 || static_cast<std::uint32_t>(x) >= width ||
+        static_cast<std::uint32_t>(y) >= height) {
+        return;
+    }
+    std::vector<std::uint8_t>& vram = framebuffer_->vram();
+    const std::size_t offset = framebuffer_->back_offset() +
+                               static_cast<std::size_t>(y) * framebuffer_->stride() +
+                               static_cast<std::size_t>(x) * 4U;
+    if (offset + 4U > vram.size()) {
+        return;
+    }
+    vram[offset] = static_cast<std::uint8_t>(color & 0xFFU);
+    vram[offset + 1] = static_cast<std::uint8_t>((color >> 8) & 0xFFU);
+    vram[offset + 2] = static_cast<std::uint8_t>((color >> 16) & 0xFFU);
+    vram[offset + 3] = 0;
+}
+
+GraphicsDevice::GraphicsDevice() {
+    reset();
+}
+
+void GraphicsDevice::attach(FramebufferDevice* framebuffer) {
+    framebuffer_ = framebuffer;
+}
+
+void GraphicsDevice::reset() {
+    arguments_.fill(0);
+    command_ = 0;
+    clip_x_ = 0;
+    clip_y_ = 0;
+    clip_width_ = 0;
+    clip_height_ = 0;
+    foreground_ = 0x00FF'FFFFU;
+    background_ = 0;
+    command_count_ = 0;
+    error_ = false;
+}
+
+bool GraphicsDevice::read(std::uint32_t offset, std::uint32_t& value) {
+    if (offset >= ArgumentBase && offset < ArgumentBase + 8U * 4U) {
+        value = arguments_[(offset - ArgumentBase) / 4U];
+        return true;
+    }
+    switch (offset) {
+    case CommandRegister: value = command_; return true;
+    case StatusRegister: value = error_ ? StatusError : 0U; return true;
+    case IdRegister: value = IdValue; return true;
+    default: value = 0; return true;
+    }
+}
+
+bool GraphicsDevice::write(std::uint32_t offset, std::uint32_t value) {
+    if (offset >= ArgumentBase && offset < ArgumentBase + 8U * 4U) {
+        arguments_[(offset - ArgumentBase) / 4U] = value;
+        return true;
+    }
+    switch (offset) {
+    case CommandRegister:
+        command_ = value;
+        return true;
+    case Doorbell:
+        if ((value & 1U) != 0) {
+            execute();
+        }
+        return true;
+    case StatusRegister:
+        if ((value & StatusError) != 0) {
+            error_ = false;
+        }
+        return true;
+    default:
+        return true;
+    }
+}
+
+void GraphicsDevice::execute() {
+    ++command_count_;
+    const auto op = static_cast<Op>(command_);
+    switch (op) {
+    case Op::SetClip: {
+        if (framebuffer_ == nullptr) {
+            error_ = true;
+            return;
+        }
+        const std::uint32_t width = framebuffer_->width();
+        const std::uint32_t height = framebuffer_->height();
+        const std::uint32_t x = std::min(arguments_[0], width);
+        const std::uint32_t y = std::min(arguments_[1], height);
+        clip_x_ = x;
+        clip_y_ = y;
+        clip_width_ = std::min(arguments_[2], width - x);
+        clip_height_ = std::min(arguments_[3], height - y);
+        return;
+    }
+    case Op::SetColor:
+        foreground_ = arguments_[0] & 0x00FF'FFFFU;
+        background_ = arguments_[1] & 0x00FF'FFFFU;
+        return;
+    case Op::FillRect:
+        fill_rect(arguments_[0], arguments_[1], arguments_[2], arguments_[3],
+                  arguments_[4]);
+        return;
+    case Op::CopyRect:
+        copy_rect(arguments_[0], arguments_[1], arguments_[2], arguments_[3],
+                  arguments_[4]);
+        return;
+    case Op::DrawLine:
+        draw_line(static_cast<int>(arguments_[0]), static_cast<int>(arguments_[1]),
+                  static_cast<int>(arguments_[2]), static_cast<int>(arguments_[3]),
+                  arguments_[4]);
+        return;
+    case Op::DrawText:
+        draw_text(arguments_[0], arguments_[1], arguments_[2], arguments_[3],
+                  arguments_[4], arguments_[5]);
+        return;
+    case Op::Flip:
+        if (framebuffer_ == nullptr || !framebuffer_->flip()) {
+            error_ = true;
+        }
+        return;
+    default:
+        error_ = true;
+        return;
+    }
+}
+
+void GraphicsDevice::fill_rect(std::uint32_t x, std::uint32_t y,
+                               std::uint32_t width, std::uint32_t height,
+                               std::uint32_t color) {
+    if (framebuffer_ == nullptr || !framebuffer_->enabled()) {
+        error_ = true;
+        return;
+    }
+    const std::uint32_t surface_width = framebuffer_->width();
+    const std::uint32_t surface_height = framebuffer_->height();
+    const std::uint32_t left = std::max(x, clip_x_);
+    const std::uint32_t top = std::max(y, clip_y_);
+    const std::uint32_t right = std::min(x + width, std::min(clip_x_ + clip_width_, surface_width));
+    const std::uint32_t bottom = std::min(y + height, std::min(clip_y_ + clip_height_, surface_height));
+    if (left >= right || top >= bottom) {
+        return;
+    }
+    std::vector<std::uint8_t>& vram = framebuffer_->vram();
+    for (std::uint32_t row = top; row < bottom; ++row) {
+        for (std::uint32_t column = left; column < right; ++column) {
+            const std::size_t offset = framebuffer_->back_offset() +
+                                       static_cast<std::size_t>(row) * framebuffer_->stride() +
+                                       static_cast<std::size_t>(column) * 4U;
+            if (offset + 4U > vram.size()) {
+                error_ = true;
+                return;
+            }
+            vram[offset] = static_cast<std::uint8_t>(color & 0xFFU);
+            vram[offset + 1] = static_cast<std::uint8_t>((color >> 8) & 0xFFU);
+            vram[offset + 2] = static_cast<std::uint8_t>((color >> 16) & 0xFFU);
+            vram[offset + 3] = 0;
+        }
+    }
+}
+
+void GraphicsDevice::copy_rect(std::uint32_t source, std::uint32_t dx,
+                               std::uint32_t dy, std::uint32_t width,
+                               std::uint32_t height) {
+    if (framebuffer_ == nullptr || !framebuffer_->enabled()) {
+        error_ = true;
+        return;
+    }
+    const std::uint32_t stride = framebuffer_->stride();
+    const std::uint32_t surface_width = framebuffer_->width();
+    const std::uint32_t surface_height = framebuffer_->height();
+    const std::uint32_t right = std::min(dx + width, surface_width);
+    const std::uint32_t bottom = std::min(dy + height, surface_height);
+    if (dx >= right || dy >= bottom) {
+        return;
+    }
+    const std::uint64_t needed = static_cast<std::uint64_t>(source) +
+                                 static_cast<std::uint64_t>(bottom - dy) * stride;
+    if (needed > framebuffer_->vram().size()) {
+        error_ = true;
+        return;
+    }
+    std::vector<std::uint8_t> scratch(static_cast<std::size_t>(right - dx) * 4U);
+    for (std::uint32_t row = dy; row < bottom; ++row) {
+        const std::size_t from = source + static_cast<std::size_t>(row - dy) * stride +
+                                 static_cast<std::size_t>(dx) * 4U;
+        const std::size_t to = framebuffer_->back_offset() +
+                               static_cast<std::size_t>(row) * stride +
+                               static_cast<std::size_t>(dx) * 4U;
+        if (from + scratch.size() > framebuffer_->vram().size() ||
+            to + scratch.size() > framebuffer_->vram().size()) {
+            error_ = true;
+            return;
+        }
+        std::copy_n(framebuffer_->vram().begin() + static_cast<std::ptrdiff_t>(from),
+                    scratch.size(), scratch.begin());
+        std::copy(scratch.begin(), scratch.end(),
+                  framebuffer_->vram().begin() + static_cast<std::ptrdiff_t>(to));
+    }
+}
+
+void GraphicsDevice::draw_line(int x0, int y0, int x1, int y1,
+                               std::uint32_t color) {
+    if (framebuffer_ == nullptr || !framebuffer_->enabled()) {
+        error_ = true;
+        return;
+    }
+    const int dx = std::abs(x1 - x0);
+    const int dy = -std::abs(y1 - y0);
+    const int sx = x0 < x1 ? 1 : -1;
+    const int sy = y0 < y1 ? 1 : -1;
+    int error = dx + dy;
+    while (true) {
+        if (x0 >= static_cast<int>(clip_x_) &&
+            y0 >= static_cast<int>(clip_y_) &&
+            static_cast<std::uint32_t>(x0) < clip_x_ + clip_width_ &&
+            static_cast<std::uint32_t>(y0) < clip_y_ + clip_height_) {
+            const std::size_t offset = framebuffer_->back_offset() +
+                                       static_cast<std::size_t>(y0) * framebuffer_->stride() +
+                                       static_cast<std::size_t>(x0) * 4U;
+            if (offset + 4U > framebuffer_->vram().size()) {
+                error_ = true;
+                return;
+            }
+            framebuffer_->vram()[offset] = static_cast<std::uint8_t>(color & 0xFFU);
+            framebuffer_->vram()[offset + 1] = static_cast<std::uint8_t>((color >> 8) & 0xFFU);
+            framebuffer_->vram()[offset + 2] = static_cast<std::uint8_t>((color >> 16) & 0xFFU);
+            framebuffer_->vram()[offset + 3] = 0;
+        }
+        if (x0 == x1 && y0 == y1) {
+            break;
+        }
+        const int doubled = 2 * error;
+        if (doubled >= dy) {
+            error += dy;
+            x0 += sx;
+        }
+        if (doubled <= dx) {
+            error += dx;
+            y0 += sy;
+        }
+    }
+}
+
+void GraphicsDevice::draw_text(std::uint32_t x, std::uint32_t y,
+                               std::uint32_t address, std::uint32_t length,
+                               std::uint32_t fg, std::uint32_t bg) {
+    if (framebuffer_ == nullptr || !framebuffer_->enabled()) {
+        error_ = true;
+        return;
+    }
+    if (address > framebuffer_->vram().size() ||
+        framebuffer_->vram().size() - address < length) {
+        error_ = true;
+        return;
+    }
+    const std::uint32_t surface_width = framebuffer_->width();
+    const std::uint32_t surface_height = framebuffer_->height();
+    for (std::uint32_t index = 0; index < length; ++index) {
+        const unsigned char character = framebuffer_->vram()[address + index];
+        int glyph = 0;
+        if (character >= 0x20 && character <= 0x7E) {
+            glyph = character - kFont10x20First;
+        } else if (character != ' ') {
+            glyph = '?' - kFont10x20First;
+        }
+        const std::uint32_t origin_x = x + index * kTerminalCellWidth;
+        for (int line = 0; line < kFont10x20Height; ++line) {
+            const std::uint16_t bits = kFont10x20[glyph * kFont10x20Height + line];
+            for (int pixel = 0; pixel < kFont10x20Width; ++pixel) {
+                const std::uint32_t px = origin_x + static_cast<std::uint32_t>(pixel);
+                const std::uint32_t py = y + static_cast<std::uint32_t>(line);
+                if (px < clip_x_ || py < clip_y_ || px >= clip_x_ + clip_width_ ||
+                    py >= clip_y_ + clip_height_ || px >= surface_width ||
+                    py >= surface_height) {
+                    continue;
+                }
+                const bool set = (bits & (1U << (kFont10x20Width - 1 - pixel))) != 0;
+                const std::uint32_t color = set ? fg : bg;
+                const std::size_t offset = framebuffer_->back_offset() +
+                                           static_cast<std::size_t>(py) * framebuffer_->stride() +
+                                           static_cast<std::size_t>(px) * 4U;
+                if (offset + 4U > framebuffer_->vram().size()) {
+                    error_ = true;
+                    return;
+                }
+                framebuffer_->vram()[offset] = static_cast<std::uint8_t>(color & 0xFFU);
+                framebuffer_->vram()[offset + 1] = static_cast<std::uint8_t>((color >> 8) & 0xFFU);
+                framebuffer_->vram()[offset + 2] = static_cast<std::uint8_t>((color >> 16) & 0xFFU);
+                framebuffer_->vram()[offset + 3] = 0;
+            }
+        }
+    }
+}
+
 DeviceBus::DeviceBus() {
     timer_.set_irq_handler([this](std::uint32_t line) { raise(line); });
     block_.set_irq_handler([this](std::uint32_t line) { raise(line); });
     keyboard_.set_irq_handler([this](std::uint32_t line) { raise(line); });
+    terminal_.attach(&framebuffer_);
+    graphics_.attach(&framebuffer_);
 }
 
 void DeviceBus::attach_machine(Machine& machine) {
@@ -570,6 +1210,12 @@ bool DeviceBus::read32(std::uint32_t address, std::uint32_t& value) {
     if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
         return framebuffer_.read_control(address - kFramebufferControlBase, value);
     }
+    if (address >= kTerminalBase && address < kTerminalBase + 0x1000) {
+        return terminal_.read(address - kTerminalBase, value);
+    }
+    if (address >= kGraphicsBase && address < kGraphicsBase + 0x1000) {
+        return graphics_.read(address - kGraphicsBase, value);
+    }
     return false;
 }
 
@@ -599,6 +1245,12 @@ bool DeviceBus::write32(std::uint32_t address, std::uint32_t value) {
     if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
         return framebuffer_.write_control(address - kFramebufferControlBase, value);
     }
+    if (address >= kTerminalBase && address < kTerminalBase + 0x1000) {
+        return terminal_.write(address - kTerminalBase, value);
+    }
+    if (address >= kGraphicsBase && address < kGraphicsBase + 0x1000) {
+        return graphics_.write(address - kGraphicsBase, value);
+    }
     return false;
 }
 
@@ -613,6 +1265,8 @@ void DeviceBus::reset() {
     serial_.reset();
     keyboard_.reset();
     framebuffer_.reset();
+    terminal_.reset();
+    graphics_.reset();
     irq_router_.reset();
     raise_count_ = 0;
 }

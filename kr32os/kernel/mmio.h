@@ -73,3 +73,18 @@ struct keyboard_registers {
 
 #define KEYBOARD_STATUS_AVAILABLE 1U
 #define KEYBOARD_STATUS_OVERRUN 2U
+
+/* Host terminal (page 8). The guest writes characters; the host renders. */
+struct terminal_registers {
+    volatile unsigned int data;
+    volatile unsigned int status;
+    volatile unsigned int control;
+    volatile unsigned int command;
+    volatile unsigned int color;
+    volatile unsigned int id;
+};
+
+#define TERMINAL_BASE 0xFFF08000U
+#define TERMINAL_ID_VALUE 0x5445524DU
+#define TERMINAL_COMMAND_CLEAR 1U
+#define TERMINAL_COMMAND_RESET 2U

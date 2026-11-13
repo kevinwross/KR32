@@ -38,8 +38,6 @@ mkdir -p "$build"
 "$KR32" as "$build/console.s" --object -o "$build/console.o"
 "$KR32" cc "$here/kernel/fb.c" --source-id 10 $opt -S -o "$build/fb.s"
 "$KR32" as "$build/fb.s" --object -o "$build/fb.o"
-"$KR32" cc "$here/kernel/font8x16.c" --source-id 11 $opt -S -o "$build/font8x16.s"
-"$KR32" as "$build/font8x16.s" --object -o "$build/font8x16.o"
 "$KR32" cc "$here/kernel/shell.c" --source-id 3 $opt -S -o "$build/shell.s"
 "$KR32" as "$build/shell.s" --object -o "$build/shell.o"
 "$KR32" cc "$here/kernel/timer.c" --source-id 4 $opt -S -o "$build/timer.s"
@@ -76,11 +74,11 @@ mkdir -p "$build"
 python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/wx.bin" "$build/initrd.bin" "$build/initrd.s"
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
-"$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/font8x16.o" "$build/shell.o" \
+"$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" "$build/fast.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
     --flat --base "$kernel_base" --map "$build/kernel.map" --sym "$build/kernel.sym" -o "$build/kernel.bin"
-"$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/font8x16.o" "$build/shell.o" \
+"$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" "$build/fast.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
     --base "$kernel_base" -o "$build/kernel.k32"

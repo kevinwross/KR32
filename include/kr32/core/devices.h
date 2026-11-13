@@ -26,6 +26,13 @@ inline constexpr std::uint32_t kKeyboardBase = kDeviceBase + 0x6000;
 // Reserved for the pointer device (display.md 8.5). No device owns this page
 // yet; accesses fault until one does.
 inline constexpr std::uint32_t kPointerBase = kDeviceBase + 0x7000;
+// Host terminal and host-executed graphics commands (terminal.md).
+inline constexpr std::uint32_t kTerminalBase = kDeviceBase + 0x8000;
+inline constexpr std::uint32_t kGraphicsBase = kDeviceBase + 0x9000;
+// Console cell size in host pixels; the terminal derives its grid from the
+// active framebuffer mode.
+inline constexpr std::uint32_t kTerminalCellWidth = 10;
+inline constexpr std::uint32_t kTerminalCellHeight = 20;
 
 // Dedicated 32 MiB display aperture below the MMIO window.
 inline constexpr std::uint32_t kFramebufferBase = 0xFC00'0000;
@@ -254,6 +261,7 @@ public:
     [[nodiscard]] std::uint32_t width() const { return width_; }
     [[nodiscard]] std::uint32_t height() const { return height_; }
     [[nodiscard]] std::uint32_t stride() const { return stride_; }
+    [[nodiscard]] std::uint32_t back_offset() const { return back_; }
     [[nodiscard]] bool enabled() const { return (control_ & 1U) != 0; }
     [[nodiscard]] std::uint32_t frame_number() const { return frame_.number; }
     [[nodiscard]] bool flip_error() const { return flip_error_; }
@@ -274,6 +282,128 @@ private:
     std::uint32_t back_ = kFramebufferSurfaceBytes;
     bool flip_error_ = false;
     CommittedFrame frame_{};
+};
+
+// Host-rendered text terminal (page 8). The guest writes characters; the host
+// keeps the grid, scrollback, palette, and font and paints the framebuffer.
+class TerminalDevice final : public Device {
+public:
+    static constexpr std::uint32_t Data = 0x00;
+    static constexpr std::uint32_t Status = 0x04;
+    static constexpr std::uint32_t Control = 0x08;
+    static constexpr std::uint32_t Command = 0x0C;
+    static constexpr std::uint32_t Color = 0x10;
+    static constexpr std::uint32_t Id = 0x14;
+    static constexpr std::uint32_t IdValue = 0x5445'524DU;  // "TERM"
+    static constexpr std::uint32_t StatusReady = 1U << 0;
+    static constexpr std::uint32_t ControlCursor = 1U << 0;
+    static constexpr std::uint32_t ControlHidden = 1U << 1;
+    static constexpr std::uint32_t CommandClear = 1;
+    static constexpr std::uint32_t CommandReset = 2;
+    static constexpr std::size_t ScrollbackLines = 256;
+
+    TerminalDevice();
+
+    void attach(FramebufferDevice* framebuffer);
+    bool read(std::uint32_t offset, std::uint32_t& value) override;
+    bool write(std::uint32_t offset, std::uint32_t value) override;
+    void reset() override;
+
+    [[nodiscard]] int columns() const { return columns_; }
+    [[nodiscard]] int rows() const { return rows_; }
+    [[nodiscard]] int cursor_x() const { return cursor_x_; }
+    [[nodiscard]] int cursor_y() const { return cursor_y_; }
+    [[nodiscard]] char cell(int column, int row) const;
+    [[nodiscard]] std::uint8_t attribute(int column, int row) const;
+    [[nodiscard]] bool hidden() const { return (control_ & ControlHidden) != 0; }
+    [[nodiscard]] std::uint8_t foreground() const {
+        return static_cast<std::uint8_t>(color_ & 0x0FU);
+    }
+    [[nodiscard]] std::uint8_t background() const {
+        return static_cast<std::uint8_t>((color_ >> 4) & 0x0FU);
+    }
+
+private:
+    void sync_geometry();
+    void clear();
+    void newline();
+    void scroll_up();
+    void putc(char character);
+    void write_cell(int column, int row, char character);
+    void render_cell(int column, int row, bool inverse = false);
+    void render_all();
+    void draw_cursor();
+    void erase_cursor();
+    void paint(int x, int y, std::uint32_t color);
+
+    FramebufferDevice* framebuffer_ = nullptr;
+    std::vector<char> chars_;
+    std::vector<std::uint8_t> attributes_;
+    std::vector<char> scrollback_;
+    int scrollback_head_ = 0;
+    int scrollback_count_ = 0;
+    int columns_ = 0;
+    int rows_ = 0;
+    int cursor_x_ = 0;
+    int cursor_y_ = 0;
+    int cursor_drawn_x_ = -1;
+    int cursor_drawn_y_ = -1;
+    std::uint32_t control_ = ControlCursor;
+    std::uint32_t color_ = 0x07;
+};
+
+// Host-executed drawing (page 9). Immediate registers: a command, eight
+// arguments, then a doorbell write that executes it.
+class GraphicsDevice final : public Device {
+public:
+    static constexpr std::uint32_t CommandRegister = 0x00;
+    static constexpr std::uint32_t ArgumentBase = 0x04;  // 0x04..0x20
+    static constexpr std::uint32_t Doorbell = 0x24;
+    static constexpr std::uint32_t StatusRegister = 0x28;
+    static constexpr std::uint32_t IdRegister = 0x2C;
+    static constexpr std::uint32_t IdValue = 0x4750'4831U;  // "GPH1"
+    static constexpr std::uint32_t StatusError = 1U << 0;
+    enum class Op : std::uint32_t {
+        SetClip = 1,
+        SetColor = 2,
+        FillRect = 3,
+        CopyRect = 4,
+        DrawLine = 5,
+        DrawText = 6,
+        Flip = 7,
+    };
+
+    GraphicsDevice();
+
+    void attach(FramebufferDevice* framebuffer);
+    bool read(std::uint32_t offset, std::uint32_t& value) override;
+    bool write(std::uint32_t offset, std::uint32_t value) override;
+    void reset() override;
+
+    [[nodiscard]] bool error() const { return error_; }
+    [[nodiscard]] std::uint32_t command_count() const { return command_count_; }
+
+private:
+    void execute();
+    void fill_rect(std::uint32_t x, std::uint32_t y, std::uint32_t width,
+                   std::uint32_t height, std::uint32_t color);
+    void copy_rect(std::uint32_t source, std::uint32_t dx, std::uint32_t dy,
+                   std::uint32_t width, std::uint32_t height);
+    void draw_line(int x0, int y0, int x1, int y1, std::uint32_t color);
+    void draw_text(std::uint32_t x, std::uint32_t y, std::uint32_t address,
+                   std::uint32_t length, std::uint32_t fg, std::uint32_t bg);
+
+    FramebufferDevice* framebuffer_ = nullptr;
+    std::array<std::uint32_t, 8> arguments_{};
+    std::uint32_t command_ = 0;
+    std::uint32_t clip_x_ = 0;
+    std::uint32_t clip_y_ = 0;
+    std::uint32_t clip_width_ = 0;
+    std::uint32_t clip_height_ = 0;
+    std::uint32_t foreground_ = 0x00FF'FFFFU;
+    std::uint32_t background_ = 0;
+    std::uint32_t command_count_ = 0;
+    bool error_ = false;
 };
 
 class IrqRouter {
@@ -311,6 +441,10 @@ public:
     [[nodiscard]] const KeyboardDevice& keyboard() const { return keyboard_; }
     [[nodiscard]] FramebufferDevice& framebuffer() { return framebuffer_; }
     [[nodiscard]] const FramebufferDevice& framebuffer() const { return framebuffer_; }
+    [[nodiscard]] TerminalDevice& terminal() { return terminal_; }
+    [[nodiscard]] const TerminalDevice& terminal() const { return terminal_; }
+    [[nodiscard]] GraphicsDevice& graphics() { return graphics_; }
+    [[nodiscard]] const GraphicsDevice& graphics() const { return graphics_; }
     [[nodiscard]] IrqRouter& irq_router() { return irq_router_; }
 
     [[nodiscard]] std::uint32_t raise_count() const { return raise_count_; }
@@ -324,6 +458,8 @@ private:
     SerialDevice serial_;
     KeyboardDevice keyboard_;
     FramebufferDevice framebuffer_;
+    TerminalDevice terminal_;
+    GraphicsDevice graphics_;
     IrqRouter irq_router_;
     std::function<void(std::uint32_t)> irq_handler_;
     std::uint32_t raise_count_ = 0;

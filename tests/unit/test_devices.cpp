@@ -520,7 +520,8 @@ TEST_CASE("keyboard reset clears FIFO, overrun, and control") {
 TEST_CASE("an unclaimed device page still faults") {
     FramebufferFixture f;
     std::uint32_t value = 0;
-    CHECK_FALSE(f.machine.read_physical32(core::kDeviceBase + 0x9000, value));
+    // Pages 0..9 are assigned; page 10 has no device behind it.
+    CHECK_FALSE(f.machine.read_physical32(core::kDeviceBase + 0xA000, value));
 }
 
 struct PagedGuest {
