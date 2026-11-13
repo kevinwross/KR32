@@ -29,7 +29,7 @@ struct ProgramResult {
     std::string diagnostics;
 };
 
-ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
+[[maybe_unused]] ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
     ProgramResult program;
     std::vector<container::Image> objects;
     assembler::Error assembly_error;
@@ -123,7 +123,7 @@ ProgramResult run_assemblies(const std::vector<std::string>& user_assemblies) {
     return program;
 }
 
-bool build_cluster_image(std::string_view source, container::Image& image,
+[[maybe_unused]] bool build_cluster_image(std::string_view source, container::Image& image,
                          std::string& error) {
     const cxx::Result compiled = cxx::compile(source);
     if (!compiled.ok) {
@@ -157,7 +157,7 @@ bool build_cluster_image(std::string_view source, container::Image& image,
     return true;
 }
 
-ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
+[[maybe_unused]] ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
     cxx::Options options;
     options.optimize = optimize;
     const cxx::Result compiled = cxx::compile(source, options);
@@ -173,7 +173,7 @@ ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
     return run_assemblies({compiled.assembly});
 }
 
-ProgramResult compile_and_run_pair(std::string_view first, std::string_view second) {
+[[maybe_unused]] ProgramResult compile_and_run_pair(std::string_view first, std::string_view second) {
     const cxx::Result first_result = cxx::compile(first);
     const cxx::Result second_result = cxx::compile(second);
     if (!first_result.ok || !second_result.ok) {
@@ -190,7 +190,7 @@ ProgramResult compile_and_run_pair(std::string_view first, std::string_view seco
     return run_assemblies({first_result.assembly, second_result.assembly});
 }
 
-ProgramResult compile_and_run_many(const std::vector<std::string>& sources) {
+[[maybe_unused]] ProgramResult compile_and_run_many(const std::vector<std::string>& sources) {
     std::vector<std::string> assemblies;
     ProgramResult failed;
     for (const std::string& source : sources) {

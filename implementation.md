@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 20:47 -08:00
+> **Last updated:** 2026-11-12 21:07 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -825,8 +825,11 @@ is the problem) or a smaller console mode — before tagging `m10`.
 **Test plan and gate**
 
 - [x] `ctest --preset windows-msvc-debug` passes (83/83).
-- [ ] `ctest --preset linux-gcc` passes on WSL; record any gap rather than
-      claiming the milestone complete.
+- [x] WSL gate: the Linux tree builds and `ctest` passes **76/76**, run headless
+      (`-DKR32_BUILD_UI=OFF`, Unix Makefiles) because WSL has no Ninja,
+      `pkg-config`, or SDL2 and `sudo` needs an interactive password. The
+      seven UI tests therefore did not run there; record the gap rather than
+      claiming the full Linux gate.
 - [x] Golden-frame hashes are checked in and updated deliberately
       (`display_screen_shot`).
 - [x] Console coverage: `os_console_screen` boots the embedded OS, requires an
@@ -834,12 +837,15 @@ is the problem) or a smaller console mode — before tagging `m10`.
 - [ ] Cell assertions for per-cell colour, a mid-line colour change, and
       colours across a scroll are not written; the console has no host-side
       harness.
-- [x] `scripts/update-os.ps1` run for Windows and the embedded images refreshed;
-      the Linux images still need `scripts/update-os.sh` in WSL.
+- [x] `scripts/update-os.ps1` run for Windows and `scripts/update-os.sh` in WSL
+      for Linux; both image pairs are refreshed.
 - [x] Docs updated: `devices.md` carries the v2 register table and keyboard,
       `display.md` points at it, `ui.md` gains the `SCREEN` tab, `testing.md`
       gains the new tests.
-- [ ] Tag `m10` and push; blocked on the WSL gate.
+- [ ] Tag `m10` and push. The Windows gate is green and the Linux gate is green
+      headless; the seven UI tests did not run on WSL because SDL2, Ninja, and
+      `pkg-config` are missing there and `sudo` needs a password. Decide whether
+      to accept the headless Linux gate or install the packages first.
 
 ### M11 — Graphics and console API
 
@@ -2958,6 +2964,19 @@ Newest entries at the bottom. Use the local time zone.
       Windows gate: 83/83 passed, 768.42 s. Still open on the milestone: the WSL
       run, Linux OS images, cell-level colour assertions, the redraw
       optimisation, and the `m10` tag.
+
+- **2026-11-12 21:07 -08:00** — WSL gate run headless. Cloned the tree to
+      `~/kr32-m10` (ext4, not `/mnt/c`), configured with Unix Makefiles and
+      `-DKR32_BUILD_UI=OFF`, built, and passed **76/76** Linux tests. WSL has no
+      Ninja, `pkg-config`, or SDL2 and `sudo` needs an interactive password, so
+      the seven UI tests did not run there.
+
+      The Linux build caught a portability bug the MSVC build hid: unused
+      helpers in `tests/cxx/cxx_test_support.h` and
+      `tests/unit/cc_test_support.h` trip GCC's `-Wunused-function` under
+      `-Werror`. Marked them `[[maybe_unused]]`. Regenerated the Linux OS images
+      with `scripts/update-os.sh` (`kernel.k32` 131,924 bytes) and copied them
+      into the tree. Windows gate re-run after the fix: 83/83 passed, 714.02 s.
 
 ## 10. Updating this file
 

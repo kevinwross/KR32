@@ -25,7 +25,7 @@ struct ProgramResult {
     bool ok = false;
 };
 
-ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
+[[maybe_unused]] ProgramResult compile_and_run(std::string_view source, bool optimize = false) {
     ProgramResult program;
     const cc::Result compiled = cc::compile(source, "<input>", 0, optimize);
     const std::string diagnostic =
