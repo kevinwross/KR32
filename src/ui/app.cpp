@@ -24,6 +24,13 @@ namespace kr32::ui {
 namespace {
 constexpr int kInitialWidth = 1440;
 constexpr int kInitialHeight = 900;
+
+// Debugger shortcuts always win, even while the guest owns the keyboard.
+bool is_debugger_key(int key) {
+    return key == kr32::platform::key::Escape || key == kr32::platform::key::F5 ||
+           key == kr32::platform::key::F6 || key == kr32::platform::key::F9 ||
+           key == kr32::platform::key::F10 || key == kr32::platform::key::F11;
+}
 }
 
 bool smoke_test() {
@@ -162,7 +169,16 @@ int run(int argc, char** argv) {    std::string image_path;
                 }
                 break;
             case kr32::platform::Event::Kind::KeyDown:
-                (void)debugger.key(event.key, event.shift, event.control);
+                if (debugger.screen_focused() && !is_debugger_key(event.key)) {
+                    debugger.guest_key(kr32::platform::event_word(event));
+                } else {
+                    (void)debugger.key(event.key, event.shift, event.control);
+                }
+                break;
+            case kr32::platform::Event::Kind::KeyUp:
+                if (debugger.screen_focused()) {
+                    debugger.guest_key(kr32::platform::event_word(event));
+                }
                 break;
             case kr32::platform::Event::Kind::MouseDown:
                 if (event.button == 3) {

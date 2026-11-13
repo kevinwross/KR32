@@ -219,13 +219,14 @@ TEST_CASE("source filename opens a source picker and selection follows steps") {
 
     const int filename_x =
         6 + ui::Canvas::text_width("SOURCE  ", ui::FontRole::UiBold) + 10;
-    CHECK(debugger.click(filename_x, 38, 1000, 700));
+    // The tab strip occupies the first 26 pixels of the old source region.
+    CHECK(debugger.click(filename_x, 64, 1000, 700));
     ui::Canvas menu(1000, 700);
     debugger.render(menu);
     CHECK(menu.hash() != baseline.hash());
 
     // The first menu row starts below the source header.
-    CHECK(debugger.click(filename_x, 62, 1000, 700));
+    CHECK(debugger.click(filename_x, 88, 1000, 700));
     CHECK(debugger.status().rfind("source:", 0) == 0);
     CHECK(!debugger.source_path().empty());
 

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 20:17 -08:00
+> **Last updated:** 2026-11-12 20:32 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -790,32 +790,37 @@ the front end's store codegen before the milestone gate.
 
 Follow-up: drive `ls` and Enter through the keyboard FIFO in a windowed test.
 
-**D4 — Debugger integration**
+**D4 — Debugger integration** — implemented 2026-11-12.
 
-Integration points, so the phase can be executed in one pass:
-`Layout` gains `Rect screen` and `Rect tabs` carved from `source`; state gains
-`screen_tab_active_`, `screen_focus_`, a cached `DisplayFrame`, and a cached
-pixel copy refreshed when `frame().number` changes. `draw_screen` blits with
-integer scale or fit; `click` selects the tab and toggles focus; `key` routes to
-`devices_.keyboard()` while focused except for F5/F6/F9-F11, and `Esc` releases
-focus before quitting; `hover` maps a pixel to `0xFC00_0000 + FRONT + y*STRIDE +
-x*4` for the tooltip. `render_headless` draws the active tab.
+`Layout` gained `tabs` and `screen` (the source pane starts below a 26-pixel
+strip); `draw_tabs` renders `SOURCE | SCREEN`; `draw_screen` caches the
+committed frame keyed on `frame().number`, blits integer-scaled or
+nearest-neighbour fit, letterboxes, and draws the focus dot; `hover` maps a
+pixel to its guest address and colour; `click` selects a tab, focuses the
+screen, and points the memory panel at the clicked pixel; `Esc` releases focus;
+`app.cpp` routes key events to `devices_.keyboard()` while focused except for
+Escape and F5/F6/F9-F11. OS mode selects the tab by default, and the new
+`ui_headless_os` test renders it.
 
-- [ ] `SOURCE | SCREEN` tab strip over the top-left region; integer scale or
+- [x] `SOURCE | SCREEN` tab strip over the top-left region; integer scale or
       fit with nearest-neighbour, centered and letterboxed.
-- [ ] Focus: click to give the guest keyboard focus, green dot, `Esc` releases
+- [x] Focus: click to give the guest keyboard focus, green dot, `Esc` releases
       focus before it quits, and debugger keys always win.
-- [ ] Hover a pixel: screen `(x, y)`, guest address, hex and RGB; clicking
+- [x] Hover a pixel: screen `(x, y)`, guest address, hex and RGB; clicking
       points the memory panel at that address.
-- [ ] `--screen-shot` includes the tab when active; `ui_headless` covers the
+- [x] `--screen-shot` includes the tab when active; `ui_headless_os` covers the
       screen.
 - Aperture fast path: conditional on profiling, recorded if taken, and never
   part of this milestone's exit gate.
 
-**Prerequisite before D4 closes:** the console redraw cost recorded under D3.
-A 7M-step boot and a 7M-step scroll make the SCREEN tab unusable in the
-debugger, so fix the fill/redraw first — either a tighter blit (the kernel front
-end's ~14 instructions per store is the problem) or a smaller console mode.
+The source-pane test in `tests/unit/test_ui.cpp` moved its two click rows down
+by the 26-pixel strip; its assertions are unchanged.
+
+**Before the milestone closes:** the console redraw cost recorded under D3. A
+7M-step boot means the debugger's SCREEN view sits at "no committed frame" until
+the guest runs for ~7M steps, and each scroll costs about the same. Fix the
+fill/redraw — a tighter blit (the kernel front end's ~14 instructions per store
+is the problem) or a smaller console mode — before tagging `m10`.
 
 **Test plan and gate**
 
@@ -2920,6 +2925,19 @@ Newest entries at the bottom. Use the local time zone.
       fault test's 100-echo timer input was reduced to one `mem` query because
       boot now advances the timer on its own. Windows gate: 81/81 passed,
       604.86 s. The checked-in Linux OS images were not regenerated.
+
+- **2026-11-12 20:32 -08:00** — M10 D4 implemented. The debugger's top-left
+      region is now a 26-pixel tab strip plus a pane: `SOURCE` draws the source
+      view, `SCREEN` caches the committed frame keyed on `frame().number` and
+      blits it integer-scaled or nearest-neighbour fit, letterboxed, with a
+      focus dot. Clicking the screen focuses it and points the memory panel at
+      the pixel's guest address; hover reports `(x, y)`, the address, and the
+      colour. `Esc` releases focus, and `app.cpp` routes keys to the keyboard
+      device while focused except Escape and F5/F6/F9-F11. OS mode selects the
+      tab by default, and `ui_headless_os` renders it headlessly. One existing
+      `test_ui` case moved two click rows down by the strip; its assertions are
+      unchanged. Windows gate: 82/82 passed, 611.91 s. The console redraw cost
+      from D3 is still the milestone's open performance item.
 
 ## 10. Updating this file
 

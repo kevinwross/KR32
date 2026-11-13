@@ -44,6 +44,9 @@ public:
     [[nodiscard]] bool wheel(int x, int y, int width, int height, int delta);
     [[nodiscard]] bool key(int key, bool shift, bool control = false);
     [[nodiscard]] bool quit_requested() const { return quit_; }
+    [[nodiscard]] bool screen_focused() const { return screen_focus_; }
+    // Routes one packed keyboard event to the guest while the screen is focused.
+    void guest_key(std::uint32_t word);
     [[nodiscard]] const std::string& status() const { return status_; }
     [[nodiscard]] const std::string& source_path() const { return source_view_path_; }
     [[nodiscard]] std::size_t breakpoint_count() const {
@@ -57,7 +60,9 @@ public:
 
 private:
     struct Layout {
+        Rect tabs;
         Rect source;
+        Rect screen;
         Rect disassembly;
         Rect cores;
         Rect memory;
@@ -87,6 +92,10 @@ private:
     void reset_stats();
     void record_stats_time(std::chrono::steady_clock::time_point start);
     void draw_panel(Canvas& canvas, Rect rect, const std::string& title);
+    void draw_tabs(Canvas& canvas, Rect rect);
+    void draw_screen(Canvas& canvas, Rect rect);
+    void refresh_screen_cache();
+    void draw_screen_tooltip(Canvas& canvas);
     void draw_toolbar(Canvas& canvas);
     void draw_status_bar(Canvas& canvas);
     void draw_source(Canvas& canvas, Rect rect);
@@ -277,6 +286,21 @@ private:
     core::DeviceBus devices_;
     std::string serial_text_;
     bool console_hover_ = false;
+
+    bool screen_tab_active_ = false;
+    bool screen_focus_ = false;
+    bool screen_has_frame_ = false;
+    core::FramebufferDevice::CommittedFrame screen_frame_{};
+    std::vector<std::uint8_t> screen_pixels_;
+    Rect screen_tab_source_{};
+    Rect screen_tab_screen_{};
+    Rect screen_view_{};
+    int screen_scale_ = 1;
+    bool screen_downscale_ = false;
+    int screen_hover_x_ = -1;
+    int screen_hover_y_ = -1;
+    std::uint32_t screen_hover_address_ = 0;
+    std::uint32_t screen_hover_color_ = 0;
 
     struct VarHoverRow {
         Rect row{};

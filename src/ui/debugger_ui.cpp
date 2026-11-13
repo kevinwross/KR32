@@ -895,6 +895,7 @@ bool DebuggerUI::load_os_memory(const std::vector<std::uint8_t>& kernel,
     path_ = kernel_name;
     bios_path_ = bios_name;
     os_mode_ = true;
+    screen_tab_active_ = true;
     os_embedded_ = kernel_name == "<embedded>";
     source_lines_.clear();
     source_cache_.clear();
@@ -1418,6 +1419,126 @@ void DebuggerUI::draw_status_bar(Canvas& canvas) {
     canvas.text(8, y + 4,
                 trim_to(status_, static_cast<std::size_t>(status_width / 7)),
                 kStats, FontRole::MonoSmall);
+}
+
+void DebuggerUI::guest_key(std::uint32_t word) {
+    (void)devices_.keyboard().push_event(word);
+}
+
+void DebuggerUI::draw_tabs(Canvas& canvas, Rect rect) {
+    canvas.fill(rect, kPanel);
+    canvas.fill(Rect{rect.x, rect.y + rect.height - 1, rect.width, 1}, kBorder);
+    const int button_height = rect.height - 4;
+    screen_tab_source_ = Rect{rect.x + 4, rect.y + 2, 78, button_height};
+    screen_tab_screen_ = Rect{screen_tab_source_.x + screen_tab_source_.width + 4,
+                              screen_tab_source_.y, 78, button_height};
+    canvas.fill(screen_tab_source_, screen_tab_active_ ? kPanel : kPanelAlt);
+    canvas.fill(screen_tab_screen_, screen_tab_active_ ? kPanelAlt : kPanel);
+    canvas.text(screen_tab_source_.x + 10, screen_tab_source_.y + 5, "SOURCE",
+                screen_tab_active_ ? kDim : kText, FontRole::UiBold);
+    canvas.text(screen_tab_screen_.x + 10, screen_tab_screen_.y + 5, "SCREEN",
+                screen_tab_active_ ? kText : kDim, FontRole::UiBold);
+    const Rect active = screen_tab_active_ ? screen_tab_screen_ : screen_tab_source_;
+    canvas.fill(Rect{active.x, active.y + active.height - 2, active.width, 2}, kAccent);
+}
+
+void DebuggerUI::refresh_screen_cache() {
+    const core::FramebufferDevice& framebuffer = devices_.framebuffer();
+    const core::FramebufferDevice::CommittedFrame& frame = framebuffer.frame();
+    if (frame.number == screen_frame_.number && !screen_pixels_.empty()) {
+        return;
+    }
+    const auto pixels = framebuffer.frame_pixels();
+    screen_pixels_.assign(pixels.begin(), pixels.end());
+    screen_frame_ = frame;
+    screen_has_frame_ = frame.number != 0 && !pixels.empty();
+}
+
+void DebuggerUI::draw_screen(Canvas& canvas, Rect rect) {
+    refresh_screen_cache();
+    std::string title = "SCREEN";
+    if (screen_has_frame_) {
+        title += " " + std::to_string(screen_frame_.width) + "x" +
+                 std::to_string(screen_frame_.height) + "  FRAME " +
+                 std::to_string(screen_frame_.number);
+    } else {
+        title += "  no committed frame";
+    }
+    draw_panel(canvas, rect, title);
+
+    screen_view_ = Rect{};
+    screen_scale_ = 1;
+    screen_downscale_ = false;
+    if (!screen_has_frame_) {
+        return;
+    }
+    const int inner_x = rect.x + 4;
+    const int inner_y = rect.y + 24;
+    const int inner_w = std::max(1, rect.width - 8);
+    const int inner_h = std::max(1, rect.height - 28);
+    const int frame_w = static_cast<int>(screen_frame_.width);
+    const int frame_h = static_cast<int>(screen_frame_.height);
+    if (frame_w <= 0 || frame_h <= 0) {
+        return;
+    }
+
+    int draw_w = frame_w;
+    int draw_h = frame_h;
+    int scale = std::min(inner_w / frame_w, inner_h / frame_h);
+    if (scale >= 1) {
+        scale = std::clamp(scale, 1, 8);
+        draw_w = frame_w * scale;
+        draw_h = frame_h * scale;
+        screen_scale_ = scale;
+    } else {
+        screen_downscale_ = true;
+        const int by_width = std::max(1, inner_w * frame_h / frame_w);
+        if (by_width <= inner_h) {
+            draw_w = inner_w;
+            draw_h = by_width;
+        } else {
+            draw_h = inner_h;
+            draw_w = std::max(1, inner_h * frame_w / frame_h);
+        }
+    }
+
+    const int origin_x = inner_x + (inner_w - draw_w) / 2;
+    const int origin_y = inner_y + (inner_h - draw_h) / 2;
+    screen_view_ = Rect{origin_x, origin_y, draw_w, draw_h};
+    for (int y = 0; y < draw_h; ++y) {
+        const int source_y = screen_downscale_ ? y * frame_h / draw_h : y / scale;
+        for (int x = 0; x < draw_w; ++x) {
+            const int source_x = screen_downscale_ ? x * frame_w / draw_w : x / scale;
+            const std::size_t offset =
+                static_cast<std::size_t>(source_y) * screen_frame_.stride +
+                static_cast<std::size_t>(source_x) * 4U;
+            if (offset + 2U >= screen_pixels_.size()) {
+                continue;
+            }
+            canvas.pixel(origin_x + x, origin_y + y,
+                         Color{screen_pixels_[offset + 2], screen_pixels_[offset + 1],
+                               screen_pixels_[offset], 255});
+        }
+    }
+    if (screen_focus_) {
+        canvas.fill(Rect{rect.x + rect.width - 16, rect.y + 8, 7, 7},
+                    Color{80, 220, 120, 255});
+    }
+}
+
+void DebuggerUI::draw_screen_tooltip(Canvas& canvas) {
+    if (!screen_tab_active_ || screen_hover_x_ < 0 || screen_view_.width == 0) {
+        return;
+    }
+    char text[128];
+    std::snprintf(text, sizeof(text), "(%d, %d)  0x%08X  #%06X", screen_hover_x_,
+                  screen_hover_y_, screen_hover_address_, screen_hover_color_);
+    const int width = Canvas::text_width(text, FontRole::MonoSmall) + 12;
+    const int x = std::min(canvas.width() - width - 4, mouse_x_ + 12);
+    const int y = std::min(canvas.height() - 24, mouse_y_ + 18);
+    canvas.fill(Rect{x, y, width, 20}, kPanelAlt);
+    canvas.frame(Rect{x, y, width, 20}, kBorder);
+    canvas.text(x + 6, y + 4, text, kText, FontRole::MonoSmall);
 }
 
 void DebuggerUI::draw_source(Canvas& canvas, Rect rect) {
@@ -3111,7 +3232,11 @@ DebuggerUI::Layout DebuggerUI::layout(int width, int height) const {
         width - variables_width - breakpoints_width - stack_width;
 
     Layout result;
-    result.source = Rect{0, kToolbarHeight, source_width, source_height};
+    constexpr int tab_height = 26;
+    result.tabs = Rect{0, kToolbarHeight, source_width, tab_height};
+    result.source = Rect{0, kToolbarHeight + tab_height, source_width,
+                         std::max(80, source_height - tab_height)};
+    result.screen = result.source;
     result.disassembly = Rect{source_width, kToolbarHeight, disassembly_width, top_height};
     result.cores = Rect{source_width + disassembly_width, kToolbarHeight, right_width,
                         top_height};
@@ -3418,6 +3543,42 @@ void DebuggerUI::activate_context_menu(bool run_to_address) {
 void DebuggerUI::hover(int x, int y, int width, int height) {
     mouse_x_ = x;
     mouse_y_ = y;
+    if (screen_tab_active_ && !scroll_dragging_) {
+        screen_hover_x_ = -1;
+        screen_hover_y_ = -1;
+        if (screen_view_.contains(x, y) && screen_has_frame_ &&
+            screen_view_.width > 0 && screen_view_.height > 0) {
+            const int frame_w = static_cast<int>(screen_frame_.width);
+            const int frame_h = static_cast<int>(screen_frame_.height);
+            const int local_x = x - screen_view_.x;
+            const int local_y = y - screen_view_.y;
+            const int px = screen_downscale_
+                               ? local_x * frame_w / screen_view_.width
+                               : local_x / std::max(1, screen_scale_);
+            const int py = screen_downscale_
+                               ? local_y * frame_h / screen_view_.height
+                               : local_y / std::max(1, screen_scale_);
+            if (px >= 0 && px < frame_w && py >= 0 && py < frame_h) {
+                screen_hover_x_ = px;
+                screen_hover_y_ = py;
+                screen_hover_address_ =
+                    core::kFramebufferBase + screen_frame_.offset +
+                    static_cast<std::uint32_t>(py) * screen_frame_.stride +
+                    static_cast<std::uint32_t>(px) * 4U;
+                const std::size_t offset =
+                    static_cast<std::size_t>(py) * screen_frame_.stride +
+                    static_cast<std::size_t>(px) * 4U;
+                screen_hover_color_ = 0;
+                if (offset + 2U < screen_pixels_.size()) {
+                    screen_hover_color_ =
+                        (static_cast<std::uint32_t>(screen_pixels_[offset + 2]) << 16) |
+                        (static_cast<std::uint32_t>(screen_pixels_[offset + 1]) << 8) |
+                        static_cast<std::uint32_t>(screen_pixels_[offset]);
+                }
+            }
+        }
+        return;
+    }
     if (scroll_dragging_) {
         if (scroll_drag_panel_ == 1) {
             // The disassembly scrollbar covers the full address space; use a
@@ -3596,7 +3757,12 @@ void DebuggerUI::render(Canvas& canvas) {
         return;
     }
     const Layout areas = layout(canvas.width(), canvas.height());
-    draw_source(canvas, areas.source);
+    draw_tabs(canvas, areas.tabs);
+    if (screen_tab_active_) {
+        draw_screen(canvas, areas.source);
+    } else {
+        draw_source(canvas, areas.source);
+    }
     draw_disassembly(canvas, areas.disassembly);
     draw_cores(canvas, areas.cores);
     draw_memory(canvas, areas.memory);
@@ -3624,6 +3790,7 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_tile_tooltip(canvas);
     draw_control_tooltip(canvas);
     draw_asm_tooltip(canvas);
+    draw_screen_tooltip(canvas);
     draw_context_menu(canvas);
     draw_source_menu(canvas);
     draw_fpr_popup(canvas);
@@ -3634,6 +3801,44 @@ void DebuggerUI::render(Canvas& canvas) {
 }
 
 bool DebuggerUI::click(int x, int y, int width, int height) {
+    if (!settings_open_ && loaded_) {
+        const Layout areas = layout(width, height);
+        if (areas.tabs.contains(x, y)) {
+            if (screen_tab_source_.contains(x, y)) {
+                screen_tab_active_ = false;
+                screen_focus_ = false;
+                return true;
+            }
+            if (screen_tab_screen_.contains(x, y)) {
+                screen_tab_active_ = true;
+                return true;
+            }
+            return false;
+        }
+        if (screen_tab_active_ && areas.source.contains(x, y)) {
+            screen_focus_ = true;
+            const int frame_w = static_cast<int>(screen_frame_.width);
+            const int frame_h = static_cast<int>(screen_frame_.height);
+            if (screen_has_frame_ && screen_view_.contains(x, y) && frame_w > 0 &&
+                frame_h > 0 && screen_view_.width > 0 && screen_view_.height > 0) {
+                const int local_x = x - screen_view_.x;
+                const int local_y = y - screen_view_.y;
+                const int px = screen_downscale_
+                                   ? local_x * frame_w / screen_view_.width
+                                   : local_x / std::max(1, screen_scale_);
+                const int py = screen_downscale_
+                                   ? local_y * frame_h / screen_view_.height
+                                   : local_y / std::max(1, screen_scale_);
+                if (px >= 0 && px < frame_w && py >= 0 && py < frame_h) {
+                    memory_address_ =
+                        core::kFramebufferBase + screen_frame_.offset +
+                        static_cast<std::uint32_t>(py) * screen_frame_.stride +
+                        static_cast<std::uint32_t>(px) * 4U;
+                }
+            }
+            return true;
+        }
+    }
     if (settings_open_) {
         if (settings_close_.contains(x, y) || settings_cancel_rect_.contains(x, y) ||
             !settings_modal_.contains(x, y)) {
@@ -4090,6 +4295,10 @@ bool DebuggerUI::wheel(int x, int y, int width, int height, int delta) {
 }
 
 bool DebuggerUI::key(int key_value, bool shift, bool control) {
+    if (screen_focus_ && key_value == kr32::platform::key::Escape) {
+        screen_focus_ = false;
+        return true;
+    }
     if (settings_open_) {
         if (key_value == kr32::platform::key::Escape) {
             close_settings(false);

@@ -352,6 +352,14 @@ if(KR32_BUILD_UI)
             --screenshot ${CMAKE_BINARY_DIR}/hello-cxx-ui.ppm)
     set_tests_properties(ui_headless_cxx PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")
+
+    # OS mode selects the SCREEN tab, so this covers the screen layout and the
+    # "no committed frame" path without booting the guest.
+    add_test(NAME ui_headless_os
+        COMMAND $<TARGET_FILE:kr32> gui --os --embedded --headless
+            --screenshot ${CMAKE_BINARY_DIR}/os-ui.ppm)
+    set_tests_properties(ui_headless_os PROPERTIES
+        PASS_REGULAR_EXPRESSION "ui-render")
 endif()
 
 add_test(NAME boundary_clean
