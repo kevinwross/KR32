@@ -854,11 +854,15 @@ Closing it needs a new builtin kind, parsing for `unsigned char`/`signed char`,
 `LOAD8U` at the load sites, and unsigned conversions and comparisons. Not
 started; it is a C++ front-end change of its own.
 
-**Known gap, call-argument codegen.** A constant argument after the first is
-evaluated into `R0` and then copied to its register, so the first argument is
-saved around it: `PUSH R0; MOV R0, #8; MOV R1, R0; POP R0; CALL`. The assembly
-optimizer could fold that to `MOV R1, #8`; a codegen fix would evaluate each
-argument into its final register directly. Not started.
+**Comparison codegen, fixed 2026-11-13.** The `PUSH R0` / `MOV R1, R0` /
+`POP R0` sequence did not come from call arguments (those already evaluate
+right-to-left through the simple-argument path). It came from a comparison whose
+right operand was a constant that was not a single token, such as `x < (8)`:
+the literal fast path only matched a bare `Number`/`Character`. The comparison
+path now folds a constant operand with `try_fold_constant` and emits
+`MOV R1, #imm; CMP R0, R1` without touching the stack.
+`unit_test_cc_8` covers `if (x < (8))` and `return x < (8)`, requiring no
+`PUSH R0` and a `MOV R1, #8`.
 
 ### M11 — Graphics and console API
 

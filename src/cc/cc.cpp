@@ -6511,6 +6511,21 @@ private:
                                 continue;
                             }
                         }
+                        std::int64_t constant = 0;
+                        if (try_fold_constant(constant)) {
+                            emit("    MOV R1, #" + std::to_string(constant));
+                            emit("    CMP R0, R1");
+                            const bool unsigned_compare =
+                                is_unsigned_scalar(left);
+                            const std::string branch = jump_true
+                                ? true_comparison(op, unsigned_compare)
+                                : inverse_comparison(op, unsigned_compare);
+                            emit("    " + branch + " " + target);
+                            condition_branched_ = true;
+                            left = type_int();
+                            matched = true;
+                            continue;
+                        }
                         emit("    PUSH R0");
                         TypePtr right = (this->*next)();
                         if (!is_long_long_type(right) &&

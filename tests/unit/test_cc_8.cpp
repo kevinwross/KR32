@@ -469,3 +469,12 @@ TEST_CASE("C accepts _Imaginary scalar declarations") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
+
+TEST_CASE("c parenthesised constants compare without a stack save") {
+    const cc::Result result = cc::compile(
+        "int f(int x) { if (x < (8)) return 1; return 0; }\n"
+        "int g(int x) { return x < (8); }\n");
+    CHECK(result.ok);
+    CHECK(result.assembly.find("PUSH R0") == std::string::npos);
+    CHECK(result.assembly.find("MOV R1, #8") != std::string::npos);
+}
