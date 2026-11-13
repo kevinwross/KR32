@@ -13,6 +13,12 @@
 namespace kr32::debug {
 namespace {
 
+// A single source line can execute millions of instructions when it calls a
+// bulk loop: the framebuffer console's full 800x600 redraw is about seven
+// million steps. This guard only exists to break a runaway step, so it is
+// generous enough to let such a call return.
+constexpr int kStepGuard = 20'000'000;
+
 std::string trim(std::string value) {
     const std::size_t first = value.find_first_not_of(" \t\r\n");
     if (first == std::string::npos) {
@@ -394,7 +400,7 @@ core::StepResult Session::step_line_in() {
         return machine_.step();
     }
     core::StepResult result;
-    for (int guard = 0; guard < 1'000'000; ++guard) {
+    for (int guard = 0; guard < kStepGuard; ++guard) {
         result = machine_.step();
         if (result.kind != core::StepResult::Kind::Retired) {
             return result;
@@ -416,7 +422,7 @@ core::StepResult Session::step_line_over() {
     const Function* start_function = function_at(machine_.pc());
     bool skipped_initial_breakpoint = false;
     core::StepResult result;
-    for (int guard = 0; guard < 1'000'000; ++guard) {
+    for (int guard = 0; guard < kStepGuard; ++guard) {
         // step_over() executes one instruction, or skips a CALL to its return
         // address. Repeating it lets control flow choose the next source line:
         // a skipped if-body must not be required to be reachable.
@@ -494,7 +500,7 @@ core::StepResult Session::step_over() {
     if (result.kind != core::StepResult::Kind::Retired) {
         return result;
     }
-    for (int guard = 0; guard < 1'000'000 && machine_.pc() != return_pc; ++guard) {
+    for (int guard = 0; guard < kStepGuard && machine_.pc() != return_pc; ++guard) {
         result = machine_.step();
         if (result.kind == core::StepResult::Kind::Halted ||
             result.kind == core::StepResult::Kind::Raised) {
@@ -514,7 +520,7 @@ core::StepResult Session::step_out() {
         return machine_.step();
     }
     core::StepResult result;
-    for (int guard = 0; guard < 1'000'000 && machine_.pc() != return_pc; ++guard) {
+    for (int guard = 0; guard < kStepGuard && machine_.pc() != return_pc; ++guard) {
         result = machine_.step();
         if (result.kind == core::StepResult::Kind::Halted ||
             result.kind == core::StepResult::Kind::Raised) {

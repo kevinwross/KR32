@@ -595,6 +595,44 @@ TEST_CASE("DebugSession steps over and out by source line") {
     CHECK(out.kind == core::StepResult::Kind::Retired);
 }
 
+TEST_CASE("DebugSession steps over a call that runs millions of steps") {
+    // The callee takes roughly 1.6M instructions, past the old one-million
+    // guard; stepping over used to stop inside it instead of at the next line.
+    const container::Image image = compile_debug_image(
+        "static int spin(int n) {\n"
+        "    int total = 0;\n"
+        "    while (n > 0) {\n"
+        "        total += n;\n"
+        "        --n;\n"
+        "    }\n"
+        "    return total;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    int total = spin(200000);\n"
+        "    return total;\n"
+        "}\n");
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Line* call_line = find_line(info, 10);
+    REQUIRE(call_line != nullptr);
+    session.set_breakpoint(call_line->address);
+    (void)session.run();
+    REQUIRE(session.at_breakpoint());
+
+    const core::StepResult over = session.step_line_over();
+    CHECK(over.kind == core::StepResult::Kind::Retired);
+    const debug::Function* function = session.function_at(session.machine().pc());
+    REQUIRE(function != nullptr);
+    CHECK(function->name == "main");
+    const debug::Line* after = session.line_at(session.machine().pc());
+    REQUIRE(after != nullptr);
+    CHECK(after->line == 11);
+}
+
 TEST_CASE("DebugSession steps out of a called function") {
     const container::Image image = compile_debug_image(
         "int add(int a, int b) {\n"
