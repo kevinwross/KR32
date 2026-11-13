@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 18:50 -08:00
+> **Last updated:** 2026-11-12 19:29 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -688,10 +688,11 @@ contract, a host window that presents committed frames, a bootable text
 console, and a `SCREEN` view in the debugger. The programmer-facing API is
 M11.
 
-**Status:** planned. The design is [docs/display.md](docs/display.md); the D0
-review closed 2026-11-12 and its decisions are recorded in §12 there. No source
-changes have been made. [docs/devices.md](docs/devices.md) remains normative for
-the shipped v1 until D1 lands.
+**Status:** in progress. D1 (device v2 and keyboard) landed 2026-11-12; D2–D4
+remain. The design is [docs/display.md](docs/display.md); the D0 review closed
+2026-11-12 and its decisions are recorded in §12 there.
+[docs/devices.md](docs/devices.md) still describes the v1 contract and absorbs
+the v2 register table when M10 closes.
 
 **Dependencies**
 
@@ -728,20 +729,21 @@ closed 2026-11-02.
 
 **Tasks**
 
-**D1 — Framebuffer v2 and keyboard device**
+**D1 — Framebuffer v2 and keyboard device** — complete 2026-11-12.
 
-- [ ] Implement the v2 register contract ([docs/display.md](docs/display.md)
+- [x] Implement the v2 register contract ([docs/display.md](docs/display.md)
       §5): `WIDTH`/`HEIGHT`/`STRIDE`/`FORMAT`/`FRONT`/`BACK`, computed
       `MODE_OK`, sticky `FLIP_ERROR`, `ID` word.
-- [ ] `FLIP` commits the surface that was `BACK` before the call, swaps the
+- [x] `FLIP` commits the surface that was `BACK` before the call, swaps the
       offsets, and increments `FRAME` only on success.
-- [ ] Keyboard device: 64-event FIFO, packed event word, IRQ, overrun W1C.
-- [ ] Pointer page constants only (§8.5); no device and no host injection.
-- [ ] Unit tests for every §11.1 rule, including byte/half/word/unaligned
+- [x] Keyboard device: 64-event FIFO, packed event word, IRQ, overrun W1C.
+- [x] Pointer page constants only (§8.5); no device and no host injection.
+- [x] Unit tests for every §11.1 rule, including byte/half/word/unaligned
       accesses across a 4 KiB boundary, a fault at `base + 32 MiB`, and success
       at `base + 32 MiB - 4`.
-- [ ] Integration test: an assembly guest sets a mode, fills VRAM, flips, and
-      reads back the committed descriptor and pixel bytes.
+- [x] Integration test: an assembly guest sets a mode, fills VRAM, flips, and
+      reads back the committed descriptor and pixel bytes. The guest runs with
+      paging enabled because the MMU refuses device addresses when it is off.
 - [x] Verified CR-1: the loader tests pass and a `.bss` range reads zero after a
       reload.
 
@@ -2847,6 +2849,17 @@ Newest entries at the bottom. Use the local time zone.
       the debugger's `Session::load` now skips `.tls` instead of loading it as a
       data section, matching the CLI and cluster loaders; it never installed TLS
       anyway.
+
+- **2026-11-12 19:29 -08:00** — M10 D1 complete. Framebuffer v2 is the device
+      contract: pending registers with computed `MODE_OK`, sticky
+      `FLIP_ERROR`, `FLIP` committing the surface that was `BACK`, `FRAME`, and
+      the `ID` word compared as a 32-bit value. Control-page writes never fault;
+      unknown offsets read zero. Added `KeyboardDevice` (64-event FIFO, packed
+      words, IRQ, overrun W1C) on page 6 and reserved page 7 for the pointer.
+      `unit_test_devices` grew from 3 to 29 cases, including an assembly guest
+      that sets a mode, stores a pixel, and flips; it runs with paging enabled
+      because the MMU rejects device addresses when paging is off. Windows gate:
+      80/80 passed, 592.28 s.
 
 ## 10. Updating this file
 

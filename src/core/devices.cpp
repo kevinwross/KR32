@@ -248,7 +248,7 @@ std::string SerialDevice::take_output() {
 }
 
 FramebufferDevice::FramebufferDevice()
-    : pixels_(kFramebufferSize, std::uint8_t{0}) {}
+    : vram_(kFramebufferSize, std::uint8_t{0}) {}
 
 bool FramebufferDevice::read_control(std::uint32_t offset,
                                      std::uint32_t& value) const {
@@ -275,10 +275,20 @@ bool FramebufferDevice::read_control(std::uint32_t offset,
         value = back_;
         return true;
     case Status:
-        value = enabled() ? 1U : 0U;
+        value = status();
+        return true;
+    case Flip:
+        value = 0;
+        return true;
+    case Frame:
+        value = frame_.number;
+        return true;
+    case Id:
+        value = IdValue;
         return true;
     default:
-        return false;
+        value = 0;
+        return true;
     }
 }
 
@@ -286,64 +296,79 @@ bool FramebufferDevice::write_control(std::uint32_t offset, std::uint32_t value)
     switch (offset) {
     case Control:
         control_ = value & 1U;
-        return true;
+        break;
     case Width:
-        if (value == 0 || value > kFramebufferWidth) return false;
-        width_ = value;
-        stride_ = width_ * 4U;
-        return true;
-    case Height:
-        if (value == 0 || value > kFramebufferHeight) return false;
-        height_ = value;
-        return true;
-    case Stride:
-        if (value < width_ * 4U || value > kFramebufferStride || (value & 3U) != 0) {
-            return false;
+        if (value >= 1U && value <= kFramebufferWidth) {
+            width_ = value;
+            stride_ = value * 4U;
         }
-        stride_ = value;
-        return true;
+        break;
+    case Height:
+        if (value >= 1U && value <= kFramebufferHeight) {
+            height_ = value;
+        }
+        break;
+    case Stride:
+        if (value >= width_ * 4U && value <= kFramebufferStride && (value & 3U) == 0) {
+            stride_ = value;
+        }
+        break;
     case Format:
-        if (value != 1) return false;
-        format_ = value;
-        return true;
+        if (value == 1U) {
+            format_ = value;
+        }
+        break;
     case Front:
     case Back:
-        if ((value & 3U) != 0 || value > kFramebufferSize - 4U) return false;
-        if (offset == Front) front_ = value;
-        if (offset == Back) back_ = value;
-        return true;
+        if ((value & 3U) == 0 && value < kFramebufferSize) {
+            if (offset == Front) {
+                front_ = value;
+            } else {
+                back_ = value;
+            }
+        }
+        break;
     case Status:
-        return false;
+        if ((value & StatusFlipError) != 0) {
+            flip_error_ = false;
+        }
+        break;
+    case Flip:
+        if ((value & 1U) != 0) {
+            (void)flip();
+        }
+        break;
     default:
-        return false;
+        break;
     }
+    return true;
 }
 
 bool FramebufferDevice::read_pixel(std::uint32_t offset,
                                    std::uint32_t& value) const {
-    if (offset > pixels_.size() || pixels_.size() - offset < 4) {
+    if (offset > vram_.size() || vram_.size() - offset < 4) {
         return false;
     }
-    value = static_cast<std::uint32_t>(pixels_[offset]) |
-            (static_cast<std::uint32_t>(pixels_[offset + 1]) << 8) |
-            (static_cast<std::uint32_t>(pixels_[offset + 2]) << 16) |
-            (static_cast<std::uint32_t>(pixels_[offset + 3]) << 24);
+    value = static_cast<std::uint32_t>(vram_[offset]) |
+            (static_cast<std::uint32_t>(vram_[offset + 1]) << 8) |
+            (static_cast<std::uint32_t>(vram_[offset + 2]) << 16) |
+            (static_cast<std::uint32_t>(vram_[offset + 3]) << 24);
     return true;
 }
 
 bool FramebufferDevice::write_pixel(std::uint32_t offset, std::uint32_t value) {
-    if (offset > pixels_.size() || pixels_.size() - offset < 4) {
+    if (offset > vram_.size() || vram_.size() - offset < 4) {
         return false;
     }
-    pixels_[offset] = static_cast<std::uint8_t>(value & 0xFFU);
-    pixels_[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
-    pixels_[offset + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFFU);
-    pixels_[offset + 3] = static_cast<std::uint8_t>((value >> 24) & 0xFFU);
+    vram_[offset] = static_cast<std::uint8_t>(value & 0xFFU);
+    vram_[offset + 1] = static_cast<std::uint8_t>((value >> 8) & 0xFFU);
+    vram_[offset + 2] = static_cast<std::uint8_t>((value >> 16) & 0xFFU);
+    vram_[offset + 3] = static_cast<std::uint8_t>((value >> 24) & 0xFFU);
     return true;
 }
 
 void FramebufferDevice::reset() {
-    std::fill(pixels_.begin(), pixels_.end(), std::uint8_t{0});
+    std::fill(vram_.begin(), vram_.end(), std::uint8_t{0});
     control_ = 0;
     width_ = kFramebufferWidth;
     height_ = kFramebufferHeight;
@@ -351,6 +376,127 @@ void FramebufferDevice::reset() {
     format_ = 1;
     front_ = 0;
     back_ = kFramebufferSurfaceBytes;
+    flip_error_ = false;
+    frame_ = CommittedFrame{};
+}
+
+bool FramebufferDevice::mode_ok() const {
+    if (width_ < 1U || width_ > kFramebufferWidth) return false;
+    if (height_ < 1U || height_ > kFramebufferHeight) return false;
+    if (format_ != 1U) return false;
+    if (stride_ < width_ * 4U || stride_ > kFramebufferStride) return false;
+    if ((stride_ & 3U) != 0) return false;
+    if ((front_ & 3U) != 0 || (back_ & 3U) != 0) return false;
+
+    const std::uint64_t bytes =
+        static_cast<std::uint64_t>(height_) * static_cast<std::uint64_t>(stride_);
+    return static_cast<std::uint64_t>(front_) + bytes <= kFramebufferSize &&
+           static_cast<std::uint64_t>(back_) + bytes <= kFramebufferSize;
+}
+
+bool FramebufferDevice::flip() {
+    if (!mode_ok()) {
+        flip_error_ = true;
+        return false;
+    }
+    frame_ = CommittedFrame{(control_ & 1U) != 0, back_, width_, height_, stride_,
+                            format_, frame_.number + 1U};
+    std::swap(front_, back_);
+    flip_error_ = false;
+    return true;
+}
+
+std::uint32_t FramebufferDevice::status() const {
+    std::uint32_t value = 0;
+    if (frame_.enabled) value |= StatusEnabled;
+    if (mode_ok()) value |= StatusModeOk;
+    if (flip_error_) value |= StatusFlipError;
+    return value;
+}
+
+std::span<const std::uint8_t> FramebufferDevice::frame_pixels() const {
+    const std::size_t offset = frame_.offset;
+    const std::size_t length =
+        static_cast<std::size_t>(frame_.height) * frame_.stride;
+    if (offset > vram_.size() || vram_.size() - offset < length) {
+        return {};
+    }
+    return std::span<const std::uint8_t>(vram_.data() + offset, length);
+}
+
+bool KeyboardDevice::read(std::uint32_t offset, std::uint32_t& value) {
+    switch (offset) {
+    case Data:
+        if (fifo_.empty()) {
+            value = 0;
+            return true;
+        }
+        value = fifo_.front();
+        fifo_.pop_front();
+        return true;
+    case Status: {
+        std::uint32_t status = 0;
+        if (!fifo_.empty()) status |= StatusAvailable;
+        if (overrun_) status |= StatusOverrun;
+        status |= static_cast<std::uint32_t>(fifo_.size() & 0xFFU) << 8;
+        value = status;
+        return true;
+    }
+    case Control:
+        value = irq_enabled_ ? 1U : 0U;
+        return true;
+    case Irq:
+        value = irq_line_;
+        return true;
+    default:
+        value = 0;
+        return true;
+    }
+}
+
+bool KeyboardDevice::write(std::uint32_t offset, std::uint32_t value) {
+    switch (offset) {
+    case Status:
+        if ((value & StatusOverrun) != 0) {
+            overrun_ = false;
+        }
+        break;
+    case Control:
+        irq_enabled_ = (value & 1U) != 0;
+        update_irq();
+        break;
+    case Irq:
+        if (value <= 15U) {
+            irq_line_ = value;
+        }
+        break;
+    default:
+        break;
+    }
+    return true;
+}
+
+bool KeyboardDevice::push_event(std::uint32_t word) {
+    if (fifo_.size() >= Capacity) {
+        overrun_ = true;
+        return false;
+    }
+    fifo_.push_back(word);
+    update_irq();
+    return true;
+}
+
+void KeyboardDevice::reset() {
+    fifo_.clear();
+    overrun_ = false;
+    irq_enabled_ = false;
+    irq_line_ = 0;
+}
+
+void KeyboardDevice::update_irq() {
+    if (irq_enabled_ && !fifo_.empty() && irq_handler_) {
+        irq_handler_(irq_line_);
+    }
 }
 
 IrqRouter::IrqRouter() {
@@ -380,6 +526,7 @@ std::uint32_t IrqRouter::route(std::uint32_t line) const {
 DeviceBus::DeviceBus() {
     timer_.set_irq_handler([this](std::uint32_t line) { raise(line); });
     block_.set_irq_handler([this](std::uint32_t line) { raise(line); });
+    keyboard_.set_irq_handler([this](std::uint32_t line) { raise(line); });
 }
 
 void DeviceBus::attach_machine(Machine& machine) {
@@ -417,6 +564,9 @@ bool DeviceBus::read32(std::uint32_t address, std::uint32_t& value) {
     if (address >= kSerialBase && address < kSerialBase + 0x1000) {
         return serial_.read(address - kSerialBase, value);
     }
+    if (address >= kKeyboardBase && address < kKeyboardBase + 0x1000) {
+        return keyboard_.read(address - kKeyboardBase, value);
+    }
     if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
         return framebuffer_.read_control(address - kFramebufferControlBase, value);
     }
@@ -443,6 +593,9 @@ bool DeviceBus::write32(std::uint32_t address, std::uint32_t value) {
     if (address >= kSerialBase && address < kSerialBase + 0x1000) {
         return serial_.write(address - kSerialBase, value);
     }
+    if (address >= kKeyboardBase && address < kKeyboardBase + 0x1000) {
+        return keyboard_.write(address - kKeyboardBase, value);
+    }
     if (address >= kFramebufferControlBase && address < kFramebufferControlBase + 0x1000) {
         return framebuffer_.write_control(address - kFramebufferControlBase, value);
     }
@@ -458,6 +611,7 @@ void DeviceBus::reset() {
     block_.reset();
     console_.reset();
     serial_.reset();
+    keyboard_.reset();
     framebuffer_.reset();
     irq_router_.reset();
     raise_count_ = 0;

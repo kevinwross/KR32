@@ -4,6 +4,7 @@
 #include <cstdint>
 #include <deque>
 #include <functional>
+#include <span>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -21,6 +22,10 @@ inline constexpr std::uint32_t kConsoleBase = kDeviceBase + 0x2000;
 inline constexpr std::uint32_t kIrqRouterBase = kDeviceBase + 0x3000;
 inline constexpr std::uint32_t kFramebufferControlBase = kDeviceBase + 0x4000;
 inline constexpr std::uint32_t kSerialBase = kDeviceBase + 0x5000;
+inline constexpr std::uint32_t kKeyboardBase = kDeviceBase + 0x6000;
+// Reserved for the pointer device (display.md 8.5). No device owns this page
+// yet; accesses fault until one does.
+inline constexpr std::uint32_t kPointerBase = kDeviceBase + 0x7000;
 
 // Dedicated 32 MiB display aperture below the MMIO window.
 inline constexpr std::uint32_t kFramebufferBase = 0xFC00'0000;
@@ -149,6 +154,50 @@ private:
     bool overrun_ = false;
 };
 
+class KeyboardDevice final : public Device {
+public:
+    static constexpr std::uint32_t Data = 0x00;
+    static constexpr std::uint32_t Status = 0x04;
+    static constexpr std::uint32_t Control = 0x08;
+    static constexpr std::uint32_t Irq = 0x0C;
+
+    static constexpr std::uint32_t StatusAvailable = 1U << 0;
+    static constexpr std::uint32_t StatusOverrun = 1U << 1;
+    static constexpr std::size_t Capacity = 64;
+
+    // ASCII in bits 0..7, modifiers 8..15, scancode 16..23, type 24..31.
+    static constexpr std::uint32_t pack_event(std::uint8_t ascii,
+                                              std::uint8_t modifiers,
+                                              std::uint8_t scancode,
+                                              std::uint8_t type) {
+        return static_cast<std::uint32_t>(ascii) |
+               (static_cast<std::uint32_t>(modifiers) << 8) |
+               (static_cast<std::uint32_t>(scancode) << 16) |
+               (static_cast<std::uint32_t>(type) << 24);
+    }
+
+    bool read(std::uint32_t offset, std::uint32_t& value) override;
+    bool write(std::uint32_t offset, std::uint32_t value) override;
+    void reset() override;
+
+    // Drops the event and sets OVERRUN when the FIFO is full.
+    [[nodiscard]] bool push_event(std::uint32_t word);
+    void set_irq_handler(std::function<void(std::uint32_t)> handler) {
+        irq_handler_ = std::move(handler);
+    }
+    [[nodiscard]] std::size_t size() const { return fifo_.size(); }
+    [[nodiscard]] bool overrun() const { return overrun_; }
+
+private:
+    void update_irq();
+
+    std::deque<std::uint32_t> fifo_;
+    bool overrun_ = false;
+    bool irq_enabled_ = false;
+    std::uint32_t irq_line_ = 0;
+    std::function<void(std::uint32_t)> irq_handler_;
+};
+
 class FramebufferDevice {
 public:
     static constexpr std::uint32_t Control = 0x00;
@@ -159,24 +208,63 @@ public:
     static constexpr std::uint32_t Front = 0x14;
     static constexpr std::uint32_t Back = 0x18;
     static constexpr std::uint32_t Status = 0x1C;
+    static constexpr std::uint32_t Flip = 0x20;
+    static constexpr std::uint32_t Frame = 0x24;
+    static constexpr std::uint32_t Id = 0x28;
+
+    // Compared as a 32-bit word, never as the byte string "FBR1": on a
+    // little-endian machine the bytes in memory read 31 52 42 46 ("1RBF").
+    static constexpr std::uint32_t IdValue = 0x4642'5231U;
+    static constexpr std::uint32_t StatusEnabled = 1U << 0;
+    static constexpr std::uint32_t StatusModeOk = 1U << 1;
+    static constexpr std::uint32_t StatusFlipError = 1U << 2;
+
+    // Snapshot of the last successful FLIP. Offsets are into VRAM.
+    struct CommittedFrame {
+        bool enabled = false;
+        std::uint32_t offset = 0;
+        std::uint32_t width = kFramebufferWidth;
+        std::uint32_t height = kFramebufferHeight;
+        std::uint32_t stride = kFramebufferStride;
+        std::uint32_t format = 1;
+        std::uint32_t number = 0;
+    };
 
     FramebufferDevice();
 
+    // The control page never faults: unknown offsets read zero and ignore
+    // writes, and an out-of-range write leaves the register unchanged.
     [[nodiscard]] bool read_control(std::uint32_t offset, std::uint32_t& value) const;
     [[nodiscard]] bool write_control(std::uint32_t offset, std::uint32_t value);
     [[nodiscard]] bool read_pixel(std::uint32_t offset, std::uint32_t& value) const;
     [[nodiscard]] bool write_pixel(std::uint32_t offset, std::uint32_t value);
     void reset();
 
-    [[nodiscard]] const std::vector<std::uint8_t>& pixels() const { return pixels_; }
-    [[nodiscard]] std::vector<std::uint8_t>& pixels() { return pixels_; }
+    // Commits the current register bundle: the surface that was BACK becomes
+    // the displayed frame, FRONT and BACK swap, and FRAME increments. A
+    // rejected bundle sets STATUS.FLIP_ERROR and touches nothing else.
+    [[nodiscard]] bool flip();
+
+    [[nodiscard]] const CommittedFrame& frame() const { return frame_; }
+    [[nodiscard]] std::span<const std::uint8_t> frame_pixels() const;
+    [[nodiscard]] std::uint32_t status() const;
+
+    [[nodiscard]] const std::vector<std::uint8_t>& vram() const { return vram_; }
+    [[nodiscard]] std::vector<std::uint8_t>& vram() { return vram_; }
     [[nodiscard]] std::uint32_t width() const { return width_; }
     [[nodiscard]] std::uint32_t height() const { return height_; }
     [[nodiscard]] std::uint32_t stride() const { return stride_; }
     [[nodiscard]] bool enabled() const { return (control_ & 1U) != 0; }
+    [[nodiscard]] std::uint32_t frame_number() const { return frame_.number; }
+    [[nodiscard]] bool flip_error() const { return flip_error_; }
+
+    // Test seam for the 2^32 frame-counter wrap.
+    void set_frame_number(std::uint32_t value) { frame_.number = value; }
 
 private:
-    std::vector<std::uint8_t> pixels_;
+    [[nodiscard]] bool mode_ok() const;
+
+    std::vector<std::uint8_t> vram_;
     std::uint32_t control_ = 0;
     std::uint32_t width_ = kFramebufferWidth;
     std::uint32_t height_ = kFramebufferHeight;
@@ -184,6 +272,8 @@ private:
     std::uint32_t format_ = 1;
     std::uint32_t front_ = 0;
     std::uint32_t back_ = kFramebufferSurfaceBytes;
+    bool flip_error_ = false;
+    CommittedFrame frame_{};
 };
 
 class IrqRouter {
@@ -217,6 +307,8 @@ public:
     [[nodiscard]] ConsoleDevice& console() { return console_; }
     [[nodiscard]] SerialDevice& serial() { return serial_; }
     [[nodiscard]] const SerialDevice& serial() const { return serial_; }
+    [[nodiscard]] KeyboardDevice& keyboard() { return keyboard_; }
+    [[nodiscard]] const KeyboardDevice& keyboard() const { return keyboard_; }
     [[nodiscard]] FramebufferDevice& framebuffer() { return framebuffer_; }
     [[nodiscard]] const FramebufferDevice& framebuffer() const { return framebuffer_; }
     [[nodiscard]] IrqRouter& irq_router() { return irq_router_; }
@@ -230,6 +322,7 @@ private:
     BlockDevice block_;
     ConsoleDevice console_;
     SerialDevice serial_;
+    KeyboardDevice keyboard_;
     FramebufferDevice framebuffer_;
     IrqRouter irq_router_;
     std::function<void(std::uint32_t)> irq_handler_;
