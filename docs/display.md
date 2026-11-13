@@ -1,10 +1,11 @@
 # Display, console, and keyboard
 
-**Status:** implemented. Framebuffer v2, the keyboard device, the host surface,
-and the framebuffer console shipped on 2026-11-12. The device contract is now
-normative in [devices.md](devices.md); this document keeps the design rationale
-and specifies the host presentation model, the windowed console, and the
-keyboard mapping that sit on top of it.
+**Status:** implemented, with the console superseded. Framebuffer v2, the
+keyboard device, the host surface, and the v1 kernel console shipped on
+2026-11-12. The device contract is normative in [devices.md](devices.md); this
+document keeps the design rationale and the host presentation model. The console
+is now a host terminal device ([terminal.md](terminal.md)); §7 records what
+remains in the guest.
 
 **Owner:** display/hardware stream. The C/C++ compiler and libc stream works
 independently in `src/cc/`, `src/cxx/`, and its own docs; see
@@ -27,15 +28,18 @@ Decisions at a glance:
 | Decision | Choice | Reason |
 | --- | --- | --- |
 | Display memory | 32 MiB VRAM at `0xFC00_0000`; surfaces are byte offsets inside it | Off-screen surfaces for free; no per-surface allocation |
-| Active mode | 320x200 through 1920x1080, default 800x600 | Fits a window 1:1; 100 console columns at 8 px, 37 rows at 16 px |
+| Active mode | 320x200 through 1920x1080, default 800x600 | Fits a window 1:1; 80 console columns at 10 px, 30 rows at 20 px (8x16 gives 100x37) |
 | Pixel format | XRGB8888, word `0x00RRGGBB` | Matches `ui::Canvas` (`0xAARRGGBB`) and SDL `ARGB8888`; one copy |
 | Presentation | Commit on `FLIP`; host reads only the committed frame | No torn modes, cheap host update |
 | Host update | Keyed on a committed-frame counter | No 8 MB scan per UI frame |
 | Bad configuration | Ignored register writes; `FLIP` sets a sticky error | MMIO never faults; easy to probe and debug |
-| Console | Kernel-rendered text grid in the framebuffer | Exercises the display; no host-side terminal emulation |
+| Console | Host terminal device; the kernel text grid shipped in M10 and is replaced | Exercises the display without guest pixel work |
 | Input | Keyboard device at `0xFFF0_6000`, packed 32-bit events | Extensible to pointer later; same device pattern |
 
-## 2. What exists today
+## 2. What existed before v2 (historical)
+
+This section is the pre-v2 snapshot that motivated the design. The shipped
+state is in [devices.md](devices.md).
 
 Implemented v1 (see [devices.md](devices.md)):
 
@@ -206,8 +210,8 @@ Notes:
 - The top byte (X) is ignored by the host, which always presents opaque.
   Guests should write zero there.
 - There is no alpha, no hardware palette, and no packed 16-bit mode in v1. The
-  console's 16-entry palette (section 7.2) is software: it expands 4-bit indices
-  to these XRGB words before writing pixels.
+  terminal's 16-entry palette ([terminal.md](terminal.md) §3) is software: the
+  host expands 4-bit indices to these XRGB words while rendering.
 
 This is deliberately the same layout as `ui::Canvas` pixels (`0xAARRGGBB`) and
 SDL's `ARGB8888` texture, so presenting a row is a masked copy rather than a
@@ -337,88 +341,33 @@ stride), and renders with integer scaling. The Canvas path is unchanged, so
 the debugger and display-only window share the window, event, and texture
 plumbing.
 
-## 7. System console in a window
+## 7. System console
 
-### 7.1 Why the guest renders it
+The console is a **host terminal device**; [terminal.md](terminal.md) is
+normative for it. This section keeps only what still lives in the guest and in
+the debugger.
 
-The console could be emulated on the host by parsing serial output. That would
-be less work and would not exercise the display. We take the guest-side path
-because the console is the first real client of the framebuffer, it forces the
-pixel format, mode, and flip contract to be usable, and it gives KR32OS a real
-screen to grow a graphics API on.
+> **Superseded design.** The v1 kernel-rendered console (guest grid, dirty
+> rectangles, kernel font, scrollback ring, single-surface policy) shipped with
+> M10 and is replaced by the terminal. `implementation.md` records the
+> replacement as M10.5; the rationale and the measured cost are in
+> [terminal.md](terminal.md) §1.
 
-### 7.2 Architecture
+### 7.1 What the guest keeps
 
-```text
-kr32os shell (transport-agnostic)
-        |
-   line discipline (echo, editing, history)
-        |
-   +----+-------------------+
-   |                        |
-serial console          framebuffer console
-(0xFFF0_5000)           (VRAM + 8x16 font)
-   |                        |
-CONSOLE panel           SCREEN pane / display window
-```
+A thin `console_*` driver over the terminal page: `console_putc` writes
+`DATA`, `console_clear` writes `COMMAND`, `con_set_colors` writes `COLOR`, and
+`console_present` flips the framebuffer. The grid, font, palette, scrollback,
+dirty tracking, and renderer all move to the host. `console_getc` and the line
+discipline stay in the kernel, and `console_putc` keeps its unconditional
+serial mirror.
 
-- **Text grid.** `cols = width / 8`, `rows = height / 16`. At 800x600 that is
-  100x37. The grid is the source of truth; the renderer paints cells. A cell is
-  two bytes: the character (7 bits, `0x20..0x7E`) and a colour byte holding a
-  4-bit foreground index and a 4-bit background index.
-- **Renderer.** For each dirty cell: fill the 8x16 background and blit the
-  glyph. Then draw the cursor cell. Then `FLIP`.
-- **Dirty tracking.** Keep a dirty rectangle in cell coordinates. Writes mark
-  cells dirty; `present` redraws that rectangle, flips, and clears it. A
-  screen clear or scroll marks the whole grid.
-- **Scrolling.** When the cursor passes the last row, move the grid up one row,
-  clear the last row, mark the full grid dirty.
-- **Scrollback.** The kernel keeps the last 256 lines in a ring buffer owned by
-  `con_state`, so history is identical in the display window and the debugger.
-  Host-side capture is not used; D4 adds navigation.
-- **Cursor.** A filled block drawn in inverse video over the cell. No blink in
-  v1: blinking needs a timer and makes frame hashes time-dependent. A
-  timer-driven blink is a later, opt-out option.
-- **Colors.** Each cell carries a 4-bit foreground and a 4-bit background index
-  into a 16-entry XRGB palette, so colour is per character and survives
-  scrollback. `con_set_colors` sets the pen used for subsequent writes; cells
-  already written keep their colours. The table is the 16 ANSI colours, with
-  index 0 set to `0x00101820` (theme background) and index 7 to `0x00E6EDF3`
-  (theme foreground); it lives in `con_palette` in `console.c`. ANSI SGR
-  parsing is a later phase and maps onto the same indices. `gfx_*` stays
-  true-colour XRGB; only the console is a palette device.
-- **Cell cost.** Two bytes per cell: 7.4 KiB for the 100x37 visible grid and
-  51.2 KiB for the 256-line ring.
-- **Present policy.** Present at the end of a burst of output, not per
-  character. The shell writes a line, then presents once. Input echo presents
-  once per keystroke.
-- **Buffer policy: single surface.** The console sets `FRONT == BACK` and
-  treats `FLIP` as a publish, not a swap. Double buffering a text console has a
-  trap: after a flip the new back surface is the previous frame, so a
-  dirty-cell redraw leaves stale cells everywhere else, and syncing the whole
-  surface costs more than the redraw. A console writes to the surface the host
-  reads, between instruction slices, and publishes when a burst is complete.
-  Graphical programs that animate should use two surfaces instead; a partial
-  frame sampled mid-redraw is invisible at human speed and never affects
-  correctness or test hashes because tests stop the guest before sampling.
-
-### 7.3 Font
-
-- 8x16 monospace, glyphs `0x20..0x7E`, 16 bytes per glyph (one byte per row),
-  1,536 bytes total. Box-drawing and block glyphs can be added later.
-- Generate the table offline from the OFL JetBrains Mono face already vendored
-  for the debugger, so the console matches the rest of the system, and check in
-  the generated `uint8_t` table with its attribution. Do not depend on
-  `stb_truetype` in the kernel.
-- The generator is a host tool under `tools/`; the generated table is
-  committed so the kernel build stays freestanding.
-
-### 7.4 Transports and line discipline
+### 7.2 Transports and line discipline
 
 The shell must not know which transport is active.
 
 - **Output** goes to both transports: serial always, so logs and tests keep
-  working; the framebuffer console when a display is present.
+  working; the terminal when a display is present.
 - **Input** is polled from both: keyboard first, then serial. In tests the
   keyboard FIFO is empty, so serial remains the scripted path.
 - **Line discipline** is shared: echo, backspace, Enter, `Ctrl-C` (cancel
@@ -426,44 +375,18 @@ The shell must not know which transport is active.
   only while the shell is the foreground consumer; while a user program owns the
   console the kernel terminates that process instead (see graphics.md §3.2).
   History and tab completion are later phases.
-- **Form feed.** The existing `console_clear()` emits `\f` to serial, and the
-  debugger console treats `\f` as clear. The framebuffer console keeps that
-  contract: `\f` clears the grid and homes the cursor.
+- **Form feed.** `console_clear()` emits `\f` to serial, and the terminal
+  treats `\f` (and `COMMAND` 1) as clear and home.
 
-### 7.5 Boot sequence
-
-1. Kernel validates `BootInfo` as today.
-2. Probe `0xFFF0_4028` for `"FBR1"`. If absent or wrong, continue with
-   serial-only output and note it once.
-3. Choose the mode: 800x600 by default. Write `WIDTH`, `HEIGHT`, `FORMAT`,
-   `FRONT = 0`, `BACK = 0` (single-surface console), then `CONTROL = 1`, then
-   `FLIP`. The first flip publishes the cleared surface; a graphical program
-   can later switch `BACK` to a second surface and double-buffer.
-4. Clear the grid, print the banner, present.
-5. Continue to the existing shell; input now also arrives from the keyboard.
-
-If any `FLIP` fails (`STATUS.FLIP_ERROR`), fall back to serial and report the
-reason once. A broken display must never stop the machine from booting.
-
-### 7.6 Focus and key routing in the debugger
+### 7.3 Focus and key routing in the debugger
 
 - Serial console: pointer hovers the `CONSOLE` panel (current behavior).
-- Framebuffer console: `SCREEN` has been clicked and shows the focus dot.
+- Terminal: `SCREEN` has been clicked and shows the focus dot.
 - While the screen is focused, printable keys, `Enter`, `Backspace`, `Tab`,
   and arrows go to the keyboard device. `F5`/`F6`/`F9`-`F11` stay with the
   debugger. `Esc` releases focus.
 - The display-only window always routes to the guest.
 
-### 7.7 Failure and fallback
-
-- Missing or wrong `ID`: serial only.
-- `FLIP` rejected: keep the previous committed frame; log once.
-- Keyboard FIFO overrun: set the status bit; the line discipline drops the
-  extra characters rather than replaying them out of order.
-- A guest that writes outside the active surface is not an error and not
-  reported; it is scratch VRAM.
-
-## 8. Keyboard device
 
 New MMIO page at `0xFFF0_6000` (page 6).
 
@@ -612,7 +535,7 @@ fixed here so the device table does not change when one arrives.
   `DisplayFrame`, and a cached copy of the pixels.
 - `draw_screen`: refresh the cache when `number` changes, then blit with
   integer scaling or fit.
-- `click`/`key`: tab selection, focus, and routing as in section 7.6.
+- `click`/`key`: tab selection, focus, and routing as in section 7.3.
 - Hover: pixel-to-guest-address mapping and tooltip.
 - `headless`: include the screen tab and support `--screen-shot`.
 
@@ -629,15 +552,12 @@ fixed here so the device table does not change when one arrives.
 
 ### 9.6 `kr32os/`
 
-- `kernel/fb.h`, `kernel/fb.c`: probe, mode set, `fb_fill`, `fb_present`,
-  `fb_surface`.
-- `kernel/font8x16.c`: generated table plus attribution.
-- `kernel/console.c`: keep the serial writers, add the framebuffer grid,
-  dirty rectangle, renderer, cursor, and the 256-line ring buffer.
-  `console_getc` polls both transports.
+- `kernel/fb.h`, `kernel/fb.c`: probe, mode set, `fb_present`.
+- `kernel/console.c`: thin driver over the terminal page (see §7 and
+  [terminal.md](terminal.md)). The grid, font, palette, renderer, cursor, and
+  scrollback ring move to the host; `console_getc` and line editing stay.
 - `kernel/keyboard.h`, `kernel/keyboard.c`: FIFO pop and decoding helpers.
-- `kernel/shell.c`: remove direct transport assumptions; it already only calls
-  `console_*`, so this should be small.
+- `kernel/shell.c`: unchanged; it only calls `console_*`.
 - `kernel/main.c`: display probe and init before the banner.
 - Keep `console_putc`'s serial write unconditional so logs and existing tests
   are unaffected.
@@ -681,34 +601,21 @@ device API.
 Exit: the pattern is visible in the window; the headless PPM hash is stable
 across runs and platforms (within the existing font-independent surface).
 
-### D3 — console
+### D3 — console (shipped, superseded)
 
-- Font generator and table.
-- Framebuffer console with dirty rectangles and scrolling.
-- Boot probe, mode set, banner.
-- Keyboard input and line discipline.
-- Serial mirror stays.
+The kernel framebuffer console shipped with M10. M10.5 replaces it with the host
+terminal; see [terminal.md](terminal.md).
 
-Exit: `kr32 display --os` boots to a prompt; typing `ls` and Enter runs it in
-the window; the serial transcript of the same run matches the existing shell
-tests.
+### D4 — debugger integration (shipped)
 
-### D4 — debugger integration and performance
+`SCREEN` tab, focus, hover inspection, and headless coverage shipped. The
+aperture fast path was not needed.
 
-- `SCREEN` tab, focus, hover inspection.
-- Aperture fast path if profiling requires it.
-- Scrollback and cursor blink (opt-out for tests).
+### D5 — programmer graphics API (superseded)
 
-Exit: `ui-headless` includes the screen; pixel hover reports the correct guest
-address; full-screen fill within the budget in section 11.5.
-
-### D5 — programmer graphics API
-
-- `gfx_*` kernel library and console API (see [graphics.md](graphics.md)).
-- User-mode presentation by syscall with dirty rectangles.
-- One or two example programs.
-
-Exit: examples build and run; the API is documented and tested.
+Split into M10.5 (terminal and host renderer, see [terminal.md](terminal.md))
+and M11 (`gfx_*` and `con_*` guest headers, see
+[implementation.md](implementation.md)).
 
 ## 11. Testing
 
@@ -779,14 +686,20 @@ Bus:
 
 ### 11.4 Console and input
 
-- `con_putc` at the right margin wraps; at the bottom it scrolls.
-- `\n`, `\r`, `\b`, `\f` behavior matches the serial console contract.
-- Dirty rectangle covers exactly the cells that changed (assert cell states,
-  then assert the rect).
-- Cursor cell is restored when the cursor moves.
+Terminal device (host unit tests, see [terminal.md](terminal.md) §9):
+
+- `putc` at the right margin wraps; at the bottom it scrolls.
+- `\n`, `\r`, `\b`, `\t`, `\f` behavior matches the serial console contract.
+- Clear (`COMMAND` 1), colours (`COLOR`), cursor visibility, hide/show, and the
+  `ID` word.
+- Geometry follows the mode: 800x600 with 10x20 cells reports 80x30.
+
+Kernel and input:
+
 - Line discipline: backspace, `Ctrl-U`, `Ctrl-C`, `Ctrl-L`.
-- Shell: inject `ls\n` through the keyboard FIFO, run until the prompt, assert
-  the serial transcript contains `init` and the grid contains the echoed line.
+- Shell: inject `ls\n` through the keyboard FIFO, run until the prompt, and
+  assert the serial transcript contains `init` (the terminal grid is covered by
+  the host tests).
 - A key-up event with the same scancode does not produce a character.
 - Modifier translation: shift+`1` yields ASCII `!` with scancode `0x31`.
 
@@ -802,8 +715,9 @@ lands, and assert it in the headless tests.
 - Host copy and present of 800x600: one full-frame copy per committed frame,
   because v1 has no partial-upload channel (section 6.1). Observed per frame,
   never a pass/fail value.
-- Console redraw of a 100-column line: the guest cost is the dirty cells plus
-  one flip; record the instruction count, do not gate on milliseconds.
+- Terminal output: the guest cost is one store per character plus the flip; the
+  host does all drawing. Assert that no guest pixel loop is reachable from
+  `console_putc`.
 - Aperture fast path, if added: at least 2x fewer instructions than the bus
   path for a full-screen fill, and byte-for-byte identical results under a
   randomized comparison.
@@ -827,12 +741,12 @@ None outstanding; the D0 exit condition (section 10) is met as of
 2026-11-12T14:55:40-08:00. Add new questions here rather than editing a
 normative table.
 
-Resolved in this review: scrollback is a 256-line kernel ring buffer
-(section 7.2); console cells are two bytes with 4-bit palette indices
-(section 7.2); pointer events use a separate FIFO and event word on page 7
-(section 8.5); `Ctrl-C` terminates a foreground user program (section 7.4); the
-display `ID` is compared as a 32-bit word (section 5); the dirty rectangle is a
-guest-side hint with no v1 host channel (section 6.1); the SDL scancode table
-lives in `src/platform` (section 8.4); performance gates on instruction counts
-(section 11.5); and `FLIP` commits the surface that was `BACK` before the call
-(section 5.3).
+Resolved in this review: scrollback is internal to the host terminal
+([terminal.md](terminal.md) §2); console cells are two bytes with 4-bit palette
+indices (terminal.md §3); pointer events use a separate FIFO and event word on
+page 7 (section 8.5); `Ctrl-C` terminates a foreground user program (section
+7.2); the display `ID` is compared as a 32-bit word (section 5); the dirty
+rectangle is a guest-side hint with no v1 host channel (section 6.1); the SDL
+scancode table lives in `src/platform` (section 8.4); performance gates on
+instruction counts (section 11.5); and `FLIP` commits the surface that was
+`BACK` before the call (section 5.3).

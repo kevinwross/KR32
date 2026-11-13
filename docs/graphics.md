@@ -1,8 +1,14 @@
 # Graphics and console API (proposal)
 
-**Status:** proposal, reviewed 2026-11-12T14:55:40-08:00. This document defines the API presented to
-people writing KR32 programs. It builds on the display contract in
-[display.md](display.md). No source changes have been made.
+**Status:** proposal. This document defines the API presented to people writing
+KR32 programs. It builds on the display contract in [display.md](display.md).
+
+**Implementation model (2026-11-13).** Drawing runs in the **host**, through the
+graphics command device (page 9, [terminal.md](terminal.md) §3.1), and the
+console is the host terminal (page 8). The functions in this document are the
+guest-facing wrappers; they submit commands and never rasterise. The surface
+convention and the semantics below are unchanged, and the guest cost is one
+command per call rather than a pixel loop.
 
 **Owner:** display/hardware stream. The C/C++ compiler and libc stream owns the
 guest headers; section 8 is the hand-off, and nothing here should be
@@ -12,7 +18,8 @@ implemented in the compilers until both streams agree.
 
 Three audiences, in order of arrival:
 
-1. **KR32OS itself.** The kernel console and shell are the first client.
+1. **KR32OS itself.** The console API (`con_*`) and the shell are the first
+   client; text and simple drawing go through the host.
    They need text, colors, a cursor, and flips. No allocation, no user
    pointers, no blocking.
 2. **Kernel and driver code.** Splash screens, panic screens, simple demos.
@@ -116,57 +123,44 @@ performance.
 
 ### 3.2 User side (`<kr32/display.h>`)
 
-A user program cannot write VRAM. It draws into a surface in its own memory and
-presents a rectangle:
+A user program does not write VRAM. It draws through the graphics command
+device into a surface the host owns, and presents with a flip:
 
 ```c
 typedef struct {
-    const uint32_t *pixels;  /* user pointer, validated by the kernel */
+    uint32_t offset;         /* surface offset in VRAM, or 0 for the default */
     int width, height;       /* surface extent, in pixels */
     int stride;              /* pixels per row */
-    int x, y, w, h;          /* rectangle in surface coordinates */
-} display_blit;
+} display_surface;
 
 int sys_display_info(fb_info *info);
-int sys_display_present(const display_blit *blit);  /* 0 or -errno */
+int sys_display_present(void);           /* FLIP; 0 or -errno */
 ```
 
-The rectangle is expressed in surface coordinates and appears at the same
-screen coordinates. User surfaces are mode-sized in v1, so there is no separate
-destination origin; a smaller surface is drawn at `(0, 0)`. A positioned
-surface needs a compositor and is deferred.
+Every drawing call (`gfx_*`, below) becomes a command to the host with the
+surface offset as its first parameter; the host validates the rectangle against
+the surface and the clip. The kernel still intercepts `Ctrl-C` and terminates
+the foreground process, so a program that stops polling input cannot lock the
+shell.
 
-The kernel validates: the pointer range is inside the process user region, the
-surface geometry is sane, the rectangle is clipped to the active mode, and the
-stride is at least `width`. It copies only the clipped rectangle into the
-framebuffer and flips once per call.
-
-A user program that presents owns the console until it exits. The kernel
-intercepts `Ctrl-C` and terminates the foreground process through the existing
-`process_exit`/`sys_exit` path, so a program that stops polling input cannot
-lock the shell; `input_pending()` is advisory, not the only exit path.
-
-Rationale: this is safe, needs no shared mapping, and the drawing library is
-unchanged. The cost is one copy of the dirty rectangle. For a shell that
-redraws a line, that is a few hundred pixels. For full-screen animation it is
-expensive on an emulated CPU, which is why the API encourages dirty rectangles
-rather than `present()` every frame (section 9).
-
-The user-facing wrapper hides the syscall:
+The wrapper hides the command submission:
 
 ```c
-gfx_surface *gfx_create(int width, int height);  /* calloc, user library */
+gfx_surface *gfx_create(int width, int height);  /* VRAM-backed handle */
 void gfx_destroy(gfx_surface *surface);
 int  gfx_present(gfx_surface *surface, int x, int y, int w, int h);
 ```
 
-`gfx_create` is the only allocating function in the API and lives in the user
-library, not the shared drawing core. The kernel uses `fb_back()` instead.
+`gfx_create` allocates a VRAM surface through the device; there is no guest
+`calloc` and no pixel copy. `gfx_present` issues a flip; the rectangle is a hint
+until the host gains a partial-present channel.
 
 ## 4. Drawing primitives (`<kr32/gfx.h>`)
 
 All functions honor `surface->clip`, clip internally, and never fault.
-`color` is an XRGB word.
+`color` is an XRGB word. Each call submits the matching graphics command
+(`FILL_RECT`, `COPY_RECT`, `DRAW_LINE`, …) and the host rasterises; the guest
+loop is one command, not a pixel loop.
 
 ```c
 void gfx_clear(gfx_surface *s, uint32_t color);
@@ -213,8 +207,8 @@ all drawing a no-op.
 ## 5. Text (`<kr32/gfx.h>`)
 
 ```c
-int gfx_font_width(void);    /* 8 */
-int gfx_font_height(void);   /* 16 */
+int gfx_font_width(void);    /* 10 */
+int gfx_font_height(void);   /* 20 */
 int gfx_text_width(const char *text);
 
 int gfx_text(gfx_surface *s, int x, int y, const char *text,
@@ -223,7 +217,8 @@ int gfx_text_clipped(gfx_surface *s, int x, int y, int max_width,
                      const char *text, uint32_t fg, uint32_t bg);
 ```
 
-- 8x16 bitmap font, ASCII `0x20..0x7E`; other bytes render as `?`.
+- 10x20 bitmap font, ASCII `0x20..0x7E`; other bytes render as `?`. This is the
+  same atlas the terminal uses, so console and graphics text match.
 - `bg` equal to the current background is still written; there is no
   transparency in v1. A `gfx_text_cell` variant that draws only the glyph
   pixels can come later.
@@ -231,29 +226,25 @@ int gfx_text_clipped(gfx_surface *s, int x, int y, int max_width,
 
 ## 6. Console (`<kr32/con.h>`)
 
-The system console is a text grid built on `gfx_surface` plus a font. It is the
-first client of the display and the only part of this API the shell uses.
+The console is the **host terminal** ([terminal.md](terminal.md)); the grid,
+font, palette, scrollback, and rendering live in the host, and this API is the
+guest wrapper over the terminal page. It is the only part of this API the shell
+uses.
 
 ```c
-typedef struct {
-    int columns, rows;
-    gfx_surface *surface;
-    uint8_t fg_index, bg_index;  /* 0..15 into the console palette */
-    int cursor_x, cursor_y;
-} con_state;
-
-int  con_init(void);      /* derives the grid from the active mode; -ENODEV if none */
+int  con_init(void);      /* probes the terminal; -ENODEV if none */
 void con_shutdown(void);
 
-void con_clear(void);
-void con_putc(char c);
+void con_clear(void);     /* COMMAND 1 */
+void con_putc(char c);    /* DATA */
 void con_puts(const char *text);
 void con_write(const char *text, int count);
 int  con_printf(const char *format, ...);   /* kernel build only */
 
-void con_set_colors(int fg_index, int bg_index);  /* 0..15; out of range ignored */
-void con_set_cursor(int visible);
-void con_present(void);                 /* redraw dirty cells, then flip */
+void con_set_colors(int fg_index, int bg_index);  /* COLOR; 0..15 */
+void con_set_cursor(int visible);                 /* CONTROL bit 0 */
+void con_hide(int hidden);                        /* CONTROL bit 1 */
+void con_present(void);                 /* FLIP */
 
 int  con_getc(void);                    /* -1 when no input */
 int  con_readline(char *buffer, int capacity);
@@ -261,22 +252,22 @@ int  con_readline(char *buffer, int capacity);
 
 Behavior:
 
-- `con_putc` handles `\n`, `\r`, `\b`, `\t`, and `\f` (clear and home), matching
-  the serial console contract so the shell does not branch on transport.
-- A cell is two bytes: a character plus a 4-bit foreground and background
-  palette index. `con_set_colors` sets the pen for subsequent writes; it does
-  not recolour cells already on screen or in the scrollback ring.
-- At the right margin the cursor wraps and the renderer marks the next row
-  dirty. At the bottom the grid scrolls up one row.
-- `con_present` redraws only dirty cells and calls `fb_present_rect` with the
-  bounding box of the dirty cells.
+- `con_putc` handles `\n`, `\r`, `\b`, `\t`, and `\f` (clear and home) in the
+  host, matching the serial console contract so the shell does not branch on
+  transport.
+- A cell is two bytes in the host: a character plus a 4-bit foreground and
+  4-bit background palette index. `con_set_colors` sets the pen for subsequent
+  writes; it does not recolour cells already on screen or in the scrollback.
+- At the right margin the cursor wraps; at the bottom the host scrolls the grid.
+  Neither costs the guest pixel work.
+- `con_present` is a flip only.
 - `con_getc` polls the keyboard and then serial, so the same shell works in a
   window and in a headless test.
 - `con_readline` implements echo, backspace, `Ctrl-U`, `Ctrl-C`, and `Ctrl-L`.
   History is not part of the first version.
 
-`con_state` is exposed for tests and for the shell's prompt logic. A future
-version can add scrollback without changing the calls.
+Console state is host-side and not exposed; tests use the terminal device
+directly ([display.md](display.md) §11.4). Scrollback is internal to the host.
 
 ## 7. Input (`<kr32/input.h>`)
 
@@ -322,7 +313,7 @@ Proposed header names and contents:
 | Header | Declares |
 | --- | --- |
 | `<kr32/fb.h>` | `fb_info`, `fb_probe`, `fb_mode`, `fb_back`, `fb_front`, `fb_present*` |
-| `<kr32/display.h>` | `display_blit`, `sys_display_info`, `sys_display_present` |
+| `<kr32/display.h>` | `display_surface`, `sys_display_info`, `sys_display_present` |
 | `<kr32/gfx.h>` | `gfx_surface`, `GFX_RGB`, drawing and text functions |
 | `<kr32/con.h>` | `con_*` |
 | `<kr32/input.h>` | `kr32_event`, `input_*` |
@@ -348,24 +339,20 @@ uses locally. The ABI is plain C, so nothing else is needed.
 
 ## 9. Performance contract
 
-The CPU is emulated, so instruction count is the real budget.
+The CPU is emulated, so instruction count is the real budget — and the guest
+must not rasterise.
 
-- Every primitive clips once and then loops over rows with no per-pixel calls.
-- `gfx_fill_rect` of `w*h` costs roughly `w*h` stores plus loop overhead.
-- `gfx_present` cost is proportional to the dirty rectangle, not the frame.
-- A full 800x600 present is 480,000 pixels; do it on mode changes and static
-  screens, not every animation frame.
-- An animation should track the union of the old and new object rectangles and
-  present that union.
-- `con_present` passes only the dirty cell rectangle to `fb_present_rect` and
-  redraws only those cells. Typing one character costs one cell of guest
-  drawing; the v1 host still copies the whole frame (section 3.1).
-- No drawing function allocates, blocks, or calls a syscall; only the named
-  wrappers do (`gfx_create`, `gfx_present`, `con_getc`, `input_wait`).
+- Every primitive is one command; the host clips and rasterises.
+- `gfx_fill_rect` of `w*h` costs the guest a handful of register writes, not
+  `w*h` stores.
+- `gfx_present` is a flip; the host copies the committed frame as before
+  (display.md §6.1).
+- The terminal does all text work in the host: typing one character costs the
+  guest one `DATA` store.
+- No drawing call allocates or blocks; the host validates every parameter.
 
-These are guidance for callers, and acceptance criteria for the implementation:
-a console keystroke must not redraw the screen, and `gfx_fill_rect` must not call
-`gfx_pixel`.
+Acceptance criteria: a console keystroke performs no guest pixel loop, and no
+`gfx_*` call contains a loop over pixels on the guest side.
 
 ## 10. Examples
 
@@ -432,11 +419,12 @@ void bounce(void) {
 - **Alpha blending.** Separate functions if it is ever needed.
 - **Rounded rectangles, ellipses, gradients.** Straightforward additions with
   their own cost; not first.
-- **Font scaling and TTF in the kernel.** Fixed 8x16 first; scaling is a
-  nearest-neighbor blit later.
+- **Font scaling and TTF.** The host font is a fixed 10x20 bitmap atlas; scaling
+  and system fonts are out of scope (1x/2x integer scaling can come later).
 - **Multiple windows.** One full-screen surface per program until there is a
   compositor and a reason for one.
-- **Allocation in the drawing core.** Callers own their surfaces.
+- **Allocation in the drawing core.** `gfx_create` allocates a VRAM surface
+  through the device; drawing calls never allocate.
 
 ## 12. Testing
 
@@ -492,7 +480,7 @@ Resolved in this review: prefixes stay short (section 8); clip lives in
 `gfx_surface` (section 2); `fb_present_rect` is a guest-side hint with no v1
 host channel (section 3.1); a user program owns the whole screen while it runs
 (section 3.2); `Ctrl-C` terminates the foreground process (section 3.2); text
-is ASCII in v1 (section 5); scrollback is a 256-line kernel ring buffer
-(display.md section 7.2); `gfx_create` returns `NULL` on failure (section 3.2);
-and the font is the OFL JetBrains Mono 8x16 rasterization (display.md
-section 7.3).
+is ASCII in v1 (section 5); scrollback is internal to the host terminal
+([terminal.md](terminal.md) §2); `gfx_create` returns `NULL` on failure
+(section 3.2); and the font is the OFL JetBrains Mono 10x20 rasterisation
+([terminal.md](terminal.md) §3).

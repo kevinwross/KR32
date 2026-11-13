@@ -81,7 +81,7 @@ New MMIO page 8 at `0xFFF0_8000`:
 - The terminal keeps a 256-line scrollback ring, the 16-entry palette (the
   values currently in `console.c`), and the **10x20 font table**. The font is
   the same JetBrains Mono face, rasterised by `tools/font8x16` at a larger cell
-  box; `8080`-style 8x16 remains available as an optional small mode.
+  box; the current 8x16 table remains available as an optional small mode.
 - After each write the renderer repaints the affected cells into the framebuffer
   device's back surface; a scroll repaints the window. That work is native C++
   and invisible to the guest.

@@ -2,7 +2,8 @@
 
 > **Framebuffer v2 and the keyboard are implemented.** This document is
 > normative for the shipped device contract; [display.md](display.md) keeps the
-> host-presentation and console design that sits on top of it. See
+> host-presentation design that sits on top of it, and [terminal.md](terminal.md)
+> specifies the host terminal that replaces the kernel console. See
 > [README.md](README.md) for the active work streams.
 
 ## MMIO map
@@ -19,6 +20,8 @@ Devices live in the 960 KiB window at `0xFFF0_0000`:
 | `0xFFF0_5000` | serial tty | 5 |
 | `0xFFF0_6000` | keyboard | 6 |
 | `0xFFF0_7000` | pointer (reserved, no device) | 7 |
+| `0xFFF0_8000` | terminal (host-rendered console, see [terminal.md](terminal.md)) | 8 |
+| `0xFFF0_9000` | graphics commands (host-rendered drawing, see [terminal.md](terminal.md) §3.1) | 9 |
 
 Accesses go through the normal load/store path. `Machine` checks the device
 window before RAM/ROM and forwards aligned 32-bit accesses to the `DeviceBus`;
@@ -81,8 +84,11 @@ while disabled commits `ENABLED = 0`.
 Reset restores control 0, 1920x1080, stride 7680, format 1, front 0, back
 `0x7E_9000`, frame counter 0, no error, and clears VRAM.
 
-Hosts read the committed frame only, through `frame()` and `frame_pixels()` in
-`include/kr32/core/devices.h`. There is no dirty-rectangle channel.
+Hosts read the committed frame through `frame()` and `frame_pixels()` in
+`include/kr32/core/devices.h`. There is no dirty-rectangle channel. The host
+also *writes* this VRAM on behalf of the terminal and graphics-command devices:
+their renderer paints into the same back surface the guest sees, so text, host
+drawing, and guest pixel writes all target the same memory and compose.
 
 ## Keyboard
 
@@ -135,11 +141,37 @@ The backing store is 4 KiB. A start command copies through
 raised. The current model completes immediately, which keeps tests
 deterministic.
 
-## Console
+## Debug console (page 2)
 
-Writing offset 0 emits the low byte to `DeviceBus::console()`; reading offset 0
-returns the last byte and offset 4 reports readable status. The GUI and host
-console can consume the same output.
+The host debug console, not the guest screen. Writing offset 0 emits the low
+byte to `DeviceBus::console()`; reading offset 0 returns the last byte and
+offset 4 reports readable status. The GUI and host console can consume the same
+output. The guest screen is the terminal device on page 8.
+
+## Terminal (page 8)
+
+`0xFFF0_8000`. The host owns the character grid, font, palette, scrollback ring,
+and rendering; the guest writes characters. The normative register table and
+semantics are in [terminal.md](terminal.md) §2:
+
+| Offset | Register | Access |
+| --- | --- | --- |
+| `0x00` | `DATA` (write one character) | WO |
+| `0x04` | `STATUS` (ready, columns, rows) | RO |
+| `0x08` | `CONTROL` (cursor visible, hidden) | RW |
+| `0x0C` | `COMMAND` (1 clear, 2 reset) | WO |
+| `0x10` | `COLOR` (foreground and background indices) | RW |
+| `0x14` | `ID` = `0x5445_524D` | RO |
+
+With the terminal present the guest console does no pixel work; writes render in
+the host.
+
+## Graphics commands (page 9)
+
+`0xFFF0_9000`. Host-executed drawing so programs never rasterise: `SET_CLIP`,
+`SET_COLOR`, `FILL_RECT`, `COPY_RECT`, `DRAW_LINE`, `DRAW_TEXT`, and `FLIP`,
+submitted through immediate registers in v1. The command set, parameters, and
+validation rules are in [terminal.md](terminal.md) §3.1.
 
 ## IRQ routing
 
@@ -167,5 +199,7 @@ synchronous rather than tick-scheduled.
 The framebuffer is presented by the `kr32 display` window and the debugger's
 `SCREEN` tab; the committed frame is the only host-visible state. The 32 MiB
 aperture is reached through the device bus one word at a time, so bulk pixel
-stores are slow; a direct fast path is a possible later optimisation. The
-pointer page is reserved and has no device behind it.
+stores are slow; the terminal (page 8) and graphics-command (page 9) devices are
+the fast path because the host does the pixel work. Direct guest pixel writes
+remain available for programs that want them. The pointer page is reserved and
+has no device behind it.
