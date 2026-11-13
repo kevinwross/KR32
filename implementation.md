@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 23:00 -08:00
+> **Last updated:** 2026-11-12 23:19 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3017,6 +3017,13 @@ Newest entries at the bottom. Use the local time zone.
       the callee relies on the normalised argument, and char lvalues already used
       `LOAD8S`/`LOAD8U`/`STORE8`. The kernel image shrank 131,072 → 130,840 bytes;
       the embedded images were regenerated.
+
+- **2026-11-12 23:19 -08:00** — Simplified the console fill loop (author's
+      change). The four-way unrolled body expanded to about 44 instructions per
+      pixel through the kernel front end; the plain pointer loop emits about 19,
+      measured from the generated `console.s`. The embedded kernel image was
+      already built from this source, so it is unchanged at 130,840 bytes.
+      Booting the embedded image and running `exit` takes 8,933,156 ticks.
 
 ## 10. Updating this file
 
