@@ -168,15 +168,8 @@ static void draw_dirty(void) {
 static void fill_surface(unsigned int color) {
     unsigned int *cursor = surface;
     int remaining = surface_stride * surface_height;
-    while (remaining >= 4) {
-        cursor[0] = color;
-        cursor[1] = color;
-        cursor[2] = color;
-        cursor[3] = color;
-        cursor += 4;
-        remaining -= 4;
-    }
-    while (remaining > 0) {
+    while (remaining > 0)
+    {
         *cursor = color;
         ++cursor;
         --remaining;
