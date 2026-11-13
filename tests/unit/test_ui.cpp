@@ -327,3 +327,20 @@ TEST_CASE("running uses the responsive sliced path and clears the RUN highlight"
     CHECK(stopped.pixel_at(84, 6) != green);
     std::filesystem::remove(path);
 }
+
+TEST_CASE("platform key events pack into the keyboard word") {
+    kr32::platform::Event event;
+    event.kind = kr32::platform::Event::Kind::KeyDown;
+    event.ascii = 'a';
+    event.modifiers = 0x1;
+    event.scancode = 0x41;
+    CHECK(kr32::platform::event_word(event) == 0x0041'0161U);
+
+    event.kind = kr32::platform::Event::Kind::KeyUp;
+    CHECK(kr32::platform::event_word(event) == 0x0141'0161U);
+
+    kr32::platform::Event special;
+    special.kind = kr32::platform::Event::Kind::KeyDown;
+    special.scancode = 0x8A; // Up
+    CHECK(kr32::platform::event_word(special) == 0x008A'0000U);
+}

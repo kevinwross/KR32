@@ -1661,13 +1661,16 @@ int run(int argc, char** argv) {
     if (command == "gui") {
         return kr32::ui::run(argc - 1, argv + 1);
     }
+    if (command == "display") {
+        return kr32::ui::run_display(argc - 1, argv + 1);
+    }
     if (command == "--smoke-ui") {
         const bool ok = kr32::ui::smoke_test();
         std::printf("ui-smoke: %s\n", ok ? "ok" : "failed");
         return ok ? 0 : 1;
     }
 #else
-    if (command == "gui" || command == "--smoke-ui") {
+    if (command == "gui" || command == "display" || command == "--smoke-ui") {
         std::fprintf(stderr, "kr32: the GUI was not built (KR32_BUILD_UI=OFF).\n");
         return 2;
     }

@@ -365,6 +365,16 @@ add_test(NAME boundary_bad
         -P ${CMAKE_SOURCE_DIR}/cmake/CheckPlatformBoundary.cmake)
 set_tests_properties(boundary_bad PROPERTIES WILL_FAIL TRUE)
 
+if(TARGET kr32_ui)
+    add_test(NAME display_screen_shot
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DEXAMPLES=${CMAKE_SOURCE_DIR}/examples
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/display-shot
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunDisplayShot.cmake)
+    set_tests_properties(display_screen_shot PROPERTIES LABELS "integration")
+endif()
+
 # Convenience targets:
 #   check-unit : only the doctest suites, parallel
 #   check      : the whole CTest suite, parallel

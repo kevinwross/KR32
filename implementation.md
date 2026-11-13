@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 19:29 -08:00
+> **Last updated:** 2026-11-12 19:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -688,8 +688,8 @@ contract, a host window that presents committed frames, a bootable text
 console, and a `SCREEN` view in the debugger. The programmer-facing API is
 M11.
 
-**Status:** in progress. D1 (device v2 and keyboard) landed 2026-11-12; D2–D4
-remain. The design is [docs/display.md](docs/display.md); the D0 review closed
+**Status:** in progress. D1 (device v2 and keyboard) and D2 (host surface,
+`kr32 display`, screen shots) landed 2026-11-12; D3–D4 remain. The design is [docs/display.md](docs/display.md); the D0 review closed
 2026-11-12 and its decisions are recorded in §12 there.
 [docs/devices.md](docs/devices.md) still describes the v1 contract and absorbs
 the v2 register table when M10 closes.
@@ -747,18 +747,20 @@ closed 2026-11-02.
 - [x] Verified CR-1: the loader tests pass and a `.bss` range reads zero after a
       reload.
 
-**D2 — Host surface and `kr32 display`**
+**D2 — Host surface and `kr32 display`** — complete 2026-11-12.
 
-- [ ] `platform::Window::present_surface(vram, width, height, stride, scale)`
+- [x] `platform::Window::present_surface(vram, width, height, stride, scale)`
       with integer zoom, sharing the window and event loop with the Canvas
       path.
-- [ ] `kr32 display [image.k32]` and `kr32 display --os`: step in slices,
+- [x] `kr32 display [image.k32]` and `kr32 display --os`: step in slices,
       present when `FRAME` changes, `Esc` quits, `F2` cycles zoom, and a halted
       guest keeps the last frame.
-- [ ] `--screen-shot X.ppm` writes only the committed frame.
-- [ ] Key events translated to packed event words; the scancode table lives in
-      `src/platform`.
-- [ ] A color-bar guest test image.
+- [x] `--screen-shot X.ppm` writes only the committed frame.
+- [x] Key events translated to packed event words; the scancode table lives in
+      `src/platform`. Key-up events are delivered too.
+- [x] A color-bar guest test image (`examples/color-bars.asm`). Standalone
+      images get a flat identity map from the display command, because a
+      plainly loaded executable cannot reach MMIO without page tables.
 
 **D3 — Framebuffer console**
 
@@ -2860,6 +2862,19 @@ Newest entries at the bottom. Use the local time zone.
       that sets a mode, stores a pixel, and flips; it runs with paging enabled
       because the MMU rejects device addresses when paging is off. Windows gate:
       80/80 passed, 592.28 s.
+
+- **2026-11-12 19:44 -08:00** — M10 D2 complete. `Window::present_surface`
+      uploads an XRGB surface with integer zoom and the texture blend mode set
+      to none, so the zero X byte does not make the frame transparent. Added
+      `kr32 display` (image or `--os`), which presents on `FRAME` change, quits
+      on `Esc`, cycles zoom on `F2`, keeps the window after a halt, and injects
+      packed key words including key-up. `--screen-shot` writes the committed
+      frame as a P6 PPM. Standalone display guests get a flat identity map,
+      because a plainly loaded executable cannot reach MMIO with paging off.
+      Added `examples/color-bars.asm` (320x200, eight bands) and the
+      `display_screen_shot` CTest, which captures twice and requires identical
+      bytes; the window was captured and shows the eight bands. Windows gate:
+      81/81 passed, 564.89 s.
 
 ## 10. Updating this file
 

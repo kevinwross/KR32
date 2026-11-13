@@ -23,6 +23,7 @@ int map_key(SDL_Keycode key) {
     switch (key) {
     case SDLK_ESCAPE: return key::Escape;
     case SDLK_TAB: return key::Tab;
+    case SDLK_F2: return key::F2;
     case SDLK_F5: return key::F5;
     case SDLK_F6: return key::F6;
     case SDLK_F9: return key::F9;
@@ -53,7 +54,83 @@ int map_key(SDL_Keycode key) {
     return 0;
 }
 
+std::uint8_t kr32_scancode(SDL_Scancode code) {
+    if (code >= SDL_SCANCODE_A && code <= SDL_SCANCODE_Z) {
+        return static_cast<std::uint8_t>('A' + (code - SDL_SCANCODE_A));
+    }
+    if (code >= SDL_SCANCODE_1 && code <= SDL_SCANCODE_9) {
+        return static_cast<std::uint8_t>('1' + (code - SDL_SCANCODE_1));
+    }
+    switch (code) {
+    case SDL_SCANCODE_0: return '0';
+    case SDL_SCANCODE_SPACE: return 0x20;
+    case SDL_SCANCODE_MINUS: return '-';
+    case SDL_SCANCODE_EQUALS: return '=';
+    case SDL_SCANCODE_LEFTBRACKET: return '[';
+    case SDL_SCANCODE_RIGHTBRACKET: return ']';
+    case SDL_SCANCODE_BACKSLASH: return '\\';
+    case SDL_SCANCODE_SEMICOLON: return ';';
+    case SDL_SCANCODE_APOSTROPHE: return '\'';
+    case SDL_SCANCODE_GRAVE: return '`';
+    case SDL_SCANCODE_COMMA: return ',';
+    case SDL_SCANCODE_PERIOD: return '.';
+    case SDL_SCANCODE_SLASH: return '/';
+    case SDL_SCANCODE_RETURN:
+    case SDL_SCANCODE_KP_ENTER: return 0x80;
+    case SDL_SCANCODE_ESCAPE: return 0x81;
+    case SDL_SCANCODE_BACKSPACE: return 0x82;
+    case SDL_SCANCODE_TAB: return 0x83;
+    case SDL_SCANCODE_DELETE: return 0x84;
+    case SDL_SCANCODE_INSERT: return 0x85;
+    case SDL_SCANCODE_HOME: return 0x86;
+    case SDL_SCANCODE_END: return 0x87;
+    case SDL_SCANCODE_PAGEUP: return 0x88;
+    case SDL_SCANCODE_PAGEDOWN: return 0x89;
+    case SDL_SCANCODE_UP: return 0x8A;
+    case SDL_SCANCODE_DOWN: return 0x8B;
+    case SDL_SCANCODE_LEFT: return 0x8C;
+    case SDL_SCANCODE_RIGHT: return 0x8D;
+    case SDL_SCANCODE_F1: return 0x90;
+    case SDL_SCANCODE_F2: return 0x91;
+    case SDL_SCANCODE_F3: return 0x92;
+    case SDL_SCANCODE_F4: return 0x93;
+    case SDL_SCANCODE_F5: return 0x94;
+    case SDL_SCANCODE_F6: return 0x95;
+    case SDL_SCANCODE_F7: return 0x96;
+    case SDL_SCANCODE_F8: return 0x97;
+    case SDL_SCANCODE_F9: return 0x98;
+    case SDL_SCANCODE_F10: return 0x99;
+    case SDL_SCANCODE_F11: return 0x9A;
+    case SDL_SCANCODE_F12: return 0x9B;
+    case SDL_SCANCODE_LSHIFT: return 0xA0;
+    case SDL_SCANCODE_RSHIFT: return 0xA1;
+    case SDL_SCANCODE_LCTRL: return 0xA2;
+    case SDL_SCANCODE_RCTRL: return 0xA3;
+    case SDL_SCANCODE_LALT: return 0xA4;
+    case SDL_SCANCODE_RALT: return 0xA5;
+    case SDL_SCANCODE_CAPSLOCK: return 0xA6;
+    default: return 0;
+    }
+}
+
+int modifier_bits(SDL_Keymod mod) {
+    int bits = 0;
+    if ((mod & KMOD_SHIFT) != 0) bits |= 1;
+    if ((mod & KMOD_CTRL) != 0) bits |= 2;
+    if ((mod & KMOD_ALT) != 0) bits |= 4;
+    if ((mod & KMOD_CAPS) != 0) bits |= 8;
+    return bits;
+}
+
 } // namespace
+
+std::uint32_t event_word(const Event& event) {
+    const std::uint32_t ascii = static_cast<std::uint32_t>(event.ascii) & 0xFFU;
+    const std::uint32_t modifiers = static_cast<std::uint32_t>(event.modifiers) & 0xFFU;
+    const std::uint32_t scancode = static_cast<std::uint32_t>(event.scancode) & 0xFFU;
+    const std::uint32_t type = event.kind == Event::Kind::KeyUp ? 1U : 0U;
+    return ascii | (modifiers << 8) | (scancode << 16) | (type << 24);
+}
 
 Window::~Window() {
     destroy();
@@ -93,6 +170,10 @@ bool Window::create(const std::string& title, int width, int height) {
 }
 
 void Window::destroy() {
+    if (surface_texture_ != nullptr) {
+        SDL_DestroyTexture(static_cast<SDL_Texture*>(surface_texture_));
+        surface_texture_ = nullptr;
+    }
     if (texture_ != nullptr) {
         SDL_DestroyTexture(static_cast<SDL_Texture*>(texture_));
         texture_ = nullptr;
@@ -126,11 +207,18 @@ bool Window::poll(Event& event) {
             }
             break;
         case SDL_KEYDOWN:
-            event.kind = Event::Kind::KeyDown;
+        case SDL_KEYUP: {
+            const bool down = sdl_event.type == SDL_KEYDOWN;
+            event.kind = down ? Event::Kind::KeyDown : Event::Kind::KeyUp;
             event.key = map_key(sdl_event.key.keysym.sym);
             event.shift = (sdl_event.key.keysym.mod & KMOD_SHIFT) != 0;
             event.control = (sdl_event.key.keysym.mod & KMOD_CTRL) != 0;
+            event.scancode = kr32_scancode(sdl_event.key.keysym.scancode);
+            event.modifiers = modifier_bits(static_cast<SDL_Keymod>(SDL_GetModState()));
+            const int symbol = static_cast<int>(sdl_event.key.keysym.sym);
+            event.ascii = (down && symbol >= 32 && symbol < 127) ? symbol : 0;
             return true;
+        }
         case SDL_MOUSEBUTTONDOWN:
             event.kind = Event::Kind::MouseDown;
             event.button = sdl_event.button.button;
@@ -187,6 +275,49 @@ void Window::present(const ui::Canvas& canvas) {
     SDL_RenderClear(static_cast<SDL_Renderer*>(renderer_));
     SDL_RenderCopy(static_cast<SDL_Renderer*>(renderer_), static_cast<SDL_Texture*>(texture_),
                    nullptr, nullptr);
+    SDL_RenderPresent(static_cast<SDL_Renderer*>(renderer_));
+}
+
+void Window::present_surface(const std::uint8_t* pixels, int width, int height,
+                             int stride, int scale) {
+    if (renderer_ == nullptr || window_ == nullptr || pixels == nullptr) {
+        return;
+    }
+    if (width <= 0 || height <= 0 || scale <= 0 || stride < width * 4) {
+        return;
+    }
+    if (surface_texture_ == nullptr || surface_width_ != width ||
+        surface_height_ != height) {
+        if (surface_texture_ != nullptr) {
+            SDL_DestroyTexture(static_cast<SDL_Texture*>(surface_texture_));
+            surface_texture_ = nullptr;
+        }
+        surface_width_ = width;
+        surface_height_ = height;
+        surface_texture_ = SDL_CreateTexture(
+            static_cast<SDL_Renderer*>(renderer_), SDL_PIXELFORMAT_ARGB8888,
+            SDL_TEXTUREACCESS_STREAMING, width, height);
+        if (surface_texture_ == nullptr) {
+            return;
+        }
+        SDL_SetTextureBlendMode(static_cast<SDL_Texture*>(surface_texture_),
+                                SDL_BLENDMODE_NONE);
+    }
+    if (SDL_UpdateTexture(static_cast<SDL_Texture*>(surface_texture_), nullptr,
+                          pixels, stride) != 0) {
+        return;
+    }
+    int output_width = 0;
+    int output_height = 0;
+    SDL_GetRendererOutputSize(static_cast<SDL_Renderer*>(renderer_),
+                              &output_width, &output_height);
+    const SDL_Rect destination{(output_width - width * scale) / 2,
+                               (output_height - height * scale) / 2,
+                               width * scale, height * scale};
+    SDL_RenderClear(static_cast<SDL_Renderer*>(renderer_));
+    SDL_RenderCopy(static_cast<SDL_Renderer*>(renderer_),
+                   static_cast<SDL_Texture*>(surface_texture_), nullptr,
+                   &destination);
     SDL_RenderPresent(static_cast<SDL_Renderer*>(renderer_));
 }
 
