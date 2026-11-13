@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-09 13:39 -08:00
+> **Last updated:** 2026-11-12 15:54 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -189,6 +189,8 @@ container, debug format, and ABI are designed for C++ from the start.
 | M7 | Host services, sandbox, shell, DAP | file I/O, shell, VS Code DAP |
 | M8 | Devices, time, full multicore | timer/block/console; two-core test |
 | M9 | C++ toolchain | C++ smoke tests through `kr32_cxx` |
+| M10 | Display device, host surface, console | framebuffer v2, `kr32 display`, bootable console |
+| M11 | Graphics and console API | guest `gfx_*`/`con_*` examples run |
 
 ## 5. Milestones and tasks
 
@@ -678,6 +680,150 @@ varargs, Itanium-like mangling, and class-member/`this` debug support.
 - [ ] GUI steps through a `.cpp` file with correct lines and variables.
 - [ ] Windows, WSL, and ARM64 builds pass.
 - [ ] Commit and tag `m9`; log entry added.
+
+### M10 — Display device, host surface, and console
+
+**Goal:** make the framebuffer a usable output device: the v2 register
+contract, a host window that presents committed frames, a bootable text
+console, and a `SCREEN` view in the debugger. The programmer-facing API is
+M11.
+
+**Status:** planned. The design is [docs/display.md](docs/display.md); the D0
+review closed 2026-11-12 and its decisions are recorded in §12 there. No source
+changes have been made. [docs/devices.md](docs/devices.md) remains normative for
+the shipped v1 until D1 lands.
+
+**Dependencies**
+
+- **CR-1 — loader zero-fills `.bss`**, below. Owned outside this milestone; D1
+  verifies it rather than assuming it.
+- SDL2 (vendored) and the embedded OS images, refreshed with
+  `scripts/update-os.ps1` / `scripts/update-os.sh`.
+- No dependency on the C++ toolchain.
+
+**Prerequisite, outside this milestone's source scope — CR-1: zero `.bss` on image load**
+
+Why: [docs/container.md](docs/container.md) says a `.bss` section "reserves
+zero-filled memory at link", but `src/cli/cli.cpp:200-202` and
+`src/vm/threads.cpp:31-34` skip `.bss` sections, and only
+`src/debug/debug.cpp:184-188` zeroes them — per byte. `Machine::reset` clears
+registers but not RAM, so a reload into an existing machine inherits stale
+bytes. A fresh `Machine` per CLI run masks this today; M10's static kernel
+buffers, and any later `static` initialised by assumption, make it a hazard.
+
+- [ ] Add one shared image loader (for example
+      `Machine::load_image(const container::Image&, std::string&)`) and use it
+      from `src/cli/cli.cpp`, `src/vm/threads.cpp`, and `src/debug/debug.cpp`.
+- [ ] Zero every allocated `.bss` range in bulk (span fill), not per byte; keep
+      `.tls` handling in the same helper.
+- [ ] Delete the three duplicated section loops.
+- [ ] Tests: dirty RAM, load an image with `.bss`, assert the range reads zero;
+      load the same image twice into one machine, assert zero both times.
+- [ ] `--flat` output is unchanged; it already materialises BSS.
+
+D1 checks these boxes before its own exit. CR-1 does not reopen M3, which
+closed 2026-11-02.
+
+**Tasks**
+
+**D1 — Framebuffer v2 and keyboard device**
+
+- [ ] Implement the v2 register contract ([docs/display.md](docs/display.md)
+      §5): `WIDTH`/`HEIGHT`/`STRIDE`/`FORMAT`/`FRONT`/`BACK`, computed
+      `MODE_OK`, sticky `FLIP_ERROR`, `ID` word.
+- [ ] `FLIP` commits the surface that was `BACK` before the call, swaps the
+      offsets, and increments `FRAME` only on success.
+- [ ] Keyboard device: 64-event FIFO, packed event word, IRQ, overrun W1C.
+- [ ] Pointer page constants only (§8.5); no device and no host injection.
+- [ ] Unit tests for every §11.1 rule, including byte/half/word/unaligned
+      accesses across a 4 KiB boundary, a fault at `base + 32 MiB`, and success
+      at `base + 32 MiB - 4`.
+- [ ] Integration test: an assembly guest sets a mode, fills VRAM, flips, and
+      reads back the committed descriptor and pixel bytes.
+- [ ] Verify CR-1: the loader tests pass and a `.bss` range reads zero after a
+      reload.
+
+**D2 — Host surface and `kr32 display`**
+
+- [ ] `platform::Window::present_surface(vram, width, height, stride, scale)`
+      with integer zoom, sharing the window and event loop with the Canvas
+      path.
+- [ ] `kr32 display [image.k32]` and `kr32 display --os`: step in slices,
+      present when `FRAME` changes, `Esc` quits, `F2` cycles zoom, and a halted
+      guest keeps the last frame.
+- [ ] `--screen-shot X.ppm` writes only the committed frame.
+- [ ] Key events translated to packed event words; the scancode table lives in
+      `src/platform`.
+- [ ] A color-bar guest test image.
+
+**D3 — Framebuffer console**
+
+- [ ] 8x16 font generator under `tools/`; the generated table is committed to
+      `kr32os/kernel/font8x16.c` with OFL attribution.
+- [ ] `kr32os/kernel/fb.{h,c}`: probe by 32-bit word, mode set, fill, present,
+      back surface.
+- [ ] Console: static 2-byte cells (character plus a 4-bit foreground and
+      background index) and a 256x100 line ring in `console.c`, occupancy
+      counter, dirty rectangles, cursor, scrolling, and `\f` clear.
+- [ ] 16-entry XRGB palette; `con_set_colors` sets the pen indices and each cell
+      captures them at write time. ANSI SGR maps onto the same indices later.
+- [ ] Boot: probe `0xFFF0_4028`, set 800x600, print the banner, fall back to
+      serial and note it once on failure.
+- [ ] Keyboard input through a shared line discipline; `Ctrl-C` terminates a
+      foreground process (M11 supplies user programs).
+- [ ] Serial mirror stays unconditional so logs and shell tests are unchanged.
+
+**D4 — Debugger integration**
+
+- [ ] `SOURCE | SCREEN` tab strip over the top-left region; integer scale or
+      fit with nearest-neighbour, centered and letterboxed.
+- [ ] Focus: click to give the guest keyboard focus, green dot, `Esc` releases
+      focus before it quits, and debugger keys always win.
+- [ ] Hover a pixel: screen `(x, y)`, guest address, hex and RGB; clicking
+      points the memory panel at that address.
+- [ ] `--screen-shot` includes the tab when active; `ui_headless` covers the
+      screen.
+- Aperture fast path: conditional on profiling, recorded if taken, and never
+  part of this milestone's exit gate.
+
+**Test plan and gate**
+
+- [ ] `ctest --preset windows-msvc-debug` passes.
+- [ ] `ctest --preset linux-gcc` passes on WSL; record any gap rather than
+      claiming the milestone complete.
+- [ ] Golden-frame hashes are checked in and updated deliberately.
+- [ ] Cell assertions cover per-cell colour, a mid-line colour change, and
+      colours preserved across a scroll and into the ring.
+- [ ] `scripts/update-os.ps1` / `.sh` run for each platform and the embedded
+      images are refreshed.
+- [ ] Docs updated: `devices.md` absorbs the v2 register table, `ui.md` gains
+      the `SCREEN` tab, `testing.md` gains the new tests.
+- [ ] Commit, tag `m10`, running-log entry added.
+
+### M11 — Graphics and console API
+
+**Goal:** the programmer-facing API in [docs/graphics.md](docs/graphics.md):
+`gfx_*` drawing, `con_*` console, `input_*`, with guest headers.
+
+**Status:** blocked on the compiler stream. Guest headers are synthesised
+inside the C and C++ front ends, and adding `<kr32/*.h>` there is deferred
+([docs/graphics.md](docs/graphics.md) §8); do not start until that work is
+scheduled and agreed by both streams.
+
+**Tasks**
+
+- [ ] Declare `<kr32/fb.h>`, `<kr32/display.h>`, `<kr32/gfx.h>`,
+      `<kr32/con.h>`, and `<kr32/input.h>` in the front ends.
+- [ ] Portable `gfx.c` drawing core with host-buffer unit tests
+      ([docs/graphics.md](docs/graphics.md) §12.1).
+- [ ] Kernel `con_*` and `input_*` wrappers; user `gfx_create`/`gfx_present`.
+- [ ] `sys_display_*` pointer, stride, and rectangle validation.
+- [ ] Two examples under `examples/gfx/`, built and hash-tested.
+
+**Test plan and gate**
+
+- [ ] Examples build and run; drawing results match the host unit tests.
+- [ ] Windows and WSL green; commit, tag `m11`, running-log entry added.
 
 ## 6. Cross-cutting test plan
 
@@ -2673,6 +2819,20 @@ Newest entries at the bottom. Use the local time zone.
       through the thumb travel to the scroll range, so the thumb tracks the
       cursor instead of moving in 14-pixel jumps. Track paging is clamped to
       the current range. Added a drag-mapping regression test.
+
+- **2026-11-12 15:41 -08:00** — Display/graphics D0 review closed: open
+      questions resolved in `docs/display.md` §12 and `docs/graphics.md` §13.
+      Added M10 (framebuffer v2, host surface, console, debugger screen) and
+      M11 (graphics API, blocked on guest header synthesis). Recorded CR-1: the
+      image loader must zero-fill `.bss`, verified at D1. Implementation not
+      started.
+
+- **2026-11-12 15:54 -08:00** — Console cells are two bytes: a character plus a
+      4-bit foreground and 4-bit background index into a 16-entry ANSI palette
+      (`con_palette` in `console.c`). Per-character colour replaces the earlier
+      global fg/bg decision; `con_set_colors` becomes a pen, and the ring costs
+      51.2 KiB instead of 25.6 KiB. Recorded in `docs/display.md` §7.2 and
+      `docs/graphics.md` §6; D3 and its test gate updated.
 
 ## 10. Updating this file
 

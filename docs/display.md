@@ -201,7 +201,9 @@ Notes:
 - Stored little-endian, so the four bytes in memory are `B, G, R, 0`.
 - The top byte (X) is ignored by the host, which always presents opaque.
   Guests should write zero there.
-- There is no alpha, no palette, and no packed 16-bit mode in v1.
+- There is no alpha, no hardware palette, and no packed 16-bit mode in v1. The
+  console's 16-entry palette (section 7.2) is software: it expands 4-bit indices
+  to these XRGB words before writing pixels.
 
 This is deliberately the same layout as `ui::Canvas` pixels (`0xAARRGGBB`) and
 SDL's `ARGB8888` texture, so presenting a row is a masked copy rather than a
@@ -357,7 +359,9 @@ CONSOLE panel           SCREEN pane / display window
 ```
 
 - **Text grid.** `cols = width / 8`, `rows = height / 16`. At 800x600 that is
-  100x37. The grid is the source of truth; the renderer paints cells.
+  100x37. The grid is the source of truth; the renderer paints cells. A cell is
+  two bytes: the character (7 bits, `0x20..0x7E`) and a colour byte holding a
+  4-bit foreground index and a 4-bit background index.
 - **Renderer.** For each dirty cell: fill the 8x16 background and blit the
   glyph. Then draw the cursor cell. Then `FLIP`.
 - **Dirty tracking.** Keep a dirty rectangle in cell coordinates. Writes mark
@@ -371,9 +375,16 @@ CONSOLE panel           SCREEN pane / display window
 - **Cursor.** A filled block drawn in inverse video over the cell. No blink in
   v1: blinking needs a timer and makes frame hashes time-dependent. A
   timer-driven blink is a later, opt-out option.
-- **Colors.** Foreground and background are XRGB words; defaults
-  `0x00E6EDF3` on `0x00101820`. The shell may set them; ANSI SGR parsing is a
-  later phase.
+- **Colors.** Each cell carries a 4-bit foreground and a 4-bit background index
+  into a 16-entry XRGB palette, so colour is per character and survives
+  scrollback. `con_set_colors` sets the pen used for subsequent writes; cells
+  already written keep their colours. The table is the 16 ANSI colours, with
+  index 0 set to `0x00101820` (theme background) and index 7 to `0x00E6EDF3`
+  (theme foreground); it lives in `con_palette` in `console.c`. ANSI SGR
+  parsing is a later phase and maps onto the same indices. `gfx_*` stays
+  true-colour XRGB; only the console is a palette device.
+- **Cell cost.** Two bytes per cell: 7.4 KiB for the 100x37 visible grid and
+  51.2 KiB for the 256-line ring.
 - **Present policy.** Present at the end of a burst of output, not per
   character. The shell writes a line, then presents once. Input echo presents
   once per keystroke.
@@ -813,6 +824,7 @@ None outstanding; the D0 exit condition (section 10) is met as of
 normative table.
 
 Resolved in this review: scrollback is a 256-line kernel ring buffer
+(section 7.2); console cells are two bytes with 4-bit palette indices
 (section 7.2); pointer events use a separate FIFO and event word on page 7
 (section 8.5); `Ctrl-C` terminates a foreground user program (section 7.4); the
 display `ID` is compared as a 32-bit word (section 5); the dirty rectangle is a

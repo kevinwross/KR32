@@ -238,7 +238,7 @@ first client of the display and the only part of this API the shell uses.
 typedef struct {
     int columns, rows;
     gfx_surface *surface;
-    uint32_t fg, bg;
+    uint8_t fg_index, bg_index;  /* 0..15 into the console palette */
     int cursor_x, cursor_y;
 } con_state;
 
@@ -251,7 +251,7 @@ void con_puts(const char *text);
 void con_write(const char *text, int count);
 int  con_printf(const char *format, ...);   /* kernel build only */
 
-void con_set_colors(uint32_t fg, uint32_t bg);
+void con_set_colors(int fg_index, int bg_index);  /* 0..15; out of range ignored */
 void con_set_cursor(int visible);
 void con_present(void);                 /* redraw dirty cells, then flip */
 
@@ -263,6 +263,9 @@ Behavior:
 
 - `con_putc` handles `\n`, `\r`, `\b`, `\t`, and `\f` (clear and home), matching
   the serial console contract so the shell does not branch on transport.
+- A cell is two bytes: a character plus a 4-bit foreground and background
+  palette index. `con_set_colors` sets the pen for subsequent writes; it does
+  not recolour cells already on screen or in the scrollback ring.
 - At the right margin the cursor wraps and the renderer marks the next row
   dirty. At the bottom the grid scrolls up one row.
 - `con_present` redraws only dirty cells and calls `fb_present_rect` with the
@@ -370,10 +373,9 @@ Console hello (kernel or shell):
 
 ```c
 #include <kr32/con.h>
-#include <kr32/gfx.h>   /* GFX_RGB and colors; con.h may include it */
 
 void banner(void) {
-    con_set_colors(GFX_RGB(0xE6, 0xED, 0xF3), GFX_RGB(0x10, 0x18, 0x20));
+    con_set_colors(7, 0);  /* palette indices; see display.md 7.2 */
     con_clear();
     con_puts("KR32OS\n");
     con_puts("type 'help' for commands\n");
