@@ -26,6 +26,7 @@ set(KR32_TEST_SOURCES
     unit/test_cc_7.cpp
     unit/test_cc_8.cpp
     unit/test_debug.cpp
+    unit/test_fast.cpp
     unit/test_embedded_os.cpp
     unit/test_host.cpp
     unit/test_threads.cpp
@@ -59,7 +60,8 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_os_images
     kr32_warnings)
 target_compile_definitions(kr32_tests PRIVATE
-    KR32_HAS_EMBEDDED_OS=$<BOOL:${KR32_EMBED_OS}>)
+    KR32_HAS_EMBEDDED_OS=$<BOOL:${KR32_EMBED_OS}>
+    KR32_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_include_directories(kr32_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)

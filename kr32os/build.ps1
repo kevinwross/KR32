@@ -76,6 +76,7 @@ $timerObject = Join-Path $build 'timer.o'
 $trapsAssembly = Join-Path $build 'traps.s'
 $trapsObject = Join-Path $build 'traps.o'
 $trapStubsObject = Join-Path $build 'trap_stubs.o'
+$fastObject = Join-Path $build 'fast.o'
 $userAssembly = Join-Path $build 'user.s'
 $userObject = Join-Path $build 'user.o'
 $memoryAssembly = Join-Path $build 'memory.s'
@@ -118,6 +119,7 @@ Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '--source-id', '5', $Opt, '-S', '-o', $trapsAssembly)
 Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps-asm.S'), '--object', '-o', $trapStubsObject)
+Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\fast.S'), '--object', '-o', $fastObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '--source-id', '6', $Opt, '-S', '-o', $userAssembly)
 Invoke-Kr32 -Arguments @('as', $userAssembly, '--object', '-o', $userObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '--source-id', '9', $Opt, '-S', '-o', $memoryAssembly)
@@ -204,12 +206,12 @@ Set-Content -LiteralPath $initrdAssembly -Value $initrdText.ToString() -NoNewlin
 Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
 
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $fontObject, $shellObject,
-                        $timerObject, $trapsObject, $trapStubsObject,
+                        $timerObject, $trapsObject, $trapStubsObject, $fastObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
                         '--flat', '--base', $kernelBase, '--map', $kernelMap,
                         '--sym', $kernelSym, '-o', $kernel)
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $fontObject, $shellObject,
-                        $timerObject, $trapsObject, $trapStubsObject,
+                        $timerObject, $trapsObject, $trapStubsObject, $fastObject,
                         $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
                         '--base', $kernelBase, '-o', $kernelK32)
 

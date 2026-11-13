@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 23:19 -08:00
+> **Last updated:** 2026-11-12 23:37 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3024,6 +3024,18 @@ Newest entries at the bottom. Use the local time zone.
       measured from the generated `console.s`. The embedded kernel image was
       already built from this source, so it is unchanged at 130,840 bytes.
       Booting the embedded image and running `exit` takes 8,933,156 ticks.
+
+- **2026-11-12 23:37 -08:00** — Added `kr32os/kernel/fast.{h,S}`: hand-written
+      `fast_WordFill` and `fast_ByteFill` for paths where the instruction count
+      matters. Both take the C ABI's first three arguments in R0-R2, are leaves,
+      and use only R0-R4. `fast_ByteFill` replicates the byte into a word, writes
+      `cnt/4` words, then finishes the remaining 0-3 bytes with `STORE8`.
+      `console.c`'s `fill_surface` now calls `fast_WordFill`, and both build
+      scripts assemble and link `fast.o`. Boot plus `exit` dropped from 8,933,156
+      to 3,173,163 ticks; the embedded images were regenerated (kernel.k32
+      132,736 bytes). `unit_test_fast` assembles `fast.S`, links it with a C
+      driver, runs it, and checks word order, byte replication, the 0-3 byte tail,
+      and zero-length calls.
 
 ## 10. Updating this file
 

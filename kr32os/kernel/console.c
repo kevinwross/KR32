@@ -1,5 +1,6 @@
 #include "console.h"
 
+#include "fast.h"
 #include "fb.h"
 #include "mmio.h"
 
@@ -166,14 +167,7 @@ static void draw_dirty(void) {
 }
 
 static void fill_surface(unsigned int color) {
-    unsigned int *cursor = surface;
-    int remaining = surface_stride * surface_height;
-    while (remaining > 0)
-    {
-        *cursor = color;
-        ++cursor;
-        --remaining;
-    }
+    fast_WordFill(surface_stride * surface_height, surface, color);
 }
 
 void console_present(void) {
@@ -222,21 +216,13 @@ int console_init(void) {
     scroll_count = 0;
     display_ready = 1;
 
-    row = 0;
-    while (row < rows) {
-        column = 0;
-        while (column < columns) {
-            grid_chars[row][column] = ' ';
-            grid_attributes[row][column] =
-                (unsigned char)(pen_foreground | (pen_background << 4));
-            ++column;
-        }
-        ++row;
-    }
+    fast_ByteFill(row*columns, (void *) &grid_chars, ' ');
+    fast_ByteFill(row*columns, (void *) &grid_attributes, (unsigned char)(pen_foreground | (pen_background << 4)));
+
     fill_surface(palette[pen_background]);
     clear_dirty();
     cursor_drawn = 0;
-    console_present();
+    console_present(); 
     return 0;
 }
 

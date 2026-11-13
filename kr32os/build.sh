@@ -47,6 +47,7 @@ mkdir -p "$build"
 "$KR32" cc "$here/kernel/traps.c" --source-id 5 $opt -S -o "$build/traps.s"
 "$KR32" as "$build/traps.s" --object -o "$build/traps.o"
 "$KR32" as "$here/kernel/traps-asm.S" --object -o "$build/trap_stubs.o"
+"$KR32" as "$here/kernel/fast.S" --object -o "$build/fast.o"
 "$KR32" cc "$here/kernel/user.c" --source-id 6 $opt -S -o "$build/user.s"
 "$KR32" as "$build/user.s" --object -o "$build/user.o"
 "$KR32" cc "$here/kernel/memory.c" --source-id 9 $opt -S -o "$build/memory.s"
@@ -76,11 +77,11 @@ python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/w
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/font8x16.o" "$build/shell.o" \
-    "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
+    "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" "$build/fast.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
     --flat --base "$kernel_base" --map "$build/kernel.map" --sym "$build/kernel.sym" -o "$build/kernel.bin"
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/font8x16.o" "$build/shell.o" \
-    "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" \
+    "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" "$build/fast.o" \
     "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
     --base "$kernel_base" -o "$build/kernel.k32"
 python3 "$here/tools/mkmeta.py" "$build/kernel.bin" "$build/kernel.map" "$build/kernel.meta"
