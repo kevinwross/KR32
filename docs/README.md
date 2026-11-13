@@ -4,6 +4,7 @@ Start here, then follow the topic.
 
 | Document | Contents |
 | --- | --- |
+| [KR32ProgrammersReference.md](KR32ProgrammersReference.md) | **Start here to write a program.** Tools, running images, assembly syntax, architecture, memory map, and the instruction reference. |
 | [display.md](display.md) | **Proposal.** Display memory, framebuffer v2 registers, host presentation, the windowed system console, and the keyboard device. |
 | [graphics.md](graphics.md) | **Proposal.** The graphics and console API presented to programmers writing KR32 programs. |
 | [devices.md](devices.md) | Implemented v1 devices: MMIO map, timer, block, console, serial, framebuffer, IRQ routing, multicore. |
