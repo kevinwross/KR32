@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 21:33 -08:00
+> **Last updated:** 2026-11-12 21:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2989,6 +2989,14 @@ Newest entries at the bottom. Use the local time zone.
       covers steady-state colour), and the console redraw optimisation (boot is
       ~7M steps; budgets absorb it and the gate does not depend on it).
       Milestone `m10` tagged and pushed.
+
+- **2026-11-12 21:55 -08:00** — Fixed the variables panel dropping inner array
+      dimensions: `grid_chars` (`char[37][100]`) rendered as `grid_chars[37]`
+      and only revealed `[100]` on expansion. Both front ends record array
+      types innermost-first (`int[3][2]` for `int m[2][3]`), and the single
+      `[count]` suffix used the last bracket. `array_dimensions_display`
+      reverses the bracket groups for the row label and the hover tooltip;
+      `unit_test_ui` covers 2-D, 1-D, 3-D, and non-array types.
 
 ## 10. Updating this file
 

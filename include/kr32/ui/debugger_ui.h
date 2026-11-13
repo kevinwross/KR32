@@ -3,6 +3,7 @@
 #include <chrono>
 #include <map>
 #include <string>
+#include <string_view>
 #include <utility>
 #include <vector>
 
@@ -373,6 +374,11 @@ private:
 [[nodiscard]] std::string format_scalar_value(const std::string& type,
                                               std::uint32_t value,
                                               bool available);
+
+// Renders an array type's bracket groups in declaration order ("[2][3]" for
+// `int m[2][3]`), because the front ends record them innermost-first. Returns
+// an empty string for a non-array type.
+[[nodiscard]] std::string array_dimensions_display(std::string_view type);
 
 // Maps a drag position to a scrollbar offset. `span` is the thumb travel in
 // pixels and `max_offset` is the scrollable item count.

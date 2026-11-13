@@ -2126,6 +2126,27 @@ int DebuggerUI::draw_core_state(Canvas& canvas, Rect rect, std::size_t core_inde
     return std::min(y - start_y, rect.height);
 }
 
+// Both front ends record array types innermost-first ("int[3][2]" for
+// `int m[2][3]`). Reverse the bracket groups so panels and tooltips show the
+// declaration order; a non-array type returns an empty string.
+std::string array_dimensions_display(std::string_view type) {
+    std::vector<std::string> parts;
+    std::size_t position = 0;
+    while ((position = type.find('[', position)) != std::string_view::npos) {
+        const std::size_t close = type.find(']', position);
+        if (close == std::string_view::npos) {
+            break;
+        }
+        parts.emplace_back(type.substr(position, close - position + 1));
+        position = close + 1;
+    }
+    std::string result;
+    for (auto it = parts.rbegin(); it != parts.rend(); ++it) {
+        result += *it;
+    }
+    return result;
+}
+
 void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
     draw_panel(canvas, rect, "VARIABLES");
     struct Entry {
@@ -2333,8 +2354,12 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             text = std::string(static_cast<std::size_t>(entry.indent * 2), ' ') + entry.name;
         } else if (entry.array) {
             const std::string indent_text(static_cast<std::size_t>(entry.indent * 2), ' ');
-            text = indent_text + (entry.expanded ? "[-] " : "[+] ") + entry.name + "[" +
-                   std::to_string(entry.array_count) + "]" +
+            std::string dimensions = array_dimensions_display(entry.type);
+            if (dimensions.empty()) {
+                dimensions = "[" + std::to_string(entry.array_count) + "]";
+            }
+            text = indent_text + (entry.expanded ? "[-] " : "[+] ") + entry.name +
+                   dimensions +
                    (entry.expanded && entry.page_count > 1
                         ? " (page " + std::to_string(entry.page + 1) + ")"
                         : "");
@@ -2828,6 +2853,10 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
     lines.push_back(row.name + (row.local ? "  (local)" : "  (global)"));
     std::string pretty_type = row.type;
     std::replace(pretty_type.begin(), pretty_type.end(), '_', ' ');
+    const std::string type_dimensions = array_dimensions_display(pretty_type);
+    if (!type_dimensions.empty()) {
+        pretty_type = pretty_type.substr(0, pretty_type.find('[')) + type_dimensions;
+    }
     lines.push_back("type: " + (pretty_type.empty() ? "?" : pretty_type));
     lines.push_back("size: " + std::to_string(row.size) + " bytes");
     lines.push_back("address: 0x" + hex(row.address, 8));

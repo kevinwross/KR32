@@ -266,6 +266,14 @@ TEST_CASE("console output follows only when the view is at the bottom") {
     CHECK(ui::console_scroll_after_output(50, 100, 5, 10) == 0);
 }
 
+TEST_CASE("array types display dimensions in declaration order") {
+    // The front ends record the innermost dimension first.
+    CHECK(ui::array_dimensions_display("int[3][2]") == "[2][3]");
+    CHECK(ui::array_dimensions_display("char[37]") == "[37]");
+    CHECK(ui::array_dimensions_display("int[7][100][37]") == "[37][100][7]");
+    CHECK(ui::array_dimensions_display("int") == "");
+}
+
 TEST_CASE("instruction and addressing help describe KR32 operands") {
     CHECK(ui::instruction_help("PUSH").find("SP") != std::string::npos);
     CHECK(ui::instruction_help("LOAD8S").find("sign") != std::string::npos);
