@@ -73,7 +73,10 @@ if(TARGET kr32_ui)
         COMMAND kr32_tests "--source-file=*test_ui.cpp")
     set_tests_properties(unit_test_ui PROPERTIES
         LABELS "unit"
-        TIMEOUT 300)
+        # The codegen buckets are CPU-heavy: test_cxx_codegen_2 alone takes about 214 s
+# and crosses 300 s when several buckets run in parallel on a busy machine. This
+# is a watchdog, not an assertion, so leave room for the slowest bucket.
+TIMEOUT 600)
     if(WIN32 AND TARGET SDL2::SDL2)
         add_custom_command(TARGET kr32_tests POST_BUILD
             COMMAND ${CMAKE_COMMAND} -E copy_if_different
@@ -100,7 +103,10 @@ foreach(test_source IN LISTS KR32_TEST_SOURCES)
         COMMAND kr32_tests "--source-file=*${test_name}.cpp")
     set_tests_properties("unit_${test_name}" PROPERTIES
         LABELS "unit"
-        TIMEOUT 300)
+        # The codegen buckets are CPU-heavy: test_cxx_codegen_2 alone takes about 214 s
+# and crosses 300 s when several buckets run in parallel on a busy machine. This
+# is a watchdog, not an assertion, so leave room for the slowest bucket.
+TIMEOUT 600)
 endforeach()
 
 if(TARGET kr32_cxx_tool)

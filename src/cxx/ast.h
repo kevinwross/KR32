@@ -30,6 +30,7 @@ enum class BuiltinKind {
     Void,
     Bool,
     Char,
+    UnsignedChar,
     Short,
     UnsignedShort,
     Int,

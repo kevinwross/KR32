@@ -583,7 +583,9 @@ private:
                 } else if (text == "bool") {
                     specifiers.type = Type::make_builtin(BuiltinKind::Bool);
                 } else if (text == "char") {
-                    specifiers.type = Type::make_builtin(BuiltinKind::Char);
+                    specifiers.type = Type::make_builtin(
+                        have_unsigned ? BuiltinKind::UnsignedChar
+                                      : BuiltinKind::Char);
                 } else if (text == "float") {
                     specifiers.type = Type::make_builtin(BuiltinKind::Float);
                 } else if (text == "double") {
@@ -658,6 +660,10 @@ private:
             } else if (have_unsigned) {
                 specifiers.type->builtin = BuiltinKind::UnsignedInt;
             }
+        } else if (specifiers.type->kind == TypeKind::Builtin &&
+                   specifiers.type->builtin == BuiltinKind::Char &&
+                   have_unsigned) {
+            specifiers.type->builtin = BuiltinKind::UnsignedChar;
         }
         if (have_long_long && specifiers.type->kind == TypeKind::Builtin) {
             if (specifiers.type->builtin == BuiltinKind::Int) {

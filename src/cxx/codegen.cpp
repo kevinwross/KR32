@@ -115,6 +115,7 @@ std::string mangle_builtin(BuiltinKind kind) {
     case BuiltinKind::Void: return "v";
     case BuiltinKind::Bool: return "b";
     case BuiltinKind::Char: return "c";
+    case BuiltinKind::UnsignedChar: return "h";
     case BuiltinKind::Short: return "s";
     case BuiltinKind::UnsignedShort: return "t";
     case BuiltinKind::Int: return "i";
@@ -234,9 +235,26 @@ bool is_integer(const TypePtr& type) {
 
 bool is_unsigned_integer(const TypePtr& type) {
     return type && type->kind == TypeKind::Builtin &&
-           (type->builtin == BuiltinKind::UnsignedShort ||
+           (type->builtin == BuiltinKind::UnsignedChar ||
+            type->builtin == BuiltinKind::UnsignedShort ||
             type->builtin == BuiltinKind::UnsignedInt ||
             type->builtin == BuiltinKind::UnsignedLongLong);
+}
+
+bool is_byte_builtin(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           (type->builtin == BuiltinKind::Char ||
+            type->builtin == BuiltinKind::UnsignedChar ||
+            type->builtin == BuiltinKind::Bool);
+}
+
+// Byte loads extend to a word; an unsigned char zero-extends and a signed one
+// (or bool) sign-extends.
+std::string byte_load_mnemonic(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+                   type->builtin == BuiltinKind::UnsignedChar
+               ? "LOAD8U"
+               : "LOAD8S";
 }
 
 bool is_long_long(const TypePtr& type) {
@@ -312,6 +330,7 @@ TypePtr promote(const TypePtr& type) {
     if (type && type->kind == TypeKind::Builtin &&
         (type->builtin == BuiltinKind::Bool ||
          type->builtin == BuiltinKind::Char ||
+         type->builtin == BuiltinKind::UnsignedChar ||
          type->builtin == BuiltinKind::Short ||
          type->builtin == BuiltinKind::UnsignedShort)) {
         return Type::make_builtin(BuiltinKind::Int);
@@ -491,7 +510,7 @@ public:
         type_aliases_["int8_t"] = Type::make_builtin(BuiltinKind::Char);
         type_aliases_["int16_t"] = Type::make_builtin(BuiltinKind::Int);
         type_aliases_["int32_t"] = Type::make_builtin(BuiltinKind::Int);
-        type_aliases_["uint8_t"] = Type::make_builtin(BuiltinKind::Char);
+        type_aliases_["uint8_t"] = Type::make_builtin(BuiltinKind::UnsignedChar);
         type_aliases_["uint16_t"] = Type::make_builtin(BuiltinKind::UnsignedInt);
         type_aliases_["uint32_t"] = Type::make_builtin(BuiltinKind::UnsignedInt);
     }
@@ -1340,7 +1359,8 @@ private:
             switch (type->builtin) {
             case BuiltinKind::Void: return 0;
             case BuiltinKind::Bool:
-            case BuiltinKind::Char: return 1;
+            case BuiltinKind::Char:
+            case BuiltinKind::UnsignedChar: return 1;
             case BuiltinKind::Short:
             case BuiltinKind::UnsignedShort: return 2;
             case BuiltinKind::Int:
@@ -3809,6 +3829,7 @@ private:
             case BuiltinKind::Void: return "void";
             case BuiltinKind::Bool: return "bool";
             case BuiltinKind::Char: return "char";
+            case BuiltinKind::UnsignedChar: return "unsigned char";
             case BuiltinKind::Float: return "float";
             case BuiltinKind::Double: return "double";
             default: return "int";
@@ -3871,10 +3892,8 @@ private:
             emit("    MOV R2, R0");
             emit("    LOAD R0, [R2]");
             emit("    LOAD R1, [R2 + 4]");
-        } else if (resolved && resolved->kind == TypeKind::Builtin &&
-            (resolved->builtin == BuiltinKind::Char ||
-             resolved->builtin == BuiltinKind::Bool)) {
-            emit("    LOAD8S R0, [R0]");
+        } else if (is_byte_builtin(resolved)) {
+            emit("    " + byte_load_mnemonic(resolved) + " R0, [R0]");
         } else if (resolved && resolved->kind == TypeKind::Builtin &&
                    resolved->builtin == BuiltinKind::Short) {
             emit("    LOAD16S R0, [R0]");
@@ -3895,9 +3914,7 @@ private:
         if (is_long_long(resolved)) {
             emit("    STORE R0, [R1]");
             emit("    STORE R2, [R1 + 4]");
-        } else if (resolved && resolved->kind == TypeKind::Builtin &&
-            (resolved->builtin == BuiltinKind::Char ||
-             resolved->builtin == BuiltinKind::Bool)) {
+        } else if (is_byte_builtin(resolved)) {
             emit("    STORE8 R0, [R1]");
         } else if (resolved && resolved->kind == TypeKind::Builtin &&
                    (resolved->builtin == BuiltinKind::Short ||
@@ -5292,10 +5309,8 @@ private:
                     } else if (is_fp(type)) {
                         emit(std::string("    FLOAD.") +
                              (is_float32(type) ? "W" : "D") + " F0, " + address);
-                    } else if (type && type->kind == TypeKind::Builtin &&
-                               (type->builtin == BuiltinKind::Char ||
-                                type->builtin == BuiltinKind::Bool)) {
-                        emit("    LOAD8S R0, " + address);
+                    } else if (is_byte_builtin(type)) {
+                        emit("    " + byte_load_mnemonic(type) + " R0, " + address);
                     } else if (type && type->kind == TypeKind::Builtin &&
                                (type->builtin == BuiltinKind::Short ||
                                 type->builtin == BuiltinKind::UnsignedShort)) {
@@ -5565,6 +5580,14 @@ private:
                 emit(std::string("    FCVT.W.") + (is_float32(source) ? "S" : "D") +
                      " R0, F0");
             } else if (target && target->kind == TypeKind::Builtin &&
+                       target->builtin == BuiltinKind::UnsignedChar) {
+                emit("    AND R0, R0, #255");
+            } else if (target && target->kind == TypeKind::Builtin &&
+                       target->builtin == BuiltinKind::Char) {
+                emit("    AND R0, R0, #255");
+                emit("    SHL R0, R0, #24");
+                emit("    SAR R0, R0, #24");
+            } else if (target && target->kind == TypeKind::Builtin &&
                        target->builtin == BuiltinKind::Bool) {
                 emit("    CMP R0, #0");
                 emit("    MOV R0, #0");
@@ -5735,10 +5758,7 @@ private:
         if (op == "++" || op == "--") {
             const TypePtr type = type_of(*expression.children[0]);
             const TypePtr resolved = resolve_type(type);
-            const bool byte_value =
-                resolved && resolved->kind == TypeKind::Builtin &&
-                (resolved->builtin == BuiltinKind::Char ||
-                 resolved->builtin == BuiltinKind::Bool);
+            const bool byte_value = is_byte_builtin(resolved);
             if (expression.children[0]->kind == ExprKind::Name) {
                 Local* local = lookup_local(expression.children[0]->name);
                 if (local != nullptr && !local->is_reference &&
@@ -5746,7 +5766,7 @@ private:
                     !is_long_long(type)) {
                     const std::string frame =
                         "[R7 + " + std::to_string(local->offset) + "]";
-                    emit(byte_value ? "    LOAD8S R0, " + frame
+                    emit(byte_value ? "    " + byte_load_mnemonic(resolved) + " R0, " + frame
                                     : "    LOAD R0, " + frame);
                     if (!expression.is_prefix) {
                         emit("    MOV R2, R0");
@@ -5780,7 +5800,7 @@ private:
             gen_address(*expression.children[0]);
             emit("    MOV R1, R0");
             if (byte_value) {
-                emit("    LOAD8S R0, [R1]");
+                emit("    " + byte_load_mnemonic(resolved) + " R0, [R1]");
             } else {
                 emit("    LOAD R0, [R1]");
             }
@@ -5920,10 +5940,8 @@ private:
         } else if (right_local != nullptr) {
             const std::string frame =
                 "[R7 + " + std::to_string(right_local->offset) + "]";
-            if (right_local_type->kind == TypeKind::Builtin &&
-                (right_local_type->builtin == BuiltinKind::Char ||
-                 right_local_type->builtin == BuiltinKind::Bool)) {
-                emit("    LOAD8S R1, " + frame);
+            if (is_byte_builtin(right_local_type)) {
+                emit("    " + byte_load_mnemonic(right_local_type) + " R1, " + frame);
             } else if (right_local_type->kind == TypeKind::Builtin &&
                        (right_local_type->builtin == BuiltinKind::Short ||
                         right_local_type->builtin ==
@@ -6771,10 +6789,8 @@ private:
                                         const std::string& reg) {
                 const std::string frame =
                     "[R7 + " + std::to_string(local->offset) + "]";
-                if (type->kind == TypeKind::Builtin &&
-                    (type->builtin == BuiltinKind::Char ||
-                     type->builtin == BuiltinKind::Bool)) {
-                    emit("    LOAD8S " + reg + ", " + frame);
+                if (is_byte_builtin(type)) {
+                    emit("    " + byte_load_mnemonic(type) + " " + reg + ", " + frame);
                 } else if (type->kind == TypeKind::Builtin &&
                            (type->builtin == BuiltinKind::Short ||
                             type->builtin == BuiltinKind::UnsignedShort)) {
@@ -7168,10 +7184,8 @@ private:
                     emit("    MOV R2, R0");
                     const std::string frame =
                         "[R7 + " + std::to_string(local->offset) + "]";
-                    if (stored_type->kind == TypeKind::Builtin &&
-                        (stored_type->builtin == BuiltinKind::Char ||
-                         stored_type->builtin == BuiltinKind::Bool)) {
-                        emit("    LOAD8S R0, " + frame);
+                    if (is_byte_builtin(stored_type)) {
+                        emit("    " + byte_load_mnemonic(stored_type) + " R0, " + frame);
                     } else if (stored_type->kind == TypeKind::Builtin &&
                                (stored_type->builtin == BuiltinKind::Short ||
                                 stored_type->builtin ==
@@ -7189,9 +7203,7 @@ private:
                         emit("    MOV R0, #1");
                         emit(done + ":");
                     }
-                    if (stored_type->kind == TypeKind::Builtin &&
-                        (stored_type->builtin == BuiltinKind::Char ||
-                         stored_type->builtin == BuiltinKind::Bool)) {
+                    if (is_byte_builtin(stored_type)) {
                         emit("    STORE8 R0, " + frame);
                     } else if (stored_type->kind == TypeKind::Builtin &&
                                (stored_type->builtin == BuiltinKind::Short ||
@@ -7215,9 +7227,7 @@ private:
                 gen_expr(*expression.children[1]);
                 const std::string frame =
                     "[R7 + " + std::to_string(local->offset) + "]";
-                if (stored_type->kind == TypeKind::Builtin &&
-                    (stored_type->builtin == BuiltinKind::Char ||
-                     stored_type->builtin == BuiltinKind::Bool)) {
+                if (is_byte_builtin(stored_type)) {
                     emit("    STORE8 R0, " + frame);
                 } else if (stored_type->kind == TypeKind::Builtin &&
                            (stored_type->builtin == BuiltinKind::Short ||
@@ -10169,9 +10179,7 @@ private:
                 emit("    STORE R0, " + frame);
                 emit("    STORE R2, [R7 + " +
                      std::to_string(local.offset + 4) + "]");
-            } else if (type->kind == TypeKind::Builtin &&
-                       (type->builtin == BuiltinKind::Char ||
-                        type->builtin == BuiltinKind::Bool)) {
+            } else if (is_byte_builtin(type)) {
                 emit("    STORE8 R0, " + frame);
             } else if (type->kind == TypeKind::Builtin &&
                        (type->builtin == BuiltinKind::Short ||

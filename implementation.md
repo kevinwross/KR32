@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 00:38 -08:00
+> **Last updated:** 2026-11-13 05:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -846,13 +846,16 @@ is the problem) or a smaller console mode — before tagging `m10`.
   about the same; the test budgets absorb it and the milestone is not gated on
   it. Recorded under D3 for a later performance pass.
 
-**Known gap, C++ `unsigned char`.** `BuiltinKind` has `Char`, `Short`, and
-`UnsignedShort` but no `UnsignedChar`, and `load_value` always emits `LOAD8S`
-(`src/cxx/codegen.cpp:3877`). So `unsigned char g = 200; (g > 100)` is false in
-C++ and true in C: the value is sign-extended on load and compared signed.
-Closing it needs a new builtin kind, parsing for `unsigned char`/`signed char`,
-`LOAD8U` at the load sites, and unsigned conversions and comparisons. Not
-started; it is a C++ front-end change of its own.
+**C++ `unsigned char`, fixed 2026-11-13.** `BuiltinKind` now has `UnsignedChar`;
+the parser maps `unsigned char` (in either order) to it; `uint8_t` aliases it;
+size, type name, and mangling (`h`) are covered; `is_unsigned_integer` and
+`promote` treat it as unsigned; byte loads emit `LOAD8U` through
+`byte_load_mnemonic`, and stores emit `STORE8`; casts mask to 255 (and signed
+char casts sign-extend). `test_cxx_codegen_1` covers 200 > 100, 200 < 128,
+compound assignment overflow, `++`, parameter passing, arrays, `(unsigned char)-1`,
+`sizeof`, and globals. The unit-bucket watchdog moved from 300 s to 600 s because
+`test_cxx_codegen_2` alone runs about 214 s and crossed 300 s under parallel
+load.
 
 **Comparison codegen, fixed 2026-11-13.** The `PUSH R0` / `MOV R1, R0` /
 `POP R0` sequence did not come from call arguments (those already evaluate
@@ -3072,6 +3075,17 @@ Newest entries at the bottom. Use the local time zone.
       `unit_test_fast` covers `buffer + 1` (6 bytes) and `buffer + 3` (9 bytes),
       checking the bytes on both sides stay untouched. The embedded image is
       regenerated (132,752 bytes); the OS and integration tests pass against it.
+
+- **2026-11-13 05:36 -08:00** — C++ `unsigned char` implemented end to end.
+      Added `BuiltinKind::UnsignedChar`; the parser accepts `unsigned char` in
+      either order; `uint8_t` aliases it; `is_unsigned_integer`, `promote`,
+      size, type name, and mangling (`h` from the Itanium table) know it. Byte
+      loads go through `byte_load_mnemonic` (`LOAD8U` for unsigned, `LOAD8S`
+      otherwise) and stores through `STORE8`; casts mask to 255 for unsigned and
+      sign-extend for plain char. `test_cxx_codegen_1` covers the value,
+      comparisons, overflow, `++`, parameters, arrays, casts, `sizeof`, and
+      globals. The unit-bucket watchdog is now 600 s: `test_cxx_codegen_2`
+      takes about 214 s alone and crossed the old 300 s limit under `-j4`.
 
 ## 10. Updating this file
 

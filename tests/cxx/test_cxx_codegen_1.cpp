@@ -686,3 +686,34 @@ TEST_CASE("<cassert> provides assert") {
     CHECK(program.result == 0);
 }
 
+TEST_CASE("unsigned char keeps its value and compares unsigned") {
+    const ProgramResult program = compile_and_run(
+        "unsigned char g;\n"
+        "int pass(unsigned char v) { return v; }\n"
+        "int main() {\n"
+        "    unsigned char c = 200;\n"
+        "    if (c != 200) return 1;\n"
+        "    if (!(c > 100)) return 2;\n"
+        "    if (c < 128) return 3;\n"
+        "    if (!(c >= 200)) return 4;\n"
+        "    c += 100;\n"
+        "    if (c != 44) return 5;\n"
+        "    c = 250;\n"
+        "    c++;\n"
+        "    if (c != 251) return 6;\n"
+        "    if (pass(200) != 200) return 7;\n"
+        "    unsigned char buf[3];\n"
+        "    buf[0] = 255; buf[1] = 2;\n"
+        "    if (buf[0] + buf[1] != 257) return 8;\n"
+        "    if ((unsigned char)(-1) != 255) return 9;\n"
+        "    if (!((unsigned char)(-1) > 100)) return 10;\n"
+        "    if (sizeof(c) != 1) return 11;\n"
+        "    g = 128;\n"
+        "    if (g != 128) return 12;\n"
+        "    unsigned char d = c;\n"
+        "    if (!(d > c - 1)) return 13;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
