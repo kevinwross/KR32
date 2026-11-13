@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 21:07 -08:00
+> **Last updated:** 2026-11-12 21:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -825,27 +825,26 @@ is the problem) or a smaller console mode — before tagging `m10`.
 **Test plan and gate**
 
 - [x] `ctest --preset windows-msvc-debug` passes (83/83).
-- [x] WSL gate: the Linux tree builds and `ctest` passes **76/76**, run headless
-      (`-DKR32_BUILD_UI=OFF`, Unix Makefiles) because WSL has no Ninja,
-      `pkg-config`, or SDL2 and `sudo` needs an interactive password. The
-      seven UI tests therefore did not run there; record the gap rather than
-      claiming the full Linux gate.
+- [x] WSL gate: `cmake --preset linux-gcc`, build, and `ctest` pass **83/83**
+      with the UI, once `ninja`, `pkg-config`, and `libsdl2-dev` were installed.
 - [x] Golden-frame hashes are checked in and updated deliberately
       (`display_screen_shot`).
 - [x] Console coverage: `os_console_screen` boots the embedded OS, requires an
-      800x600 committed frame, and asserts two runs are byte-identical.
-- [ ] Cell assertions for per-cell colour, a mid-line colour change, and
-      colours across a scroll are not written; the console has no host-side
-      harness.
+      800x600 committed frame, asserts two runs are byte-identical, and requires
+      both the foreground and background palette colours to appear.
+- [ ] Cell assertions for a mid-line colour change and colours across a scroll
+      are **deferred**: the kernel console has no host-side harness, and adding
+      one means refactoring `console.c` behind a testable surface. The
+      screenshot colour assertion covers steady-state rendering.
 - [x] `scripts/update-os.ps1` run for Windows and `scripts/update-os.sh` in WSL
       for Linux; both image pairs are refreshed.
 - [x] Docs updated: `devices.md` carries the v2 register table and keyboard,
       `display.md` points at it, `ui.md` gains the `SCREEN` tab, `testing.md`
       gains the new tests.
-- [ ] Tag `m10` and push. The Windows gate is green and the Linux gate is green
-      headless; the seven UI tests did not run on WSL because SDL2, Ninja, and
-      `pkg-config` are missing there and `sudo` needs a password. Decide whether
-      to accept the headless Linux gate or install the packages first.
+- [ ] Tag `m10` and push.
+- Deferred: the console redraw optimisation. Boot costs ~7M steps and a scroll
+  about the same; the test budgets absorb it and the milestone is not gated on
+  it. Recorded under D3 for a later performance pass.
 
 ### M11 — Graphics and console API
 
@@ -2977,6 +2976,19 @@ Newest entries at the bottom. Use the local time zone.
       `-Werror`. Marked them `[[maybe_unused]]`. Regenerated the Linux OS images
       with `scripts/update-os.sh` (`kernel.k32` 131,924 bytes) and copied them
       into the tree. Windows gate re-run after the fix: 83/83 passed, 714.02 s.
+
+- **2026-11-12 21:33 -08:00** — M10 gate closed. With `ninja`, `pkg-config`, and
+      `libsdl2-dev` installed in WSL, the Linux tree configured with
+      `linux-gcc`, built with the UI, and passed **83/83** (`SDL_VIDEODRIVER=dummy`,
+      371.43 s). GCC also caught an unparenthesised arithmetic-or in
+      `app.cpp`'s flat page map; parenthesised, and the Windows gate re-ran
+      **83/83** (902.92 s). Both platforms are green with the UI.
+
+      Deferred with reasons: kernel console cell assertions for a mid-line
+      colour change and scroll colours (no host harness; the screenshot test
+      covers steady-state colour), and the console redraw optimisation (boot is
+      ~7M steps; budgets absorb it and the gate does not depend on it).
+      Milestone `m10` tagged and pushed.
 
 ## 10. Updating this file
 

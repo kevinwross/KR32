@@ -338,12 +338,12 @@ void install_display_map(core::Machine& machine) {
 
     for (std::uint32_t index = 0; index < 1024U; ++index) {
         (void)machine.write_physical32(kLowLeaf + index * 4U,
-                                       index * 0x1000U | kFlags);
+                                       (index * 0x1000U) | kFlags);
         (void)machine.write_physical32(kVramLeaf + index * 4U,
-                                       core::kFramebufferBase + index * 0x1000U |
+                                       (core::kFramebufferBase + index * 0x1000U) |
                                            (core::kPteValid | core::kPteWritable));
         (void)machine.write_physical32(kMmioLeaf + index * 4U,
-                                       0xFFC0'0000U + index * 0x1000U |
+                                       (0xFFC0'0000U + index * 0x1000U) |
                                            (core::kPteValid | core::kPteWritable));
     }
     (void)machine.write_physical32(kTables, kLowLeaf | core::kPteValid);
