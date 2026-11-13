@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 21:55 -08:00
+> **Last updated:** 2026-11-12 23:00 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -2997,6 +2997,26 @@ Newest entries at the bottom. Use the local time zone.
       `[count]` suffix used the last bracket. `array_dimensions_display`
       reverses the bracket groups for the row label and the hover tooltip;
       `unit_test_ui` covers 2-D, 1-D, 3-D, and non-array types.
+
+- **2026-11-12 22:39 -08:00** — Fixed source-line step-over stopping inside a
+      long callee. `Session::step_over` skips a CALL by running until the
+      return address, but its guard was one million instructions; the console's
+      `fill_surface` runs about seven million, so stepping over
+      `fill_surface(...)` stopped mid-loop at `fill_surface+0x50` instead of the
+      next line. The guard is now `kStepGuard` (20M) at all four step sites, and
+      `unit_test_debug` covers a call that runs 1.6M instructions. Reload the
+      image in the debugger after rebuilding the kernel so its addresses match.
+
+- **2026-11-12 23:00 -08:00** — Folded constant narrowing conversions in the C
+      compiler. `convert_value` always emitted the `AND`/`SHL`/`SAR` sequence for
+      int-to-char (and short/bool) conversions, so `console_putc('\n')` compiled
+      to `MOV R0, #10; AND #255; SHL #24; SAR #24; CALL`. When the value being
+      converted is the literal currently in `R0`, `take_literal_in_r0` consumes
+      it and the conversion becomes one `MOV` with the truncated, sign-extended
+      value: `MOV R0, #10; CALL`. Non-constant conversions keep the mask because
+      the callee relies on the normalised argument, and char lvalues already used
+      `LOAD8S`/`LOAD8U`/`STORE8`. The kernel image shrank 131,072 → 130,840 bytes;
+      the embedded images were regenerated.
 
 ## 10. Updating this file
 

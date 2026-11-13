@@ -3731,6 +3731,38 @@ private:
         }
     }
 
+    // Consumes the last emitted instruction when it loads R0 with a literal, so
+    // a following narrowing conversion can fold the constant away.
+    bool take_literal_in_r0(std::int64_t& value) {
+        const std::string marker = "    MOV R0, #";
+        if (output_ != nullptr || text_.size() < marker.size() + 2 ||
+            text_.back() != '\n') {
+            return false;
+        }
+        const std::size_t previous = text_.rfind('\n', text_.size() - 2);
+        const std::size_t line_start =
+            previous == std::string::npos ? 0 : previous + 1;
+        if (text_.compare(line_start, marker.size(), marker) != 0) {
+            return false;
+        }
+        const std::string number =
+            text_.substr(line_start + marker.size(),
+                         text_.size() - 1 - (line_start + marker.size()));
+        std::size_t consumed = 0;
+        std::int64_t parsed = 0;
+        try {
+            parsed = std::stoll(number, &consumed, 0);
+        } catch (...) {
+            return false;
+        }
+        if (consumed != number.size()) {
+            return false;
+        }
+        text_.resize(line_start);
+        value = parsed;
+        return true;
+    }
+
     void convert_value(const TypePtr& from, const TypePtr& to) {
         if (from == nullptr || to == nullptr) {
             return;
@@ -3764,18 +3796,41 @@ private:
                  (from->kind == Type::Kind::Double ? "FCVT.W.D" : "FCVT.W.S") + " R0, F0");
         }
         if (to->kind == Type::Kind::Char) {
+            std::int64_t literal = 0;
+            if (!from_fp && take_literal_in_r0(literal)) {
+                literal &= 0xFF;
+                if (!to->is_unsigned && (literal & 0x80) != 0) {
+                    literal -= 0x100;
+                }
+                emit("    MOV R0, #" + std::to_string(literal));
+                return;
+            }
             emit("    AND R0, R0, #255");
             if (!to->is_unsigned) {
                 emit("    SHL R0, R0, #24");
                 emit("    SAR R0, R0, #24");
             }
         } else if (to->kind == Type::Kind::Short) {
+            std::int64_t literal = 0;
+            if (!from_fp && take_literal_in_r0(literal)) {
+                literal &= 0xFFFF;
+                if (!to->is_unsigned && (literal & 0x8000) != 0) {
+                    literal -= 0x10000;
+                }
+                emit("    MOV R0, #" + std::to_string(literal));
+                return;
+            }
             emit("    AND R0, R0, #65535");
             if (!to->is_unsigned) {
                 emit("    SHL R0, R0, #16");
                 emit("    SAR R0, R0, #16");
             }
         } else if (to->kind == Type::Kind::Bool) {
+            std::int64_t literal = 0;
+            if (!from_fp && take_literal_in_r0(literal)) {
+                emit("    MOV R0, #" + std::to_string(literal != 0 ? 1 : 0));
+                return;
+            }
             const std::string nonzero = new_label("bool");
             const std::string done = new_label("boolend");
             emit("    CMP R0, #0");
