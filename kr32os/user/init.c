@@ -12,10 +12,16 @@ int sys_getpid(void);
 int sys_brk(unsigned int address);
 
 int main(void) {
+    int i; 
     sys_write(1, INIT_MESSAGE, INIT_MESSAGE_LENGTH);
+       for(i = 0; i < 32 ; i++)
+    {
+        sys_write(1,"Scrolling\n",10);
+    }
     if (sys_getpid() == 1) {
         sys_write(1, INIT_IDENTITY, INIT_IDENTITY_LENGTH);
     }
+    sys_write(1, INIT_MESSAGE, INIT_MESSAGE_LENGTH);
     (void)sys_yield();
     (void)sys_read(0, (char *)0, 0);
     (void)sys_brk(USER_CODE_BASE);
