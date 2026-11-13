@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-12 15:54 -08:00
+> **Last updated:** 2026-11-12 18:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -695,8 +695,8 @@ the shipped v1 until D1 lands.
 
 **Dependencies**
 
-- **CR-1 — loader zero-fills `.bss`**, below. Owned outside this milestone; D1
-  verifies it rather than assuming it.
+- **CR-1 — loader zero-fills `.bss`**, below. Done 2026-11-12; D1 re-runs the
+  loader tests as part of its gate.
 - SDL2 (vendored) and the embedded OS images, refreshed with
   `scripts/update-os.ps1` / `scripts/update-os.sh`.
 - No dependency on the C++ toolchain.
@@ -711,17 +711,19 @@ registers but not RAM, so a reload into an existing machine inherits stale
 bytes. A fresh `Machine` per CLI run masks this today; M10's static kernel
 buffers, and any later `static` initialised by assumption, make it a hazard.
 
-- [ ] Add one shared image loader (for example
-      `Machine::load_image(const container::Image&, std::string&)`) and use it
-      from `src/cli/cli.cpp`, `src/vm/threads.cpp`, and `src/debug/debug.cpp`.
-- [ ] Zero every allocated `.bss` range in bulk (span fill), not per byte; keep
-      `.tls` handling in the same helper.
-- [ ] Delete the three duplicated section loops.
-- [ ] Tests: dirty RAM, load an image with `.bss`, assert the range reads zero;
+- [x] Add one shared image loader,
+      `container::load_into(core::Machine&, const Image&, LoadedImage&,
+      std::string&)` in `src/container/container.cpp`, and use it from
+      `src/cli/cli.cpp`, `src/vm/threads.cpp`, and `src/debug/debug.cpp`.
+- [x] Zero every allocated `.bss` range in bulk through `Machine::zero_memory`,
+      not per byte; `.tls` is captured in `LoadedImage` by the same helper.
+- [x] Delete the three duplicated section loops.
+- [x] Tests: dirty RAM, load an image with `.bss`, assert the range reads zero;
       load the same image twice into one machine, assert zero both times.
-- [ ] `--flat` output is unchanged; it already materialises BSS.
+- [x] `--flat` output is unchanged; the linker path is untouched.
 
-D1 checks these boxes before its own exit. CR-1 does not reopen M3, which
+Implemented and verified 2026-11-12; the loader tests are part of
+`unit_test_container` and run in the normal gate. CR-1 does not reopen M3, which
 closed 2026-11-02.
 
 **Tasks**
@@ -740,7 +742,7 @@ closed 2026-11-02.
       at `base + 32 MiB - 4`.
 - [ ] Integration test: an assembly guest sets a mode, fills VRAM, flips, and
       reads back the committed descriptor and pixel bytes.
-- [ ] Verify CR-1: the loader tests pass and a `.bss` range reads zero after a
+- [x] Verified CR-1: the loader tests pass and a `.bss` range reads zero after a
       reload.
 
 **D2 — Host surface and `kr32 display`**
@@ -2833,6 +2835,18 @@ Newest entries at the bottom. Use the local time zone.
       global fg/bg decision; `con_set_colors` becomes a pen, and the ring costs
       51.2 KiB instead of 25.6 KiB. Recorded in `docs/display.md` §7.2 and
       `docs/graphics.md` §6; D3 and its test gate updated.
+
+- **2026-11-12 18:50 -08:00** — CR-1 implemented. One shared loader,
+      `container::load_into(core::Machine&, const Image&, LoadedImage&,
+      std::string&)`, now loads allocated sections, captures `.tls` as a
+      template, and bulk-zeroes `.bss` through `Machine::zero_memory`. The three
+      duplicated loops in `cli.cpp`, `threads.cpp`, and `debug.cpp` are gone;
+      `--flat` output is untouched. `unit_test_container` gained four cases
+      (dirty then zero, reload, `.tls` captured not written, non-fitting `.bss`
+      rejected). Windows gate: 80/80 passed, 632.64 s. Behaviour change to note:
+      the debugger's `Session::load` now skips `.tls` instead of loading it as a
+      data section, matching the CLI and cluster loaders; it never installed TLS
+      anyway.
 
 ## 10. Updating this file
 

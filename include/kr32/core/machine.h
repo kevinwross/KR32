@@ -118,6 +118,9 @@ public:
                                   std::size_t size);
     [[nodiscard]] bool load_image(std::uint32_t address,
                                   const std::vector<std::uint8_t>& data);
+    // Zeroes `size` bytes at `address`. The range must lie in RAM or ROM;
+    // returns false when it does not, so callers can report a bad .bss.
+    [[nodiscard]] bool zero_memory(std::uint32_t address, std::size_t size);
     void attach_devices(DeviceBus* devices, bool tick_devices = true);
     [[nodiscard]] DeviceBus* devices() const { return devices_; }
     void invalidate_reservation();

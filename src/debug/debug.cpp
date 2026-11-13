@@ -147,15 +147,9 @@ bool parse_info(const container::Image& image, Info& info, std::string& error) {
 Session::Session() : machine_(core::Machine::Options{core::kDefaultRamSize}) {}
 
 bool Session::load(const container::Image& image, std::string& error) {
-    for (const container::Section& section : image.sections) {
-        if ((section.flags & container::Alloc) == 0 ||
-            section.type == container::SectionType::Bss) {
-            continue;
-        }
-        if (!machine_.load_image(section.address, section.data)) {
-            error = "failed to load section " + section.name;
-            return false;
-        }
+    container::LoadedImage loaded;
+    if (!container::load_into(machine_, image, loaded, error)) {
+        return false;
     }
     machine_.reset(image.entry);
     if (!machine_.setup_arguments(arguments_, program_name_, error)) {
@@ -177,26 +171,8 @@ bool Session::load_os(const container::Image& kernel,
                       std::string& error) {
     error.clear();
     const auto load_image = [&](const container::Image& image) {
-        for (const container::Section& section : image.sections) {
-            if ((section.flags & container::Alloc) == 0) {
-                continue;
-            }
-            if (section.type == container::SectionType::Bss) {
-                for (std::uint32_t offset = 0; offset < section.size; ++offset) {
-                    if (!machine_.write8(section.address + offset, 0)) {
-                        error = "failed to clear section " + section.name;
-                        return false;
-                    }
-                }
-                continue;
-            }
-            if (!section.data.empty() &&
-                !machine_.load_image(section.address, section.data)) {
-                error = "failed to load section " + section.name;
-                return false;
-            }
-        }
-        return true;
+        container::LoadedImage loaded;
+        return container::load_into(machine_, image, loaded, error);
     };
     if (!load_image(kernel) || !load_image(bios)) {
         return false;

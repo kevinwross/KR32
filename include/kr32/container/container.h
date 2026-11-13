@@ -5,6 +5,10 @@
 #include <string>
 #include <vector>
 
+namespace kr32::core {
+class Machine;
+}
+
 namespace kr32::container {
 
 enum class ImageType : std::uint16_t {
@@ -80,6 +84,17 @@ struct Image {
 struct Error {
     std::string message;
 };
+
+// `.tls` is a template, not a loadable region: the loader captures it and the
+// caller installs it into the thread control block.
+struct LoadedImage {
+    std::vector<std::uint8_t> tls_template;
+};
+
+// Loads every allocated section of `image` into `machine` and zero-fills each
+// `.bss` range. Returns false with `error` set when a section does not fit.
+[[nodiscard]] bool load_into(core::Machine& machine, const Image& image,
+                             LoadedImage& loaded, std::string& error);
 
 [[nodiscard]] std::uint32_t crc32(const std::uint8_t* data, std::size_t size);
 

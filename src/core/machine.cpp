@@ -225,6 +225,29 @@ bool Machine::load_image(std::uint32_t address,
     return load_image(address, data.data(), data.size());
 }
 
+bool Machine::zero_memory(std::uint32_t address, std::size_t size) {
+    if (size == 0) {
+        return true;
+    }
+
+    const std::uint64_t begin = address;
+    const std::uint64_t end = begin + size;
+
+    if (begin >= kRamBase && end <= static_cast<std::uint64_t>(kRamBase) + ram_->size()) {
+        const auto first = ram_->begin() + static_cast<std::ptrdiff_t>(begin - kRamBase);
+        std::fill(first, first + static_cast<std::ptrdiff_t>(size),
+                  static_cast<std::uint8_t>(0));
+        return true;
+    }
+    if (begin >= kRomBase && end <= static_cast<std::uint64_t>(kRomBase) + rom_.size()) {
+        const auto first = rom_.begin() + static_cast<std::ptrdiff_t>(begin - kRomBase);
+        std::fill(first, first + static_cast<std::ptrdiff_t>(size),
+                  static_cast<std::uint8_t>(0));
+        return true;
+    }
+    return false;
+}
+
 void Machine::attach_devices(DeviceBus* devices, bool tick_devices) {
     devices_ = devices;
     tick_devices_ = tick_devices;

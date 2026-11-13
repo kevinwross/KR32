@@ -25,20 +25,11 @@ void ClusterHost::install() {
 }
 
 bool ClusterHost::load_image(const container::Image& image, std::string& error) {
-    for (const container::Section& section : image.sections) {
-        if (section.name == ".tls") {
-            tls_template_ = section.data;
-            continue;
-        }
-        if ((section.flags & container::Alloc) == 0 ||
-            section.type == container::SectionType::Bss) {
-            continue;
-        }
-        if (!cluster_.core(0).load_image(section.address, section.data)) {
-            error = "failed to load image section";
-            return false;
-        }
+    container::LoadedImage loaded;
+    if (!container::load_into(cluster_.core(0), image, loaded, error)) {
+        return false;
     }
+    tls_template_ = std::move(loaded.tls_template);
     guest_thread_entry_ = 0;
     for (const container::Symbol& symbol : image.symbols) {
         if (symbol.name != "__kr32_thread_entry" ||

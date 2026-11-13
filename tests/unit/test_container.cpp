@@ -1,6 +1,7 @@
 #include "doctest.h"
 
 #include "kr32/container/container.h"
+#include "kr32/core/machine.h"
 
 #include <cstdint>
 #include <string>
@@ -141,4 +142,109 @@ TEST_CASE("container readers reject corruption, truncation, and bad magic") {
     std::vector<std::uint8_t> magic = bytes;
     magic[0] = 'X';
     CHECK_FALSE(read(magic, image, error));
+}
+
+TEST_CASE("load_into zero-fills .bss over dirty memory") {
+    kr32::core::Machine machine;
+    const std::uint32_t address = kr32::core::kRamBase + 0x1000;
+    const std::uint8_t dirty[] = {0xAA, 0xBB, 0xCC, 0xDD};
+    REQUIRE(machine.load_image(address, dirty, sizeof(dirty)));
+
+    Image image;
+    image.type = ImageType::Executable;
+    image.entry = address;
+    Section bss;
+    bss.name = ".bss";
+    bss.type = SectionType::Bss;
+    bss.flags = Alloc | Write;
+    bss.address = address;
+    bss.size = static_cast<std::uint32_t>(sizeof(dirty));
+    image.sections.push_back(bss);
+
+    LoadedImage loaded;
+    std::string error;
+    REQUIRE(load_into(machine, image, loaded, error));
+    CHECK(error.empty());
+    for (std::uint32_t offset = 0; offset < sizeof(dirty); ++offset) {
+        std::uint8_t value = 0xFF;
+        REQUIRE(machine.read8(address + offset, value));
+        CHECK(value == 0);
+    }
+}
+
+TEST_CASE("load_into zero-fills .bss on every load") {
+    kr32::core::Machine machine;
+    const std::uint32_t address = kr32::core::kRamBase + 0x2000;
+    const std::uint8_t dirty[] = {1, 2, 3, 4, 5, 6, 7, 8};
+
+    Image image;
+    image.type = ImageType::Executable;
+    image.entry = address;
+    Section bss;
+    bss.name = ".bss";
+    bss.type = SectionType::Bss;
+    bss.flags = Alloc | Write;
+    bss.address = address;
+    bss.size = static_cast<std::uint32_t>(sizeof(dirty));
+    image.sections.push_back(bss);
+
+    for (int pass = 0; pass < 2; ++pass) {
+        REQUIRE(machine.load_image(address, dirty, sizeof(dirty)));
+        LoadedImage loaded;
+        std::string error;
+        REQUIRE(load_into(machine, image, loaded, error));
+        for (std::uint32_t offset = 0; offset < sizeof(dirty); ++offset) {
+            std::uint8_t value = 0xFF;
+            REQUIRE(machine.read8(address + offset, value));
+            CHECK(value == 0);
+        }
+    }
+}
+
+TEST_CASE("load_into captures .tls instead of writing it") {
+    kr32::core::Machine machine;
+    const std::uint32_t address = kr32::core::kRamBase + 0x3000;
+    const std::uint8_t dirty[] = {0x55, 0x66};
+    REQUIRE(machine.load_image(address, dirty, sizeof(dirty)));
+
+    Image image;
+    image.type = ImageType::Executable;
+    Section tls;
+    tls.name = ".tls";
+    tls.type = SectionType::Data;
+    tls.flags = Alloc | Write;
+    tls.address = address;
+    tls.data = {0x11, 0x22};
+    tls.size = 2;
+    image.sections.push_back(tls);
+
+    LoadedImage loaded;
+    std::string error;
+    REQUIRE(load_into(machine, image, loaded, error));
+    REQUIRE(loaded.tls_template.size() == 2);
+    CHECK(loaded.tls_template[0] == 0x11);
+    CHECK(loaded.tls_template[1] == 0x22);
+    for (std::uint32_t offset = 0; offset < sizeof(dirty); ++offset) {
+        std::uint8_t value = 0;
+        REQUIRE(machine.read8(address + offset, value));
+        CHECK(value == dirty[offset]);
+    }
+}
+
+TEST_CASE("load_into rejects a .bss section that does not fit") {
+    kr32::core::Machine machine(kr32::core::Machine::Options{0x1'0000});
+    Image image;
+    image.type = ImageType::Executable;
+    Section bss;
+    bss.name = ".bss";
+    bss.type = SectionType::Bss;
+    bss.flags = Alloc | Write;
+    bss.address = kr32::core::kRamBase + 0xFFFC;
+    bss.size = 8;
+    image.sections.push_back(bss);
+
+    LoadedImage loaded;
+    std::string error;
+    CHECK_FALSE(load_into(machine, image, loaded, error));
+    CHECK(error.find(".bss") != std::string::npos);
 }

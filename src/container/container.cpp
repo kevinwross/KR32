@@ -1,5 +1,7 @@
 #include "kr32/container/container.h"
 
+#include "kr32/core/machine.h"
+
 #include <algorithm>
 #include <cstring>
 #include <iterator>
@@ -380,6 +382,33 @@ bool read(const std::vector<std::uint8_t>& bytes, Image& image, Error& error) {
         entry += kRelocationEntrySize;
     }
 
+    return true;
+}
+
+bool load_into(core::Machine& machine, const Image& image, LoadedImage& loaded,
+               std::string& error) {
+    loaded.tls_template.clear();
+    for (const Section& section : image.sections) {
+        if (section.name == ".tls") {
+            loaded.tls_template = section.data;
+            continue;
+        }
+        if ((section.flags & Alloc) == 0) {
+            continue;
+        }
+        if (section.type == SectionType::Bss) {
+            if (!machine.zero_memory(section.address, section.size)) {
+                error = "section does not fit: " + section.name;
+                return false;
+            }
+            continue;
+        }
+        if (!section.data.empty() &&
+            !machine.load_image(section.address, section.data)) {
+            error = "section does not fit: " + section.name;
+            return false;
+        }
+    }
     return true;
 }
 
