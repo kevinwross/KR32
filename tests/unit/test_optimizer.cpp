@@ -961,3 +961,26 @@ TEST_CASE("assembly optimizer folds an operand before a two-argument call") {
     (void)stats;
     CHECK(assembly.find("MOV R1, R2") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer keeps a block built through a frame base") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R1, [R7 + 52]\n"
+        "    MOV R0, #0\n"
+        "    STORE R0, [R1]\n"
+        "    MOV R0, #800\n"
+        "    STORE R0, [R1 + 4]\n"
+        "    MOV R0, #600\n"
+        "    STORE R0, [R1 + 8]\n"
+        "    LEA R0, [R7 + 52]\n"
+        "    STORE R0, [R7 + 88]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("STORE R0, [R7 + 56]") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [R7 + 60]") != std::string::npos);
+}

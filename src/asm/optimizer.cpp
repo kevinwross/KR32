@@ -696,7 +696,12 @@ std::vector<CfgFunction> build_cfgs(const std::vector<std::string>& lines) {
                 RegisterMask uses = 0;
                 RegisterMask defs = 0;
                 instruction_uses_defs(instruction, uses, defs);
-                block.uses = static_cast<RegisterMask>(block.uses | uses);
+                // A block's use set is the reads that happen before a
+                // definition inside the block; a later read is supplied by
+                // the definition, not by the predecessors.
+                block.uses = static_cast<RegisterMask>(
+                    block.uses |
+                    (uses & static_cast<RegisterMask>(~block.defs)));
                 block.defs = static_cast<RegisterMask>(block.defs | defs);
                 frame_slot_effects(instruction, block.slot_uses,
                                    block.slot_defs);
@@ -2586,58 +2591,6 @@ int fold_boolean_branches(std::vector<std::string>& lines) {
 
 int remove_dead_frame_stores(std::vector<std::string>& lines) {
     int removed = 0;
-    std::vector<std::set<int>> read_by_group;
-    int group = -1;
-    for (const std::string& line : lines) {
-        if (trim(line) == ".text") {
-            ++group;
-            read_by_group.emplace_back();
-        }
-        if (group < 0) {
-            group = 0;
-            read_by_group.emplace_back();
-        }
-        Instruction instruction;
-        if (!parse_instruction(line, instruction) ||
-            instruction.operands.size() < 2) {
-            continue;
-        }
-        if (instruction.mnemonic != "LEA" &&
-            instruction.mnemonic != "LOAD" &&
-            instruction.mnemonic != "LOAD8S" &&
-            instruction.mnemonic != "LOAD8U" &&
-            instruction.mnemonic != "LOAD16S" &&
-            instruction.mnemonic != "LOAD16U") {
-            continue;
-        }
-        int slot = 0;
-        if (parse_frame_slot(instruction.operands[1], slot)) {
-            read_by_group[static_cast<std::size_t>(group)].insert(slot);
-        }
-    }
-    group = -1;
-    for (std::string& line : lines) {
-        if (trim(line) == ".text") {
-            ++group;
-            continue;
-        }
-        if (group < 0) {
-            group = 0;
-        }
-        Instruction instruction;
-        if (!parse_instruction(line, instruction) ||
-            instruction.mnemonic != "STORE" ||
-            instruction.operands.size() != 2) {
-            continue;
-        }
-        int slot = 0;
-        if (parse_frame_slot(instruction.operands[1], slot) &&
-            read_by_group[static_cast<std::size_t>(group)].find(slot) ==
-                read_by_group[static_cast<std::size_t>(group)].end()) {
-            line.clear();
-            ++removed;
-        }
-    }
     for (const CfgFunction& function : build_cfgs(lines)) {
         bool has_exception_path = false;
         for (std::size_t index = function.begin; index < function.end;
@@ -2714,7 +2667,17 @@ int remove_dead_frame_stores(std::vector<std::string>& lines) {
                     instruction.mnemonic == "STORE" &&
                     instruction.operands.size() == 2 &&
                     parse_frame_slot(instruction.operands[1], slot);
-                if (full_store && escaped.find(slot) == escaped.end() &&
+                // A store at or after an escaped slot may be a field of the
+                // escaped block, so its address is reachable through that
+                // pointer even though no direct load names it.
+                bool after_escape = false;
+                for (const int base : escaped) {
+                    if (slot >= base) {
+                        after_escape = true;
+                        break;
+                    }
+                }
+                if (full_store && !after_escape &&
                     live.find(slot) == live.end()) {
                     lines[index - 1].clear();
                     ++removed;
@@ -4298,11 +4261,13 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     // see, so repeat the address and frame clean-up on the folded code.
     stats.removed += fold_clobbered_address_copies(lines);
     stats.removed += fold_address_moves(lines);
+
     stats.removed += use_absolute_symbol_addresses(lines);
     stats.removed += promote_symbol_bases(lines);
     stats.removed += forward_cfg_frame_loads(lines);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += remove_dead_frame_stores(lines);
+
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += remove_unused_frame_prologues(lines);
     stats.removed += remove_redundant_jumps(lines);

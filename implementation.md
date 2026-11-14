@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 12:41 -08:00
+> **Last updated:** 2026-11-14 13:37 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3422,6 +3422,22 @@ Newest entries at the bottom. Use the local time zone.
       for its `memcpy` and `memset` calls (three arguments), so the optimizer
       stops treating `R3` as live across them; the other C++ call sites remain
       conservative. A call-count fold test was added. All 89 Windows tests pass.
+
+- **2026-11-14 13:37 -08:00** — Liveness was over-approximated: a block's use
+      set was the union of every read in the block, including reads that happen
+      *after* a definition in the same block. The block equations need the
+      upward-exposed reads only, so `live_in` claimed registers that the block
+      itself defines. Fixed, the libc drops 419 instructions (11,761 -> 11,342;
+      object 416,412 -> 414,948) and the kernel 588 bytes (67,432 -> 66,844);
+      `MOV R1, R2` disappears entirely.
+
+      That exposed a real miscompile, caught by the gfx pixel tests: once the
+      frame-base `LEA` was folded away, `remove_dead_frame_stores` no longer saw
+      the block as escaped and deleted every field store of a command block. The
+      pass now keeps a store to any slot at or after an escaped slot, and its
+      coarse per-group pre-pass (which ignored escapes) is gone; the CFG pass
+      handles the same stores with escape information. Windows 89/89 and WSL
+      89/89 pass.
 
 ## 10. Updating this file
 
