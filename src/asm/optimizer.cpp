@@ -3480,6 +3480,159 @@ int forward_stack_temporaries(std::vector<std::string>& lines) {
     return removed;
 }
 
+// AND/SHL/SAR that truncate a value to a byte or halfword are dead work when
+// the consumer stores only that many bits.
+int fold_narrowing_stores(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        Instruction store;
+        if (!parse_instruction(lines[index], store) ||
+            (store.mnemonic != "STORE8" && store.mnemonic != "STORE16") ||
+            store.operands.size() != 2) {
+            continue;
+        }
+        int value = 0;
+        if (!parse_register(store.operands[0], value)) {
+            continue;
+        }
+        const bool narrow = store.mnemonic == "STORE8";
+        std::size_t cursor = index;
+        int chain = 0;
+        while (cursor > 0) {
+            std::size_t previous = cursor - 1;
+            while (previous > 0 && lines[previous].empty()) {
+                --previous;
+            }
+            Instruction step;
+            if (!parse_instruction(lines[previous], step) ||
+                step.operands.size() != 3) {
+                break;
+            }
+            int destination = 0;
+            int source = 0;
+            if (!parse_register(step.operands[0], destination) ||
+                !parse_register(step.operands[1], source) ||
+                destination != value || source != value) {
+                break;
+            }
+            if (step.operands[2].empty() || step.operands[2].front() != '#') {
+                break;
+            }
+            int amount = 0;
+            try {
+                amount = std::stoi(step.operands[2].substr(1));
+            } catch (...) {
+                break;
+            }
+            const int width = narrow ? 24 : 16;
+            const int mask = narrow ? 0xFF : 0xFFFF;
+            const bool fits =
+                (step.mnemonic == "AND" && (amount & mask) == mask) ||
+                ((step.mnemonic == "SHL" || step.mnemonic == "SAR" ||
+                  step.mnemonic == "SHR") &&
+                 amount == width);
+            if (!fits) {
+                break;
+            }
+            ++chain;
+            cursor = previous;
+        }
+        if (chain == 0) {
+            continue;
+        }
+        for (std::size_t line = cursor; line < index; ++line) {
+            lines[line].clear();
+        }
+        removed += chain;
+    }
+    return removed;
+}
+
+// MOV Rd, Rs followed by the first reader of Rd: fold the copy into the
+// consumer's source operands and drop the move. Reads of Rd in the consumer
+// see the value the copy produced, whether or not the consumer also writes Rd.
+int fold_copy_consumers(std::vector<std::string>& lines) {
+    const LivenessInfo liveness = compute_register_liveness(lines);
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction move;
+        if (!parse_instruction(lines[index], move) || move.mnemonic != "MOV" ||
+            move.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int source = 0;
+        if (!parse_register(move.operands[0], destination) ||
+            !parse_register(move.operands[1], source) ||
+            destination == source || destination == 7 || destination == 11 ||
+            source == 7 || source == 11) {
+            continue;
+        }
+        const RegisterMask bit = bit_for_register(destination);
+        const RegisterMask source_bit = bit_for_register(source);
+        std::size_t consumer = 0;
+        bool found = false;
+        bool consumer_writes = false;
+        for (std::size_t scan = index + 1; scan < lines.size(); ++scan) {
+            Instruction instruction;
+            if (!parse_instruction(lines[scan], instruction)) {
+                if (trim(lines[scan]).empty()) {
+                    continue;
+                }
+                break;
+            }
+            if (is_branch(instruction.mnemonic) ||
+                is_call(instruction.mnemonic) ||
+                is_return_mnemonic(instruction.mnemonic)) {
+                break;
+            }
+            RegisterMask uses = 0;
+            RegisterMask defs = 0;
+            instruction_uses_defs(instruction, uses, defs);
+            if ((uses & bit) == 0) {
+                if ((defs & bit) != 0) {
+                    break;
+                }
+                if ((defs & source_bit) != 0) {
+                    break;
+                }
+                continue;
+            }
+            consumer = scan;
+            consumer_writes = (defs & bit) != 0;
+            found = true;
+            break;
+        }
+        if (!found) {
+            continue;
+        }
+        if (!consumer_writes &&
+            register_live_after(liveness, consumer, destination)) {
+            continue;
+        }
+        Instruction instruction;
+        if (!parse_instruction(lines[consumer], instruction)) {
+            continue;
+        }
+        const std::size_t first =
+            writes_first_operand(instruction) ? 1 : 0;
+        bool replaced = false;
+        for (std::size_t operand = first;
+             operand < instruction.operands.size(); ++operand) {
+            if (replace_register_operand(instruction.operands[operand],
+                                         destination, source)) {
+                replaced = true;
+            }
+        }
+        if (!replaced) {
+            continue;
+        }
+        lines[consumer] = format_instruction(instruction);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
 int fold_push_pop_pairs(std::vector<std::string>& lines, int& rewritten) {
     int removed = 0;
     for (std::size_t index = 0; index < lines.size(); ++index) {
@@ -3914,11 +4067,15 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += forward_stack_temporaries(lines);
+    stats.removed += fold_narrowing_stores(lines);
+    stats.removed += fold_copy_consumers(lines);
     stats.removed += fold_address_moves(lines);
     stats.removed += use_absolute_symbol_addresses(lines);
     stats.removed += reuse_symbol_bases(lines);
     stats.removed += strength_reduce_immediates(lines, stats.rewritten);
     stats.removed += coalesce_moves(lines);
+    stats.removed += fold_narrowing_stores(lines);
+    stats.removed += fold_copy_consumers(lines);
     stats.removed += fold_address_moves(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);

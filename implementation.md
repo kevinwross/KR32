@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 23:56 -08:00
+> **Last updated:** 2026-11-14 07:42 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3336,6 +3336,17 @@ Newest entries at the bottom. Use the local time zone.
       Measured against `-O0` of the same tree: libc object 448,096 -> 418,920
       bytes; kernel binary 85,032 -> 69,252 bytes (-18.5%); the pattern sample
       123 -> 86 instructions (-30%). Windows 89/89 and WSL 89/89 tests pass.
+
+- **2026-11-14 07:42 -08:00** — Two code-quality fixes found by reading `memchr`
+      at `-O1`. A truncation to `char` or `short` is no longer emitted before a
+      narrowing store (`AND #255 ; SHL #24 ; SAR #24 ; STORE8` is now just
+      `STORE8`, because the store keeps only those bits). And a `MOV` is folded
+      into its first reader, so `MOV R0, R13 ; MOV R2, R0 ; MOV R0, R12 ;
+      ADD R0, R2, R0` becomes `ADD R0, R13, R12`. The copy fold stops when the
+      source register is clobbered before the reader.
+
+      libc object 418,920 -> 417,596 bytes; kernel at `-O1` 69,252 -> 68,696.
+      Windows 89/89 and WSL 89/89 tests pass.
 
 ## 10. Updating this file
 

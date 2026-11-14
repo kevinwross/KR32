@@ -737,3 +737,73 @@ TEST_CASE("assembly optimizer stores through a static symbol address") {
     (void)stats;
     CHECK(assembly.find("STORE R0, [rand_state]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer drops a truncation before a narrow store") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    AND R0, R0, #255\n"
+        "    SHL R0, R0, #24\n"
+        "    SAR R0, R0, #24\n"
+        "    STORE8 R0, [R7 + 8]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("STORE8 R0, [R7 + 8]") != std::string::npos);
+    CHECK(assembly.find("AND R0, R0, #255") == std::string::npos);
+    CHECK(assembly.find("SAR R0, R0, #24") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer keeps a truncation before a full store") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    AND R0, R0, #255\n"
+        "    SHL R0, R0, #24\n"
+        "    SAR R0, R0, #24\n"
+        "    STORE R0, [R7 + 8]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    (void)stats;
+    CHECK(assembly.find("SAR R0, R0, #24") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer folds a copy chain into the consumer") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R0, R13\n"
+        "    MOV R2, R0\n"
+        "    MOV R0, R12\n"
+        "    ADD R0, R2, R0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("ADD R0, R13, R12") != std::string::npos);
+    CHECK(assembly.find("MOV R2, R0") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer keeps a copy read twice") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R0, R13\n"
+        "    ADD R2, R0, #1\n"
+        "    ADD R3, R0, #2\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R0, R13") != std::string::npos);
+}
