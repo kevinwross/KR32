@@ -1,7 +1,19 @@
 #pragma once
 
+// The embedded libc source exceeds the 65536-character string-literal length
+// that C++ compilers are only required to support. Both GCC and Clang accept
+// larger literals in practice, but Clang warns under -Woverlength-strings.
+#if defined(__clang__)
+#pragma clang diagnostic push
+#pragma clang diagnostic ignored "-Woverlength-strings"
+#endif
+
 namespace kr32::cc::libc_source {
 
 inline constexpr const char* kLibcSource = R"KR32LIBC(@KR32_LIBC_SOURCE@)KR32LIBC";
 
 } // namespace kr32::cc::libc_source
+
+#if defined(__clang__)
+#pragma clang diagnostic pop
+#endif

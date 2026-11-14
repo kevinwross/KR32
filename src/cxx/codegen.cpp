@@ -7828,7 +7828,7 @@ private:
         };
         std::vector<ArgumentSlot> slots;
         std::vector<int> stack_temps;
-        int integer_argument =
+        [[maybe_unused]] int integer_argument =
             (member_call ? 1 : 0) + (lambda_closure_offset >= 0 ? 1 : 0);
         int fp_argument = 0;
         const std::size_t named_parameters = function->parameters.size();
