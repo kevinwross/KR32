@@ -83,6 +83,10 @@ $processAssembly = Join-Path $build 'process.s'
 $processObject = Join-Path $build 'process.o'
 $syscallAssembly = Join-Path $build 'syscall.s'
 $syscallObject = Join-Path $build 'syscall.o'
+$gfxAssembly = Join-Path $build 'gfx.s'
+$gfxObject = Join-Path $build 'gfx.o'
+$inputAssembly = Join-Path $build 'input.s'
+$inputObject = Join-Path $build 'input.o'
 $userBridgeObject = Join-Path $build 'user_bridge.o'
 $userCrtObject = Join-Path $build 'crt0.o'
 $userSyscallObject = Join-Path $build 'user_syscall.o'
@@ -123,6 +127,10 @@ Invoke-Kr32 -Arguments @('as', $memoryAssembly, '--object', '-o', $memoryObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '--source-id', '8', $Opt, '-S', '-o', $processAssembly)
 Invoke-Kr32 -Arguments @('as', $processAssembly, '--object', '-o', $processObject)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '--source-id', '7', $Opt, '-S', '-o', $syscallAssembly)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\gfx.c'), '--source-id', '12', $Opt, '-S', '-o', $gfxAssembly)
+Invoke-Kr32 -Arguments @('as', $gfxAssembly, '--object', '-o', $gfxObject)
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\input.c'), '--source-id', '13', $Opt, '-S', '-o', $inputAssembly)
+Invoke-Kr32 -Arguments @('as', $inputAssembly, '--object', '-o', $inputObject)
 Invoke-Kr32 -Arguments @('as', $syscallAssembly, '--object', '-o', $syscallObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user-asm.S'), '--object', '-o', $userBridgeObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
@@ -132,7 +140,11 @@ Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\init.c'), $Opt, '-S', '-o'
 Invoke-Kr32 -Arguments @('as', $userInitAssembly, '--object', '-o', $userInitObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\crt0.S'), '--object', '-o', $userCrtObject)
 Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\syscall.S'), '--object', '-o', $userSyscallObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userInitObject, $userSyscallObject,
+$userGfxAssembly = Join-Path $build 'user_gfx.s'
+$userGfxObject = Join-Path $build 'user_gfx.o'
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'libc\gfx.c'), $Opt, '-S', '-o', $userGfxAssembly)
+Invoke-Kr32 -Arguments @('as', $userGfxAssembly, '--object', '-o', $userGfxObject)
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userInitObject, $userSyscallObject, $userGfxObject,
                         '--flat', '--base', $userBase, '-o', $userImage)
 
 $userFaultAssembly = Join-Path $build 'user_fault.s'
@@ -143,17 +155,25 @@ $userWxObject = Join-Path $build 'user_wx.o'
 $userWxImage = Join-Path $build 'wx.bin'
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\fault.c'), $Opt, '-S', '-o', $userFaultAssembly)
 Invoke-Kr32 -Arguments @('as', $userFaultAssembly, '--object', '-o', $userFaultObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userFaultObject, $userSyscallObject,
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userFaultObject, $userSyscallObject, $userGfxObject,
                         '--flat', '--base', $userBase, '-o', $userFaultImage)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\wx.c'), $Opt, '-S', '-o', $userWxAssembly)
 Invoke-Kr32 -Arguments @('as', $userWxAssembly, '--object', '-o', $userWxObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userWxObject, $userSyscallObject,
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userWxObject, $userSyscallObject, $userGfxObject,
                         '--flat', '--base', $userBase, '-o', $userWxImage)
+$userGfxDemoAssembly = Join-Path $build 'user_gfxdemo.s'
+$userGfxDemoObject = Join-Path $build 'user_gfxdemo.o'
+$userGfxDemoImage = Join-Path $build 'gfxdemo.bin'
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\gfxdemo.c'), $Opt, '-S', '-o', $userGfxDemoAssembly)
+Invoke-Kr32 -Arguments @('as', $userGfxDemoAssembly, '--object', '-o', $userGfxDemoObject)
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userGfxDemoObject, $userSyscallObject, $userGfxObject,
+                        '--flat', '--base', $userBase, '-o', $userGfxDemoImage)
 
 # Build the K32I initrd with init and fault entries.
 $userBytes = [System.IO.File]::ReadAllBytes($userImage)
 $faultBytes = [System.IO.File]::ReadAllBytes($userFaultImage)
 $wxBytes = [System.IO.File]::ReadAllBytes($userWxImage)
+$gfxDemoBytes = [System.IO.File]::ReadAllBytes($userGfxDemoImage)
 $initrdMagic = [uint32]0x4932334B
 $initrdVersion = [uint32]1
 $initrdHeaderSize = 12
@@ -163,16 +183,17 @@ $initrdEntryOffsetOffset = 32
 $initrdEntryOffsetSize = 36
 $initrdEntryOffsetEntry = 40
 $userCodeBase = [uint32]$userBase
-$initrdEntryCount = 3
+$initrdEntryCount = 4
 $payloadOffset = $initrdHeaderSize + $initrdEntryCount * $initrdEntrySize
-$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length)
+$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdMagic), 0, $initrdBytes, 0, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdVersion), 0, $initrdBytes, 4, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$initrdEntryCount), 0, $initrdBytes, 8, 4)
 $entries = @(
     @{ Name = 'init'; Offset = $payloadOffset; Size = $userBytes.Length; Bytes = $userBytes },
     @{ Name = 'fault'; Offset = $payloadOffset + $userBytes.Length; Size = $faultBytes.Length; Bytes = $faultBytes },
-    @{ Name = 'wx'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length; Size = $wxBytes.Length; Bytes = $wxBytes }
+    @{ Name = 'wx'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length; Size = $wxBytes.Length; Bytes = $wxBytes },
+    @{ Name = 'gfxdemo'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length; Size = $gfxDemoBytes.Length; Bytes = $gfxDemoBytes }
 )
 for ($index = 0; $index -lt $initrdEntryCount; ++$index) {
     $entryOffset = $initrdHeaderSize + $index * $initrdEntrySize
@@ -203,12 +224,12 @@ Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
 
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject, $fastObject,
-                        $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
+                        $userObject, $syscallObject, $gfxObject, $inputObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
                         '--flat', '--base', $kernelBase, '--map', $kernelMap,
                         '--sym', $kernelSym, '-o', $kernel)
 Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $shellObject,
                         $timerObject, $trapsObject, $trapStubsObject, $fastObject,
-                        $userObject, $syscallObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
+                        $userObject, $syscallObject, $gfxObject, $inputObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
                         '--base', $kernelBase, '-o', $kernelK32)
 
 # Generate kernel.meta from the linker map and kernel image.

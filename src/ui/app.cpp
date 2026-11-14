@@ -396,6 +396,7 @@ int run_display(int argc, char** argv) {
     bool os_mode = false;
     bool embedded = false;
     std::uint64_t step_limit = 50'000'000ULL;
+    std::string serial_input;
 
     for (int index = 1; index < argc; ++index) {
         const std::string argument = argv[index];
@@ -404,6 +405,14 @@ int run_display(int argc, char** argv) {
             if (index + 1 < argc && argv[index + 1][0] != '-') {
                 os_path = argv[++index];
             }
+            continue;
+        }
+        if (argument == "--serial-input") {
+            if (index + 1 >= argc) {
+                std::fprintf(stderr, "kr32 display: --serial-input needs a value\n");
+                return 2;
+            }
+            serial_input = argv[++index];
             continue;
         }
         if (argument == "--embedded") {
@@ -490,6 +499,9 @@ int run_display(int argc, char** argv) {
     }
 
     if (!shot_path.empty()) {
+        if (!serial_input.empty()) {
+            devices.serial().push_input(serial_input);
+        }
         for (std::uint64_t step = 0; step < step_limit && !machine.halted(); ++step) {
             (void)machine.step();
         }

@@ -54,6 +54,10 @@ mkdir -p "$build"
 "$KR32" as "$build/process.s" --object -o "$build/process.o"
 "$KR32" cc "$here/kernel/syscall.c" --source-id 7 $opt -S -o "$build/syscall.s"
 "$KR32" as "$build/syscall.s" --object -o "$build/syscall.o"
+"$KR32" cc "$here/kernel/gfx.c" --source-id 12 $opt -S -o "$build/gfx.s"
+"$KR32" as "$build/gfx.s" --object -o "$build/gfx.o"
+"$KR32" cc "$here/kernel/input.c" --source-id 13 $opt -S -o "$build/input.s"
+"$KR32" as "$build/input.s" --object -o "$build/input.o"
 "$KR32" as "$here/kernel/user-asm.S" --object -o "$build/user_bridge.o"
 "$KR32" as "$here/boot/entry.S" --object -o "$build/entry.o"
 
@@ -61,26 +65,28 @@ mkdir -p "$build"
 "$KR32" as "$build/user_init.s" --object -o "$build/user_init.o"
 "$KR32" as "$here/libc/crt0.S" --object -o "$build/crt0.o"
 "$KR32" as "$here/libc/syscall.S" --object -o "$build/user_syscall.o"
+"$KR32" cc "$here/libc/gfx.c" $opt -S -o "$build/user_gfx.s"
+"$KR32" as "$build/user_gfx.s" --object -o "$build/user_gfx.o"
 "$KR32" cc "$here/user/fault.c" $opt -S -o "$build/user_fault.s"
 "$KR32" as "$build/user_fault.s" --object -o "$build/user_fault.o"
 "$KR32" cc "$here/user/wx.c" $opt -S -o "$build/user_wx.s"
 "$KR32" as "$build/user_wx.s" --object -o "$build/user_wx.o"
-"$KR32" ld "$build/crt0.o" "$build/user_init.o" "$build/user_syscall.o" \
+"$KR32" ld "$build/crt0.o" "$build/user_init.o" "$build/user_syscall.o" "$build/user_gfx.o" \
     --flat --base "$user_base" -o "$build/init.bin"
-"$KR32" ld "$build/crt0.o" "$build/user_fault.o" "$build/user_syscall.o" \
+"$KR32" ld "$build/crt0.o" "$build/user_fault.o" "$build/user_syscall.o" "$build/user_gfx.o" \
     --flat --base "$user_base" -o "$build/fault.bin"
-"$KR32" ld "$build/crt0.o" "$build/user_wx.o" "$build/user_syscall.o" \
+"$KR32" ld "$build/crt0.o" "$build/user_wx.o" "$build/user_syscall.o" "$build/user_gfx.o" \
     --flat --base "$user_base" -o "$build/wx.bin"
 python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/wx.bin" "$build/initrd.bin" "$build/initrd.s"
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" "$build/fast.o" \
-    "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
+    "$build/user.o" "$build/syscall.o" "$build/gfx.o" "$build/input.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
     --flat --base "$kernel_base" --map "$build/kernel.map" --sym "$build/kernel.sym" -o "$build/kernel.bin"
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/shell.o" \
     "$build/timer.o" "$build/traps.o" "$build/trap_stubs.o" "$build/fast.o" \
-    "$build/user.o" "$build/syscall.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
+    "$build/user.o" "$build/syscall.o" "$build/gfx.o" "$build/input.o" "$build/process.o" "$build/memory.o" "$build/user_bridge.o" "$build/initrd.o" \
     --base "$kernel_base" -o "$build/kernel.k32"
 python3 "$here/tools/mkmeta.py" "$build/kernel.bin" "$build/kernel.map" "$build/kernel.meta"
 

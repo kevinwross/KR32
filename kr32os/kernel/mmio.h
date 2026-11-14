@@ -88,3 +88,24 @@ struct terminal_registers {
 #define TERMINAL_ID_VALUE 0x5445524DU
 #define TERMINAL_COMMAND_CLEAR 1U
 #define TERMINAL_COMMAND_RESET 2U
+#define TERMINAL_CONTROL_CURSOR 1U
+#define TERMINAL_CONTROL_HIDDEN 2U
+/* Host-executed graphics commands (page 9). */
+struct graphics_registers {
+    volatile unsigned int command;
+    volatile unsigned int args[8];
+    volatile unsigned int doorbell;
+    volatile unsigned int status;
+    volatile unsigned int id;
+};
+
+#define GRAPHICS_BASE 0xFFF09000U
+#define GRAPHICS_ID_VALUE 0x47504831U
+#define GRAPHICS_OP_SET_CLIP 1U
+#define GRAPHICS_OP_SET_COLOR 2U
+#define GRAPHICS_OP_FILL_RECT 3U
+#define GRAPHICS_OP_COPY_RECT 4U
+#define GRAPHICS_OP_DRAW_LINE 5U
+#define GRAPHICS_OP_DRAW_TEXT 6U
+#define GRAPHICS_OP_FLIP 7U
+#define GRAPHICS_OP_SET_SURFACE 8U

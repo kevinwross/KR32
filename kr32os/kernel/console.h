@@ -13,5 +13,11 @@ void console_clear(void);
 /* Sets the pen for subsequent writes. Indices 0..15; out of range is ignored. */
 void console_set_colors(int fg_index, int bg_index);
 
+/* Toggles the terminal cursor block. */
+void console_set_cursor(int visible);
+
+/* Hides or shows the terminal; the grid keeps updating while hidden. */
+void console_hide(int hidden);
+
 /* Publishes the host-rendered frame. */
 void console_present(void);

@@ -1,5 +1,7 @@
 #include "console.h"
 #include "errno.h"
+#include "gfx.h"
+#include "input.h"
 #include "memory.h"
 #include "syscall.h"
 #include "user_memory.h"
@@ -55,6 +57,30 @@ int sys_brk(unsigned int address) {
     return 0;
 }
 
+int sys_con(int op, int value) {
+    if (op == 1) {
+        console_set_colors(value & 0x0F, (value >> 4) & 0x0F);
+        return 0;
+    }
+    if (op == 2) {
+        console_set_cursor(value != 0);
+        return 0;
+    }
+    if (op == 3) {
+        console_clear();
+        return 0;
+    }
+    if (op == 4) {
+        console_present();
+        return 0;
+    }
+    if (op == 5) {
+        console_hide(value != 0);
+        return 0;
+    }
+    return -ERRNO_EINVAL;
+}
+
 int sys_dispatch(int argument0, int argument1, int argument2) {
     volatile struct syscall_scratch *scratch =
         (volatile struct syscall_scratch *)SYSCALL_SCRATCH_PHYS;
@@ -69,6 +95,22 @@ int sys_dispatch(int argument0, int argument1, int argument2) {
     }
     if (scratch->vector == SYSCALL_BRK) {
         return sys_brk((unsigned int)argument0);
+    }
+    if (scratch->vector == SYSCALL_GFX) {
+        return gfx_submit_from_user((unsigned int)argument0);
+    }
+    if (scratch->vector == SYSCALL_GFX_ALLOC) {
+        return (int)gfx_alloc((unsigned int)argument0,
+                             (unsigned int)argument1);
+    }
+    if (scratch->vector == SYSCALL_INPUT_POLL) {
+        return input_poll_from_user((unsigned int)argument0);
+    }
+    if (scratch->vector == SYSCALL_INPUT_PENDING) {
+        return input_pending();
+    }
+    if (scratch->vector == SYSCALL_CON) {
+        return sys_con(argument0, argument1);
     }
     return -ERRNO_ENOSYS;
 }

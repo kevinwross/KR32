@@ -8,12 +8,14 @@ USER_CODE_BASE = 0x00400000
 HEADER = struct.Struct("<III")
 ENTRY = struct.Struct("<32sIII")
 
-user_path, fault_path, wx_path, archive_path, assembly_path = sys.argv[1:6]
-programs = [
-    ("init", open(user_path, "rb").read()),
-    ("fault", open(fault_path, "rb").read()),
-    ("wx", open(wx_path, "rb").read()),
-]
+archive_path = sys.argv[1]
+assembly_path = sys.argv[2]
+programs = []
+for argument in sys.argv[3:]:
+    name, _, path = argument.partition("=")
+    if not name or not path:
+        raise SystemExit(f"expected name=path, got {argument}")
+    programs.append((name, open(path, "rb").read()))
 header = HEADER.pack(INITRD_MAGIC, INITRD_VERSION, len(programs))
 payload_offset = HEADER.size + len(programs) * ENTRY.size
 table = b""

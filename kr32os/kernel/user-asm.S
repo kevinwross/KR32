@@ -10,10 +10,20 @@
 .equ SYSCALL_YIELD_OFFSET, 268
 .equ SYSCALL_GETPID_OFFSET, 272
 .equ SYSCALL_BRK_OFFSET, 276
+.equ SYSCALL_GFX_OFFSET, 280
+.equ SYSCALL_GFX_ALLOC_OFFSET, 284
+.equ SYSCALL_INPUT_POLL_OFFSET, 288
+.equ SYSCALL_INPUT_PENDING_OFFSET, 292
+.equ SYSCALL_CON_OFFSET, 296
 .equ SYSCALL_READ_VECTOR, 66
 .equ SYSCALL_YIELD_VECTOR, 67
 .equ SYSCALL_GETPID_VECTOR, 68
 .equ SYSCALL_BRK_VECTOR, 69
+.equ SYSCALL_GFX_VECTOR, 70
+.equ SYSCALL_GFX_ALLOC_VECTOR, 71
+.equ SYSCALL_INPUT_POLL_VECTOR, 72
+.equ SYSCALL_INPUT_PENDING_VECTOR, 73
+.equ SYSCALL_CON_VECTOR, 74
 .equ SYSCALL_SCRATCH_PHYS, 0x0006F000
 .equ SYSCALL_VECTOR_ADDR, 0x0006F004
 .equ KERNEL_STACK_TOP, 0x00100000
@@ -83,6 +93,16 @@ user_install_syscalls:
     STORE R2, [R1 + SYSCALL_GETPID_OFFSET]
     LEA R2, [syscall_brk_stub]
     STORE R2, [R1 + SYSCALL_BRK_OFFSET]
+    LEA R2, [syscall_gfx_stub]
+    STORE R2, [R1 + SYSCALL_GFX_OFFSET]
+    LEA R2, [syscall_gfx_alloc_stub]
+    STORE R2, [R1 + SYSCALL_GFX_ALLOC_OFFSET]
+    LEA R2, [syscall_input_poll_stub]
+    STORE R2, [R1 + SYSCALL_INPUT_POLL_OFFSET]
+    LEA R2, [syscall_input_pending_stub]
+    STORE R2, [R1 + SYSCALL_INPUT_PENDING_OFFSET]
+    LEA R2, [syscall_con_stub]
+    STORE R2, [R1 + SYSCALL_CON_OFFSET]
     RET
 
     .global kernel_enter_user
@@ -180,6 +200,31 @@ syscall_getpid_stub:
 
 syscall_brk_stub:
     MOV R12, #SYSCALL_BRK_VECTOR
+    STORE R12, [SYSCALL_VECTOR_ADDR]
+    JMP syscall_common
+
+syscall_gfx_stub:
+    MOV R12, #SYSCALL_GFX_VECTOR
+    STORE R12, [SYSCALL_VECTOR_ADDR]
+    JMP syscall_common
+
+syscall_gfx_alloc_stub:
+    MOV R12, #SYSCALL_GFX_ALLOC_VECTOR
+    STORE R12, [SYSCALL_VECTOR_ADDR]
+    JMP syscall_common
+
+syscall_input_poll_stub:
+    MOV R12, #SYSCALL_INPUT_POLL_VECTOR
+    STORE R12, [SYSCALL_VECTOR_ADDR]
+    JMP syscall_common
+
+syscall_input_pending_stub:
+    MOV R12, #SYSCALL_INPUT_PENDING_VECTOR
+    STORE R12, [SYSCALL_VECTOR_ADDR]
+    JMP syscall_common
+
+syscall_con_stub:
+    MOV R12, #SYSCALL_CON_VECTOR
     STORE R12, [SYSCALL_VECTOR_ADDR]
     JMP syscall_common
 

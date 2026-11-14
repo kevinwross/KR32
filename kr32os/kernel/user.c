@@ -184,7 +184,14 @@ int run_named(const char *name) {
             destination[offset] = source[start + offset];
             ++offset;
         }
-        code[index] = frame | PAGE_USER_RX;
+        // The flat image ends with .data/.bss, and code may share that last
+        // page, so it stays executable and writable. Larger writable data
+        // needs the sectioned loader.
+        if (index + 1 == pages) {
+            code[index] = frame | PAGE_USER_RWX;
+        } else {
+            code[index] = frame | PAGE_USER_RX;
+        }
         ++index;
     }
 

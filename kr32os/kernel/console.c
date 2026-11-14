@@ -127,6 +127,34 @@ void console_present(void) {
     (void)fb_present();
 }
 
+void console_set_cursor(int visible) {
+    volatile struct terminal_registers *registers =
+        (volatile struct terminal_registers *)TERMINAL_BASE;
+
+    if (!display_ready) {
+        return;
+    }
+    if (visible != 0) {
+        registers->control = registers->control | TERMINAL_CONTROL_CURSOR;
+    } else {
+        registers->control = registers->control & ~TERMINAL_CONTROL_CURSOR;
+    }
+}
+
+void console_hide(int hidden) {
+    volatile struct terminal_registers *registers =
+        (volatile struct terminal_registers *)TERMINAL_BASE;
+
+    if (!display_ready) {
+        return;
+    }
+    if (hidden != 0) {
+        registers->control = registers->control | TERMINAL_CONTROL_HIDDEN;
+    } else {
+        registers->control = registers->control & ~TERMINAL_CONTROL_HIDDEN;
+    }
+}
+
 void console_set_colors(int fg_index, int bg_index) {
     volatile struct terminal_registers *registers =
         (volatile struct terminal_registers *)TERMINAL_BASE;

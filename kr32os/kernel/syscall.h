@@ -20,3 +20,8 @@ struct syscall_scratch {
 #define SYSCALL_YIELD 67U
 #define SYSCALL_GETPID 68U
 #define SYSCALL_BRK 69U
+#define SYSCALL_GFX 70U
+#define SYSCALL_GFX_ALLOC 71U
+#define SYSCALL_INPUT_POLL 72U
+#define SYSCALL_INPUT_PENDING 73U
+#define SYSCALL_CON 74U
