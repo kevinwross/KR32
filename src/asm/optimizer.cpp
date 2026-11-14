@@ -4270,6 +4270,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
 
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += remove_unused_frame_prologues(lines);
+    stats.removed += fold_copy_consumers(lines);
     stats.removed += remove_redundant_jumps(lines);
     stats.removed += remove_dead_functions(lines);
     for (std::string& line : lines) {

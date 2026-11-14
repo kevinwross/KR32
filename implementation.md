@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 13:37 -08:00
+> **Last updated:** 2026-11-14 13:57 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3438,6 +3438,13 @@ Newest entries at the bottom. Use the local time zone.
       coarse per-group pre-pass (which ignored escapes) is gone; the CFG pass
       handles the same stores with escape information. Windows 89/89 and WSL
       89/89 pass.
+
+- **2026-11-14 13:57 -08:00** — A third copy-fold pass runs after the frame
+      clean-up. The copy of a promoted parameter (`MOV R2, R0`) is created early
+      but only becomes foldable once the frame accesses around it are gone, so
+      the two earlier calls never saw it. libc 11,342 -> 11,213 instructions
+      (object 414,948 -> 414,432 bytes), kernel 66,844 -> 66,588. `MOV R2, R0`
+      drops from 180 to 62. Windows 89/89 and WSL 89/89 pass.
 
 ## 10. Updating this file
 

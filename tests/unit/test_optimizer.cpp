@@ -984,3 +984,38 @@ TEST_CASE("assembly optimizer keeps a block built through a frame base") {
     CHECK(assembly.find("STORE R0, [R7 + 56]") != std::string::npos);
     CHECK(assembly.find("STORE R0, [R7 + 60]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer folds a promoted parameter copy") {
+    std::string assembly =
+        ".text\n"
+        ".global heap_block_size\n"
+        "heap_block_size:\n"
+        "    PUSH R7\n"
+        "    ADJSP #-12\n"
+        "    LEA R7, [SP]\n"
+        ".Lline_74:\n"
+        "    MOV R2, R0\n"
+        "    ADD R0, R2, #16\n"
+        "    ADD R0, R0, #4\n"
+        "    STORE R0, [R7 + 4]\n"
+        ".Lline_75:\n"
+        "    MOV R0, #28\n"
+        "    STORE R0, [R7 + 8]\n"
+        ".Lline_76:\n"
+        "    MOV R1, #8\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    CALL heap_align, #2\n"
+        ".Lline_77:\n"
+        "    LOAD R1, [R7 + 8]\n"
+        "    CMP R0, R1\n"
+        "    JCS .Lelse_182\n"
+        ".Lelse_182:\n"
+        "    ADJSP #12\n"
+        "    POP R7\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R2, R0") == std::string::npos);
+}
