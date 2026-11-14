@@ -4315,7 +4315,7 @@ private:
             emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
             emit("    MOV R1, #0");
             emit("    MOV R2, #" + std::to_string(info->size));
-            emit("    CALL memset");
+            emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
             construct_default_subobjects(*info, address_temp);
             return;
         }
@@ -4516,7 +4516,7 @@ private:
                 emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
                 emit("    MOV R1, #0");
                 emit("    MOV R2, #" + std::to_string(element_size));
-                emit("    CALL memset");
+                emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
                 if (!expression.new_initializer->children.empty()) {
                     if (expression.new_initializer->children.size() > 1) {
                         error(expression.location,
@@ -4530,7 +4530,7 @@ private:
                 emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
                 emit("    MOV R1, #0");
                 emit("    MOV R2, #" + std::to_string(element_size));
-                emit("    CALL memset");
+                emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
             } else if (expression.arguments.size() == 1) {
                 store_new_value(pointee, *expression.arguments[0], pointer_temp);
             }
@@ -4586,7 +4586,7 @@ private:
                     if (element_size != 1) {
                         emit("    MUL R2, R2, #" + std::to_string(element_size));
                     }
-                    emit("    CALL memset");
+                    emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
                     int literal_bound = -1;
                     if (expression.children[0]->kind == ExprKind::IntegerLiteral) {
                         literal_bound = static_cast<int>(expression.children[0]->integer);
@@ -4727,7 +4727,7 @@ private:
                 if (element_size != 1) {
                     emit("    MUL R2, R2, #" + std::to_string(element_size));
                 }
-                emit("    CALL memset");
+                emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
             }
         } else if (info != nullptr) {
             if (expression.new_initializer != nullptr &&
@@ -4755,7 +4755,7 @@ private:
             emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
             emit("    MOV R1, #0");
             emit("    MOV R2, #" + std::to_string(element_size));
-            emit("    CALL memset");
+            emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
             if (!expression.new_initializer->children.empty()) {
                 if (expression.new_initializer->children.size() > 1) {
                     error(expression.location,
@@ -4769,7 +4769,7 @@ private:
             emit("    LOAD R0, [R7 + " + std::to_string(pointer_temp) + "]");
             emit("    MOV R1, #0");
             emit("    MOV R2, #" + std::to_string(element_size));
-            emit("    CALL memset");
+            emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
         } else if (expression.arguments.size() == 1) {
             store_new_value(pointee, *expression.arguments[0], pointer_temp);
         } else if (!expression.arguments.empty()) {
@@ -4926,7 +4926,7 @@ private:
                 emit("    STORE R1, [R0 - 4]");
                 emit("    LOAD R1, [R7 + " + std::to_string(source) + "]");
                 emit("    MOV R2, #" + std::to_string(info->size));
-                emit("    CALL memcpy");
+                emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                 emit("    LOAD R0, [R7 + " + std::to_string(object) + "]");
                 emit("    STORE R0, [__kr32_exception_object]");
             } else {
@@ -5031,7 +5031,7 @@ private:
                         emit("    LOAD R1, [__kr32_exception_object]");
                         emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                         emit("    MOV R2, #" + std::to_string(info->size));
-                        emit("    CALL memcpy");
+                        emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     }
                 } else {
                     local.offset = allocate_local(type);
@@ -5499,7 +5499,7 @@ private:
                              std::to_string(object) + "]");
                         emit("    MOV R2, #" +
                              std::to_string(target_info->size));
-                        emit("    CALL memcpy");
+                        emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     }
                 } else {
                     construct_object_from_expression(
@@ -7026,7 +7026,7 @@ private:
                      "]");
                 emit("    LEA R1, [R7 + " + std::to_string(converted) + "]");
                 emit("    MOV R2, #" + std::to_string(info->size));
-                emit("    CALL memcpy");
+                emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                 return lhs_type;
             }
             if (expression.children[1]->kind == ExprKind::Call) {
@@ -7037,7 +7037,7 @@ private:
             emit("    MOV R1, R0");
             emit("    LOAD R0, [R7 + " + std::to_string(destination) + "]");
             emit("    MOV R2, #" + std::to_string(info->size));
-            emit("    CALL memcpy");
+            emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
             return lhs_type;
         }
         if (is_fp(stored_type)) {
@@ -7353,7 +7353,7 @@ private:
                     emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
                     emit("    MOV R1, #0");
                     emit("    MOV R2, #" + std::to_string(info->size));
-                    emit("    CALL memset");
+                    emit("    CALL memset" + std::string(optimize_ ? ", #3" : ""));
                 }
                 emit("    LEA R0, [R7 + " + std::to_string(offset) + "]");
                 return value_type;
@@ -8063,7 +8063,7 @@ private:
                     emit("    MOV R2, #" + std::to_string(parameter_class->size));
                     emit("    LEA R0, [R7 + " +
                          std::to_string(argument_object) + "]");
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     slot.fp = true;
                     slot.type = parameter;
                     slot.offset = argument_object;
@@ -8116,7 +8116,7 @@ private:
                 emit("    MOV R1, R0");
                 emit("    MOV R2, #" + std::to_string(parameter_class->size));
                 emit("    LEA R0, [R7 + " + std::to_string(argument_object) + "]");
-                emit("    CALL memcpy");
+                emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    LEA R0, [R7 + " + std::to_string(argument_object) + "]");
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
@@ -8670,7 +8670,7 @@ private:
                              "]");
                         emit("    MOV R2, #" +
                              std::to_string(declared_class->size));
-                        emit("    CALL memcpy");
+                        emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     }
                     emit_all_local_destructors();
                     emit("    MOV R0, #0");
@@ -8725,7 +8725,7 @@ private:
                              "]");
                         emit("    LOAD R1, [R7 + " + std::to_string(source_temp) + "]");
                         emit("    MOV R2, #" + std::to_string(result_class->size));
-                        emit("    CALL memcpy");
+                        emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     }
                     emit_all_local_destructors();
                     emit("    MOV R0, #0");
@@ -9955,7 +9955,7 @@ private:
                     emit("    LEA R1, [R7 + " + std::to_string(object) + "]");
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                     emit("    MOV R2, #" + std::to_string(info->size));
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                 }
                 return;
             }
@@ -9969,7 +9969,7 @@ private:
                     emit("    MOV R1, R0");
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                     emit("    MOV R2, #" + std::to_string(info->size));
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     return;
                 }
             }
@@ -10008,7 +10008,7 @@ private:
                     emit("    MOV R1, R0");
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                     emit("    MOV R2, #" + std::to_string(info->size));
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     if (Function* destructor = find_destructor(info)) {
                         local_destructors_.back().push_back({local.offset, destructor});
                     }
@@ -10054,7 +10054,7 @@ private:
                     emit("    LOAD R1, [R7 + " + std::to_string(result_address) + "]");
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                     emit("    MOV R2, #" + std::to_string(info->size));
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     if (Function* destructor = find_destructor(info)) {
                         local_destructors_.back().push_back({local.offset, destructor});
                     }
@@ -10443,7 +10443,7 @@ private:
                         emit("    MOV R1, R" + std::to_string(integer_argument));
                     }
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     ++integer_argument;
                 } else {
                     const ClassInfo* parameter_class = class_of(local.type);
@@ -10453,7 +10453,7 @@ private:
                     emit("    LEA R0, [R7 + " + std::to_string(local.offset) + "]");
                     emit("    MOV R2, #" +
                          std::to_string(parameter_class->size));
-                    emit("    CALL memcpy");
+                    emit("    CALL memcpy" + std::string(optimize_ ? ", #3" : ""));
                     ++integer_argument;
                 }
             } else if (integer_argument < 4) {

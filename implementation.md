@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 12:25 -08:00
+> **Last updated:** 2026-11-14 12:41 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3413,9 +3413,15 @@ Newest entries at the bottom. Use the local time zone.
       instructions (11,783 -> 11,761; object 416,500 -> 416,412). The count is
       stripped before assembly and the tail-call fold accepts it.
 
-      The kernel binary grew slightly (67,372 -> 67,432 bytes) because the more
-      precise liveness steers promotion and folding differently; the two units
-      together are 28 bytes smaller. Windows 89/89 and WSL 89/89 pass.
+      The kernel binary reading of 67,432 bytes was taken from a stale artifact;
+      compiling the kernel sources with and without the counts shows the change
+      removes 17 instructions (4,509 -> 4,492), so the kernel shrinks too.
+      Windows 89/89 and WSL 89/89 pass.
+
+- **2026-11-14 12:41 -08:00** — The C++ front end now passes an argument count
+      for its `memcpy` and `memset` calls (three arguments), so the optimizer
+      stops treating `R3` as live across them; the other C++ call sites remain
+      conservative. A call-count fold test was added. All 89 Windows tests pass.
 
 ## 10. Updating this file
 

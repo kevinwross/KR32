@@ -942,3 +942,22 @@ TEST_CASE("assembly optimizer uses a call's argument count") {
     CHECK(assembly.find("CALL use") != std::string::npos);
     CHECK(assembly.find("CALL use, #") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer folds an operand before a two-argument call") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R2, R0\n"
+        "    MOV R1, R2\n"
+        "    ADD R0, R1, #16\n"
+        "    MOV R1, #8\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    CALL heap_align, #2\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R1, R2") == std::string::npos);
+}
