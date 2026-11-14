@@ -974,6 +974,10 @@ void GraphicsDevice::execute() {
         fill_rect(arguments_[0], arguments_[1], arguments_[2], arguments_[3],
                   arguments_[4]);
         return;
+    case Op::CopyRectStrided:
+        copy_rect_strided(arguments_[0], arguments_[1], arguments_[2],
+                          arguments_[3], arguments_[4], arguments_[5]);
+        return;
     case Op::CopyRect:
         copy_rect(arguments_[0], arguments_[1], arguments_[2], arguments_[3],
                   arguments_[4]);
@@ -1169,6 +1173,54 @@ void GraphicsDevice::copy_rect(std::uint32_t source, std::uint32_t dx,
                     scratch.size(), scratch.begin());
         std::copy(scratch.begin(), scratch.end(),
                   framebuffer_->vram().begin() + static_cast<std::ptrdiff_t>(to));
+    }
+}
+
+void GraphicsDevice::copy_rect_strided(std::uint32_t source,
+                                       std::uint32_t source_stride,
+                                       std::uint32_t dx, std::uint32_t dy,
+                                       std::uint32_t width,
+                                       std::uint32_t height) {
+    if (framebuffer_ == nullptr || !framebuffer_->enabled() ||
+        source_stride < width * 4U) {
+        error_ = true;
+        return;
+    }
+    std::uint32_t surface_offset = 0;
+    std::uint32_t surface_width = 0;
+    std::uint32_t surface_height = 0;
+    std::uint32_t surface_stride = 0;
+    target(surface_offset, surface_width, surface_height, surface_stride);
+    std::uint32_t clip_x = 0;
+    std::uint32_t clip_y = 0;
+    std::uint32_t clip_width = 0;
+    std::uint32_t clip_height = 0;
+    effective_clip(clip_x, clip_y, clip_width, clip_height);
+    const std::uint32_t left = std::max(dx, clip_x);
+    const std::uint32_t top = std::max(dy, clip_y);
+    const std::uint32_t right = std::min(dx + width, clip_x + clip_width);
+    const std::uint32_t bottom = std::min(dy + height, clip_y + clip_height);
+    if (left >= right || top >= bottom) {
+        return;
+    }
+    std::vector<std::uint8_t>& vram = framebuffer_->vram();
+    std::vector<std::uint8_t> scratch(static_cast<std::size_t>(right - left) * 4U);
+    for (std::uint32_t row = top; row < bottom; ++row) {
+        const std::size_t from = source +
+                                 static_cast<std::size_t>(row - dy) * source_stride +
+                                 static_cast<std::size_t>(left - dx) * 4U;
+        const std::size_t to = surface_offset +
+                               static_cast<std::size_t>(row) * surface_stride +
+                               static_cast<std::size_t>(left) * 4U;
+        if (from + scratch.size() > vram.size() ||
+            to + scratch.size() > vram.size()) {
+            error_ = true;
+            return;
+        }
+        std::copy_n(vram.begin() + static_cast<std::ptrdiff_t>(from),
+                    scratch.size(), scratch.begin());
+        std::copy(scratch.begin(), scratch.end(),
+                  vram.begin() + static_cast<std::ptrdiff_t>(to));
     }
 }
 

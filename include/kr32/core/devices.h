@@ -372,6 +372,9 @@ public:
         DrawText = 6,
         Flip = 7,
         SetSurface = 8,
+        // Copies a rectangle from another surface: args are source offset,
+        // source stride, destination x, destination y, width, height.
+        CopyRectStrided = 9,
     };
 
     GraphicsDevice();
@@ -396,6 +399,9 @@ private:
                    std::uint32_t height, std::uint32_t color);
     void copy_rect(std::uint32_t source, std::uint32_t dx, std::uint32_t dy,
                    std::uint32_t width, std::uint32_t height);
+    void copy_rect_strided(std::uint32_t source, std::uint32_t source_stride,
+                           std::uint32_t dx, std::uint32_t dy,
+                           std::uint32_t width, std::uint32_t height);
     void draw_line(int x0, int y0, int x1, int y1, std::uint32_t color);
     void draw_text(std::uint32_t x, std::uint32_t y, std::uint32_t address,
                    std::uint32_t length, std::uint32_t fg, std::uint32_t bg);

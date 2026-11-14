@@ -372,6 +372,15 @@ if(KR32_BUILD_UI)
     set_tests_properties(ui_headless_os PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")
 
+    add_test(NAME os_gfx_demo
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxDemo.cmake)
+    set_tests_properties(os_gfx_demo PROPERTIES LABELS "integration")
+
     add_test(NAME os_console_screen
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>

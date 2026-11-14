@@ -190,21 +190,23 @@ writes `COMMAND` and `ARGS[0..5]` on page 9, then rings the doorbell. It never
 reads any other user pointer. The host device clamps every rectangle to the
 surface and the clip, so a bad argument cannot escape VRAM.
 
-`DRAW_TEXT` reads characters from VRAM, not from user memory. `gfx_text` first
-copies the string into a small staging region of the target surface (`STAGE_TEXT`,
-a memcpy by the kernel through the VRAM aperture), then issues `DRAW_TEXT` with
-that offset. Text length is bounded by the staging size.
+`DRAW_TEXT` reads characters from VRAM, not from user memory. The kernel copies
+the string from the caller into a small VRAM staging region inside the
+`DRAW_TEXT` syscall and submits the offset to the device, so the copy and the
+draw are atomic. Text length is bounded by the staging size (4 KiB).
 
 `gfx_create` allocates from a kernel VRAM arena: a bump allocator over the
 aperture, 4-byte aligned, never reused in v1. `gfx_destroy` is a no-op until the
 allocator can reclaim; that is documented rather than hidden.
 
-`gfx_present` issues `FLIP`. `gfx_pixel`, `gfx_hline`, and `gfx_vline` are
-one-pixel or one-row `FILL_RECT` commands. `COPY_RECT` copies within one stride,
-so a blit between surfaces of different widths is not a single command in v1.
+`gfx_present` copies an off-screen surface to the screen with one strided copy
+(`COPY_RECT_STRIDED`) and then issues `FLIP`; presenting the screen surface is a
+flip alone. `gfx_pixel`, `gfx_hline`, and `gfx_vline` are one-pixel or one-row
+`FILL_RECT` commands.
 
-Input uses the same shape: `input_poll` is syscall 61, returning a packed event
-word in `R0` (zero when there is none); `input_pending` is syscall 62.
+The syscall numbers are: `sys_gfx` 70, the surface allocator 71, `input_poll`
+72, `input_pending` 73, and console control 74 (colour, cursor, clear, present,
+hide).
 
 ## 4. Drawing primitives (`<kr32/gfx.h>`)
 

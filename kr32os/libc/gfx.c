@@ -40,6 +40,7 @@ typedef struct kr32_event_user {
 #define GFX_OP_DRAW_TEXT 6U
 #define GFX_OP_FLIP 7U
 #define GFX_OP_SET_SURFACE 8U
+#define GFX_OP_COPY_RECT_STRIDED 9U
 
 #define GFX_SCREEN_OFFSET 0U
 #define GFX_SCREEN_WIDTH 800
@@ -141,10 +142,8 @@ int gfx_present(gfx_surface *surface, int x, int y, int w, int h) {
     if (w <= 0 || h <= 0) {
         return -1;
     }
-    /* Off-screen surfaces are copied to the screen one row at a time, then
-       flipped: the device copies within one stride, so a full-rectangle copy
-       would only work for matching strides. */
-    struct gfx_surface screen;
+    /* One strided copy puts the rectangle on the screen, then a flip. */
+    gfx_surface screen;
     screen.offset = GFX_SCREEN_OFFSET;
     screen.width = GFX_SCREEN_WIDTH;
     screen.height = GFX_SCREEN_HEIGHT;
@@ -153,16 +152,13 @@ int gfx_present(gfx_surface *surface, int x, int y, int w, int h) {
     screen.clip_y = 0;
     screen.clip_w = GFX_SCREEN_WIDTH;
     screen.clip_h = GFX_SCREEN_HEIGHT;
-    int row = 0;
-    while (row < h) {
-        const unsigned int source = surface->offset +
-                                    (unsigned int)((y + row) * surface->stride) +
-                                    (unsigned int)(x * 4);
-        if (submit(&screen, GFX_OP_COPY_RECT, source, (unsigned int)x,
-                   (unsigned int)(y + row), (unsigned int)w, 1, 0) != 0) {
-            return -1;
-        }
-        ++row;
+    const unsigned int source = surface->offset +
+                                (unsigned int)(y * surface->stride) +
+                                (unsigned int)(x * 4);
+    if (submit(&screen, GFX_OP_COPY_RECT_STRIDED, source,
+               (unsigned int)surface->stride, (unsigned int)x, (unsigned int)y,
+               (unsigned int)w, (unsigned int)h) != 0) {
+        return -1;
     }
     return submit(&screen, GFX_OP_FLIP, 0, 0, 0, 0, 0, 0);
 }

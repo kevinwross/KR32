@@ -103,8 +103,10 @@ A second MMIO page (page 9) exposes host drawing so programs never rasterise:
 | `FILL_RECT` | x, y, width, height, colour |
 | `COPY_RECT` | source offset, destination x/y/width/height |
 | `DRAW_LINE` | x0, y0, x1, y1, colour |
-| `DRAW_TEXT` | x, y, pointer, length, colour |
+| `DRAW_TEXT` | x, y, pointer, length, foreground, background |
 | `FLIP` | — |
+| `SET_SURFACE` | offset, width, height, stride |
+| `COPY_RECT_STRIDED` | source, source stride, x, y, width, height |
 
 v1 is **immediate registers**: write the opcode and its parameters, then ring a
 doorbell; the host executes and validates. A command FIFO in VRAM replaces this

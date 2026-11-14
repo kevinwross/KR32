@@ -166,6 +166,39 @@ TEST_CASE("an unknown command sets the error bit") {
     CHECK((status(bus) & GraphicsDevice::StatusError) != 0);
 }
 
+TEST_CASE("a strided copy blits between surfaces") {
+    DeviceBus bus;
+    set_mode(bus, 800, 600);
+    constexpr std::uint32_t kSource = 0x0012'0000U;
+    argument(bus, 0, kSource);
+    argument(bus, 1, 4);
+    argument(bus, 2, 4);
+    argument(bus, 3, 16);  // surface stride in bytes
+    command(bus, GraphicsDevice::Op::SetSurface);
+    argument(bus, 0, 0);
+    argument(bus, 1, 0);
+    argument(bus, 2, 4);
+    argument(bus, 3, 4);
+    argument(bus, 4, 0x00AB'CDEFU);
+    command(bus, GraphicsDevice::Op::FillRect);
+
+    argument(bus, 0, 0);       // screen surface
+    argument(bus, 1, 800);
+    argument(bus, 2, 600);
+    argument(bus, 3, 3200);
+    command(bus, GraphicsDevice::Op::SetSurface);
+    argument(bus, 0, kSource);  // source offset
+    argument(bus, 1, 16);       // source stride
+    argument(bus, 2, 10);       // destination x
+    argument(bus, 3, 10);       // destination y
+    argument(bus, 4, 4);        // width
+    argument(bus, 5, 4);        // height
+    command(bus, GraphicsDevice::Op::CopyRectStrided);
+    CHECK(pixel(bus.framebuffer(), 10, 10) == 0x00AB'CDEFU);
+    CHECK(pixel(bus.framebuffer(), 13, 13) == 0x00AB'CDEFU);
+    CHECK(pixel(bus.framebuffer(), 9, 9) == 0);
+}
+
 TEST_CASE("set surface routes drawing into a vram region") {
     DeviceBus bus;
     set_mode(bus, 800, 600);

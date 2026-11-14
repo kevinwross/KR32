@@ -77,7 +77,13 @@ mkdir -p "$build"
     --flat --base "$user_base" -o "$build/fault.bin"
 "$KR32" ld "$build/crt0.o" "$build/user_wx.o" "$build/user_syscall.o" "$build/user_gfx.o" \
     --flat --base "$user_base" -o "$build/wx.bin"
-python3 "$here/tools/mkinitrd.py" "$build/init.bin" "$build/fault.bin" "$build/wx.bin" "$build/initrd.bin" "$build/initrd.s"
+"$KR32" cc "$here/user/gfxdemo.c" $opt -S -o "$build/user_gfxdemo.s"
+"$KR32" as "$build/user_gfxdemo.s" --object -o "$build/user_gfxdemo.o"
+"$KR32" ld "$build/crt0.o" "$build/user_gfxdemo.o" "$build/user_syscall.o" "$build/user_gfx.o" \
+    --flat --base "$user_base" -o "$build/gfxdemo.bin"
+python3 "$here/tools/mkinitrd.py" "$build/initrd.bin" "$build/initrd.s" \
+    init="$build/init.bin" fault="$build/fault.bin" wx="$build/wx.bin" \
+    gfxdemo="$build/gfxdemo.bin"
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/shell.o" \

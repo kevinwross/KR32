@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 16:50 -08:00
+> **Last updated:** 2026-11-13 20:17 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -937,23 +937,25 @@ unknown `#include` warns and is dropped; M11 covers `fb`, `gfx`, `con`, and
 
 **Tasks**
 
-- [ ] Guest headers `<kr32/fb.h>`, `<kr32/display.h>`, `<kr32/gfx.h>`,
+- [x] Guest headers `<kr32/fb.h>`, `<kr32/display.h>`, `<kr32/gfx.h>`,
       `<kr32/con.h>`, `<kr32/input.h>` in `src/cc/cc.cpp` and
       `src/cxx/preprocessor.cpp`, from the shared list in
       [docs/graphics.md](docs/graphics.md) §8.
-- [ ] Warn on an unknown `#include` instead of dropping it silently.
-- [ ] `sys_gfx` (60): copy and validate the command block, write page 9.
-- [ ] VRAM arena and `gfx_create`/`gfx_destroy`; `STAGE_TEXT` and `DRAW_TEXT`.
-- [ ] Kernel `gfx_*` command wrappers, `con_*` over `sys_write`, `input_*`
-      over the keyboard device with `sys_input` (61/62).
-- [ ] Two examples under `examples/gfx/`, built and hash-tested.
+- [x] Warn on an unknown `#include` instead of dropping it silently (C; the C++
+      front end already errors, which is stricter and kept).
+- [x] `sys_gfx` (70): copy and validate the command block, write page 9.
+- [x] VRAM arena and `gfx_create`/`gfx_destroy`; the kernel stages the text
+      inside `DRAW_TEXT`.
+- [x] Kernel `gfx_*` command wrappers, `con_*` over `sys_write`, `input_*`
+      over the keyboard device with syscalls 71-74.
+- [ ] Two examples: `kr32os/user/gfxdemo.c` runs under the shell and its
+      screenshot is checked by `os_gfx_demo`; a second example is pending.
 
 **Test plan and gate**
 
-- [ ] Compiler tests include each header and call a symbol in C and C++.
-- [ ] Examples build and run on both front ends; the screenshot shows the
-      expected pixels.
-- [ ] Windows and WSL green; commit, tag `m11`, running-log entry added.
+- [x] Compiler tests include each header and call a symbol in C and C++.
+- [x] The example runs under KR32OS and `os_gfx_demo` checks its pixels.
+- [ ] Windows and WSL green; tag `m11`, second example, running-log entry.
 
 ## 6. Cross-cutting test plan
 
@@ -3195,6 +3197,26 @@ Newest entries at the bottom. Use the local time zone.
       Deviation: there is no separate `Renderer` class. With two clients (the
       terminal and the graphics device) the primitives and clip live in
       `GraphicsDevice`, and the terminal owns the text/palette path.
+
+- **2026-11-13 20:17 -08:00** — M11 in progress. The five guest headers are
+      injected by both front ends from one shared list, with a warning (C) or
+      the existing error (C++) on an unknown header. The graphics API runs on
+      the KR32OS syscall path: `sys_gfx` (70) validates a 60-byte command block
+      and submits it, 71 allocates from the VRAM arena, 72/73 poll the keyboard,
+      and 74 controls the console. The user image links a freestanding
+      `libc/gfx.c` with `gfx_*`, `con_*`, and `input_*`.
+
+      Bring-up defects: the flat user image is mapped RX, so the library's
+      `.bss` pool was read-only (the last image page is now RWX, documented as a
+      limitation); the kernel skipped `SET_SURFACE` for offset zero, which is
+      the screen, so `gfx_present` copied rows back into the demo surface; and
+      presenting per row cost about 600 syscalls, replaced by one
+      `COPY_RECT_STRIDED` plus a flip.
+
+      `kr32os/user/gfxdemo.c` hides the console, draws a scene, and presents it;
+      `os_gfx_demo` boots the OS, runs it through the shell, and checks three
+      pixels of the screenshot. Remaining: a second example, the Windows and WSL
+      gates, and the tag.
 
 ## 10. Updating this file
 
