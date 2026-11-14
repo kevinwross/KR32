@@ -1336,6 +1336,347 @@ int fold_symbol_address_loads(std::vector<std::string>& lines) {
     return removed;
 }
 
+// "[symbol]" or "[symbol + n]" to its parts.
+bool parse_symbol_offset(std::string_view text, std::string& symbol, int& offset) {
+    const std::string value = trim(text);
+    if (value.size() < 3 || value.front() != '[' || value.back() != ']') {
+        return false;
+    }
+    const std::string inside = trim(value.substr(1, value.size() - 2));
+    if (inside.empty()) {
+        return false;
+    }
+    int reg = 0;
+    if (parse_register(inside, reg)) {
+        return false;
+    }
+    const std::size_t plus = inside.find(" + ");
+    if (plus == std::string::npos) {
+        if (inside.find_first_of("+-* /") != std::string::npos) {
+            return false;
+        }
+        symbol = inside;
+        offset = 0;
+        return true;
+    }
+    const std::string base = trim(inside.substr(0, plus));
+    const std::string number = trim(inside.substr(plus + 3));
+    if (base.empty() || number.empty() ||
+        base.find_first_of("+-* /") != std::string::npos) {
+        return false;
+    }
+    int parsed = 0;
+    try {
+        parsed = std::stoi(number);
+    } catch (...) {
+        return false;
+    }
+    symbol = base;
+    offset = parsed;
+    return true;
+}
+
+bool instruction_touches_register(const Instruction& instruction, int reg) {
+    RegisterMask uses = 0;
+    RegisterMask defs = 0;
+    instruction_uses_defs(instruction, uses, defs);
+    const RegisterMask bit = bit_for_register(reg);
+    return ((uses | defs) & bit) != 0;
+}
+
+// Finds the store that consumes `reg` after the LEA at `start`, skipping
+// instructions that do not touch it. Labels that can be entered by a branch
+// stop the walk; other labels are line markers and are skipped.
+bool find_store_through(const std::vector<std::string>& lines,
+                        const std::set<std::string>& branch_targets,
+                        std::size_t start, int reg, std::size_t& consumer) {
+    std::size_t cursor = start;
+    while (cursor < lines.size()) {
+        Instruction instruction;
+        if (!parse_instruction(lines[cursor], instruction)) {
+            const std::string trimmed = trim(lines[cursor]);
+            if (trimmed.empty()) {
+                ++cursor;
+                continue;
+            }
+            if (is_label(lines[cursor]) &&
+                branch_targets.find(trimmed.substr(0, trimmed.size() - 1)) ==
+                    branch_targets.end()) {
+                ++cursor;
+                continue;
+            }
+            return false;
+        }
+        if (is_branch(instruction.mnemonic) || is_call(instruction.mnemonic)) {
+            return false;
+        }
+        if (instruction_touches_register(instruction, reg)) {
+            break;
+        }
+        ++cursor;
+    }
+    if (cursor >= lines.size()) {
+        return false;
+    }
+    Instruction store;
+    if (!parse_instruction(lines[cursor], store)) {
+        return false;
+    }
+    if (store.mnemonic != "STORE" && store.mnemonic != "STORE8" &&
+        store.mnemonic != "STORE16") {
+        return false;
+    }
+    if (store.operands.size() != 2) {
+        return false;
+    }
+    int address = 0;
+    int offset = 0;
+    if (!parse_register_offset(store.operands[1], address, offset) ||
+        address != reg) {
+        return false;
+    }
+    consumer = cursor;
+    return true;
+}
+
+// True when `reg` is rewritten before it is read. Labels that no branch can
+// enter are line markers and are skipped; a branch target is a real entry.
+bool register_dead_ignoring_line_labels(
+    const std::vector<std::string>& lines,
+    const std::set<std::string>& branch_targets, std::size_t start, int reg) {
+    const RegisterMask bit = bit_for_register(reg);
+    for (std::size_t index = start; index < lines.size(); ++index) {
+        Instruction instruction;
+        if (!parse_instruction(lines[index], instruction)) {
+            const std::string trimmed = trim(lines[index]);
+            if (trimmed.empty()) {
+                continue;
+            }
+            if (is_label(lines[index]) &&
+                branch_targets.find(trimmed.substr(0, trimmed.size() - 1)) ==
+                    branch_targets.end()) {
+                continue;
+            }
+            return false;
+        }
+        if (is_branch(instruction.mnemonic) || is_call(instruction.mnemonic)) {
+            return false;
+        }
+        RegisterMask uses = 0;
+        RegisterMask defs = 0;
+        instruction_uses_defs(instruction, uses, defs);
+        if ((uses & bit) != 0) {
+            return false;
+        }
+        if ((defs & bit) != 0) {
+            return true;
+        }
+    }
+    return true;
+}
+
+// LEA Rd, [symbol + n] ; LOAD/STORE x, [Rd]  ->  LOAD/STORE x, [symbol + n]
+// The absolute mode carries the symbol and its displacement, so the address
+// never has to be materialised in a register.
+int use_absolute_symbol_addresses(std::vector<std::string>& lines) {
+    std::set<std::string> branch_targets;
+    for (const std::string& line : lines) {
+        Instruction instruction;
+        if (!parse_instruction(line, instruction) ||
+            !is_branch(instruction.mnemonic) || instruction.operands.empty()) {
+            continue;
+        }
+        branch_targets.insert(trim(instruction.operands[0]));
+    }
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int address_register = 0;
+        std::string symbol;
+        int displacement = 0;
+        if (!parse_register(address.operands[0], address_register) ||
+            address_register == 7 || address_register == 11 ||
+            !parse_symbol_offset(address.operands[1], symbol, displacement)) {
+            continue;
+        }
+        std::size_t consumer = 0;
+        bool found = false;
+        std::size_t cursor = index + 1;
+        while (cursor < lines.size()) {
+            Instruction instruction;
+            if (!parse_instruction(lines[cursor], instruction)) {
+                const std::string trimmed = trim(lines[cursor]);
+                if (trimmed.empty()) {
+                    ++cursor;
+                    continue;
+                }
+                if (is_label(lines[cursor]) &&
+                    branch_targets.find(trimmed.substr(0, trimmed.size() - 1)) ==
+                        branch_targets.end()) {
+                    ++cursor;
+                    continue;
+                }
+                break;
+            }
+            if (is_branch(instruction.mnemonic) ||
+                is_call(instruction.mnemonic)) {
+                break;
+            }
+            if (instruction_touches_register(instruction, address_register)) {
+                consumer = cursor;
+                found = true;
+                break;
+            }
+            ++cursor;
+        }
+        if (!found) {
+            continue;
+        }
+        Instruction memory;
+        if (!parse_instruction(lines[consumer], memory) ||
+            memory.operands.size() != 2) {
+            continue;
+        }
+        const bool is_load =
+            memory.mnemonic == "LOAD" || memory.mnemonic == "LOAD8U" ||
+            memory.mnemonic == "LOAD8S" || memory.mnemonic == "LOAD16U" ||
+            memory.mnemonic == "LOAD16S";
+        const bool is_store = memory.mnemonic == "STORE" ||
+                              memory.mnemonic == "STORE8" ||
+                              memory.mnemonic == "STORE16";
+        if (!is_load && !is_store) {
+            continue;
+        }
+        int accessed = 0;
+        int offset = 0;
+        if (!parse_register_offset(memory.operands[1], accessed, offset) ||
+            accessed != address_register || offset != 0) {
+            continue;
+        }
+        if (!register_dead_ignoring_line_labels(lines, branch_targets,
+                                                consumer + 1,
+                                                address_register)) {
+            continue;
+        }
+        memory.operands[1] =
+            displacement == 0
+                ? "[" + symbol + "]"
+                : "[" + symbol + " + " + std::to_string(displacement) + "]";
+        lines[consumer] = format_instruction(memory);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
+// Keeps one base pointer in a register and reaches the following stores with a
+// displacement: LEA R1, [s + a] ; ... ; STORE ; LEA R1, [s + b] ; STORE
+// becomes LEA R1, [s + a] ; ... ; STORE ; STORE [R1 + b].
+int reuse_symbol_bases(std::vector<std::string>& lines) {
+    std::set<std::string> branch_targets;
+    for (const std::string& line : lines) {
+        Instruction instruction;
+        if (!parse_instruction(line, instruction) ||
+            !is_branch(instruction.mnemonic) || instruction.operands.empty()) {
+            continue;
+        }
+        branch_targets.insert(trim(instruction.operands[0]));
+    }
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction base;
+        if (!parse_instruction(lines[index], base) ||
+            base.mnemonic != "LEA" || base.operands.size() != 2) {
+            continue;
+        }
+        int base_register = 0;
+        std::string symbol;
+        int base_offset = 0;
+        if (!parse_register(base.operands[0], base_register) ||
+            base_register == 7 || base_register == 11 ||
+            !parse_symbol_offset(base.operands[1], symbol, base_offset)) {
+            continue;
+        }
+        std::size_t consumer = 0;
+        if (!find_store_through(lines, branch_targets, index + 1, base_register,
+                                consumer)) {
+            continue;
+        }
+        std::size_t cursor = consumer + 1;
+        while (true) {
+            std::size_t scan = cursor;
+            bool blocked = false;
+            while (scan < lines.size()) {
+                Instruction instruction;
+                if (!parse_instruction(lines[scan], instruction)) {
+                    const std::string trimmed = trim(lines[scan]);
+                    if (trimmed.empty()) {
+                        ++scan;
+                        continue;
+                    }
+                    if (is_label(lines[scan]) &&
+                        branch_targets.find(trimmed.substr(0, trimmed.size() - 1)) ==
+                            branch_targets.end()) {
+                        ++scan;
+                        continue;
+                    }
+                    blocked = true;
+                    break;
+                }
+                if (is_branch(instruction.mnemonic) ||
+                    is_call(instruction.mnemonic)) {
+                    blocked = true;
+                    break;
+                }
+                if (instruction_touches_register(instruction, base_register)) {
+                    break;
+                }
+                ++scan;
+            }
+            if (blocked || scan >= lines.size()) {
+                break;
+            }
+            Instruction next_lea;
+            if (!parse_instruction(lines[scan], next_lea) ||
+                next_lea.mnemonic != "LEA" || next_lea.operands.size() != 2) {
+                break;
+            }
+            int next_register = 0;
+            std::string next_symbol;
+            int next_offset = 0;
+            if (!parse_register(next_lea.operands[0], next_register) ||
+                next_register != base_register ||
+                !parse_symbol_offset(next_lea.operands[1], next_symbol,
+                                     next_offset) ||
+                next_symbol != symbol) {
+                break;
+            }
+            std::size_t next_consumer = 0;
+            if (!find_store_through(lines, branch_targets, scan + 1,
+                                    base_register, next_consumer)) {
+                break;
+            }
+            Instruction store;
+            parse_instruction(lines[next_consumer], store);
+            const int displacement = next_offset - base_offset;
+            store.operands[1] =
+                "[R" + std::to_string(base_register) +
+                (displacement >= 0 ? " + " : " - ") +
+                std::to_string(displacement >= 0 ? displacement : -displacement) +
+                "]";
+            lines[next_consumer] = format_instruction(store);
+            lines[scan].clear();
+            ++removed;
+            cursor = next_consumer + 1;
+        }
+    }
+    return removed;
+}
+
 // LEA Rd, [symbol] ; ADD Rd, Rd, #n  ->  LEA Rd, [symbol + n]
 int fold_symbol_offsets(std::vector<std::string>& lines) {
     int removed = 0;
@@ -1392,6 +1733,56 @@ int fold_symbol_offsets(std::vector<std::string>& lines) {
 }
 
 // MOV Ry, Rd where Rd is dead afterwards: retarget the LEA or ADD that
+// MOV Rd, #v ; NEG Rd, Rd  ->  MOV Rd, #-v
+// MOV Rd, #v ; NOT Rd, Rd  ->  MOV Rd, #~v
+int fold_unary_constants(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction move;
+        if (!parse_instruction(lines[index], move) || move.mnemonic != "MOV" ||
+            move.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        if (!parse_register(move.operands[0], destination) ||
+            move.operands[1].empty() || move.operands[1].front() != '#') {
+            continue;
+        }
+        int value = 0;
+        try {
+            value = std::stoi(move.operands[1].substr(1));
+        } catch (...) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction unary;
+        if (!parse_instruction(lines[next], unary) ||
+            (unary.mnemonic != "NEG" && unary.mnemonic != "NOT") ||
+            unary.operands.size() != 2) {
+            continue;
+        }
+        int target = 0;
+        int source = 0;
+        if (!parse_register(unary.operands[0], target) ||
+            !parse_register(unary.operands[1], source) ||
+            target != destination || source != destination) {
+            continue;
+        }
+        value = unary.mnemonic == "NEG" ? -value : ~value;
+        move.operands[1] = "#" + std::to_string(value);
+        lines[index] = format_instruction(move);
+        lines[next].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 // produced Rd to write Ry instead, and drop the copy.
 int fold_address_moves(std::vector<std::string>& lines) {
     int removed = 0;
@@ -3135,6 +3526,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_noop_moves(lines);
     stats.removed += fold_symbol_address_loads(lines);
     stats.removed += fold_symbol_offsets(lines);
+    stats.removed += fold_unary_constants(lines);
     stats.removed += fold_symbol_address_stores(lines);
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
@@ -3160,6 +3552,8 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += promote_leaf_scalars(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += fold_address_moves(lines);
+    stats.removed += use_absolute_symbol_addresses(lines);
+    stats.removed += reuse_symbol_bases(lines);
     stats.removed += strength_reduce_immediates(lines, stats.rewritten);
     stats.removed += coalesce_moves(lines);
     stats.removed += fold_address_moves(lines);

@@ -547,3 +547,70 @@ TEST_CASE("assembly optimizer folds addresses across line labels") {
     CHECK(assembly.find("LEA R1, [state + 4]") != std::string::npos);
     CHECK(assembly.find("MOV R1, R0") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer stores through a symbol address") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [state + 4]\n"
+        "    MOV R1, #1\n"
+        "    STORE R1, [R0]\n"
+        "    MOV R0, #0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("STOR") != std::string::npos);
+    CHECK(assembly.find("E R1, [state + 4]") != std::string::npos);
+    CHECK(assembly.find("LEA R0, [state + 4]") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer loads through a symbol address") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R2, [tick]\n"
+        "    LOAD R0, [R2]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LOAD R0, [tick]") != std::string::npos);
+    CHECK(assembly.find("LEA R2, [tick]") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer keeps a lea before a jumped-to label") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [state]\n"
+        ".Ltarget:\n"
+        "    MOV R1, #1\n"
+        "    STORE R1, [R0]\n"
+        "    RET\n"
+        "other:\n"
+        "    JMP .Ltarget\n";
+    std::string original = assembly;
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(assembly.find("STORE R1, [state]") == std::string::npos);
+    (void)stats;
+}
+
+TEST_CASE("assembly optimizer folds a negated constant") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R0, #1\n"
+        "    NEG R0, R0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("MOV R0, #-1") != std::string::npos);
+    CHECK(assembly.find("NEG R0, R0") == std::string::npos);
+}

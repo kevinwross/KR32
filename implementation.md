@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 21:35 -08:00
+> **Last updated:** 2026-11-13 21:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3240,6 +3240,19 @@ Newest entries at the bottom. Use the local time zone.
       Next: reuse one base pointer across consecutive stores to the same object
       (`STORE R0, [R1 + n]`) and look at the remaining `MOV`/`NEG` constant
       pairs.
+
+- **2026-11-13 21:50 -08:00** — The address work continues. A `LEA` plus a
+      memory operation through that register now becomes an absolute-address
+      operation (`MOV R0, #0 ; STORE R0, [stdin_object + 4]`), so the register
+      is not needed at all; the pass skips a register that is still live at a
+      `RET` or a branch target. Repeated base loads also collapse to one `LEA`
+      plus displacements when the absolute form does not apply, and a
+      `MOV`/`NEG` pair folds to a negative immediate.
+
+      Measured on the real `__kr32_stdio_init` in `libc.c`: 91 instructions at
+      `-O0`, 36 at `-O1` (74 before this work). The whole libc object drops from
+      451,376 to 425,212 bytes. Both front ends emit the same shape. All 89
+      tests pass on Windows (42 unit, 47 integration/OS).
 
 ## 10. Updating this file
 
