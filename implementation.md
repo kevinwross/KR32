@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 09:35 -08:00
+> **Last updated:** 2026-11-14 10:13 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3384,6 +3384,15 @@ Newest entries at the bottom. Use the local time zone.
       The dead `MOV R0` removal that exposed this is still reverted: it is
       correct on every site inspected, but with it the two gfx tests still lose
       the frame after the capture change, and the cause is not yet isolated.
+
+- **2026-11-14 10:13 -08:00** — A `sys_halt` syscall (75) halts the machine with
+      the current frame on screen. The gfx fixtures call it after presenting, so
+      the pixel tests capture a frozen frame instead of racing the shell: they
+      pass in about 16 seconds each and no longer depend on how fast the program
+      runs. With that, dead `MOV R0` instructions are removed by the optimizer
+      again (destinations other than R7 and R11), which drops 125 instructions
+      from the libc. libc object 417,056 -> 416,556 bytes; kernel at `-O1`
+      67,528 -> 67,372. Windows 89/89 pass.
 
 ## 10. Updating this file
 

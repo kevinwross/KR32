@@ -81,6 +81,8 @@ int sys_con(int op, int value) {
     return -ERRNO_EINVAL;
 }
 
+void kernel_halt(int status);
+
 int sys_dispatch(int argument0, int argument1, int argument2) {
     volatile struct syscall_scratch *scratch =
         (volatile struct syscall_scratch *)SYSCALL_SCRATCH_PHYS;
@@ -111,6 +113,10 @@ int sys_dispatch(int argument0, int argument1, int argument2) {
     }
     if (scratch->vector == SYSCALL_CON) {
         return sys_con(argument0, argument1);
+    }
+    if (scratch->vector == SYSCALL_HALT) {
+        kernel_halt(0);
+        return 0;
     }
     return -ERRNO_ENOSYS;
 }

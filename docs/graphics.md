@@ -205,8 +205,9 @@ flip alone. `gfx_pixel`, `gfx_hline`, and `gfx_vline` are one-pixel or one-row
 `FILL_RECT` commands.
 
 The syscall numbers are: `sys_gfx` 70, the surface allocator 71, `input_poll`
-72, `input_pending` 73, and console control 74 (colour, cursor, clear, present,
-hide).
+72, `input_pending` 73, console control 74 (colour, cursor, clear, present,
+hide), and `sys_halt` 75, which halts the machine with the current frame on
+screen so a screenshot is deterministic.
 
 ## 4. Drawing primitives (`<kr32/gfx.h>`)
 

@@ -25,3 +25,4 @@ struct syscall_scratch {
 #define SYSCALL_INPUT_POLL 72U
 #define SYSCALL_INPUT_PENDING 73U
 #define SYSCALL_CON 74U
+#define SYSCALL_HALT 75U

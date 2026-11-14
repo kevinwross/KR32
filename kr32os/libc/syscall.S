@@ -9,6 +9,7 @@
 .equ SYSCALL_INPUT_POLL, 72
 .equ SYSCALL_INPUT_PENDING, 73
 .equ SYSCALL_CON, 74
+.equ SYSCALL_HALT, 75
 
     .text
     .global sys_exit
@@ -64,4 +65,9 @@ sys_input_pending:
     .global sys_con
 sys_con:
     SYSCALL #SYSCALL_CON
+    RET
+
+    .global sys_halt
+sys_halt:
+    SYSCALL #SYSCALL_HALT
     RET

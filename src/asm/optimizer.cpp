@@ -2770,7 +2770,7 @@ int remove_dead_moves(std::vector<std::string>& lines) {
         }
         int destination = 0;
         if (!parse_register(instruction.operands[0], destination) ||
-            destination == 0 || destination == 7 || destination == 11) {
+            destination == 7 || destination == 11) {
             continue;
         }
         if (!register_live_after(liveness, index, destination)) {
