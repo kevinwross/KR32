@@ -102,9 +102,12 @@ the same alignment rule rather than changing `.k32` silently.
 | `F8..F15` | Callee-saved FP registers |
 | `T0..T15` | 4x4 `f32` tiles; caller-saved |
 
-The C compiler uses only `R0-R7`; `R8-R11` remain reserved for the wider ABI. In
-C++ translation units `R11` is the thread pointer and is not available to the
-general register allocator. C code never sets or depends on `R11`.
+The compilers' register allocator uses `R0-R7`; `R8-R11` remain reserved for the
+wider ABI. The 64-bit multiply and shift expansions, and runtime helpers such as
+`__kr32_ulldiv`, also use `R12-R15` as caller-saved scratch, so a caller may not
+keep a value there across a call. In C++ translation units `R11` is the thread
+pointer and is not available to the general register allocator. C code never
+sets or depends on `R11`.
 
 ### Integer argument assignment
 

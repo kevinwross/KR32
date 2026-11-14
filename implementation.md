@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 21:50 -08:00
+> **Last updated:** 2026-11-13 22:18 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3253,6 +3253,19 @@ Newest entries at the bottom. Use the local time zone.
       `-O0`, 36 at `-O1` (74 before this work). The whole libc object drops from
       451,376 to 425,212 bytes. Both front ends emit the same shape. All 89
       tests pass on Windows (42 unit, 47 integration/OS).
+
+- **2026-11-13 22:18 -08:00** — 32-bit expression temporaries now take one stack
+      slot instead of an eight-byte long long slot. A narrow value is widened
+      only when the other operand is wider, so `p->x + p->y` and `s += array[i]`
+      no longer emit the sign-extend and double store/load pair. The libc object
+      drops to 422,532 bytes (451,376 at `-O0`); the pattern sample from 127
+      instructions at `-O0` to 96.
+
+      Also corrected: `docs/abi.md` claimed the C compiler uses only `R0-R7`,
+      but the 64-bit multiply and shift expansions and helpers such as
+      `__kr32_ulldiv` use `R12-R15` as caller-saved scratch. The gfx and console
+      integration tests now take the `kr32os_build` resource lock, because they
+      rebuild the shared OS tree and collided under `ctest -j`.
 
 ## 10. Updating this file
 

@@ -3944,11 +3944,16 @@ private:
         if (is_fp_type(type)) {
             emit("    ADJSP #-8");
             emit("    FSTORE.D F0, [SP]");
-        } else {
+        } else if (is_long_long_type(type)) {
             normalize_long_long(type);
             emit("    ADJSP #-8");
             emit("    STORE R0, [SP]");
             emit("    STORE R1, [SP + 4]");
+        } else {
+            // A 32-bit value takes one slot; a consumer widens it only when
+            // the other operand is wider.
+            emit("    ADJSP #-4");
+            emit("    STORE R0, [SP]");
         }
     }
 
@@ -3956,9 +3961,12 @@ private:
         if (is_fp_type(left)) {
             emit("    FLOAD.D F1, [SP]");
             emit("    ADJSP #8");
-        } else {
+        } else if (is_long_long_type(left)) {
             emit("    LOAD R1, [SP]");
             emit("    ADJSP #8");
+        } else {
+            emit("    LOAD R1, [SP]");
+            emit("    ADJSP #4");
         }
         const TypePtr common = common_fp_type(left, right);
         const std::string suffix = common->kind == Type::Kind::Double ? ".D" : ".S";
@@ -4037,9 +4045,21 @@ private:
 
     void gen_long_long_binary(const std::string& op, const TypePtr& left,
                               const TypePtr& right) {
-        emit("    LOAD R2, [SP]");
-        emit("    LOAD R3, [SP + 4]");
-        emit("    ADJSP #8");
+        if (is_long_long_type(left)) {
+            emit("    LOAD R2, [SP]");
+            emit("    LOAD R3, [SP + 4]");
+            emit("    ADJSP #8");
+        } else {
+            // The caller pushed a 32-bit value: widen it here.
+            emit("    LOAD R2, [SP]");
+            emit("    ADJSP #4");
+            if (is_unsigned_scalar(left) || left->is_pointer()) {
+                emit("    MOV R3, #0");
+            } else {
+                emit("    MOV R3, R2");
+                emit("    SAR R3, R3, #31");
+            }
+        }
         normalize_long_long(right);
         emit("    MOV R4, R0");
         emit("    MOV R5, R1");
@@ -4192,7 +4212,7 @@ private:
             return;
         }
         emit("    LOAD R1, [SP]");
-        emit("    ADJSP #8");
+        emit("    ADJSP #4");
         gen_binary_ready(op, left, right);
     }
 
