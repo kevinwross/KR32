@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 09:55 -08:00
+> **Last updated:** 2026-11-13 16:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -882,11 +882,13 @@ path now folds a constant operand with `try_fold_constant` and emits
 device, and give programs host-executed drawing through a graphics command
 device. Specification: [docs/terminal.md](docs/terminal.md).
 
-**Status:** approved 2026-11-13; implementation not started. Decisions taken:
-10x20 cells (80x30 grid), one host renderer shared by the terminal and the
-graphics device, the terminal as a host-side client that draws last with an
-explicit hide/show, immediate-register graphics commands first (a FIFO only if
-measured), no escape sequences in v1, and scrollback kept internal.
+**Status:** complete 2026-11-13; tagged `m10.5`. The host terminal device, the
+graphics command device, the kernel console driver, and the font atlas are in.
+Both gates pass (Windows and WSL, 86/86 each). Decisions taken: 10x20 cells
+(80x30 grid), one host renderer shared by the terminal and the graphics device,
+the terminal as a host-side client that draws last with an explicit hide/show,
+immediate-register graphics commands first (a FIFO only if measured), no escape
+sequences in v1, and scrollback kept internal.
 
 **Why:** the guest cannot move framebuffer data at interactive speed. Measured:
 a scroll is 473,600 pixels, at least ~1.9M ticks even at four instructions per
@@ -895,26 +897,30 @@ pixel; a 41-line print took 10M ticks after the panning prototype, and 45M for
 
 **Tasks**
 
-- [ ] Host `Renderer`: surface, clip, palette, fill, copy, line, text blit;
-      deterministic integer rasterisation.
-- [ ] Terminal device (page 8 at `0xFFF0_8000`): `DATA`, `STATUS`, `CONTROL`,
+- [x] Host `Renderer`: surface, clip, palette, fill, copy, line, text blit;
+      deterministic integer rasterisation. The primitives live in
+      `GraphicsDevice`; the terminal is the text/palette client. No separate
+      `Renderer` class was needed with two clients.
+- [x] Terminal device (page 8 at `0xFFF0_8000`): `DATA`, `STATUS`, `CONTROL`,
       `COMMAND`, `COLOR`, `ID`; 10x20 font table; 80x30 grid; 256-line
       scrollback ring.
-- [ ] Graphics command device (page 9): `SET_CLIP`, `SET_COLOR`, `FILL_RECT`,
+- [x] Graphics command device (page 9): `SET_CLIP`, `SET_COLOR`, `FILL_RECT`,
       `COPY_RECT`, `DRAW_LINE`, `DRAW_TEXT`, `FLIP`; immediate registers.
-- [ ] Kernel `console.c` reduced to a device driver; `font8x16.c` and the grids
+- [x] Kernel `console.c` reduced to a device driver; `font8x16.c` and the grids
       deleted; both build scripts updated.
-- [ ] Embedded images regenerated; boot screen checked at 80x30.
-- [ ] Documentation: `devices.md` pages 8 and 9, `display.md` §11 pointer,
-      `graphics.md` §7 note.
+- [x] Embedded images regenerated; boot screen checked at 80x30.
+- [x] Documentation: `devices.md` pages 8 and 9, `display.md` §7 rewritten and
+      §11 pointers, `graphics.md` host-execution model, programmer's reference
+      MMIO map.
 
 **Test plan and gate**
 
-- [ ] Host unit tests for the terminal (putc, wrap, scroll, clear, control
+- [x] Host unit tests for the terminal (putc, wrap, scroll, clear, control
       characters, colours, hide/show, geometry, no-framebuffer) and per
-      graphics primitive (fill, copy, line, text, clip, validation).
-- [ ] `os_console_screen` and `run_os_*` stay green; the screenshot is 800x600.
-- [ ] Windows and WSL gates pass.
+      graphics primitive (fill, copy, line, text, clip, validation):
+      `tests/unit/test_terminal.cpp`, `tests/unit/test_graphics.cpp`.
+- [x] `os_console_screen` and `run_os_*` stay green; the screenshot is 800x600.
+- [x] Windows and WSL gates pass: 86/86 each.
 
 ### M11 — Graphics and console API
 
@@ -3156,6 +3162,32 @@ Newest entries at the bottom. Use the local time zone.
       and 12x24 (66x25). The default table output is byte-identical to the
       committed `font8x16.c`, so the generator change is safe. The host console
       itself remains unchanged; the earlier view-panning prototype was reverted.
+
+- **2026-11-13 16:50 -08:00** — **M10.5 complete, tagged `m10.5`.** The kernel
+      console is replaced by the host terminal device (page 8), and host-executed
+      graphics commands landed on page 9 (`SET_CLIP`, `SET_COLOR`, `FILL_RECT`,
+      `COPY_RECT`, `DRAW_LINE`, `DRAW_TEXT`, `FLIP`). The host owns the 80x30
+      grid, the 10x20 JetBrains Mono atlas, the palette, and a 256-line
+      scrollback ring; `console.c` is a thin driver and `font8x16.c` is deleted.
+      The BIOS maps MMIO pages 8 and 9, and both build scripts dropped the font
+      object.
+
+      Two defects surfaced while bringing it up: `COMMAND` reset did not
+      re-derive the grid from the active mode, so the terminal stayed 192x54 and
+      rows past 30 were written below the 600-pixel surface (the screen appeared
+      frozen at 30 lines); and hiding the terminal left the cursor block painted.
+      The graphics device also defaulted to an empty clip, so drawing before
+      `SET_CLIP` did nothing; an unset clip now means the full surface.
+
+      Tests: `tests/unit/test_terminal.cpp` (6 cases) and
+      `tests/unit/test_graphics.cpp` (8 cases); `unit_test_devices` moved its
+      unclaimed-page probe from page 9 to page 10. Gates: Windows 86/86, WSL
+      86/86. `kr32os/user/init.c` prints 32 lines during boot to exercise the
+      scroll path.
+
+      Deviation: there is no separate `Renderer` class. With two clients (the
+      terminal and the graphics device) the primitives and clip live in
+      `GraphicsDevice`, and the terminal owns the text/palette path.
 
 ## 10. Updating this file
 

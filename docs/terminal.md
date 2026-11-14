@@ -1,8 +1,9 @@
-# Host terminal service (proposal)
+# Host terminal service
 
-**Status:** proposal, 2026-11-13. No source changes have been made. This
-document specifies a host-implemented terminal device that replaces the
-kernel's framebuffer console.
+**Status:** implemented 2026-11-13, tagged `m10.5`. The terminal device (page 8),
+the graphics command device (page 9), the kernel driver, and the font atlas are
+in; [implementation.md](implementation.md) records the deviation that the
+renderer primitives live in `GraphicsDevice` rather than a separate class.
 
 **Decisions taken 2026-11-13:** 10x20 cells (80x30 grid); one host renderer
 shared with a graphics command device; console is a host-side client of that
@@ -151,18 +152,18 @@ the framebuffer stays available for graphics programs.
 
 ## 7. Migration
 
-This is its own milestone before M11 (`implementation.md` records it as M10.5).
+Landed as its own milestone before M11 (`implementation.md` records it as
+M10.5).
 
 1. Host renderer and terminal device with grid, 10x20 font, palette, scrollback,
    and rendering; host unit tests.
 2. Graphics command device (immediate registers) reusing the renderer.
-3. `kr32os/kernel/console.c` reduced to the device driver; drop
-   `font8x16.c` from both build scripts and the link.
-4. Regenerate the embedded OS images; `os_console_screen` and `run_os_*` must
-   stay green; check the boot screen visually at 80x30.
-5. Documentation: this document becomes normative, `devices.md` gains pages 8
-   and 9, `display.md` §11 is replaced by a pointer, `graphics.md` §7 notes that
-   `gfx_*` runs on the graphics device.
+3. `kr32os/kernel/console.c` reduced to the device driver; `font8x16.c` dropped
+   from both build scripts and the link.
+4. Embedded OS images regenerated; `os_console_screen` and `run_os_*` stay
+   green; the boot screen was checked visually at 80x30.
+5. Documentation: `devices.md` gained pages 8 and 9, `display.md` §7 points
+   here, and `graphics.md` records the host-execution model.
 
 ## 8. Open questions
 
@@ -176,6 +177,9 @@ This is its own milestone before M11 (`implementation.md` records it as M10.5).
   graphics device's surface.
 
 ## 9. Test plan
+
+Implemented in `tests/unit/test_terminal.cpp` and
+`tests/unit/test_graphics.cpp`:
 
 - Host unit tests: putc and wrapping at 80x30, scroll, clear, control
   characters, colours, hide/show, geometry, no-framebuffer behaviour, and the
