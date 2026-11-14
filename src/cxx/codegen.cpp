@@ -7854,6 +7854,10 @@ private:
             int offset = 0;
             bool fp = false;
             TypePtr type;
+            // A literal argument is placed straight into its register; the
+            // temporary below still exists for the stack-argument path.
+            bool literal = false;
+            std::int64_t literal_value = 0;
         };
         std::vector<ArgumentSlot> slots;
         std::vector<int> stack_temps;
@@ -7925,9 +7929,48 @@ private:
         if (simple_call) {
             for (std::size_t index = effective_arguments.size();
                  index-- > 0;) {
-                gen_expr(*effective_arguments[index]);
+                const Expr& argument = *effective_arguments[index];
+                const std::string destination =
+                    "R" + std::to_string(index);
+                // A literal or a plain local lands in its argument register
+                // directly instead of being staged through R0.
+                if (argument.kind == ExprKind::IntegerLiteral ||
+                    argument.kind == ExprKind::CharacterLiteral ||
+                    argument.kind == ExprKind::BoolLiteral ||
+                    argument.kind == ExprKind::NullptrLiteral) {
+                    emit("    MOV " + destination + ", #" +
+                         std::to_string(argument.kind == ExprKind::NullptrLiteral
+                                            ? 0
+                                            : argument.integer));
+                    continue;
+                }
+                if (argument.kind == ExprKind::Name && index != 0) {
+                    Local* local = lookup_local(argument.name);
+                    if (local != nullptr && !local->is_reference &&
+                        local->static_global == nullptr) {
+                        const TypePtr type = resolve_type(local->type);
+                        if (type != nullptr &&
+                            is_integer(type) &&
+                            !is_long_long(type) && class_of(type) == nullptr) {
+                            const std::string frame =
+                                "[R7 + " + std::to_string(local->offset) + "]";
+                            if (is_byte_builtin(type)) {
+                                emit("    LOAD8S " + destination + ", " +
+                                     frame);
+                            } else if (type->kind == TypeKind::Builtin &&
+                                       type->builtin == BuiltinKind::Short) {
+                                emit("    LOAD16S " + destination + ", " +
+                                     frame);
+                            } else {
+                                emit("    LOAD " + destination + ", " + frame);
+                            }
+                            continue;
+                        }
+                    }
+                }
+                gen_expr(argument);
                 if (index != 0) {
-                    emit("    MOV R" + std::to_string(index) + ", R0");
+                    emit("    MOV " + destination + ", R0");
                 }
             }
             if (function->is_noexcept) {
@@ -8158,6 +8201,17 @@ private:
                 }
                 slot.offset = allocate_local(Type::make_builtin(BuiltinKind::Int));
                 emit("    STORE R0, [R7 + " + std::to_string(slot.offset) + "]");
+                const ExprKind argument_kind = effective_arguments[index]->kind;
+                if (argument_kind == ExprKind::IntegerLiteral ||
+                    argument_kind == ExprKind::CharacterLiteral ||
+                    argument_kind == ExprKind::BoolLiteral ||
+                    argument_kind == ExprKind::NullptrLiteral) {
+                    slot.literal = true;
+                    slot.literal_value =
+                        argument_kind == ExprKind::NullptrLiteral
+                            ? 0
+                            : effective_arguments[index]->integer;
+                }
                 ++integer_argument;
             }
             slots.push_back(std::move(slot));
@@ -8251,8 +8305,14 @@ private:
                 integer_register += 2;
             } else {
                 if (integer_register < 4) {
-                    emit("    LOAD R" + std::to_string(integer_register) +
-                         ", [R7 + " + std::to_string(slot.offset) + "]");
+                    if (slot.literal) {
+                        emit("    MOV R" + std::to_string(integer_register) +
+                             ", #" +
+                             std::to_string(slot.literal_value));
+                    } else {
+                        emit("    LOAD R" + std::to_string(integer_register) +
+                             ", [R7 + " + std::to_string(slot.offset) + "]");
+                    }
                     ++integer_register;
                 } else {
                     emit("    LOAD R4, [R7 + " +

@@ -2090,8 +2090,10 @@ int fold_address_moves(std::vector<std::string>& lines) {
             continue;
         }
         const bool address_instruction =
-            produced.mnemonic == "LEA" ||
-            produced.mnemonic == "ADD" || produced.mnemonic == "SUB";
+            produced.mnemonic == "LEA" || produced.mnemonic == "ADD" ||
+            produced.mnemonic == "SUB" || produced.mnemonic == "LOAD" ||
+            produced.mnemonic == "LOAD8S" || produced.mnemonic == "LOAD8U" ||
+            produced.mnemonic == "LOAD16S" || produced.mnemonic == "LOAD16U";
         if (!address_instruction || produced.operands.empty()) {
             continue;
         }
@@ -3724,6 +3726,52 @@ int fold_narrowing_stores(std::vector<std::string>& lines) {
     return removed;
 }
 
+// MOV Rd, #imm ; MOV Re, Rd  ->  MOV Re, #imm when Rd is dead afterwards.
+int fold_literal_copies(std::vector<std::string>& lines) {
+    const LivenessInfo liveness = compute_register_liveness(lines);
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction move;
+        if (!parse_instruction(lines[index], move) || move.mnemonic != "MOV" ||
+            move.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        if (!parse_register(move.operands[0], destination) ||
+            destination == 7 || destination == 11 ||
+            move.operands[1].empty() || move.operands[1][0] != '#') {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction copy;
+        if (!parse_instruction(lines[next], copy) || copy.mnemonic != "MOV" ||
+            copy.operands.size() != 2) {
+            continue;
+        }
+        int target = 0;
+        int source = 0;
+        if (!parse_register(copy.operands[0], target) ||
+            !parse_register(copy.operands[1], source) ||
+            source != destination || target == destination || target == 7 ||
+            target == 11) {
+            continue;
+        }
+        if (register_live_after(liveness, next, destination)) {
+            continue;
+        }
+        copy.operands[1] = move.operands[1];
+        lines[next] = format_instruction(copy);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
 // MOV Rd, Rs followed by the first reader of Rd: fold the copy into the
 // consumer's source operands and drop the move. Reads of Rd in the consumer
 // see the value the copy produced, whether or not the consumer also writes Rd.
@@ -4245,6 +4293,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += forward_stack_temporaries(lines);
     stats.removed += fold_narrowing_stores(lines);
     stats.removed += fold_copy_consumers(lines);
+    stats.removed += fold_literal_copies(lines);
     stats.removed += fold_clobbered_address_copies(lines);
     stats.removed += fold_address_moves(lines);
     stats.removed += use_absolute_symbol_addresses(lines);

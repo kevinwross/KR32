@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 13:57 -08:00
+> **Last updated:** 2026-11-14 15:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3445,6 +3445,21 @@ Newest entries at the bottom. Use the local time zone.
       the two earlier calls never saw it. libc 11,342 -> 11,213 instructions
       (object 414,948 -> 414,432 bytes), kernel 66,844 -> 66,588. `MOV R2, R0`
       drops from 180 to 62. Windows 89/89 and WSL 89/89 pass.
+
+- **2026-11-14 15:15 -08:00** — A batch of five functional changes, committed
+      together under the new cadence rule in `AGENTS.local.md` (five changes or
+      180 lines of code, focused tests in the loop, full regression before the
+      commit). The C++ simple-call path places literal and plain-integer
+      arguments directly in their argument registers and accepts `nullptr` as a
+      literal zero; `fold_address_moves` retargets a `LOAD` into a copy's
+      destination; and a new `fold_literal_copies` turns
+      `MOV Rd, #imm ; MOV Re, Rd` into `MOV Re, #imm`. libc 11,213 -> 11,059
+      instructions (object 414,432 -> 413,816 bytes); the C++ pattern sample
+      249 -> 245.
+
+      Tried and reverted: loading a *pointer* local directly into its argument
+      register. A pointer local can live in a register, so reading its frame
+      slot returns stale data; eight `<cstring>` and algorithm tests caught it.
 
 ## 10. Updating this file
 

@@ -1019,3 +1019,37 @@ TEST_CASE("assembly optimizer folds a promoted parameter copy") {
     (void)stats;
     CHECK(assembly.find("MOV R2, R0") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer retargets a load through a copy") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R12, [R7 + 4]\n"
+        "    MOV R0, R12\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("LOAD R0, [R7 + 4]") != std::string::npos);
+    CHECK(assembly.find("MOV R0, R12") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer folds a copied literal") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R0, #1\n"
+        "    MOV R1, R0\n"
+        "    LOAD R0, [R7 + 16]\n"
+        "    SUB R0, R1, R0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R1, #1") != std::string::npos);
+    CHECK(assembly.find("MOV R0, #1") == std::string::npos);
+}
