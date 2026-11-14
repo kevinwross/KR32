@@ -155,6 +155,57 @@ int  gfx_present(gfx_surface *surface, int x, int y, int w, int h);
 `calloc` and no pixel copy. `gfx_present` issues a flip; the rectangle is a hint
 until the host gains a partial-present channel.
 
+The handle is a small struct in the program's own memory. The pixels are in
+VRAM at `offset`:
+
+```c
+typedef struct {
+    uint32_t offset;                  /* VRAM offset from gfx_create */
+    int width, height;                /* surface extent, in pixels */
+    int stride;                       /* pixels per row */
+    uint32_t clip_x, clip_y;          /* clip rectangle */
+    uint32_t clip_w, clip_h;
+} gfx_surface;
+```
+
+Drawing calls never touch the pixels; they fill a command block from the handle
+and the arguments. [§3.3](#33-command-submission-sys_gfx) defines the block.
+
+### 3.3 Command submission (`sys_gfx`)
+
+User programs cannot write the device registers, so every call submits a
+command through syscall 60:
+
+```c
+typedef struct {
+    uint32_t op;       /* the page-9 command number */
+    uint32_t args[6];  /* meaning per op; unused entries are zero */
+} gfx_command;
+
+int sys_gfx(const gfx_command *command);   /* 0, or -errno */
+```
+
+The kernel copies the block from the caller's region, checks the opcode, and
+writes `COMMAND` and `ARGS[0..5]` on page 9, then rings the doorbell. It never
+reads any other user pointer. The host device clamps every rectangle to the
+surface and the clip, so a bad argument cannot escape VRAM.
+
+`DRAW_TEXT` reads characters from VRAM, not from user memory. `gfx_text` first
+copies the string into a small staging region of the target surface (`STAGE_TEXT`,
+a memcpy by the kernel through the VRAM aperture), then issues `DRAW_TEXT` with
+that offset. Text length is bounded by the staging size.
+
+`gfx_create` allocates from a kernel VRAM arena: a bump allocator over the
+aperture, 4-byte aligned, never reused in v1. `gfx_destroy` is a no-op until the
+allocator can reclaim; that is documented rather than hidden.
+
+`gfx_present` issues `FLIP`. `gfx_pixel`, `gfx_hline`, and `gfx_vline` are
+one-pixel or one-row `FILL_RECT` commands. `COPY_RECT` copies within one stride,
+so a blit between surfaces of different widths is not a single command in v1.
+
+Input uses the same shape: `input_poll` is syscall 61, returning a packed event
+word in `R0` (zero when there is none); `input_pending` is syscall 62.
+
 ## 4. Drawing primitives (`<kr32/gfx.h>`)
 
 All functions honor `surface->clip`, clip internally, and never fault.
@@ -304,9 +355,9 @@ endian, so the kernel can copy a word and cast.
 
 Guest headers are synthesized by the C and C++ front ends; there are no `.h`
 files on disk (see the `#include` handling in `src/cc/cc.cpp` and
-`src/cxx/preprocessor.cpp`). Adding these headers therefore requires a change
-in the compiler stream. That is deferred, and the compiler stream should treat
-this section as the specification when it picks the work up.
+`src/cxx/preprocessor.cpp`). The compiler stream implements the five headers
+below in M11 from this list. An unknown `#include` warns and is dropped, so a
+typo surfaces at compile time rather than at link time.
 
 Proposed header names and contents:
 
