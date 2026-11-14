@@ -3,6 +3,7 @@
 #include "libc_runtime.h"
 
 #include "kr32/asm/optimizer.h"
+#include "kr32/cc/guest_headers.h"
 
 #include <algorithm>
 #include <bit>
@@ -203,6 +204,19 @@ struct PreprocessMessage {
     std::string text;
 };
 
+// The text between the angled brackets or quotes of an #include directive.
+std::string include_target(const std::string& directive) {
+    const std::size_t open = directive.find_first_of("<\"");
+    if (open == std::string::npos) {
+        return {};
+    }
+    const std::size_t close = directive.find_first_of(">\"", open + 1);
+    if (close == std::string::npos) {
+        return directive.substr(open + 1);
+    }
+    return directive.substr(open + 1, close - open - 1);
+}
+
 std::string preprocess(std::string_view source, const std::string& source_name,
                        std::vector<PreprocessMessage>& messages) {
     std::string without_comments = strip_comments(source);
@@ -213,7 +227,7 @@ std::string preprocess(std::string_view source, const std::string& source_name,
 
 
     std::map<std::string, std::string> macros;
-    struct FunctionMacro {
+    std::set<std::string> injected_guest_headers;    struct FunctionMacro {
         std::vector<std::string> parameters;
         std::string body;
         bool variadic = false;
@@ -486,7 +500,29 @@ std::string preprocess(std::string_view source, const std::string& source_name,
                            : text.substr(text_first);
                 messages.push_back({line_number, is_error, text});
             } else if (directive.rfind("#include", 0) == 0 && active) {
-                if (directive.find("unistd.h") != std::string::npos) {
+                const std::size_t include_start = result.size();
+                const std::string include_name = include_target(directive);
+                if (include_name == "kr32/fb.h") {
+                    if (injected_guest_headers.insert(include_name).second) {
+                        result += kr32::cc::kGuestFbHeader;
+                    }
+                } else if (include_name == "kr32/display.h") {
+                    if (injected_guest_headers.insert(include_name).second) {
+                        result += kr32::cc::kGuestDisplayHeader;
+                    }
+                } else if (include_name == "kr32/gfx.h") {
+                    if (injected_guest_headers.insert(include_name).second) {
+                        result += kr32::cc::kGuestGfxHeader;
+                    }
+                } else if (include_name == "kr32/con.h") {
+                    if (injected_guest_headers.insert(include_name).second) {
+                        result += kr32::cc::kGuestConHeader;
+                    }
+                } else if (include_name == "kr32/input.h") {
+                    if (injected_guest_headers.insert(include_name).second) {
+                        result += kr32::cc::kGuestInputHeader;
+                    }
+                } else if (directive.find("unistd.h") != std::string::npos) {
                     result +=
                         "int access(const char *path, int mode); "
                         "int isatty(int descriptor); "
@@ -745,6 +781,11 @@ std::string preprocess(std::string_view source, const std::string& source_name,
                         "double fmax(double left, double right); "
                         "float fmaxf(float left, float right);";
                     macros["M_PI"] = "3.14159265358979323846";
+                }
+                if (result.size() == include_start) {
+                    messages.push_back(
+                        {line_number, false,
+                         "unknown header ignored: " + include_name});
                 }
             } else if (directive.rfind("#line", 0) == 0 && active) {
                 result += directive;

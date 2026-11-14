@@ -1,5 +1,7 @@
 #include "cxx/preprocessor.h"
 
+#include "kr32/cc/guest_headers.h"
+
 #include <cctype>
 #include <cstdint>
 #include <cstdlib>
@@ -547,6 +549,46 @@ private:
         }
         if (directive == "include") {
             const std::string header(trim(rest));
+            if (header.find("kr32/fb.h") != std::string::npos) {
+                if (!kr32_fb_header_injected_) {
+                    kr32_fb_header_injected_ = true;
+                    append_line("extern \"C\" {\n" +
+                                std::string(kr32::cc::kGuestFbHeader) + "}\n");
+                }
+                return;
+            }
+            if (header.find("kr32/display.h") != std::string::npos) {
+                if (!kr32_display_header_injected_) {
+                    kr32_display_header_injected_ = true;
+                    append_line("extern \"C\" {\n" +
+                                std::string(kr32::cc::kGuestDisplayHeader) + "}\n");
+                }
+                return;
+            }
+            if (header.find("kr32/gfx.h") != std::string::npos) {
+                if (!kr32_gfx_header_injected_) {
+                    kr32_gfx_header_injected_ = true;
+                    append_line("extern \"C\" {\n" +
+                                std::string(kr32::cc::kGuestGfxHeader) + "}\n");
+                }
+                return;
+            }
+            if (header.find("kr32/con.h") != std::string::npos) {
+                if (!kr32_con_header_injected_) {
+                    kr32_con_header_injected_ = true;
+                    append_line("extern \"C\" {\n" +
+                                std::string(kr32::cc::kGuestConHeader) + "}\n");
+                }
+                return;
+            }
+            if (header.find("kr32/input.h") != std::string::npos) {
+                if (!kr32_input_header_injected_) {
+                    kr32_input_header_injected_ = true;
+                    append_line("extern \"C\" {\n" +
+                                std::string(kr32::cc::kGuestInputHeader) + "}\n");
+                }
+                return;
+            }
             if (header.find("<utility>") != std::string::npos) {
                 if (!utility_header_injected_) {
                     utility_header_injected_ = true;
@@ -5487,6 +5529,11 @@ private:
     bool cctype_header_injected_ = false;
     bool cstddef_header_injected_ = false;
     bool cstdint_header_injected_ = false;
+    bool kr32_fb_header_injected_ = false;
+    bool kr32_display_header_injected_ = false;
+    bool kr32_gfx_header_injected_ = false;
+    bool kr32_con_header_injected_ = false;
+    bool kr32_input_header_injected_ = false;
     bool climits_header_injected_ = false;
     bool cfloat_header_injected_ = false;
     bool stdio_header_injected_ = false;
