@@ -903,3 +903,22 @@ TEST_CASE("assembly optimizer keeps a move that is stored") {
     CHECK(assembly.find("MOV R0, #2") != std::string::npos);
     CHECK(assembly.find("STORE R0, [R1]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer folds a saved operand into its consumer") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R4, R0\n"
+        "    MOV R1, R4\n"
+        "    ADD R0, R1, #16\n"
+        "    ADD R0, R0, #4\n"
+        "    STORE R0, [R7 + 4]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R1, R4") == std::string::npos);
+    CHECK(assembly.find("ADD R0, R0, #16") != std::string::npos);
+}

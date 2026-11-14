@@ -6232,32 +6232,32 @@ private:
                         for (std::size_t index = fixed_count;
                              index-- > 0;) {
                             const SimpleArgument& argument = simple[index];
+                            // Write the argument register directly instead of
+                            // staging every value through R0.
+                            const std::string destination =
+                                "R" + std::to_string(index);
                             if (argument.is_literal) {
-                                emit("    MOV R0, #" +
+                                emit("    MOV " + destination + ", #" +
                                      std::to_string(argument.literal));
-                            } else {
-                                const TypePtr type = argument.type;
-                                if (type->kind == Type::Kind::Char ||
-                                    type->kind == Type::Kind::Bool) {
-                                    emit("    LOAD8S R0, [R7 + " +
-                                         std::to_string(
-                                             argument.variable->offset) +
-                                         "]");
-                                } else if (type->kind == Type::Kind::Short) {
-                                    emit("    LOAD16S R0, [R7 + " +
-                                         std::to_string(
-                                             argument.variable->offset) +
-                                         "]");
-                                } else {
-                                    emit("    LOAD R0, [R7 + " +
-                                         std::to_string(
-                                             argument.variable->offset) +
-                                         "]");
-                                }
+                                continue;
                             }
-                            if (index != 0) {
-                                emit("    MOV R" + std::to_string(index) +
-                                     ", R0");
+                            const TypePtr type = argument.type;
+                            if (type->kind == Type::Kind::Char ||
+                                type->kind == Type::Kind::Bool) {
+                                emit("    LOAD8S " + destination + ", [R7 + " +
+                                     std::to_string(
+                                         argument.variable->offset) +
+                                     "]");
+                            } else if (type->kind == Type::Kind::Short) {
+                                emit("    LOAD16S " + destination + ", [R7 + " +
+                                     std::to_string(
+                                         argument.variable->offset) +
+                                     "]");
+                            } else {
+                                emit("    LOAD " + destination + ", [R7 + " +
+                                     std::to_string(
+                                         argument.variable->offset) +
+                                     "]");
                             }
                         }
                         if (emit_inlined_call_result(name)) {

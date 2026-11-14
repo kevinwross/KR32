@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 10:13 -08:00
+> **Last updated:** 2026-11-14 11:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3393,6 +3393,17 @@ Newest entries at the bottom. Use the local time zone.
       again (destinations other than R7 and R11), which drops 125 instructions
       from the libc. libc object 417,056 -> 416,556 bytes; kernel at `-O1`
       67,528 -> 67,372. Windows 89/89 pass.
+
+- **2026-11-14 11:44 -08:00** — Call arguments are loaded straight into their
+      argument registers. The simple-argument path used to stage every value
+      through `R0` and then move it into place, so `heap_align(total, 8)` cost
+      `MOV R0, #8 ; MOV R1, R0 ; LOAD R0, [R7+4]`; it is now
+      `MOV R1, #8 ; LOAD R0, [R7+4]`. libc drops to 11,783 instructions and
+      416,500 bytes. Windows 89/89 pass.
+
+      The machine crashed during this run and left corrupted build artifacts;
+      a clean rebuild restored the suite (an MSVC internal compiler error on the
+      first attempt did not reproduce).
 
 ## 10. Updating this file
 
