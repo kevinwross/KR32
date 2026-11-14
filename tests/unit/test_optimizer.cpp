@@ -832,3 +832,56 @@ TEST_CASE("assembly optimizer promotes a parameter used once") {
     // The parameter stays in R0 and feeds the member load directly.
     CHECK(assembly.find("LOAD R0, [R0 + 4]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer moves a copied address into its producer") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [state]\n"
+        "    MOV R12, R0\n"
+        "    LOAD R0, [R0]\n"
+        "    ADD R0, R0, #1\n"
+        "    STORE R0, [R12]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("MOV R12, R0") == std::string::npos);
+    CHECK(assembly.find("LOAD R0, [state]") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [state]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer names a symbol base at every use") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R12, [state]\n"
+        "    LOAD R0, [R12]\n"
+        "    ADD R0, R0, #1\n"
+        "    STORE R0, [R12]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LEA R12, [state]") == std::string::npos);
+    CHECK(assembly.find("LOAD R0, [state]") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [state]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer keeps a symbol base that escapes") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R12, [state]\n"
+        "    STORE R12, [R7 + 0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    (void)stats;
+    CHECK(assembly.find("LEA R12, [state]") != std::string::npos);
+}

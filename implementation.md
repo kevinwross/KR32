@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 08:30 -08:00
+> **Last updated:** 2026-11-14 08:47 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3361,6 +3361,16 @@ Newest entries at the bottom. Use the local time zone.
       so `void f(void) { }` is now a single `RET` and every void function loses
       one instruction. libc object 417,132 -> 417,060 bytes; kernel at `-O1`
       68,280 -> 67,560. Windows 89/89 and WSL 89/89 pass.
+
+- **2026-11-14 08:47 -08:00** — Two address passes closed the last visible copy
+      in a global increment. When a `MOV` copies an address that the very next
+      instruction reads and clobbers, the copy moves into the producer and the
+      consumer, so the move disappears. And a `LEA Rd, [symbol]` whose register
+      is read only as a memory address is replaced by naming the symbol at every
+      use, so the register and the `LEA` go away. `++counter` is now
+      `LOAD R0, [counter] ; ADD R0, R0, #1 ; STORE R0, [counter]`.
+      libc object 417,060 -> 417,056 bytes; kernel at `-O1` 67,560 -> 67,528.
+      Windows 89/89 and WSL 89/89 pass.
 
 ## 10. Updating this file
 

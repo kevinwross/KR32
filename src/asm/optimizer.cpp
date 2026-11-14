@@ -1535,6 +1535,107 @@ bool register_dead_ignoring_line_labels(
 // LEA Rd, [symbol + n] ; LOAD/STORE x, [Rd]  ->  LOAD/STORE x, [symbol + n]
 // The absolute mode carries the symbol and its displacement, so the address
 // never has to be materialised in a register.
+// LEA Rd, [symbol + n] where Rd is only ever read as a memory address: every
+// use can name the symbol directly, so the register and the LEA go away.
+int promote_symbol_bases(std::vector<std::string>& lines) {
+    const std::vector<CfgFunction> functions = build_cfgs(lines);
+    int removed = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int reg = 0;
+        std::string symbol;
+        int base_offset = 0;
+        if (!parse_register(address.operands[0], reg) || reg == 7 || reg == 11 ||
+            !parse_symbol_offset(address.operands[1], symbol, base_offset)) {
+            continue;
+        }
+        const CfgFunction* function = nullptr;
+        for (const CfgFunction& candidate : functions) {
+            if (index >= candidate.begin && index < candidate.end) {
+                function = &candidate;
+                break;
+            }
+        }
+        if (function == nullptr) {
+            continue;
+        }
+        const RegisterMask bit = bit_for_register(reg);
+        std::vector<std::size_t> uses;
+        bool ok = true;
+        for (std::size_t scan = function->begin; scan < function->end; ++scan) {
+            if (scan == index) {
+                continue;
+            }
+            Instruction instruction;
+            if (!parse_instruction(lines[scan], instruction)) {
+                continue;
+            }
+            RegisterMask used = 0;
+            RegisterMask defined = 0;
+            instruction_uses_defs(instruction, used, defined);
+            if ((defined & bit) != 0) {
+                ok = false;
+                break;
+            }
+            if ((used & bit) == 0) {
+                continue;
+            }
+            const bool memory_instruction =
+                instruction.mnemonic.rfind("LOAD", 0) == 0 ||
+                instruction.mnemonic.rfind("STORE", 0) == 0;
+            bool memory_read = false;
+            bool plain_read = false;
+            for (const std::string& operand : instruction.operands) {
+                int address_reg = 0;
+                int offset = 0;
+                int plain = 0;
+                if (parse_register(operand, plain) && plain == reg) {
+                    plain_read = true;
+                }
+                if (memory_instruction &&
+                    parse_register_offset(operand, address_reg, offset) &&
+                    address_reg == reg) {
+                    memory_read = true;
+                }
+            }
+            if (!memory_read || plain_read) {
+                ok = false;
+                break;
+            }
+            uses.push_back(scan);
+        }
+        if (!ok || uses.empty()) {
+            continue;
+        }
+        for (const std::size_t use : uses) {
+            Instruction instruction;
+            if (!parse_instruction(lines[use], instruction)) {
+                continue;
+            }
+            for (std::string& operand : instruction.operands) {
+                int address_reg = 0;
+                int offset = 0;
+                if (!parse_register_offset(operand, address_reg, offset) ||
+                    address_reg != reg) {
+                    continue;
+                }
+                const int combined = base_offset + offset;
+                operand = combined == 0
+                              ? "[" + symbol + "]"
+                              : "[" + symbol + " + " +
+                                    std::to_string(combined) + "]";
+            }
+            lines[use] = format_instruction(instruction);
+        }
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
 int use_absolute_symbol_addresses(std::vector<std::string>& lines) {
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::set<std::string> branch_targets;
@@ -1840,6 +1941,93 @@ int fold_unary_constants(std::vector<std::string>& lines) {
 }
 
 // produced Rd to write Ry instead, and drop the copy.
+// MOV Rd, Rs where the producer computes an address in Rs and the consumer
+// immediately reads and clobbers Rs: move the copy into both ends so the
+// address survives in Rd and the extra move disappears.
+int fold_clobbered_address_copies(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 1; index + 1 < lines.size(); ++index) {
+        Instruction move;
+        if (!parse_instruction(lines[index], move) || move.mnemonic != "MOV" ||
+            move.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int source = 0;
+        if (!parse_register(move.operands[0], destination) ||
+            !parse_register(move.operands[1], source) ||
+            destination == source || destination == 7 || destination == 11 ||
+            source == 7 || source == 11) {
+            continue;
+        }
+        std::size_t producer = index;
+        bool found = false;
+        while (producer > 0) {
+            --producer;
+            if (lines[producer].empty()) {
+                continue;
+            }
+            found = !is_label(lines[producer]);
+            break;
+        }
+        if (!found) {
+            continue;
+        }
+        Instruction produced;
+        if (!parse_instruction(lines[producer], produced) ||
+            (produced.mnemonic != "LEA" && produced.mnemonic != "ADD" &&
+             produced.mnemonic != "SUB") ||
+            produced.operands.empty()) {
+            continue;
+        }
+        int target = 0;
+        if (!parse_register(produced.operands[0], target) || target != source) {
+            continue;
+        }
+        std::size_t consumer = index + 1;
+        while (consumer < lines.size() && lines[consumer].empty()) {
+            ++consumer;
+        }
+        if (consumer >= lines.size()) {
+            continue;
+        }
+        Instruction instruction;
+        if (!parse_instruction(lines[consumer], instruction)) {
+            continue;
+        }
+        RegisterMask uses = 0;
+        RegisterMask defs = 0;
+        instruction_uses_defs(instruction, uses, defs);
+        const RegisterMask source_bit = bit_for_register(source);
+        const RegisterMask destination_bit = bit_for_register(destination);
+        if ((uses & source_bit) == 0 || (defs & source_bit) == 0) {
+            continue;
+        }
+        if ((uses & destination_bit) != 0 ||
+            (defs & destination_bit) != 0) {
+            continue;
+        }
+        const std::size_t first =
+            writes_first_operand(instruction) ? 1 : 0;
+        bool replaced = false;
+        for (std::size_t operand = first;
+             operand < instruction.operands.size(); ++operand) {
+            if (replace_register_operand(instruction.operands[operand],
+                                         source, destination)) {
+                replaced = true;
+            }
+        }
+        if (!replaced) {
+            continue;
+        }
+        produced.operands[0] = "R" + std::to_string(destination);
+        lines[producer] = format_instruction(produced);
+        lines[consumer] = format_instruction(instruction);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
 int fold_address_moves(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 1; index < lines.size(); ++index) {
@@ -4072,8 +4260,10 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += forward_stack_temporaries(lines);
     stats.removed += fold_narrowing_stores(lines);
     stats.removed += fold_copy_consumers(lines);
+    stats.removed += fold_clobbered_address_copies(lines);
     stats.removed += fold_address_moves(lines);
     stats.removed += use_absolute_symbol_addresses(lines);
+    stats.removed += promote_symbol_bases(lines);
     stats.removed += reuse_symbol_bases(lines);
     stats.removed += strength_reduce_immediates(lines, stats.rewritten);
     stats.removed += coalesce_moves(lines);
@@ -4084,8 +4274,10 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_overwritten_moves(lines);
     // The folds above can expose frame traffic that the first round could not
     // see, so repeat the address and frame clean-up on the folded code.
+    stats.removed += fold_clobbered_address_copies(lines);
     stats.removed += fold_address_moves(lines);
     stats.removed += use_absolute_symbol_addresses(lines);
+    stats.removed += promote_symbol_bases(lines);
     stats.removed += forward_cfg_frame_loads(lines);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += remove_dead_frame_stores(lines);
