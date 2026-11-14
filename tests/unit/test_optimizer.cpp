@@ -506,9 +506,9 @@ TEST_CASE("assembly optimizer retargets an address move to the store register") 
     const assembler::OptimizeStats stats =
         assembler::optimize_assembly(assembly);
     CHECK(stats.removed >= 2);
-    CHECK(assembly.find("LEA R1, [state + 4]") != std::string::npos);
+    // The absolute form wins over materialising the address in a register.
+    CHECK(assembly.find("STORE R0, [state + 4]") != std::string::npos);
     CHECK(assembly.find("MOV R1, R0") == std::string::npos);
-    CHECK(assembly.find("STORE R0, [R1]") != std::string::npos);
 }
 
 TEST_CASE("assembly optimizer retargets a symbol address move") {
@@ -524,7 +524,7 @@ TEST_CASE("assembly optimizer retargets a symbol address move") {
     const assembler::OptimizeStats stats =
         assembler::optimize_assembly(assembly);
     CHECK(stats.removed >= 1);
-    CHECK(assembly.find("LEA R1, [state]") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [state]") != std::string::npos);
     CHECK(assembly.find("MOV R1, R0") == std::string::npos);
 }
 
@@ -544,7 +544,7 @@ TEST_CASE("assembly optimizer folds addresses across line labels") {
         assembler::optimize_assembly(assembly);
     CHECK(stats.removed >= 2);
     INFO(assembly);
-    CHECK(assembly.find("LEA R1, [state + 4]") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [state + 4]") != std::string::npos);
     CHECK(assembly.find("MOV R1, R0") == std::string::npos);
 }
 

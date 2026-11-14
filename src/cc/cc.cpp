@@ -1302,8 +1302,9 @@ std::string compile_time_stamp(const char* format) {
 
 class Compiler {
 public:
-    Compiler(std::string_view source, std::string_view name, int source_id = 0)
-        : source_name_(name), source_id_(source_id),
+    Compiler(std::string_view source, std::string_view name, int source_id = 0,
+             bool optimize = false)
+        : source_name_(name), source_id_(source_id), optimize_(optimize),
           tokens_(Lexer(preprocess(source, std::string(name),
                                     preprocessor_messages_),
                          name)
@@ -2750,7 +2751,8 @@ private:
         emit(return_label_ + ":");
         emit("    ADJSP #__FRAME_" + name + "__");
         emit("    POP R7");
-        emit("    RET");
+        // A wide return keeps R1 live; the optimizer folds it back to RET.
+        emit(is_long_long_type(result_type) && optimize_ ? "    RETW" : "    RET");
         emit(".Lend_" + name + ":");
         debug_record("F " + name + " " + name + " .Lend_" + name + " " +
                      std::to_string(frame_size_) + " " + debug_type_name(result_type));
@@ -6881,6 +6883,7 @@ private:
 
     std::string source_name_;
     int source_id_ = 0;
+    bool optimize_ = false;
     std::vector<PreprocessMessage> preprocessor_messages_;
     std::vector<Token> tokens_;
     std::size_t position_ = 0;
@@ -6927,7 +6930,7 @@ private:
 
 Result compile(std::string_view source, std::string_view source_name, int source_id,
                 bool optimize) {
-    Compiler compiler(source, source_name, source_id);
+    Compiler compiler(source, source_name, source_id, optimize);
     Result result = compiler.run();
     if (optimize && result.ok) {
         const assembler::OptimizeStats stats =

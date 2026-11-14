@@ -181,6 +181,12 @@ bool is_call(std::string_view mnemonic) {
     return mnemonic == "CALL" || mnemonic == "SYSCALL";
 }
 
+// RETW is the compiler's wide return: same encoding as RET, but the optimizer
+// keeps R1 live for it because a 64-bit result uses both words.
+bool is_return_mnemonic(std::string_view mnemonic) {
+    return mnemonic == "RET" || mnemonic == "RETW";
+}
+
 bool writes_first_operand(const Instruction& instruction) {
     if (instruction.operands.empty()) {
         return false;
@@ -188,7 +194,8 @@ bool writes_first_operand(const Instruction& instruction) {
     if (instruction.mnemonic == "CMP" || instruction.mnemonic == "STORE" ||
         instruction.mnemonic == "STORE8" || instruction.mnemonic == "STORE16" ||
         instruction.mnemonic == "PUSH" || instruction.mnemonic == "FENCE" ||
-        instruction.mnemonic == "NOP" || instruction.mnemonic == "RET" ||
+        instruction.mnemonic == "NOP" ||
+        is_return_mnemonic(instruction.mnemonic) ||
         instruction.mnemonic == "HALT" || is_call(instruction.mnemonic) ||
         is_branch(instruction.mnemonic)) {
         return false;
@@ -225,9 +232,13 @@ void count_reads(const Instruction& instruction, RegisterReadCounts& counts) {
         }
         return;
     }
-    if (instruction.mnemonic == "RET") {
+    if (instruction.mnemonic == "RETW") {
         ++counts.reads[0];
         ++counts.reads[1];
+        return;
+    }
+    if (instruction.mnemonic == "RET") {
+        ++counts.reads[0];
         return;
     }
     const std::size_t first =
@@ -492,8 +503,12 @@ void instruction_uses_defs(const Instruction& instruction,
                            RegisterMask& uses, RegisterMask& defs) {
     uses = 0;
     defs = 0;
-    if (instruction.mnemonic == "RET") {
+    if (instruction.mnemonic == "RETW") {
         uses = bit_for_register(0) | bit_for_register(1);
+        return;
+    }
+    if (instruction.mnemonic == "RET") {
+        uses = bit_for_register(0);
         return;
     }
     if (is_call(instruction.mnemonic)) {
@@ -627,7 +642,7 @@ std::vector<CfgFunction> build_cfgs(const std::vector<std::string>& lines) {
             if (parse_instruction(text, instruction)) {
                 previous_terminated =
                     is_branch(instruction.mnemonic) ||
-                    instruction.mnemonic == "RET" ||
+                    is_return_mnemonic(instruction.mnemonic) ||
                     instruction.mnemonic == "HALT";
             } else {
                 previous_terminated = false;
@@ -700,7 +715,7 @@ std::vector<CfgFunction> build_cfgs(const std::vector<std::string>& lines) {
                     block.successors.push_back(fallthrough);
                 }
             } else if (!has_last ||
-                       (last.mnemonic != "RET" &&
+                       (!is_return_mnemonic(last.mnemonic) &&
                         last.mnemonic != "HALT")) {
                 if (fallthrough < function.blocks.size()) {
                     block.successors.push_back(fallthrough);
@@ -835,7 +850,7 @@ int coalesce_block_moves(std::vector<std::string>& lines,
                 removable = false;
                 break;
             }
-            if (instruction.mnemonic == "RET") {
+            if (is_return_mnemonic(instruction.mnemonic)) {
                 if (destination == 1) {
                     removable = false;
                 }
@@ -906,7 +921,7 @@ bool next_consumer(std::string_view load_line, int destination, int source,
         return false;
     }
     (void)load_line;
-    if (consumer.mnemonic == "RET" || consumer.mnemonic == "HALT" ||
+    if (is_return_mnemonic(consumer.mnemonic) || consumer.mnemonic == "HALT" ||
         is_branch(consumer.mnemonic) || is_call(consumer.mnemonic)) {
         return false;
     }
@@ -2568,7 +2583,8 @@ int remove_redundant_jumps(std::vector<std::string>& lines) {
 }
 
 bool is_terminator(const std::string& mnemonic) {
-    return mnemonic == "RET" || mnemonic == "JMP" || mnemonic == "HALT";
+    return is_return_mnemonic(mnemonic) || mnemonic == "JMP" ||
+           mnemonic == "HALT";
 }
 
 int fold_load_copy_overwrites(std::vector<std::string>& lines) {
@@ -2872,7 +2888,7 @@ int fold_tail_calls(std::vector<std::string>& lines, int& rewritten) {
         Instruction ret;
         if (ret_index >= lines.size() ||
             !parse_instruction(lines[ret_index], ret) ||
-            ret.mnemonic != "RET") {
+            !is_return_mnemonic(ret.mnemonic)) {
             continue;
         }
         replacements.push_back({index, jump_index, adjust,
@@ -3461,7 +3477,7 @@ int fold_push_pop_pairs(std::vector<std::string>& lines, int& rewritten) {
             }
             if (is_call(instruction.mnemonic) ||
                 is_branch(instruction.mnemonic) ||
-                instruction.mnemonic == "RET" ||
+                is_return_mnemonic(instruction.mnemonic) ||
                 instruction.mnemonic == "HALT" ||
                 instruction.mnemonic == "ADJSP") {
                 invalid = true;
@@ -3817,6 +3833,14 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_overwritten_moves(lines);
     stats.removed += remove_redundant_jumps(lines);
     stats.removed += remove_dead_functions(lines);
+    for (std::string& line : lines) {
+        Instruction instruction;
+        if (parse_instruction(line, instruction) &&
+            instruction.mnemonic == "RETW") {
+            instruction.mnemonic = "RET";
+            line = format_instruction(instruction);
+        }
+    }
     assembly = join_lines(lines);
     return stats;
 }

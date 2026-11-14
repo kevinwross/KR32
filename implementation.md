@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 22:37 -08:00
+> **Last updated:** 2026-11-13 22:49 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3282,6 +3282,17 @@ Newest entries at the bottom. Use the local time zone.
       bytes, and the kernel binary at `-O1` from 72,876 to 70,176 bytes (85,032
       at `-O0`, 17.5% saved). The check uses the CFG liveness analysis, not just
       a linear scan. All 89 Windows tests pass.
+
+- **2026-11-13 22:49 -08:00** — `RET` no longer counts as reading `R1`. The
+      compilers emit `RETW` for a 64-bit return while optimizing, and the
+      optimizer maps it back to `RET` before assembling, so only functions that
+      actually return a wide value keep `R1` live. This unlocks the register
+      folds at the end of every other function. The libc object drops from
+      420,708 to 420,500 bytes and the kernel at `-O1` from 70,176 to 69,920.
+      All 89 Windows tests pass.
+
+      A copy-into-consumer pass was prototyped and dropped: with the wide-return
+      change in place it changed no instruction in the sample.
 
 ## 10. Updating this file
 

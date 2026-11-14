@@ -10492,7 +10492,8 @@ private:
         frame_size_ = (frame_size_ + 15) / 16 * 16 + 8;
         emit("    ADJSP #" + std::to_string(frame_size_));
         emit("    POP R7");
-        emit("    RET");
+        // A wide return keeps R1 live; the optimizer folds it back to RET.
+        emit(is_long_long(function.result) && optimize_ ? "    RETW" : "    RET");
 
         const std::string function_end = new_label("func_end");
         emit(function_end + ":");
