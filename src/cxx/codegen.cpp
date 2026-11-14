@@ -7243,7 +7243,7 @@ private:
         // A simple scalar assignment pushes the address, so the optimizer can
         // keep it in the store register instead of a frame slot.
         const bool address_on_stack =
-            expression.text == "=" && !is_long_long(stored_type);
+            !is_long_long(stored_type) && !is_fp(stored_type);
         int address_temp = -1;
         if (address_on_stack) {
             emit("    PUSH R0");
@@ -7256,10 +7256,17 @@ private:
             gen_expr(*expression.children[1]);
         } else {
             const std::string op = expression.text.substr(0, expression.text.size() - 1);
-            emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
-            load_value(stored_type);
-            const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-            emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+            int left_temp = -1;
+            if (address_on_stack) {
+                // The address is on the stack; the old value waits there too.
+                load_value(stored_type);
+                emit("    PUSH R0");
+            } else {
+                emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
+                load_value(stored_type);
+                left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+                emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+            }
             gen_expr(*expression.children[1]);
             emit("    MOV R1, R0");
             if (is_pointer(stored_type)) {
@@ -7274,7 +7281,11 @@ private:
                     }
                 }
             }
-            emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+            if (address_on_stack) {
+                emit("    POP R0");
+            } else {
+                emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+            }
             const bool unsigned_operation =
                 is_unsigned_operation(stored_type, type_of(*expression.children[1]));
             if (op == "+") emit("    ADD R0, R0, R1");

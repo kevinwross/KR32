@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 23:23 -08:00
+> **Last updated:** 2026-11-13 23:43 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3309,6 +3309,19 @@ Newest entries at the bottom. Use the local time zone.
 
       libc object 420,240 -> 418,920 bytes; kernel at `-O1` 69,740 -> 69,252.
       All 89 Windows tests pass.
+
+- **2026-11-13 23:43 -08:00** — C++ compound assignment no longer keeps two
+      frame temporaries. It pushes the lvalue address and the old value, so the
+      optimizer folds the pushes into moves: `counter += v` is now
+      `LEA R0, [counter] ; PUSH R0 ; LOAD R0, [R0] ; LOAD R1, [R7+0] ; ADD ... ;
+      POP R1 ; STORE R0, [R1]` instead of six frame accesses. Verified by
+      executing a C++ program that uses `+=`, `*=`, `-=`, `<<=` and `|=`.
+      All 89 Windows tests pass.
+
+      A pass that tried to keep the pushed lvalue address in a scratch register
+      was prototyped and dropped: the address register is consumed by its own
+      load and the value operand occupies `R1`, so the rewrite cannot beat the
+      push/pop without real register allocation.
 
 ## 10. Updating this file
 
