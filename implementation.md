@@ -927,25 +927,32 @@ pixel; a 41-line print took 10M ticks after the panning prototype, and 45M for
 **Goal:** the programmer-facing API in [docs/graphics.md](docs/graphics.md):
 `gfx_*` drawing, `con_*` console, `input_*`, with guest headers.
 
-**Status:** blocked on the compiler stream and on M10.5. Guest headers are
-synthesised inside the C and C++ front ends, and adding `<kr32/*.h>` there is
-deferred ([docs/graphics.md](docs/graphics.md) §8); do not start until that work
-is scheduled and agreed by both streams. The console and drawing backends land
-in M10.5 first.
+**Status:** blocked on the compiler stream; M10.5 supplies the terminal and
+graphics devices. Decisions taken 2026-11-13: user programs reach the devices
+through a syscall command block (`sys_gfx`, 60); surfaces are VRAM-backed
+handles allocated by the kernel; text is copied into a VRAM staging buffer
+before `DRAW_TEXT`; the five guest headers land in both front ends at once; an
+unknown `#include` warns and is dropped; M11 covers `fb`, `gfx`, `con`, and
+`input`.
 
 **Tasks**
 
-- [ ] Declare `<kr32/fb.h>`, `<kr32/display.h>`, `<kr32/gfx.h>`,
-      `<kr32/con.h>`, and `<kr32/input.h>` in the front ends.
-- [ ] Portable `gfx.c` drawing core with host-buffer unit tests
-      ([docs/graphics.md](docs/graphics.md) §12.1).
-- [ ] Kernel `con_*` and `input_*` wrappers; user `gfx_create`/`gfx_present`.
-- [ ] `sys_display_*` pointer, stride, and rectangle validation.
+- [ ] Guest headers `<kr32/fb.h>`, `<kr32/display.h>`, `<kr32/gfx.h>`,
+      `<kr32/con.h>`, `<kr32/input.h>` in `src/cc/cc.cpp` and
+      `src/cxx/preprocessor.cpp`, from the shared list in
+      [docs/graphics.md](docs/graphics.md) §8.
+- [ ] Warn on an unknown `#include` instead of dropping it silently.
+- [ ] `sys_gfx` (60): copy and validate the command block, write page 9.
+- [ ] VRAM arena and `gfx_create`/`gfx_destroy`; `STAGE_TEXT` and `DRAW_TEXT`.
+- [ ] Kernel `gfx_*` command wrappers, `con_*` over `sys_write`, `input_*`
+      over the keyboard device with `sys_input` (61/62).
 - [ ] Two examples under `examples/gfx/`, built and hash-tested.
 
 **Test plan and gate**
 
-- [ ] Examples build and run; drawing results match the host unit tests.
+- [ ] Compiler tests include each header and call a symbol in C and C++.
+- [ ] Examples build and run on both front ends; the screenshot shows the
+      expected pixels.
 - [ ] Windows and WSL green; commit, tag `m11`, running-log entry added.
 
 ## 6. Cross-cutting test plan
