@@ -385,6 +385,8 @@ public:
 
 private:
     void execute();
+    void effective_clip(std::uint32_t& x, std::uint32_t& y, std::uint32_t& width,
+                        std::uint32_t& height) const;
     void fill_rect(std::uint32_t x, std::uint32_t y, std::uint32_t width,
                    std::uint32_t height, std::uint32_t color);
     void copy_rect(std::uint32_t source, std::uint32_t dx, std::uint32_t dy,

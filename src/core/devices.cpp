@@ -993,6 +993,29 @@ void GraphicsDevice::execute() {
     }
 }
 
+void GraphicsDevice::effective_clip(std::uint32_t& x, std::uint32_t& y,
+                                    std::uint32_t& width,
+                                    std::uint32_t& height) const {
+    if (framebuffer_ == nullptr) {
+        x = 0;
+        y = 0;
+        width = 0;
+        height = 0;
+        return;
+    }
+    if (clip_width_ == 0 || clip_height_ == 0) {
+        x = 0;
+        y = 0;
+        width = framebuffer_->width();
+        height = framebuffer_->height();
+        return;
+    }
+    x = clip_x_;
+    y = clip_y_;
+    width = clip_width_;
+    height = clip_height_;
+}
+
 void GraphicsDevice::fill_rect(std::uint32_t x, std::uint32_t y,
                                std::uint32_t width, std::uint32_t height,
                                std::uint32_t color) {
@@ -1002,10 +1025,15 @@ void GraphicsDevice::fill_rect(std::uint32_t x, std::uint32_t y,
     }
     const std::uint32_t surface_width = framebuffer_->width();
     const std::uint32_t surface_height = framebuffer_->height();
-    const std::uint32_t left = std::max(x, clip_x_);
-    const std::uint32_t top = std::max(y, clip_y_);
-    const std::uint32_t right = std::min(x + width, std::min(clip_x_ + clip_width_, surface_width));
-    const std::uint32_t bottom = std::min(y + height, std::min(clip_y_ + clip_height_, surface_height));
+    std::uint32_t clip_x = 0;
+    std::uint32_t clip_y = 0;
+    std::uint32_t clip_width = 0;
+    std::uint32_t clip_height = 0;
+    effective_clip(clip_x, clip_y, clip_width, clip_height);
+    const std::uint32_t left = std::max(x, clip_x);
+    const std::uint32_t top = std::max(y, clip_y);
+    const std::uint32_t right = std::min(x + width, std::min(clip_x + clip_width, surface_width));
+    const std::uint32_t bottom = std::min(y + height, std::min(clip_y + clip_height, surface_height));
     if (left >= right || top >= bottom) {
         return;
     }
@@ -1035,11 +1063,16 @@ void GraphicsDevice::copy_rect(std::uint32_t source, std::uint32_t dx,
         return;
     }
     const std::uint32_t stride = framebuffer_->stride();
-    const std::uint32_t surface_width = framebuffer_->width();
-    const std::uint32_t surface_height = framebuffer_->height();
-    const std::uint32_t right = std::min(dx + width, surface_width);
-    const std::uint32_t bottom = std::min(dy + height, surface_height);
-    if (dx >= right || dy >= bottom) {
+    std::uint32_t clip_x = 0;
+    std::uint32_t clip_y = 0;
+    std::uint32_t clip_width = 0;
+    std::uint32_t clip_height = 0;
+    effective_clip(clip_x, clip_y, clip_width, clip_height);
+    const std::uint32_t left = std::max(dx, clip_x);
+    const std::uint32_t top = std::max(dy, clip_y);
+    const std::uint32_t right = std::min(dx + width, clip_x + clip_width);
+    const std::uint32_t bottom = std::min(dy + height, clip_y + clip_height);
+    if (left >= right || top >= bottom) {
         return;
     }
     const std::uint64_t needed = static_cast<std::uint64_t>(source) +
@@ -1048,13 +1081,13 @@ void GraphicsDevice::copy_rect(std::uint32_t source, std::uint32_t dx,
         error_ = true;
         return;
     }
-    std::vector<std::uint8_t> scratch(static_cast<std::size_t>(right - dx) * 4U);
-    for (std::uint32_t row = dy; row < bottom; ++row) {
+    std::vector<std::uint8_t> scratch(static_cast<std::size_t>(right - left) * 4U);
+    for (std::uint32_t row = top; row < bottom; ++row) {
         const std::size_t from = source + static_cast<std::size_t>(row - dy) * stride +
-                                 static_cast<std::size_t>(dx) * 4U;
+                                 static_cast<std::size_t>(left - dx) * 4U;
         const std::size_t to = framebuffer_->back_offset() +
                                static_cast<std::size_t>(row) * stride +
-                               static_cast<std::size_t>(dx) * 4U;
+                               static_cast<std::size_t>(left) * 4U;
         if (from + scratch.size() > framebuffer_->vram().size() ||
             to + scratch.size() > framebuffer_->vram().size()) {
             error_ = true;
@@ -1073,16 +1106,21 @@ void GraphicsDevice::draw_line(int x0, int y0, int x1, int y1,
         error_ = true;
         return;
     }
+    std::uint32_t clip_x = 0;
+    std::uint32_t clip_y = 0;
+    std::uint32_t clip_width = 0;
+    std::uint32_t clip_height = 0;
+    effective_clip(clip_x, clip_y, clip_width, clip_height);
     const int dx = std::abs(x1 - x0);
     const int dy = -std::abs(y1 - y0);
     const int sx = x0 < x1 ? 1 : -1;
     const int sy = y0 < y1 ? 1 : -1;
     int error = dx + dy;
     while (true) {
-        if (x0 >= static_cast<int>(clip_x_) &&
-            y0 >= static_cast<int>(clip_y_) &&
-            static_cast<std::uint32_t>(x0) < clip_x_ + clip_width_ &&
-            static_cast<std::uint32_t>(y0) < clip_y_ + clip_height_) {
+        if (x0 >= static_cast<int>(clip_x) &&
+            y0 >= static_cast<int>(clip_y) &&
+            static_cast<std::uint32_t>(x0) < clip_x + clip_width &&
+            static_cast<std::uint32_t>(y0) < clip_y + clip_height) {
             const std::size_t offset = framebuffer_->back_offset() +
                                        static_cast<std::size_t>(y0) * framebuffer_->stride() +
                                        static_cast<std::size_t>(x0) * 4U;
@@ -1122,6 +1160,11 @@ void GraphicsDevice::draw_text(std::uint32_t x, std::uint32_t y,
         error_ = true;
         return;
     }
+    std::uint32_t clip_x = 0;
+    std::uint32_t clip_y = 0;
+    std::uint32_t clip_width = 0;
+    std::uint32_t clip_height = 0;
+    effective_clip(clip_x, clip_y, clip_width, clip_height);
     const std::uint32_t surface_width = framebuffer_->width();
     const std::uint32_t surface_height = framebuffer_->height();
     for (std::uint32_t index = 0; index < length; ++index) {
@@ -1138,8 +1181,8 @@ void GraphicsDevice::draw_text(std::uint32_t x, std::uint32_t y,
             for (int pixel = 0; pixel < kFont10x20Width; ++pixel) {
                 const std::uint32_t px = origin_x + static_cast<std::uint32_t>(pixel);
                 const std::uint32_t py = y + static_cast<std::uint32_t>(line);
-                if (px < clip_x_ || py < clip_y_ || px >= clip_x_ + clip_width_ ||
-                    py >= clip_y_ + clip_height_ || px >= surface_width ||
+                if (px < clip_x || py < clip_y || px >= clip_x + clip_width ||
+                    py >= clip_y + clip_height || px >= surface_width ||
                     py >= surface_height) {
                     continue;
                 }

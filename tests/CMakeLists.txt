@@ -27,6 +27,7 @@ set(KR32_TEST_SOURCES
     unit/test_cc_8.cpp
     unit/test_debug.cpp
     unit/test_terminal.cpp
+    unit/test_graphics.cpp
     unit/test_fast.cpp
     unit/test_embedded_os.cpp
     unit/test_host.cpp
