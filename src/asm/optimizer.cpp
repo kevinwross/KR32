@@ -1336,6 +1336,117 @@ int fold_symbol_address_loads(std::vector<std::string>& lines) {
     return removed;
 }
 
+// LEA Rd, [symbol] ; ADD Rd, Rd, #n  ->  LEA Rd, [symbol + n]
+int fold_symbol_offsets(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction address;
+        if (!parse_instruction(lines[index], address) ||
+            address.mnemonic != "LEA" || address.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        std::string symbol;
+        if (!parse_register(address.operands[0], destination) ||
+            !parse_symbol_address(address.operands[1], symbol)) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction adjust;
+        if (!parse_instruction(lines[next], adjust) ||
+            adjust.mnemonic != "ADD" || adjust.operands.size() != 3) {
+            continue;
+        }
+        int adjusted = 0;
+        int left = 0;
+        if (!parse_register(adjust.operands[0], adjusted) ||
+            adjusted != destination ||
+            !parse_register(adjust.operands[1], left) || left != destination) {
+            continue;
+        }
+        if (adjust.operands[2].empty() || adjust.operands[2].front() != '#') {
+            continue;
+        }
+        int value = 0;
+        try {
+            value = std::stoi(adjust.operands[2].substr(1));
+        } catch (...) {
+            continue;
+        }
+        if (value < 0) {
+            continue;
+        }
+        address.operands[1] =
+            "[" + symbol + " + " + std::to_string(value) + "]";
+        lines[index] = format_instruction(address);
+        lines[next].clear();
+        ++removed;
+    }
+    return removed;
+}
+
+// MOV Ry, Rd where Rd is dead afterwards: retarget the LEA or ADD that
+// produced Rd to write Ry instead, and drop the copy.
+int fold_address_moves(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 1; index < lines.size(); ++index) {
+        Instruction move;
+        if (!parse_instruction(lines[index], move) ||
+            move.mnemonic != "MOV" || move.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int source = 0;
+        if (!parse_register(move.operands[0], destination) ||
+            !parse_register(move.operands[1], source) ||
+            destination == source || destination == 7 || destination == 11 ||
+            source == 7 || source == 11) {
+            continue;
+        }
+        if (!register_dead_after(lines, index + 1, source)) {
+            continue;
+        }
+        std::size_t producer = index;
+        bool found = false;
+        while (producer > 0) {
+            --producer;
+            if (lines[producer].empty()) {
+                continue;
+            }
+            found = !is_label(lines[producer]);
+            break;
+        }
+        if (!found) {
+            continue;
+        }
+        Instruction produced;
+        if (!parse_instruction(lines[producer], produced)) {
+            continue;
+        }
+        const bool address_instruction =
+            produced.mnemonic == "LEA" ||
+            produced.mnemonic == "ADD" || produced.mnemonic == "SUB";
+        if (!address_instruction || produced.operands.empty()) {
+            continue;
+        }
+        int target = 0;
+        if (!parse_register(produced.operands[0], target) || target != source) {
+            continue;
+        }
+        produced.operands[0] = "R" + std::to_string(destination);
+        lines[producer] = format_instruction(produced);
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int fold_symbol_address_stores(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -3023,6 +3134,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
     stats.removed += fold_symbol_address_loads(lines);
+    stats.removed += fold_symbol_offsets(lines);
     stats.removed += fold_symbol_address_stores(lines);
     stats.removed += fold_pointer_load_offsets(lines);
     stats.removed += fold_pointer_store_offsets(lines);
@@ -3047,8 +3159,10 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
+    stats.removed += fold_address_moves(lines);
     stats.removed += strength_reduce_immediates(lines, stats.rewritten);
     stats.removed += coalesce_moves(lines);
+    stats.removed += fold_address_moves(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);
     stats.removed += remove_redundant_jumps(lines);

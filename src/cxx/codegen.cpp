@@ -7240,8 +7240,17 @@ private:
             }
         }
         gen_address(*expression.children[0]);
-        const int address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-        emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+        // A simple scalar assignment pushes the address, so the optimizer can
+        // keep it in the store register instead of a frame slot.
+        const bool address_on_stack =
+            expression.text == "=" && !is_long_long(stored_type);
+        int address_temp = -1;
+        if (address_on_stack) {
+            emit("    PUSH R0");
+        } else {
+            address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
+            emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+        }
 
         if (expression.text == "=") {
             gen_expr(*expression.children[1]);
@@ -7295,7 +7304,11 @@ private:
             }
             emit("    MOV R2, R1");
         }
-        emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+        if (address_on_stack) {
+            emit("    POP R1");
+        } else {
+            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+        }
         store_value(stored_type);
         return lhs_type;
     }

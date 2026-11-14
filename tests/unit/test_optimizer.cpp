@@ -475,3 +475,75 @@ TEST_CASE("assembly optimizer removes overwritten and no-op moves") {
     CHECK(assembly.find("MOV R0, #2") == std::string::npos);
     CHECK(assembly.find("JMP .Lnext") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer folds a symbol offset into the address") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [state]\n"
+        "    ADD R0, R0, #4\n"
+        "    LOAD R0, [R0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LEA R0, [state + 4]") != std::string::npos);
+    CHECK(assembly.find("ADD R0, R0, #4") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer retargets an address move to the store register") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [state]\n"
+        "    ADD R0, R0, #4\n"
+        "    MOV R1, R0\n"
+        "    MOV R0, #1\n"
+        "    STORE R0, [R1]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("LEA R1, [state + 4]") != std::string::npos);
+    CHECK(assembly.find("MOV R1, R0") == std::string::npos);
+    CHECK(assembly.find("STORE R0, [R1]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer retargets a symbol address move") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LEA R0, [state]\n"
+        "    MOV R1, R0\n"
+        "    LEA R0, [other]\n"
+        "    STORE R0, [R1]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LEA R1, [state]") != std::string::npos);
+    CHECK(assembly.find("MOV R1, R0") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer folds addresses across line labels") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        ".Lline_1:\n"
+        "    LEA R0, [state]\n"
+        "    ADD R0, R0, #4\n"
+        "    MOV R1, R0\n"
+        "    MOV R0, #1\n"
+        "    STORE R0, [R1]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    INFO(assembly);
+    CHECK(assembly.find("LEA R1, [state + 4]") != std::string::npos);
+    CHECK(assembly.find("MOV R1, R0") == std::string::npos);
+}

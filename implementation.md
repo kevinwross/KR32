@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 20:41 -08:00
+> **Last updated:** 2026-11-13 21:35 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3222,6 +3222,24 @@ Newest entries at the bottom. Use the local time zone.
       pixels of the screenshot; `gfxcheck` adds a clip-confined fill and a line
       with five pixel checks. Windows and WSL gates pass 89/89 each and the
       milestone is tagged `m11`.
+
+- **2026-11-13 21:35 -08:00** — Code-size work started in both compilers. Two
+      optimizer passes now fold addresses: a `LEA` plus a constant `ADD` becomes
+      one `LEA` with a displacement, and a `MOV` that copies an address is
+      retargeted into the `LEA`/`ADD` that produced it when the source register
+      is dead afterwards. The C++ front end now pushes the lvalue address of a
+      simple scalar assignment (as the C front end does) instead of spilling it
+      to a frame slot, so the same passes apply.
+
+      Measured on the `__kr32_stdio_init` shape: 91 instructions at `-O0`, 50 at
+      `-O1` (was about 74), with each member store down from five instructions to
+      `LEA R1, [object + n]` / `MOV R0, #v` / `STORE R0, [R1]`. Both front ends
+      produce the same form. All 42 unit suites and the 47 integration/OS tests
+      pass.
+
+      Next: reuse one base pointer across consecutive stores to the same object
+      (`STORE R0, [R1 + n]`) and look at the remaining `MOV`/`NEG` constant
+      pairs.
 
 ## 10. Updating this file
 
