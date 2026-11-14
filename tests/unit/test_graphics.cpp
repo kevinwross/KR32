@@ -165,3 +165,30 @@ TEST_CASE("an unknown command sets the error bit") {
     command(bus, static_cast<GraphicsDevice::Op>(99));
     CHECK((status(bus) & GraphicsDevice::StatusError) != 0);
 }
+
+TEST_CASE("set surface routes drawing into a vram region") {
+    DeviceBus bus;
+    set_mode(bus, 800, 600);
+    constexpr std::uint32_t kSurface = 0x0010'0000U;  // 1 MiB into VRAM
+    argument(bus, 0, kSurface);
+    argument(bus, 1, 16);  // width
+    argument(bus, 2, 16);  // height
+    argument(bus, 3, 64);  // stride in bytes
+    command(bus, GraphicsDevice::Op::SetSurface);
+    CHECK((status(bus) & GraphicsDevice::StatusError) == 0);
+
+    argument(bus, 0, 2);
+    argument(bus, 1, 2);
+    argument(bus, 2, 4);
+    argument(bus, 3, 4);
+    argument(bus, 4, 0x0000'00FFU);
+    command(bus, GraphicsDevice::Op::FillRect);
+
+    const std::vector<std::uint8_t>& vram = bus.framebuffer().vram();
+    const std::size_t inside = kSurface + 2 * 64 + 2 * 4;
+    CHECK((static_cast<std::uint32_t>(vram[inside]) |
+           (static_cast<std::uint32_t>(vram[inside + 1]) << 8) |
+           (static_cast<std::uint32_t>(vram[inside + 2]) << 16)) == 0x0000'00FFU);
+    // The screen surface was not touched.
+    CHECK(pixel(bus.framebuffer(), 2, 2) == 0);
+}

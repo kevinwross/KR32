@@ -371,6 +371,7 @@ public:
         DrawLine = 5,
         DrawText = 6,
         Flip = 7,
+        SetSurface = 8,
     };
 
     GraphicsDevice();
@@ -385,6 +386,10 @@ public:
 
 private:
     void execute();
+    // The current drawing target: an explicit VRAM surface set by SET_SURFACE,
+    // or the framebuffer back surface when none is set.
+    void target(std::uint32_t& offset, std::uint32_t& width,
+                std::uint32_t& height, std::uint32_t& stride) const;
     void effective_clip(std::uint32_t& x, std::uint32_t& y, std::uint32_t& width,
                         std::uint32_t& height) const;
     void fill_rect(std::uint32_t x, std::uint32_t y, std::uint32_t width,
@@ -406,6 +411,11 @@ private:
     std::uint32_t background_ = 0;
     std::uint32_t command_count_ = 0;
     bool error_ = false;
+    bool surface_set_ = false;
+    std::uint32_t surface_offset_ = 0;
+    std::uint32_t surface_width_ = 0;
+    std::uint32_t surface_height_ = 0;
+    std::uint32_t surface_stride_ = 0;
 };
 
 class IrqRouter {

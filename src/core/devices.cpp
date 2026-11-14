@@ -903,6 +903,11 @@ void GraphicsDevice::reset() {
     background_ = 0;
     command_count_ = 0;
     error_ = false;
+    surface_set_ = false;
+    surface_offset_ = 0;
+    surface_width_ = 0;
+    surface_height_ = 0;
+    surface_stride_ = 0;
 }
 
 bool GraphicsDevice::read(std::uint32_t offset, std::uint32_t& value) {
@@ -987,16 +992,73 @@ void GraphicsDevice::execute() {
             error_ = true;
         }
         return;
+    case Op::SetSurface: {
+        if (framebuffer_ == nullptr) {
+            error_ = true;
+            return;
+        }
+        const std::uint32_t offset = arguments_[0];
+        const std::uint32_t width = arguments_[1];
+        const std::uint32_t height = arguments_[2];
+        const std::uint32_t stride = arguments_[3];
+        if ((offset & 3U) != 0 || width == 0 || height == 0 ||
+            stride < width * 4U) {
+            error_ = true;
+            return;
+        }
+        const std::uint64_t end = static_cast<std::uint64_t>(offset) +
+                                  static_cast<std::uint64_t>(height) * stride;
+        if (end > framebuffer_->vram().size()) {
+            error_ = true;
+            return;
+        }
+        surface_set_ = true;
+        surface_offset_ = offset;
+        surface_width_ = width;
+        surface_height_ = height;
+        surface_stride_ = stride;
+        return;
+    }
     default:
         error_ = true;
         return;
     }
 }
 
+void GraphicsDevice::target(std::uint32_t& offset, std::uint32_t& width,
+                            std::uint32_t& height,
+                            std::uint32_t& stride) const {
+    if (surface_set_) {
+        offset = surface_offset_;
+        width = surface_width_;
+        height = surface_height_;
+        stride = surface_stride_;
+        return;
+    }
+    if (framebuffer_ == nullptr) {
+        offset = 0;
+        width = 0;
+        height = 0;
+        stride = 0;
+        return;
+    }
+    offset = framebuffer_->back_offset();
+    width = framebuffer_->width();
+    height = framebuffer_->height();
+    stride = framebuffer_->stride();
+}
+
 void GraphicsDevice::effective_clip(std::uint32_t& x, std::uint32_t& y,
                                     std::uint32_t& width,
                                     std::uint32_t& height) const {
-    if (framebuffer_ == nullptr) {
+    std::uint32_t target_offset = 0;
+    std::uint32_t target_width = 0;
+    std::uint32_t target_height = 0;
+    std::uint32_t target_stride = 0;
+    target(target_offset, target_width, target_height, target_stride);
+    (void)target_offset;
+    (void)target_stride;
+    if (target_width == 0 || target_height == 0) {
         x = 0;
         y = 0;
         width = 0;
@@ -1006,8 +1068,8 @@ void GraphicsDevice::effective_clip(std::uint32_t& x, std::uint32_t& y,
     if (clip_width_ == 0 || clip_height_ == 0) {
         x = 0;
         y = 0;
-        width = framebuffer_->width();
-        height = framebuffer_->height();
+        width = target_width;
+        height = target_height;
         return;
     }
     x = clip_x_;
@@ -1023,8 +1085,11 @@ void GraphicsDevice::fill_rect(std::uint32_t x, std::uint32_t y,
         error_ = true;
         return;
     }
-    const std::uint32_t surface_width = framebuffer_->width();
-    const std::uint32_t surface_height = framebuffer_->height();
+    std::uint32_t surface_offset = 0;
+    std::uint32_t surface_width = 0;
+    std::uint32_t surface_height = 0;
+    std::uint32_t surface_stride = 0;
+    target(surface_offset, surface_width, surface_height, surface_stride);
     std::uint32_t clip_x = 0;
     std::uint32_t clip_y = 0;
     std::uint32_t clip_width = 0;
@@ -1040,8 +1105,8 @@ void GraphicsDevice::fill_rect(std::uint32_t x, std::uint32_t y,
     std::vector<std::uint8_t>& vram = framebuffer_->vram();
     for (std::uint32_t row = top; row < bottom; ++row) {
         for (std::uint32_t column = left; column < right; ++column) {
-            const std::size_t offset = framebuffer_->back_offset() +
-                                       static_cast<std::size_t>(row) * framebuffer_->stride() +
+            const std::size_t offset = surface_offset +
+                                       static_cast<std::size_t>(row) * surface_stride +
                                        static_cast<std::size_t>(column) * 4U;
             if (offset + 4U > vram.size()) {
                 error_ = true;
@@ -1062,7 +1127,14 @@ void GraphicsDevice::copy_rect(std::uint32_t source, std::uint32_t dx,
         error_ = true;
         return;
     }
-    const std::uint32_t stride = framebuffer_->stride();
+    std::uint32_t surface_offset = 0;
+    std::uint32_t surface_width = 0;
+    std::uint32_t surface_height = 0;
+    std::uint32_t surface_stride = 0;
+    target(surface_offset, surface_width, surface_height, surface_stride);
+    (void)surface_width;
+    (void)surface_height;
+    const std::uint32_t stride = surface_stride;
     std::uint32_t clip_x = 0;
     std::uint32_t clip_y = 0;
     std::uint32_t clip_width = 0;
@@ -1085,7 +1157,7 @@ void GraphicsDevice::copy_rect(std::uint32_t source, std::uint32_t dx,
     for (std::uint32_t row = top; row < bottom; ++row) {
         const std::size_t from = source + static_cast<std::size_t>(row - dy) * stride +
                                  static_cast<std::size_t>(left - dx) * 4U;
-        const std::size_t to = framebuffer_->back_offset() +
+        const std::size_t to = surface_offset +
                                static_cast<std::size_t>(row) * stride +
                                static_cast<std::size_t>(left) * 4U;
         if (from + scratch.size() > framebuffer_->vram().size() ||
@@ -1106,6 +1178,13 @@ void GraphicsDevice::draw_line(int x0, int y0, int x1, int y1,
         error_ = true;
         return;
     }
+    std::uint32_t surface_offset = 0;
+    std::uint32_t surface_width = 0;
+    std::uint32_t surface_height = 0;
+    std::uint32_t surface_stride = 0;
+    target(surface_offset, surface_width, surface_height, surface_stride);
+    (void)surface_width;
+    (void)surface_height;
     std::uint32_t clip_x = 0;
     std::uint32_t clip_y = 0;
     std::uint32_t clip_width = 0;
@@ -1121,8 +1200,8 @@ void GraphicsDevice::draw_line(int x0, int y0, int x1, int y1,
             y0 >= static_cast<int>(clip_y) &&
             static_cast<std::uint32_t>(x0) < clip_x + clip_width &&
             static_cast<std::uint32_t>(y0) < clip_y + clip_height) {
-            const std::size_t offset = framebuffer_->back_offset() +
-                                       static_cast<std::size_t>(y0) * framebuffer_->stride() +
+            const std::size_t offset = surface_offset +
+                                       static_cast<std::size_t>(y0) * surface_stride +
                                        static_cast<std::size_t>(x0) * 4U;
             if (offset + 4U > framebuffer_->vram().size()) {
                 error_ = true;
@@ -1165,8 +1244,11 @@ void GraphicsDevice::draw_text(std::uint32_t x, std::uint32_t y,
     std::uint32_t clip_width = 0;
     std::uint32_t clip_height = 0;
     effective_clip(clip_x, clip_y, clip_width, clip_height);
-    const std::uint32_t surface_width = framebuffer_->width();
-    const std::uint32_t surface_height = framebuffer_->height();
+    std::uint32_t surface_offset = 0;
+    std::uint32_t surface_width = 0;
+    std::uint32_t surface_height = 0;
+    std::uint32_t surface_stride = 0;
+    target(surface_offset, surface_width, surface_height, surface_stride);
     for (std::uint32_t index = 0; index < length; ++index) {
         const unsigned char character = framebuffer_->vram()[address + index];
         int glyph = 0;
@@ -1188,8 +1270,8 @@ void GraphicsDevice::draw_text(std::uint32_t x, std::uint32_t y,
                 }
                 const bool set = (bits & (1U << (kFont10x20Width - 1 - pixel))) != 0;
                 const std::uint32_t color = set ? fg : bg;
-                const std::size_t offset = framebuffer_->back_offset() +
-                                           static_cast<std::size_t>(py) * framebuffer_->stride() +
+                const std::size_t offset = surface_offset +
+                                           static_cast<std::size_t>(py) * surface_stride +
                                            static_cast<std::size_t>(px) * 4U;
                 if (offset + 4U > framebuffer_->vram().size()) {
                     error_ = true;
