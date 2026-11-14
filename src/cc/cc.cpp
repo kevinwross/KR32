@@ -4447,9 +4447,18 @@ private:
             type->kind == Type::Kind::Union) {
             error("compound assignment requires a scalar lvalue");
         }
-        const int address_slot = allocate_local(type_int());
-        emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
-        emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+        // A scalar address is pushed so the optimizer can keep it in the store
+        // register; FP and 64-bit values keep a frame slot.
+        const bool address_on_stack =
+            !is_fp_type(type) && !is_long_long_type(type);
+        int address_slot = -1;
+        if (address_on_stack) {
+            emit("    PUSH R0");
+        } else {
+            address_slot = allocate_local(type_int());
+            emit("    STORE R0, [R7 + " + std::to_string(address_slot) + "]");
+            emit("    LOAD R0, [R7 + " + std::to_string(address_slot) + "]");
+        }
         gen_load(type);
         push_value(type);
         TypePtr right = gen_expression();
@@ -4471,7 +4480,11 @@ private:
         if (is_long_long_type(type)) {
             emit("    MOV R2, R1");
         }
-        emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
+        if (address_on_stack) {
+            emit("    POP R1");
+        } else {
+            emit("    LOAD R1, [R7 + " + std::to_string(address_slot) + "]");
+        }
         gen_store(type);
     }
 
@@ -4565,6 +4578,41 @@ private:
                     } else {
                         emit("    " + mnemonic + " R0, R0, R2");
                     }
+                    if (type->kind == Type::Kind::Bool) {
+                        const std::string done = new_label("boolnorm");
+                        emit("    CMP R0, #0");
+                        emit("    JZ " + done);
+                        emit("    MOV R0, #1");
+                        emit(done + ":");
+                    }
+                    emit(byte_value ? "    STORE8 R0, " + frame
+                                    : (short_value
+                                           ? "    STORE16 R0, " + frame
+                                           : "    STORE R0, " + frame));
+                    return type;
+                }
+                // A general right-hand side on a plain local: read the slot,
+                // combine, and write it back, with no address in a register.
+                {
+                    const TypePtr type = target->type;
+                    take();
+                    const std::string base = take().text.substr(0, op.size() - 1);
+                    const std::string frame =
+                        "[R7 + " + std::to_string(target->offset) + "]";
+                    const bool byte_value = type->kind == Type::Kind::Char ||
+                                            type->kind == Type::Kind::Bool;
+                    const bool short_value = type->kind == Type::Kind::Short;
+                    emit(byte_value ? "    LOAD8S R0, " + frame
+                                    : (short_value
+                                           ? "    LOAD16S R0, " + frame
+                                           : "    LOAD R0, " + frame));
+                    push_value(type);
+                    TypePtr right = gen_expression();
+                    if (is_fp_type(right) && !is_fp_type(type)) {
+                        convert_value(right, type);
+                        right = type;
+                    }
+                    gen_binary(base, type, right);
                     if (type->kind == Type::Kind::Bool) {
                         const std::string done = new_label("boolnorm");
                         emit("    CMP R0, #0");

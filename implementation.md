@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 22:18 -08:00
+> **Last updated:** 2026-11-13 22:26 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3266,6 +3266,14 @@ Newest entries at the bottom. Use the local time zone.
       `__kr32_ulldiv` use `R12-R15` as caller-saved scratch. The gfx and console
       integration tests now take the `kr32os_build` resource lock, because they
       rebuild the shared OS tree and collided under `ctest -j`.
+
+- **2026-11-13 22:26 -08:00** — Compound assignment on a plain local no longer
+      materialises the lvalue address: it reads the frame slot, combines, and
+      writes the slot back (`s += array[i]` is now `LOAD R0,[R7+4]` ...
+      `STORE R0,[R7+4]` with no `LEA`/`PUSH`/`POP` address). The generic path
+      pushes the address instead of spilling it to a slot, so the optimizer can
+      fold it. `sum_array` in the pattern sample drops from 40 to 32
+      instructions. All 89 Windows tests pass.
 
 ## 10. Updating this file
 
