@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 23:43 -08:00
+> **Last updated:** 2026-11-13 23:56 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3322,6 +3322,20 @@ Newest entries at the bottom. Use the local time zone.
       was prototyped and dropped: the address register is consumed by its own
       load and the value operand occupies `R1`, so the rewrite cannot beat the
       push/pop without real register allocation.
+
+- **2026-11-13 23:56 -08:00** — Code-generation campaign closed. Both front ends
+      now fold member offsets and lvalue addresses into the addressing mode and
+      emit addresses directly in the store register (`LOAD R0, [R0 + 4]`,
+      `STORE R0, [rand_state]`, `STORE R0, [stdin_object + 4]`). Supporting
+      passes: absolute-address stores and loads, base reuse with displacements,
+      one 32-bit stack slot per temporary, stack temporaries forwarded to
+      `R2-R6`, dead frame loads and stores, unused-frame removal (including the
+      `ADJSP` pair), `RETW` so only wide returns keep `R1` live, and pushed
+      addresses and old values for compound assignment in both compilers.
+
+      Measured against `-O0` of the same tree: libc object 448,096 -> 418,920
+      bytes; kernel binary 85,032 -> 69,252 bytes (-18.5%); the pattern sample
+      123 -> 86 instructions (-30%). Windows 89/89 and WSL 89/89 tests pass.
 
 ## 10. Updating this file
 
