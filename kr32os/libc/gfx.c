@@ -220,6 +220,19 @@ void gfx_line(gfx_surface *surface, int x0, int y0, int x1, int y1,
                  (unsigned int)x1, (unsigned int)y1, color, 0);
 }
 
+void gfx_blit(gfx_surface *dst, int dx, int dy, gfx_surface *src, int sx, int sy,
+              int w, int h) {
+    if (dst == 0 || src == 0 || w <= 0 || h <= 0) {
+        return;
+    }
+    const unsigned int source = src->offset +
+                                (unsigned int)(sy * src->stride) +
+                                (unsigned int)(sx * 4);
+    (void)submit(dst, GFX_OP_COPY_RECT_STRIDED, source,
+                 (unsigned int)src->stride, (unsigned int)dx, (unsigned int)dy,
+                 (unsigned int)w, (unsigned int)h);
+}
+
 void gfx_set_clip(gfx_surface *surface, int x, int y, int width, int height) {
     if (surface == 0) {
         return;

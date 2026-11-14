@@ -55,6 +55,7 @@ inline constexpr std::string_view kGuestGfxHeader =
     "void gfx_fill_rect(gfx_surface *surface, int x, int y, int width, int height, unsigned int color);\n"
     "void gfx_frame_rect(gfx_surface *surface, int x, int y, int width, int height, unsigned int color);\n"
     "void gfx_line(gfx_surface *surface, int x0, int y0, int x1, int y1, unsigned int color);\n"
+    "void gfx_blit(gfx_surface *dst, int dx, int dy, gfx_surface *src, int sx, int sy, int w, int h);\n"
     "void gfx_set_clip(gfx_surface *surface, int x, int y, int width, int height);\n"
     "void gfx_reset_clip(gfx_surface *surface);\n"
     "int gfx_font_width(void);\n"

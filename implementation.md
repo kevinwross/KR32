@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 20:17 -08:00
+> **Last updated:** 2026-11-13 20:41 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -927,8 +927,9 @@ pixel; a 41-line print took 10M ticks after the panning prototype, and 45M for
 **Goal:** the programmer-facing API in [docs/graphics.md](docs/graphics.md):
 `gfx_*` drawing, `con_*` console, `input_*`, with guest headers.
 
-**Status:** blocked on the compiler stream; M10.5 supplies the terminal and
-graphics devices. Decisions taken 2026-11-13: user programs reach the devices
+**Status:** complete 2026-11-13; tagged `m11`. The five guest headers, the
+syscall path, the VRAM arena, the user runtime, and two pixel-tested examples
+are in; both gates pass 89/89. Decisions taken 2026-11-13: user programs reach the devices
 through a syscall command block (`sys_gfx`, 60); surfaces are VRAM-backed
 handles allocated by the kernel; text is copied into a VRAM staging buffer
 before `DRAW_TEXT`; the five guest headers land in both front ends at once; an
@@ -948,14 +949,17 @@ unknown `#include` warns and is dropped; M11 covers `fb`, `gfx`, `con`, and
       inside `DRAW_TEXT`.
 - [x] Kernel `gfx_*` command wrappers, `con_*` over `sys_write`, `input_*`
       over the keyboard device with syscalls 71-74.
-- [ ] Two examples: `kr32os/user/gfxdemo.c` runs under the shell and its
-      screenshot is checked by `os_gfx_demo`; a second example is pending.
+- [x] Two examples: `kr32os/user/gfxdemo.c` and `kr32os/user/gfxcheck.c` run
+      under the shell; `os_gfx_demo` and `os_gfx_check` check their pixels.
+- [x] `gfx_blit` ships as one strided copy; keyed and masked blits, clipped
+      text, `con_readline` for user programs, and `input_wait` are deferred
+      and marked so in [docs/graphics.md](docs/graphics.md).
 
 **Test plan and gate**
 
 - [x] Compiler tests include each header and call a symbol in C and C++.
-- [x] The example runs under KR32OS and `os_gfx_demo` checks its pixels.
-- [ ] Windows and WSL green; tag `m11`, second example, running-log entry.
+- [x] The examples run under KR32OS and both pixel tests pass.
+- [x] Windows and WSL gates pass: 89/89 each.
 
 ## 6. Cross-cutting test plan
 
@@ -3215,8 +3219,9 @@ Newest entries at the bottom. Use the local time zone.
 
       `kr32os/user/gfxdemo.c` hides the console, draws a scene, and presents it;
       `os_gfx_demo` boots the OS, runs it through the shell, and checks three
-      pixels of the screenshot. Remaining: a second example, the Windows and WSL
-      gates, and the tag.
+      pixels of the screenshot; `gfxcheck` adds a clip-confined fill and a line
+      with five pixel checks. Windows and WSL gates pass 89/89 each and the
+      milestone is tagged `m11`.
 
 ## 10. Updating this file
 

@@ -229,10 +229,11 @@ void gfx_blit(gfx_surface *dst, int dx, int dy,
 void gfx_blit_keyed(gfx_surface *dst, int dx, int dy,
                     const gfx_surface *src, int sx, int sy, int w, int h,
                     uint32_t key);
-void gfx_blit_mask(gfx_surface *dst, int dx, int dy,
-                   const gfx_surface *src, int sx, int sy, int w, int h,
-                   const uint8_t *mask, int mask_stride, uint32_t key);
 ```
+
+v1 ships `gfx_blit` (one strided copy). `gfx_blit_keyed`, `gfx_blit_mask`,
+`gfx_text_clipped`, and `gfx_text_cell` are deferred until a program needs
+them; the command device would need a keyed copy or a mask staging area.
 
 Semantics worth writing down because they cause bugs:
 
@@ -299,9 +300,11 @@ void con_set_cursor(int visible);                 /* CONTROL bit 0 */
 void con_hide(int hidden);                        /* CONTROL bit 1 */
 void con_present(void);                 /* FLIP */
 
-int  con_getc(void);                    /* -1 when no input */
-int  con_readline(char *buffer, int capacity);
 ```
+
+`con_getc` and `con_readline` are kernel-side in v1: a user program reads the
+keyboard with `input_poll` from `<kr32/input.h>`. `con_printf` is likewise
+kernel-only.
 
 Behavior:
 
@@ -340,8 +343,10 @@ can copy a word and cast. Do not reorder the fields.
 ```c
 int input_poll(kr32_event *event);              /* 1 event, 0 none */
 int input_pending(void);
-int input_wait(kr32_event *event, int timeout_ms);  /* kernel build */
 ```
+
+`input_wait` and the `input_key_down`/`input_char` helpers are deferred; a
+program loops on `input_poll` and yields between attempts.
 
 Helpers:
 
@@ -423,21 +428,30 @@ void banner(void) {
 }
 ```
 
-Drawing and flipping:
+Drawing and presenting:
 
 ```c
-#include <kr32/fb.h>
+#include <kr32/con.h>
 #include <kr32/gfx.h>
 
-void splash(void) {
-    gfx_surface *back = fb_back();
-    gfx_clear(back, GFX_RGB(0x10, 0x18, 0x20));
-    gfx_fill_rect(back, 40, 40, 320, 200, GFX_RGB(0x1F, 0x6F, 0xB2));
-    gfx_frame_rect(back, 40, 40, 320, 200, GFX_WHITE);
-    gfx_text(back, 56, 56, "KR32", GFX_WHITE, GFX_RGB(0x1F, 0x6F, 0xB2));
-    fb_present();
+int main(void) {
+    gfx_surface *screen = gfx_create(800, 600);
+    if (screen == 0) {
+        return 1;
+    }
+    con_hide(1);                       /* keep the terminal off the frame */
+    gfx_clear(screen, 0x00101820U);
+    gfx_fill_rect(screen, 40, 40, 320, 200, 0x001F6FB2U);
+    gfx_frame_rect(screen, 40, 40, 320, 200, 0x00FFFFFFU);
+    gfx_text(screen, 56, 56, "KR32", 0x00FFFFFFU, 0x001F6FB2U);
+    gfx_present(screen, 0, 0, 800, 600);
+    return 0;
 }
 ```
+
+The shipped examples are `kr32os/user/gfxdemo.c` and `kr32os/user/gfxcheck.c`;
+`os_gfx_demo` and `os_gfx_check` boot the OS, run them through the shell, and
+check pixels in the screenshot.
 
 Animated box with dirty rectangles (user mode):
 
