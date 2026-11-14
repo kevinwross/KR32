@@ -377,9 +377,22 @@ if(KR32_BUILD_UI)
             -DKR32=$<TARGET_FILE:kr32>
             -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
             -DBINARY_DIR=${CMAKE_BINARY_DIR}
-            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxDemo.cmake)
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx-demo
+            -DPROGRAM=gfxdemo
+            "-DCHECKS=10,10,101820;150,150,30A030;400,260,F06060"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxProgram.cmake)
     set_tests_properties(os_gfx_demo PROPERTIES LABELS "integration")
+
+    add_test(NAME os_gfx_check
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx-check
+            -DPROGRAM=gfxcheck
+            "-DCHECKS=10,10,000000;150,150,FF0000;425,425,0000FF;799,0,00FF00;0,599,00FF00"
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxProgram.cmake)
+    set_tests_properties(os_gfx_check PROPERTIES LABELS "integration")
 
     add_test(NAME os_console_screen
         COMMAND ${CMAKE_COMMAND}

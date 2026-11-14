@@ -168,12 +168,20 @@ Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\gfxdemo.c'), $Opt, '-S', '
 Invoke-Kr32 -Arguments @('as', $userGfxDemoAssembly, '--object', '-o', $userGfxDemoObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userGfxDemoObject, $userSyscallObject, $userGfxObject,
                         '--flat', '--base', $userBase, '-o', $userGfxDemoImage)
+$userGfxCheckAssembly = Join-Path $build 'user_gfxcheck.s'
+$userGfxCheckObject = Join-Path $build 'user_gfxcheck.o'
+$userGfxCheckImage = Join-Path $build 'gfxcheck.bin'
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\gfxcheck.c'), $Opt, '-S', '-o', $userGfxCheckAssembly)
+Invoke-Kr32 -Arguments @('as', $userGfxCheckAssembly, '--object', '-o', $userGfxCheckObject)
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userGfxCheckObject, $userSyscallObject, $userGfxObject,
+                        '--flat', '--base', $userBase, '-o', $userGfxCheckImage)
 
 # Build the K32I initrd with init and fault entries.
 $userBytes = [System.IO.File]::ReadAllBytes($userImage)
 $faultBytes = [System.IO.File]::ReadAllBytes($userFaultImage)
 $wxBytes = [System.IO.File]::ReadAllBytes($userWxImage)
 $gfxDemoBytes = [System.IO.File]::ReadAllBytes($userGfxDemoImage)
+$gfxCheckBytes = [System.IO.File]::ReadAllBytes($userGfxCheckImage)
 $initrdMagic = [uint32]0x4932334B
 $initrdVersion = [uint32]1
 $initrdHeaderSize = 12
@@ -183,9 +191,9 @@ $initrdEntryOffsetOffset = 32
 $initrdEntryOffsetSize = 36
 $initrdEntryOffsetEntry = 40
 $userCodeBase = [uint32]$userBase
-$initrdEntryCount = 4
+$initrdEntryCount = 5
 $payloadOffset = $initrdHeaderSize + $initrdEntryCount * $initrdEntrySize
-$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length)
+$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdMagic), 0, $initrdBytes, 0, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdVersion), 0, $initrdBytes, 4, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$initrdEntryCount), 0, $initrdBytes, 8, 4)
@@ -193,7 +201,8 @@ $entries = @(
     @{ Name = 'init'; Offset = $payloadOffset; Size = $userBytes.Length; Bytes = $userBytes },
     @{ Name = 'fault'; Offset = $payloadOffset + $userBytes.Length; Size = $faultBytes.Length; Bytes = $faultBytes },
     @{ Name = 'wx'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length; Size = $wxBytes.Length; Bytes = $wxBytes },
-    @{ Name = 'gfxdemo'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length; Size = $gfxDemoBytes.Length; Bytes = $gfxDemoBytes }
+    @{ Name = 'gfxdemo'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length; Size = $gfxDemoBytes.Length; Bytes = $gfxDemoBytes },
+    @{ Name = 'gfxcheck'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length; Size = $gfxCheckBytes.Length; Bytes = $gfxCheckBytes }
 )
 for ($index = 0; $index -lt $initrdEntryCount; ++$index) {
     $entryOffset = $initrdHeaderSize + $index * $initrdEntrySize

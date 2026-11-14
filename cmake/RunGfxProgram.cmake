@@ -1,6 +1,13 @@
-# Runs the gfxdemo user program under KR32OS and checks the rendered pixels.
-if(NOT DEFINED KR32 OR NOT DEFINED SOURCE_DIR OR NOT DEFINED BINARY_DIR OR NOT DEFINED WORK)
-    message(FATAL_ERROR "KR32, SOURCE_DIR, BINARY_DIR, and WORK are required")
+# Runs a KR32OS user program and checks pixels in its screenshot.
+#
+# Required: KR32, SOURCE_DIR, BINARY_DIR, WORK, PROGRAM, CHECKS
+# CHECKS is a list of "x,y,RRGGBB" entries.
+if(NOT DEFINED KR32 OR NOT DEFINED SOURCE_DIR OR NOT DEFINED BINARY_DIR OR
+   NOT DEFINED WORK OR NOT DEFINED PROGRAM OR NOT DEFINED CHECKS)
+    message(FATAL_ERROR "KR32, SOURCE_DIR, BINARY_DIR, WORK, PROGRAM, and CHECKS are required")
+endif()
+if(NOT DEFINED STEPS)
+    set(STEPS 6000000)
 endif()
 
 file(MAKE_DIRECTORY "${WORK}")
@@ -21,20 +28,20 @@ if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR "KR32OS build failed")
 endif()
 
-set(_shot "${WORK}/gfxdemo.ppm")
+set(_shot "${WORK}/${PROGRAM}.ppm")
 file(REMOVE "${_shot}")
 execute_process(
     COMMAND "${KR32}" display --os "${_osdir}/kernel.k32"
-            --bios "${_osdir}/bios.k32" --serial-input "run gfxdemo\n"
-            --steps 6000000 --screen-shot "${_shot}"
+            --bios "${_osdir}/bios.k32" --serial-input "run ${PROGRAM}\n"
+            --steps ${STEPS} --screen-shot "${_shot}"
     RESULT_VARIABLE _run_result
     OUTPUT_VARIABLE _output
     ERROR_VARIABLE _error)
 if(NOT _run_result EQUAL 0)
-    message(FATAL_ERROR "gfxdemo run failed: ${_output} ${_error}")
+    message(FATAL_ERROR "${PROGRAM} run failed: ${_output} ${_error}")
 endif()
 if(NOT EXISTS "${_shot}")
-    message(FATAL_ERROR "gfxdemo produced no screenshot")
+    message(FATAL_ERROR "${PROGRAM} produced no screenshot")
 endif()
 
 file(READ "${_shot}" _hex HEX)
@@ -45,16 +52,16 @@ if(NOT _pixels_length EQUAL 2880000)
     message(FATAL_ERROR "unexpected screenshot size: ${_pixels_length} hex chars")
 endif()
 
-function(check_pixel x y expected)
-    math(EXPR _offset "(${y} * 800 + ${x}) * 6")
+foreach(_check IN LISTS CHECKS)
+    string(REPLACE "," ";" _fields "${_check}")
+    list(GET _fields 0 _x)
+    list(GET _fields 1 _y)
+    list(GET _fields 2 _expected)
+    math(EXPR _offset "(${_y} * 800 + ${_x}) * 6")
     string(SUBSTRING "${_pixels}" ${_offset} 6 _pixel)
     string(TOUPPER "${_pixel}" _pixel)
-    if(NOT _pixel STREQUAL "${expected}")
-        message(FATAL_ERROR "pixel (${x},${y}) is ${_pixel}, expected ${expected}")
+    string(TOUPPER "${_expected}" _expected)
+    if(NOT _pixel STREQUAL "${_expected}")
+        message(FATAL_ERROR "${PROGRAM}: pixel (${_x},${_y}) is ${_pixel}, expected ${_expected}")
     endif()
-endfunction()
-
-# The scene: dark background, a green filled rectangle, and a red line.
-check_pixel(10 10 "101820")
-check_pixel(150 150 "30A030")
-check_pixel(400 260 "F06060")
+endforeach()
