@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 08:47 -08:00
+> **Last updated:** 2026-11-14 09:35 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3371,6 +3371,19 @@ Newest entries at the bottom. Use the local time zone.
       `LOAD R0, [counter] ; ADD R0, R0, #1 ; STORE R0, [counter]`.
       libc object 417,060 -> 417,056 bytes; kernel at `-O1` 67,560 -> 67,528.
       Windows 89/89 and WSL 89/89 pass.
+
+- **2026-11-14 09:35 -08:00** — The gfx pixel tests now run for 25,000,000
+      steps instead of 6,000,000, and their programs stay on the final frame
+      with the console hidden instead of exiting into the shell prompt, which
+      repaints the top-left of the screen. The old timing depended on how fast
+      the program ran, so an optimization that shortened it could turn the
+      capture into a picture of the terminal. Each test takes about 54 seconds
+      now; the integration suite about four minutes. Windows 89/89 and WSL 89/89
+      pass.
+
+      The dead `MOV R0` removal that exposed this is still reverted: it is
+      correct on every site inspected, but with it the two gfx tests still lose
+      the frame after the capture change, and the cause is not yet isolated.
 
 ## 10. Updating this file
 

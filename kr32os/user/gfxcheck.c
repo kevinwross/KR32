@@ -18,5 +18,9 @@ int main(void) {
     gfx_fill_rect(screen, 400, 400, 50, 50, 0x000000FFU);
     gfx_line(screen, 0, 599, 799, 0, 0x0000FF00U);
     gfx_present(screen, 0, 0, 800, 600);
+    /* The screenshot harness samples at a fixed step count, so stay on this
+       frame with the console hidden instead of exiting into the shell prompt. */
+    for (volatile int keep = 1; keep; ) {
+    }
     return 0;
 }

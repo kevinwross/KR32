@@ -7,7 +7,8 @@ if(NOT DEFINED KR32 OR NOT DEFINED SOURCE_DIR OR NOT DEFINED BINARY_DIR OR
     message(FATAL_ERROR "KR32, SOURCE_DIR, BINARY_DIR, WORK, PROGRAM, and CHECKS are required")
 endif()
 if(NOT DEFINED STEPS)
-    set(STEPS 6000000)
+    # Graphics work moves a lot of memory; give it room to finish.
+    set(STEPS 25000000)
 endif()
 
 file(MAKE_DIRECTORY "${WORK}")

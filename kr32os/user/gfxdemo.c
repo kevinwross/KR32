@@ -18,5 +18,9 @@ int main(void) {
     gfx_line(screen, 100, 260, 700, 260, 0x00F06060U);
     gfx_text(screen, 100, 300, "KR32 gfx demo", 0x00E6EDF3U, 0x00101820U);
     gfx_present(screen, 0, 0, 800, 600);
+    /* The screenshot harness samples at a fixed step count, so stay on this
+       frame with the console hidden instead of exiting into the shell prompt. */
+    for (volatile int keep = 1; keep; ) {
+    }
     return 0;
 }
