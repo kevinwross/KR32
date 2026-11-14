@@ -964,6 +964,45 @@ struct PromotionInsertion {
     int slot = 0;
 };
 
+bool register_dead_ignoring_line_labels(const std::vector<std::string>& lines,
+                                        const std::set<std::string>& branch_targets,
+                                        std::size_t start, int reg);
+
+// LOAD Rd, [R7 + slot] where Rd is overwritten before it is read. Frame slots
+// are ordinary memory, so dropping the load has no device side effect.
+int remove_dead_frame_loads(std::vector<std::string>& lines) {
+    std::set<std::string> branch_targets;
+    for (const std::string& line : lines) {
+        Instruction instruction;
+        if (parse_instruction(line, instruction) &&
+            is_branch(instruction.mnemonic) && !instruction.operands.empty()) {
+            branch_targets.insert(trim(instruction.operands[0]));
+        }
+    }
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction load;
+        if (!parse_instruction(lines[index], load) ||
+            load.mnemonic != "LOAD" || load.operands.size() != 2) {
+            continue;
+        }
+        int destination = 0;
+        int slot = 0;
+        if (!parse_register(load.operands[0], destination) ||
+            destination == 7 || destination == 11 ||
+            !parse_frame_slot(load.operands[1], slot)) {
+            continue;
+        }
+        if (!register_dead_ignoring_line_labels(lines, branch_targets,
+                                                index + 1, destination)) {
+            continue;
+        }
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int promote_leaf_scalars(std::vector<std::string>& lines) {
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
@@ -1494,6 +1533,7 @@ bool register_dead_ignoring_line_labels(
 // The absolute mode carries the symbol and its displacement, so the address
 // never has to be materialised in a register.
 int use_absolute_symbol_addresses(std::vector<std::string>& lines) {
+    const LivenessInfo liveness = compute_register_liveness(lines);
     std::set<std::string> branch_targets;
     for (const std::string& line : lines) {
         Instruction instruction;
@@ -1572,9 +1612,7 @@ int use_absolute_symbol_addresses(std::vector<std::string>& lines) {
             accessed != address_register || offset != 0) {
             continue;
         }
-        if (!register_dead_ignoring_line_labels(lines, branch_targets,
-                                                consumer + 1,
-                                                address_register)) {
+        if (register_live_after(liveness, consumer, address_register)) {
             continue;
         }
         memory.operands[1] =
@@ -3107,6 +3145,7 @@ void invalidate_register(FrameAvailability& available, int reg) {
 
 void transfer_frame_availability(FrameAvailability& available,
                                  const Instruction& instruction) {
+
     if (is_call(instruction.mnemonic)) {
         available.clear();
         return;
@@ -3118,7 +3157,9 @@ void transfer_frame_availability(FrameAvailability& available,
         if (parse_register(instruction.operands[0], source) &&
             parse_frame_slot(instruction.operands[1], slot)) {
             available[slot] = source;
+
         } else {
+
             available.clear();
         }
         return;
@@ -3225,6 +3266,8 @@ int forward_cfg_frame_loads(std::vector<std::string>& lines) {
         }
         for (std::size_t block = 0; block < block_count; ++block) {
             FrameAvailability available = live_in[block];
+
+
             for (std::size_t index = function.blocks[block].begin;
                  index < function.blocks[block].end; ++index) {
                 Instruction instruction;
@@ -3235,12 +3278,14 @@ int forward_cfg_frame_loads(std::vector<std::string>& lines) {
                     instruction.operands.size() == 2) {
                     int destination = 0;
                     int slot = 0;
+
                     if (parse_register(instruction.operands[0],
                                        destination) &&
                         destination != 7 && destination != 11 &&
                         parse_frame_slot(instruction.operands[1], slot) &&
                         available.find(slot) != available.end() &&
                         available[slot] == destination) {
+
                         lines[index].clear();
                         ++removed;
                         continue;
@@ -3659,9 +3704,6 @@ int remove_unused_frame_prologues(std::vector<std::string>& lines) {
     const std::vector<CfgFunction> functions = build_cfgs(lines);
     int removed = 0;
     for (const CfgFunction& function : functions) {
-        std::size_t push_line = function.end;
-        std::size_t setup_line = function.end;
-        std::size_t pop_line = function.end;
         std::size_t cursor = function.begin;
         while (cursor < function.end) {
             Instruction instruction;
@@ -3680,10 +3722,35 @@ int remove_unused_frame_prologues(std::vector<std::string>& lines) {
             push.operands[0] != "R7") {
             continue;
         }
-        push_line = cursor;
-        std::size_t next = cursor + 1;
+        const std::size_t push_line = cursor;
+        std::size_t next = push_line + 1;
         while (next < function.end && lines[next].empty()) {
             ++next;
+        }
+        // The frame is allocated before the frame pointer is set up.
+        std::size_t frame_line = function.end;
+        int frame_bytes = 0;
+        if (next < function.end) {
+            Instruction allocate;
+            if (parse_instruction(lines[next], allocate) &&
+                allocate.mnemonic == "ADJSP" && allocate.operands.size() == 1 &&
+                allocate.operands[0].size() > 1 &&
+                allocate.operands[0][0] == '#') {
+                try {
+                    frame_bytes = std::stoi(allocate.operands[0].substr(1));
+                } catch (...) {
+                    frame_bytes = 0;
+                }
+                if (frame_bytes < 0) {
+                    frame_line = next;
+                    ++next;
+                    while (next < function.end && lines[next].empty()) {
+                        ++next;
+                    }
+                } else {
+                    frame_bytes = 0;
+                }
+            }
         }
         if (next >= function.end) {
             continue;
@@ -3694,9 +3761,10 @@ int remove_unused_frame_prologues(std::vector<std::string>& lines) {
             trim(setup.operands[1]) != "[SP]") {
             continue;
         }
-        setup_line = next;
+        const std::size_t setup_line = next;
         int pops = 0;
         bool used = false;
+        std::size_t pop_line = function.end;
         for (std::size_t scan = setup_line + 1; scan < function.end; ++scan) {
             Instruction instruction;
             if (!parse_instruction(lines[scan], instruction)) {
@@ -3717,14 +3785,36 @@ int remove_unused_frame_prologues(std::vector<std::string>& lines) {
         if (used || pops != 1) {
             continue;
         }
+        // The frame release immediately before the pop, when it matches.
+        std::size_t release_line = function.end;
+        if (frame_line != function.end) {
+            std::size_t before = pop_line;
+            while (before > function.begin && lines[before - 1].empty()) {
+                --before;
+            }
+            if (before > function.begin && before - 1 >= function.begin) {
+                Instruction release;
+                if (parse_instruction(lines[before - 1], release) &&
+                    release.mnemonic == "ADJSP" &&
+                    release.operands.size() == 1 &&
+                    release.operands[0] == "#" +
+                                             std::to_string(-frame_bytes)) {
+                    release_line = before - 1;
+                }
+            }
+        }
         lines[push_line].clear();
         lines[setup_line].clear();
         lines[pop_line].clear();
         removed += 3;
+        if (release_line != function.end) {
+            lines[frame_line].clear();
+            lines[release_line].clear();
+            removed += 2;
+        }
     }
     return removed;
 }
-
 int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -3821,6 +3911,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += forward_cfg_frame_loads(lines);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
+    stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += forward_stack_temporaries(lines);
     stats.removed += fold_address_moves(lines);
@@ -3831,6 +3922,15 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_address_moves(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_overwritten_moves(lines);
+    // The folds above can expose frame traffic that the first round could not
+    // see, so repeat the address and frame clean-up on the folded code.
+    stats.removed += fold_address_moves(lines);
+    stats.removed += use_absolute_symbol_addresses(lines);
+    stats.removed += forward_cfg_frame_loads(lines);
+    stats.removed += remove_dead_frame_loads(lines);
+    stats.removed += remove_dead_frame_stores(lines);
+    stats.removed += remove_zero_frame_adjustments(lines);
+    stats.removed += remove_unused_frame_prologues(lines);
     stats.removed += remove_redundant_jumps(lines);
     stats.removed += remove_dead_functions(lines);
     for (std::string& line : lines) {

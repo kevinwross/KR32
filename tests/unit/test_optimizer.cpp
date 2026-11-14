@@ -172,8 +172,9 @@ TEST_CASE("assembly optimizer promotes leaf locals") {
     const assembler::OptimizeStats stats =
         assembler::optimize_assembly(assembly);
     CHECK(stats.removed >= 2);
-    CHECK(assembly.find("LOAD R12, [R7 + 4]") != std::string::npos);
-    CHECK(assembly.find("LOAD R1, [R7 + 4]") == std::string::npos);
+    // The parameter is promoted into R12 and the frame slot disappears.
+    CHECK(assembly.find("MOV R12, R0") != std::string::npos);
+    CHECK(assembly.find("[R7 + 4]") == std::string::npos);
 }
 
 TEST_CASE("assembly optimizer uses CFG liveness for dead stores") {
@@ -188,7 +189,7 @@ TEST_CASE("assembly optimizer uses CFG liveness for dead stores") {
         ".Lchoose:\n"
         "    STORE R2, [R7 + 0]\n"
         ".Ldone:\n"
-        "    LOAD R3, [R7 + 0]\n"
+        "    LOAD R0, [R7 + 0]\n"
         "    RET\n";
     const assembler::OptimizeStats stats =
         assembler::optimize_assembly(assembly);
@@ -228,7 +229,7 @@ TEST_CASE("assembly optimizer folds load copies") {
         "    LOAD R0, [R7 + 4]\n"
         "    MOV R1, R0\n"
         "    LOAD R0, [R7 + 8]\n"
-        "    RET\n";
+        "    RETW\n";
     const assembler::OptimizeStats stats =
         assembler::optimize_assembly(assembly);
     CHECK(stats.removed >= 1);
@@ -680,4 +681,59 @@ TEST_CASE("assembly optimizer keeps a stack temporary in a register") {
     CHECK(stats.removed >= 1);
     CHECK(assembly.find("ADJSP #-4") == std::string::npos);
     CHECK(assembly.find("STORE R0, [SP]") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer drops an overwritten frame load") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R2, [R7 + 4]\n"
+        ".Lline_1:\n"
+        "    MOV R2, #0\n"
+        "    STORE R2, [R7 + 8]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("LOAD R2, [R7 + 4]") == std::string::npos);
+}
+
+TEST_CASE("assembly optimizer keeps a frame load that is read") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R2, [R7 + 4]\n"
+        ".Lline_1:\n"
+        "    ADD R0, R2, R0\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    (void)stats;
+    CHECK(assembly.find("LOAD R2, [R7 + 4]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer stores through a static symbol address") {
+    std::string assembly =
+        ".text\n"
+        ".global srand\n"
+        "srand:\n"
+        "    PUSH R7\n"
+        "    ADJSP #-4\n"
+        "    LEA R7, [SP]\n"
+        ".Lline_1:\n"
+        "    LEA R1, [rand_state]\n"
+        "    STORE R0, [R1]\n"
+        "    MOV R0, #0\n"
+        ".Lreturn_0:\n"
+        "    ADJSP #4\n"
+        "    POP R7\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("STORE R0, [rand_state]") != std::string::npos);
 }

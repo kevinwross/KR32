@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-13 22:49 -08:00
+> **Last updated:** 2026-11-13 23:23 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3293,6 +3293,22 @@ Newest entries at the bottom. Use the local time zone.
 
       A copy-into-consumer pass was prototyped and dropped: with the wide-return
       change in place it changed no instruction in the sample.
+
+- **2026-11-13 23:23 -08:00** — `srand` was eight instructions and a stack frame;
+      it is now `STORE R0, [rand_state] ; MOV R0, #0 ; RET`. Three changes
+      together: the address folds run again after the push/pop and address
+      folds expose their final shape; the absolute-address pass uses the CFG
+      liveness instead of stopping at a return label; and the frame prologue
+      pass now recognises the real `PUSH R7 ; ADJSP #-N ; LEA R7, [SP]` order
+      and removes the released frame too. A dead-frame-load pass drops loads
+      whose register is overwritten first.
+
+      A `double` expression no longer pays two spurious `FCVT.W.D` truncations:
+      the logical-operator parser only converts an operand when `&&` or `||`
+      actually follows.
+
+      libc object 420,240 -> 418,920 bytes; kernel at `-O1` 69,740 -> 69,252.
+      All 89 Windows tests pass.
 
 ## 10. Updating this file
 

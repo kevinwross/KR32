@@ -5101,8 +5101,9 @@ private:
 
     TypePtr parse_logical_and() {
         TypePtr left = parse_bit_or_real();
-        value_to_integer(left);
-        while (match("&&")) {
+        while (peek().text == "&&") {
+            match("&&");
+            value_to_integer(left);
             const std::string false_label = new_label("andfalse");
             const std::string end_label = new_label("andend");
             emit("    CMP R0, #0");
@@ -5123,8 +5124,9 @@ private:
 
     TypePtr parse_logical_or() {
         TypePtr left = parse_logical_and();
-        value_to_integer(left);
-        while (match("||")) {
+        while (peek().text == "||") {
+            match("||");
+            value_to_integer(left);
             const std::string true_label = new_label("ortrue");
             const std::string end_label = new_label("orend");
             emit("    CMP R0, #0");
