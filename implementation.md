@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 11:44 -08:00
+> **Last updated:** 2026-11-14 12:25 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3404,6 +3404,18 @@ Newest entries at the bottom. Use the local time zone.
       The machine crashed during this run and left corrupted build artifacts;
       a clean rebuild restored the suite (an MSVC internal compiler error on the
       first attempt did not reproduce).
+
+- **2026-11-14 12:25 -08:00** — Calls now carry their integer argument count
+      (`CALL f, #2`, emitted only when optimizing), so the optimizer knows a
+      one-argument call reads `R0` alone instead of assuming `R0-R3`. That makes
+      the liveness analysis precise at calls and lets the copy folds work through
+      them: `MOV R1, R4` in the libc drops from 88 to 3, and the libc loses 22
+      instructions (11,783 -> 11,761; object 416,500 -> 416,412). The count is
+      stripped before assembly and the tail-call fold accepts it.
+
+      The kernel binary grew slightly (67,372 -> 67,432 bytes) because the more
+      precise liveness steers promotion and folding differently; the two units
+      together are 28 bytes smaller. Windows 89/89 and WSL 89/89 pass.
 
 ## 10. Updating this file
 

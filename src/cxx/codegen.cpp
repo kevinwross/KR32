@@ -8283,13 +8283,16 @@ private:
         if (!skip_unwind) {
             emit(call_start + ":");
         }
+        const std::string argument_count =
+            optimize_ ? ", #" + std::to_string(std::min(integer_register, 4))
+                      : "";
         if (virtual_dispatch) {
             emit("    LOAD R4, [R0]");
             emit("    LOAD R4, [R4 + " +
                  std::to_string(function->vtable_index * 4) + "]");
-            emit("    CALL R4");
+            emit("    CALL R4" + argument_count);
         } else {
-            emit("    CALL " + function->symbol);
+            emit("    CALL " + function->symbol + argument_count);
         }
         if (stack_bytes != 0) {
             emit("    ADJSP #" + std::to_string(stack_bytes));

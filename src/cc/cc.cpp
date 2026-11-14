@@ -5302,7 +5302,9 @@ private:
                 ++integer_register;
             }
         }
-        emit("    CALL R6");
+        emit("    CALL R6" +
+             (optimize_ ? ", #" + std::to_string(std::min(integer_register, 4))
+                        : ""));
         if (stack_count > 0) {
             emit("    ADJSP #" + std::to_string(stack_count * 8));
         }
@@ -6263,7 +6265,12 @@ private:
                         if (emit_inlined_call_result(name)) {
                             return signature->second.result;
                         }
-                        emit("    CALL " + name);
+                        emit("    CALL " + name +
+                             (optimize_ ? ", #" +
+                                              std::to_string(
+                                                  std::min<std::size_t>(
+                                                      fixed_count, 4))
+                                        : ""));
                         return signature->second.result;
                     }
                 }
@@ -6384,8 +6391,12 @@ private:
                     }
                     return type_int();
                 }
-                emit(indirect_function != nullptr ? "    CALL R6"
-                                                  : "    CALL " + name);
+                emit((indirect_function != nullptr ? "    CALL R6"
+                                                   : "    CALL " + name) +
+                     (optimize_ ? ", #" +
+                                      std::to_string(
+                                          std::min(integer_register, 4))
+                                : ""));
                 if (stack_count > 0) {
                     emit("    ADJSP #" + std::to_string(stack_count * 8));
                 }

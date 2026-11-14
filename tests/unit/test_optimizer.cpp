@@ -922,3 +922,23 @@ TEST_CASE("assembly optimizer folds a saved operand into its consumer") {
     CHECK(assembly.find("MOV R1, R4") == std::string::npos);
     CHECK(assembly.find("ADD R0, R0, #16") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer uses a call's argument count") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R2, R0\n"
+        "    MOV R1, R2\n"
+        "    ADD R0, R1, #1\n"
+        "    CALL use, #1\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R1, R2") == std::string::npos);
+    CHECK(assembly.find("ADD R0, R0, #1") != std::string::npos);
+    CHECK(assembly.find("CALL use") != std::string::npos);
+    CHECK(assembly.find("CALL use, #") == std::string::npos);
+}

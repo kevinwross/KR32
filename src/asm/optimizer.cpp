@@ -515,7 +515,27 @@ void instruction_uses_defs(const Instruction& instruction,
         for (const std::string& operand : instruction.operands) {
             add_operand_register(operand, uses);
         }
-        for (int reg = 0; reg < 4; ++reg) {
+        // A call may carry its integer argument count as "#N"; without it the
+        // callee might read any of R0..R3.
+        int argument_registers = 4;
+        if (instruction.mnemonic == "CALL" &&
+            instruction.operands.size() >= 2 &&
+            instruction.operands[1].size() > 1 &&
+            instruction.operands[1][0] == '#') {
+            try {
+                argument_registers =
+                    std::stoi(instruction.operands[1].substr(1));
+            } catch (...) {
+                argument_registers = 4;
+            }
+            if (argument_registers < 0) {
+                argument_registers = 0;
+            }
+            if (argument_registers > 4) {
+                argument_registers = 4;
+            }
+        }
+        for (int reg = 0; reg < argument_registers; ++reg) {
             uses = static_cast<RegisterMask>(
                 uses | bit_for_register(reg));
         }
@@ -3060,7 +3080,9 @@ int fold_tail_calls(std::vector<std::string>& lines, int& rewritten) {
     for (std::size_t index = 0; index < lines.size(); ++index) {
         Instruction call;
         if (!parse_instruction(lines[index], call) ||
-            call.mnemonic != "CALL" || call.operands.size() != 1) {
+            call.mnemonic != "CALL" || call.operands.empty() ||
+            (call.operands.size() > 1 &&
+             (call.operands[1].empty() || call.operands[1][0] != '#'))) {
             continue;
         }
         int indirect = 0;
@@ -4290,6 +4312,15 @@ OptimizeStats optimize_assembly(std::string& assembly) {
         if (parse_instruction(line, instruction) &&
             instruction.mnemonic == "RETW") {
             instruction.mnemonic = "RET";
+            line = format_instruction(instruction);
+            continue;
+        }
+        if (parse_instruction(line, instruction) &&
+            instruction.mnemonic == "CALL" &&
+            instruction.operands.size() > 1 &&
+            instruction.operands[1].size() > 1 &&
+            instruction.operands[1][0] == '#') {
+            instruction.operands.pop_back();
             line = format_instruction(instruction);
         }
     }
