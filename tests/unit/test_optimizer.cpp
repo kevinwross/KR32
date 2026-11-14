@@ -614,3 +614,44 @@ TEST_CASE("assembly optimizer folds a negated constant") {
     CHECK(assembly.find("MOV R0, #-1") != std::string::npos);
     CHECK(assembly.find("NEG R0, R0") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer drops a frame prologue that is never used") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    PUSH R7\n"
+        "    LEA R7, [SP]\n"
+        "    MOV R0, #1\n"
+        "    STORE R0, [state]\n"
+        "    POP R7\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    CHECK(stats.removed >= 2);
+    CHECK(assembly.find("PUSH R7") == std::string::npos);
+    CHECK(assembly.find("LEA R7, [SP]") == std::string::npos);
+    CHECK(assembly.find("STORE R0, [state]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer keeps a frame prologue that is used") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    PUSH R7\n"
+        "    LEA R7, [SP]\n"
+        "    ADJSP #-8\n"
+        "    MOV R0, #1\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    LEA R0, [R7 + 0]\n"
+        "    CALL use\n"
+        "    ADJSP #8\n"
+        "    POP R7\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    (void)stats;
+    CHECK(assembly.find("PUSH R7") != std::string::npos);
+    CHECK(assembly.find("LEA R0, [R7 + 0]") != std::string::npos);
+}

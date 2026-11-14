@@ -3455,6 +3455,78 @@ int strength_reduce_immediates(std::vector<std::string>& lines,
     return changed;
 }
 
+// PUSH R7 ; LEA R7, [SP] ... POP R7 with no other use of R7: the function has
+// no frame, so the prologue and epilogue are dead.
+int remove_unused_frame_prologues(std::vector<std::string>& lines) {
+    const std::vector<CfgFunction> functions = build_cfgs(lines);
+    int removed = 0;
+    for (const CfgFunction& function : functions) {
+        std::size_t push_line = function.end;
+        std::size_t setup_line = function.end;
+        std::size_t pop_line = function.end;
+        std::size_t cursor = function.begin;
+        while (cursor < function.end) {
+            Instruction instruction;
+            if (!parse_instruction(lines[cursor], instruction)) {
+                ++cursor;
+                continue;
+            }
+            break;
+        }
+        if (cursor >= function.end) {
+            continue;
+        }
+        Instruction push;
+        if (!parse_instruction(lines[cursor], push) ||
+            push.mnemonic != "PUSH" || push.operands.size() != 1 ||
+            push.operands[0] != "R7") {
+            continue;
+        }
+        push_line = cursor;
+        std::size_t next = cursor + 1;
+        while (next < function.end && lines[next].empty()) {
+            ++next;
+        }
+        if (next >= function.end) {
+            continue;
+        }
+        Instruction setup;
+        if (!parse_instruction(lines[next], setup) || setup.mnemonic != "LEA" ||
+            setup.operands.size() != 2 || setup.operands[0] != "R7" ||
+            trim(setup.operands[1]) != "[SP]") {
+            continue;
+        }
+        setup_line = next;
+        int pops = 0;
+        bool used = false;
+        for (std::size_t scan = setup_line + 1; scan < function.end; ++scan) {
+            Instruction instruction;
+            if (!parse_instruction(lines[scan], instruction)) {
+                continue;
+            }
+            if (instruction.mnemonic == "POP" &&
+                instruction.operands.size() == 1 &&
+                instruction.operands[0] == "R7") {
+                ++pops;
+                pop_line = scan;
+                continue;
+            }
+            if (instruction_touches_register(instruction, 7)) {
+                used = true;
+                break;
+            }
+        }
+        if (used || pops != 1) {
+            continue;
+        }
+        lines[push_line].clear();
+        lines[setup_line].clear();
+        lines[pop_line].clear();
+        removed += 3;
+    }
+    return removed;
+}
+
 int remove_zero_frame_adjustments(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::string& line : lines) {
@@ -3540,6 +3612,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     } while (add_chain > 0);
     stats.removed += remove_unreachable_after_terminators(lines);
     stats.removed += remove_zero_frame_adjustments(lines);
+    stats.removed += remove_unused_frame_prologues(lines);
     stats.removed += fold_frame_address_arithmetic(lines);
     stats.removed += fold_frame_addresses(lines);
     stats.removed += remove_forwarded_loads(lines, stats.rewritten);
