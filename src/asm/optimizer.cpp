@@ -3237,6 +3237,188 @@ int forward_cfg_frame_loads(std::vector<std::string>& lines) {
     return removed;
 }
 
+// "[SP]" or "[SP + n]" to its displacement; SP is not in the R0..R15 syntax.
+bool parse_stack_address(std::string_view text, int& offset) {
+    const std::string value = trim(text);
+    if (value.size() < 4 || value.front() != '[' || value.back() != ']') {
+        return false;
+    }
+    std::string inside = value.substr(1, value.size() - 2);
+    inside.erase(std::remove_if(inside.begin(), inside.end(),
+                                [](unsigned char character) {
+                                    return std::isspace(character) != 0;
+                                }),
+                 inside.end());
+    if (inside.rfind("SP", 0) != 0) {
+        return false;
+    }
+    const std::string rest = inside.substr(2);
+    if (rest.empty()) {
+        offset = 0;
+        return true;
+    }
+    if (rest.front() != '+' && rest.front() != '-') {
+        return false;
+    }
+    const int sign = rest.front() == '-' ? -1 : 1;
+    const std::string number = rest.substr(1);
+    if (number.empty()) {
+        return false;
+    }
+    char* end = nullptr;
+    const long parsed = std::strtol(number.c_str(), &end, 10);
+    if (end == nullptr || *end != '\0') {
+        return false;
+    }
+    offset = sign * static_cast<int>(parsed);
+    return true;
+}
+
+// Pushes and pops a single 32-bit value through [SP]. When the span between
+// them touches neither SP nor a free scratch register, the value can stay in
+// that register instead: `ADJSP #-4 ; STORE Rs, [SP] ... LOAD Rd, [SP] ;
+// ADJSP #4` becomes `MOV Rc, Rs ... MOV Rd, Rc`.
+int forward_stack_temporaries(std::vector<std::string>& lines) {
+    const LivenessInfo liveness = compute_register_liveness(lines);
+    int removed = 0;
+    for (std::size_t index = 0; index + 2 < lines.size(); ++index) {
+        Instruction adjust;
+        if (!parse_instruction(lines[index], adjust) ||
+            adjust.mnemonic != "ADJSP" || adjust.operands.size() != 1 ||
+            trim(adjust.operands[0]) != "#-4") {
+            continue;
+        }
+        std::size_t store_index = index + 1;
+        while (store_index < lines.size() && lines[store_index].empty()) {
+            ++store_index;
+        }
+        Instruction store;
+        if (store_index >= lines.size() ||
+            !parse_instruction(lines[store_index], store) ||
+            store.mnemonic != "STORE" || store.operands.size() != 2) {
+            continue;
+        }
+        int source = 0;
+        if (!parse_register(store.operands[0], source)) {
+            continue;
+        }
+        int offset = 0;
+        if (!parse_stack_address(store.operands[1], offset) || offset != 0) {
+            continue;
+        }
+        // Find the matching reload and make sure the span leaves SP alone.
+        std::size_t load_index = store_index + 1;
+        bool span_ok = true;
+        RegisterMask span_uses = 0;
+        RegisterMask span_defs = 0;
+        while (load_index < lines.size()) {
+            Instruction instruction;
+            if (!parse_instruction(lines[load_index], instruction)) {
+                const std::string trimmed = trim(lines[load_index]);
+                if (trimmed.empty()) {
+                    ++load_index;
+                    continue;
+                }
+                span_ok = false;
+                break;
+            }
+            const bool touches_stack =
+                instruction.mnemonic == "ADJSP" ||
+                instruction.mnemonic == "PUSH" ||
+                instruction.mnemonic == "POP" ||
+                instruction.mnemonic == "CALL" ||
+                instruction.mnemonic == "SYSCALL" ||
+                is_branch(instruction.mnemonic);
+            if (touches_stack) {
+                span_ok = false;
+                break;
+            }
+            int destination = 0;
+            const bool is_reload =
+                instruction.mnemonic == "LOAD" &&
+                instruction.operands.size() == 2 &&
+                parse_register(instruction.operands[0], destination) &&
+                parse_stack_address(instruction.operands[1], offset) &&
+                offset == 0;
+            if (is_reload) {
+                break;
+            }
+            bool mentions_stack = false;
+            for (const std::string& operand : instruction.operands) {
+                if (operand.find("[SP") != std::string::npos) {
+                    mentions_stack = true;
+                    break;
+                }
+            }
+            if (mentions_stack) {
+                span_ok = false;
+                break;
+            }
+            RegisterMask uses = 0;
+            RegisterMask defs = 0;
+            instruction_uses_defs(instruction, uses, defs);
+            span_uses = static_cast<RegisterMask>(span_uses | uses);
+            span_defs = static_cast<RegisterMask>(span_defs | defs);
+            ++load_index;
+        }
+        if (!span_ok || load_index >= lines.size()) {
+            continue;
+        }
+        Instruction reload;
+        if (!parse_instruction(lines[load_index], reload) ||
+            reload.mnemonic != "LOAD" || reload.operands.size() != 2) {
+            continue;
+        }
+        int reload_target = 0;
+        if (!parse_register(reload.operands[0], reload_target)) {
+            continue;
+        }
+        std::size_t after = load_index + 1;
+        while (after < lines.size() && lines[after].empty()) {
+            ++after;
+        }
+        if (after >= lines.size()) {
+            continue;
+        }
+        Instruction restore;
+        if (!parse_instruction(lines[after], restore) ||
+            restore.mnemonic != "ADJSP" || restore.operands.size() != 1 ||
+            trim(restore.operands[0]) != "#4") {
+            continue;
+        }
+        // Pick a caller-saved scratch register the span does not touch and
+        // that is dead once the value has been reloaded.
+        int chosen = -1;
+        for (int candidate = 2; candidate <= 6; ++candidate) {
+            const RegisterMask bit = bit_for_register(candidate);
+            if ((span_uses & bit) != 0 || (span_defs & bit) != 0) {
+                continue;
+            }
+            if (candidate == source || candidate == reload_target) {
+                continue;
+            }
+            if (register_live_after(liveness, after, candidate)) {
+                continue;
+            }
+            chosen = candidate;
+            break;
+        }
+        if (chosen < 0) {
+            continue;
+        }
+        lines[index].clear();
+        lines[store_index] = format_instruction(
+            Instruction{"MOV", {"R" + std::to_string(chosen),
+                                 "R" + std::to_string(source)}});
+        lines[load_index] = format_instruction(
+            Instruction{"MOV", {"R" + std::to_string(reload_target),
+                                 "R" + std::to_string(chosen)}});
+        lines[after].clear();
+        ++removed;
+    }
+    return removed;
+}
+
 int fold_push_pop_pairs(std::vector<std::string>& lines, int& rewritten) {
     int removed = 0;
     for (std::size_t index = 0; index < lines.size(); ++index) {
@@ -3624,6 +3806,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
+    stats.removed += forward_stack_temporaries(lines);
     stats.removed += fold_address_moves(lines);
     stats.removed += use_absolute_symbol_addresses(lines);
     stats.removed += reuse_symbol_bases(lines);

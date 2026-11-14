@@ -655,3 +655,29 @@ TEST_CASE("assembly optimizer keeps a frame prologue that is used") {
     CHECK(assembly.find("PUSH R7") != std::string::npos);
     CHECK(assembly.find("LEA R0, [R7 + 0]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer keeps a stack temporary in a register") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R0, [R7 + 4]\n"
+        "    ADJSP #-4\n"
+        "    STORE R0, [SP]\n"
+        "    LEA R1, [array]\n"
+        "    MOV R0, R12\n"
+        "    SHL R0, R0, #2\n"
+        "    ADD R0, R1, R0\n"
+        "    LOAD R0, [R0]\n"
+        "    LOAD R1, [SP]\n"
+        "    ADJSP #4\n"
+        "    ADD R0, R1, R0\n"
+        "    STORE R0, [R7 + 4]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("ADJSP #-4") == std::string::npos);
+    CHECK(assembly.find("STORE R0, [SP]") == std::string::npos);
+}
