@@ -338,6 +338,11 @@ TypePtr promote(const TypePtr& type) {
     return type;
 }
 
+bool is_void(const TypePtr& type) {
+    return type && type->kind == TypeKind::Builtin &&
+           type->builtin == BuiltinKind::Void;
+}
+
 bool is_fp(const TypePtr& type) {
     return type && type->kind == TypeKind::Builtin &&
            (type->builtin == BuiltinKind::Float ||
@@ -10489,7 +10494,7 @@ private:
             const std::string zero = intern_fp_constant(0.0, is_float32(result));
             emit(std::string("    FLOAD.") + (is_float32(result) ? "W" : "D") +
                  " F0, [" + zero + "]");
-        } else {
+        } else if (!is_void(function.result)) {
             emit("    MOV R0, #0");
         }
         emit(return_label_ + ":");

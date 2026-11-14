@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 08:14 -08:00
+> **Last updated:** 2026-11-14 08:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3355,6 +3355,12 @@ Newest entries at the bottom. Use the local time zone.
       instructions with no frame; `set_fields` keeps its three parameters in
       `R12-R14` and drops the frame. libc object 417,596 -> 417,132 bytes;
       kernel at `-O1` 68,696 -> 68,280. Windows 89/89 and WSL 89/89 pass.
+
+- **2026-11-14 08:30 -08:00** — A void function no longer clears `R0` on the way
+      out, in either compiler. The value is not part of the calling convention,
+      so `void f(void) { }` is now a single `RET` and every void function loses
+      one instruction. libc object 417,132 -> 417,060 bytes; kernel at `-O1`
+      68,280 -> 67,560. Windows 89/89 and WSL 89/89 pass.
 
 ## 10. Updating this file
 

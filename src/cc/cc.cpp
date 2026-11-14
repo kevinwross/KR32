@@ -2736,7 +2736,10 @@ private:
         }
 
         parse_block_contents();
-        if (result_type->kind == Type::Kind::Float) {
+        // A void function returns nothing, so it does not clear R0 on the way
+        // out; every other result type has a zero value to produce.
+        if (result_type->kind == Type::Kind::Void) {
+        } else if (result_type->kind == Type::Kind::Float) {
             emit("    MOV R0, #0");
             emit("    FCVT.S.W F0, R0");
         } else if (result_type->kind == Type::Kind::Double) {
@@ -3198,7 +3201,8 @@ private:
                        current_result_type_->kind == Type::Kind::Double) {
                 emit("    MOV R0, #0");
                 emit("    FCVT.D.W F0, R0");
-            } else {
+            } else if (current_result_type_ == nullptr ||
+                       current_result_type_->kind != Type::Kind::Void) {
                 emit("    MOV R0, #0");
             }
             emit("    JMP " + return_label_);
