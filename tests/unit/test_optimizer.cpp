@@ -807,3 +807,28 @@ TEST_CASE("assembly optimizer keeps a copy read twice") {
     (void)stats;
     CHECK(assembly.find("MOV R0, R13") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer promotes a parameter used once") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    PUSH R7\n"
+        "    ADJSP #-4\n"
+        "    LEA R7, [SP]\n"
+        "    STORE R0, [R7 + 0]\n"
+        ".Lline_1:\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    LOAD R0, [R0 + 4]\n"
+        "    ADJSP #4\n"
+        "    POP R7\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    CHECK(stats.removed >= 1);
+    CHECK(assembly.find("PUSH R7") == std::string::npos);
+    CHECK(assembly.find("[R7 + 0]") == std::string::npos);
+    // The parameter stays in R0 and feeds the member load directly.
+    CHECK(assembly.find("LOAD R0, [R0 + 4]") != std::string::npos);
+}

@@ -1063,6 +1063,7 @@ int promote_leaf_scalars(std::vector<std::string>& lines) {
 
         bool used_register[16] = {};
         std::map<int, int> load_counts;
+        std::map<int, int> store_counts;
         std::set<int> blocked_slots;
         for (std::size_t index = function.begin; index < function.end;
              ++index) {
@@ -1092,6 +1093,8 @@ int promote_leaf_scalars(std::vector<std::string>& lines) {
                 int source = 0;
                 if (!parse_register(instruction.operands[0], source)) {
                     blocked_slots.insert(slot);
+                } else {
+                    ++store_counts[slot];
                 }
             } else {
                 blocked_slots.insert(slot);
@@ -1110,7 +1113,9 @@ int promote_leaf_scalars(std::vector<std::string>& lines) {
 
         std::vector<std::pair<int, int>> candidates;
         for (const auto& [slot, count] : load_counts) {
-            if (count >= 2 && blocked_slots.find(slot) == blocked_slots.end()) {
+            const int stores = store_counts[slot];
+            if (count >= 1 && count >= stores &&
+                blocked_slots.find(slot) == blocked_slots.end()) {
                 candidates.emplace_back(count, slot);
             }
         }
@@ -1160,9 +1165,7 @@ int promote_leaf_scalars(std::vector<std::string>& lines) {
                     removable_loads.push_back(index);
                 }
             }
-            if (removable_loads.empty()) {
-                continue;
-            }
+
 
             for (std::size_t index = function.begin; index < function.end;
                  ++index) {
