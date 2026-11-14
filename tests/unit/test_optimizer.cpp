@@ -885,3 +885,21 @@ TEST_CASE("assembly optimizer keeps a symbol base that escapes") {
     (void)stats;
     CHECK(assembly.find("LEA R12, [state]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer keeps a move that is stored") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    LOAD R0, [R7 + 12]\n"
+        "    ADD R1, R0, #12\n"
+        "    MOV R0, #2\n"
+        "    STORE R0, [R1]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("MOV R0, #2") != std::string::npos);
+    CHECK(assembly.find("STORE R0, [R1]") != std::string::npos);
+}
