@@ -3438,7 +3438,8 @@ FrameAvailability intersect_availability(
     return result;
 }
 
-int forward_cfg_frame_loads(std::vector<std::string>& lines) {
+int forward_cfg_frame_loads(std::vector<std::string>& lines,
+                               int& rewritten) {
     int removed = 0;
     for (const CfgFunction& function : build_cfgs(lines)) {
         bool has_exception_path = false;
@@ -3509,12 +3510,29 @@ int forward_cfg_frame_loads(std::vector<std::string>& lines) {
                                        destination) &&
                         destination != 7 && destination != 11 &&
                         parse_frame_slot(instruction.operands[1], slot) &&
-                        available.find(slot) != available.end() &&
-                        available[slot] == destination) {
-
-                        lines[index].clear();
-                        ++removed;
-                        continue;
+                        available.find(slot) != available.end()) {
+                        const int source = available[slot];
+                        if (source == destination) {
+                            lines[index].clear();
+                            ++removed;
+                            continue;
+                        }
+                        if (source != 7 && source != 11) {
+                            // The value already sits in a register: serve the
+                            // load from it instead of memory.
+                            lines[index] = "    MOV R" +
+                                           std::to_string(destination) + ", R" +
+                                           std::to_string(source);
+                            ++rewritten;
+                            Instruction move;
+                            move.mnemonic = "MOV";
+                            move.operands.push_back(
+                                "R" + std::to_string(destination));
+                            move.operands.push_back("R" +
+                                                    std::to_string(source));
+                            transfer_frame_availability(available, move);
+                            continue;
+                        }
                     }
                 }
                 transfer_frame_availability(available, instruction);
@@ -4334,7 +4352,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_comparison_values(lines);
     stats.removed += fold_compare_materialization_branches(lines);
     stats.removed += fold_boolean_branches(lines);
-    stats.removed += forward_cfg_frame_loads(lines);
+    stats.removed += forward_cfg_frame_loads(lines, stats.rewritten);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
     stats.removed += remove_dead_frame_loads(lines);
@@ -4362,7 +4380,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
 
     stats.removed += use_absolute_symbol_addresses(lines);
     stats.removed += promote_symbol_bases(lines);
-    stats.removed += forward_cfg_frame_loads(lines);
+    stats.removed += forward_cfg_frame_loads(lines, stats.rewritten);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += remove_dead_frame_stores(lines);
