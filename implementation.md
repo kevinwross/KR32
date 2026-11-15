@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 13:41 -08:00
+> **Last updated:** 2026-11-15 14:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3825,6 +3825,18 @@ Newest entries at the bottom. Use the local time zone.
       with zero `ADJSP` staging, the file 289 -> 280. libc 9,954 -> 9,900 and
       409,396 -> 409,180 bytes; libcpp unchanged at 10,251. All eleven parts
       (91 tests) and 91/91 WSL pass.
+
+- **2026-11-15 14:09 -08:00** — Golden vectors recomputed with an independent
+      encoder. `tests/unit/test_golden_vectors.cpp` rebuilds every §12 row from
+      its fields using the §2.1 layout rather than the implementation's
+      constants, encodes all 72 opcodes in §4 with both widths, and checks that
+      `kr32::isa::encode`/`decode` agree. It found one defect in the document:
+      §4.4 claimed 71 of 128 top-level slots in use and 57 reserved; the map uses
+      72 and reserves 56. It also caught a bug in the test itself first — the
+      inline field is signed 11-bit, and `ADJSP #-16` failed until bit 10 was
+      sign-extended. The document is now draft 0.4, the §13 golden-vector item is
+      closed, and §12 states that the table is a sample rather than the coverage.
+      All eleven parts (92 tests) and 92/92 WSL pass.
 
 ## 10. Updating this file
 

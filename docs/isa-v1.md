@@ -1,6 +1,6 @@
 # KR32 Instruction Set v1 — Draft
 
-> **Status:** draft 0.3, 2026-11-15. For review; **not frozen**. Encoding
+> **Status:** draft 0.4, 2026-11-15. For review; **not frozen**. Encoding
 > decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
 > becomes v1 only after the golden vectors in §12 are checked and the open items
 > in §13 are closed.
@@ -214,7 +214,7 @@ displacement is inline or in the extension word.
 
 ### 4.4 Reserved (0x63–0x7F)
 
-The map uses 71 of the 128 top-level slots; 57 are reserved, 29 of them in
+The map uses 72 of the 128 top-level slots; 56 are reserved, 29 of them in
 `0x63–0x7F`. A reserved opcode raises `#UD`.
 
 ## 5. Base instructions
@@ -597,10 +597,13 @@ has its own `PTBR`. There is no TLB in v1.
 
 The extension word is little-endian and is always the word after the base word.
 
+These rows are a sample, not the coverage. `tests/unit/test_golden_vectors.cpp`
+recomputes the encoding of every opcode in §4 (72 of them) and of both widths
+from §2.1 with an encoder that does not call the implementation, and checks that
+the implementation agrees; it also rebuilds every row above from its fields.
+
 ## 13. Before freezing
 
-- **Golden vectors.** Recompute the table in §12 with an independent encoder and
-  add coverage for every opcode and both extension widths.
 - **Pseudo-ops.** `JZ`/`JNZ`/…, `VLOAD`/`VSTORE`, and `NEG`-style aliases belong
   to the assembler, not the ISA.
 - **Data directives.** `.byte`, `.word`, `.float`, and `.double` emit scalar
@@ -621,3 +624,4 @@ The extension word is little-endian and is always the word after the base word.
 | --- | --- | --- |
 | 0.2 | 2026-11-01 | Baseline recorded in this document's status note: encoding decisions D8, D13-D16, D20-D22, D51, and D52 applied; §12 golden vectors and §13 open items still to be resolved before v1 is frozen. |
 | 0.3 | 2026-11-15 | Added `FMOV Fd, Fs` (FP escape function `0x032`), an FPR-to-FPR copy of all 64 bits. It exists so a cached floating-point value can reach an operand register without a memory round trip; before it, the compiler staged every FP value through a frame slot. Golden encoding for `FMOV F3, F5` is `0xC06A0032` (§6.2, `tests/unit/test_encoding.cpp`). |
+| 0.4 | 2026-11-15 | Golden vectors recomputed from §2.1 by an encoder that does not call the implementation: `tests/unit/test_golden_vectors.cpp` covers every opcode in §4 and both widths, and rebuilds each §12 row from its fields. It found one defect in this document: §4.4 claimed 71 of 128 top-level slots in use and 57 reserved; the map uses 72 and reserves 56. The §13 golden-vector item is closed by that coverage. |

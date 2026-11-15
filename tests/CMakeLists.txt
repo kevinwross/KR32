@@ -7,6 +7,7 @@ endif()
 set(KR32_TEST_SOURCES
     unit/test_main.cpp
     unit/test_encoding.cpp
+    unit/test_golden_vectors.cpp
     unit/test_version.cpp
     unit/test_machine.cpp
     unit/test_privilege.cpp
@@ -440,7 +441,7 @@ add_custom_target(check
 # Parts group the suites so that one invocation finishes in under three
 # minutes. See docs/testing.md; each row is "label|test|test|...".
 set(KR32_TEST_PART_ROWS    "part01|unit_test_cxx_codegen_2b|unit_test_optimizer"
-    "part02|unit_test_cxx_codegen_2c|unit_test_encoding|unit_test_version|unit_test_matrix|unit_test_boot|unit_test_fp"
+    "part02|unit_test_cxx_codegen_2c|unit_test_encoding|unit_test_golden_vectors|unit_test_version|unit_test_matrix|unit_test_boot|unit_test_fp"
     "part03|unit_test_cxx_codegen_2|unit_test_cc_1"
     "part04|unit_test_cxx_codegen_4|unit_test_debug|unit_test_disassembler"
     "part05|unit_test_cxx_codegen_3|unit_test_cxx_codegen_1|unit_test_host"
