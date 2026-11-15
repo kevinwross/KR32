@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 09:04 -08:00
+> **Last updated:** 2026-11-15 09:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3696,6 +3696,23 @@ Newest entries at the bottom. Use the local time zone.
       its consumer (`FADD F0, F1, F2` becoming `FADD F0, F8, F2`), which needs an
       FP-aware copy fold that does not exist yet. All eleven parts (91 tests) and
       91/91 WSL pass.
+
+- **2026-11-15 09:33 -08:00** — Call-free live-range allocation measured and
+      reverted. The pass allocates a frame slot to an otherwise unused register
+      for the span between its first and last access when that span contains no
+      call, and lets two non-overlapping spans share a register. It is a large
+      win: libc 10,142 -> 9,742 and libcpp 10,576 -> 10,340 with the span free
+      of branches and calls; restricting spans to straight-line code gives
+      libc 10,002 and libcpp 10,496 and makes `run_os_user` pass, but
+      `os_gfx_check` still fails.
+
+      What is ruled out: the multi-term frame offsets (`[R7 + 152 + 8]`) are
+      rejected by `parse_frame_slot`; R0 and R1 are not in the pool; a slot's
+      first access being a store while another path reaches a load without it is
+      excluded by the straight-line rule; and the frame removal in the failing
+      `main` is consistent (save area `ADJSP #-16` paired with
+      `LOAD R8, [SP + 0]; ADJSP #16; RET`). The remaining fault is a specific
+      transform in the gfx path and needs a per-function bisect.
 
 ## 10. Updating this file
 
