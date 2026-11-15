@@ -1629,6 +1629,113 @@ bool parse_symbol_address(std::string_view text, std::string& symbol) {
 // round trip through memory that leaves Rx unchanged. Labels may sit between
 // the two; a CFG pass cannot remove these when the function has an exception
 // path, but adjacency makes it safe locally.
+// A 64-bit value staged through the stack as
+//   ADJSP #-8 ; STORE Ra, [SP] ; STORE Rb, [SP + 4] ... LOAD Rc, [SP] ;
+//   LOAD Rd, [SP + 4] ; ADJSP #8
+// moves a pair of registers through memory. Rewriting it as PUSH/POP keeps the
+// same stack discipline and lets the forwarding passes collapse it to moves.
+int fold_stack_argument_copies(std::vector<std::string>& lines) {
+    struct Edits {
+        std::map<std::size_t, std::string> replace;
+        std::map<std::size_t, std::vector<std::string>> insert;
+    };
+    Edits edits;
+    for (std::size_t index = 0; index + 2 < lines.size(); ++index) {
+        Instruction adjust;
+        if (!parse_instruction(lines[index], adjust) ||
+            adjust.mnemonic != "ADJSP" || adjust.operands.size() != 1 ||
+            trim(adjust.operands[0]) != "#-8") {
+            continue;
+        }
+        Instruction low_store;
+        Instruction high_store;
+        if (!parse_instruction(lines[index + 1], low_store) ||
+            low_store.mnemonic != "STORE" || low_store.operands.size() != 2 ||
+            trim(low_store.operands[1]) != "[SP]") {
+            continue;
+        }
+        if (!parse_instruction(lines[index + 2], high_store) ||
+            high_store.mnemonic != "STORE" ||
+            high_store.operands.size() != 2 ||
+            trim(high_store.operands[1]) != "[SP + 4]") {
+            continue;
+        }
+        int low_register = 0;
+        int high_register = 0;
+        if (!parse_register(low_store.operands[0], low_register) ||
+            !parse_register(high_store.operands[0], high_register)) {
+            continue;
+        }
+        std::size_t match = lines.size();
+        for (std::size_t scan = index + 3;
+             scan + 2 < lines.size() && scan < index + 64; ++scan) {
+            Instruction instruction;
+            if (!parse_instruction(lines[scan], instruction)) {
+                continue;
+            }
+            if (instruction.mnemonic == "ADJSP" ||
+                instruction.mnemonic == "PUSH" || instruction.mnemonic == "POP" ||
+                instruction.mnemonic == "PUSHR" ||
+                instruction.mnemonic == "POPR" ||
+                instruction.mnemonic == "PUSHFP" ||
+                instruction.mnemonic == "POPFP") {
+                break;
+            }
+            Instruction low_load;
+            Instruction high_load;
+            Instruction release;
+            if (!parse_instruction(lines[scan], low_load) ||
+                low_load.mnemonic != "LOAD" || low_load.operands.size() != 2 ||
+                trim(low_load.operands[1]) != "[SP]") {
+                continue;
+            }
+            if (!parse_instruction(lines[scan + 1], high_load) ||
+                high_load.mnemonic != "LOAD" ||
+                high_load.operands.size() != 2 ||
+                trim(high_load.operands[1]) != "[SP + 4]") {
+                continue;
+            }
+            if (!parse_instruction(lines[scan + 2], release) ||
+                release.mnemonic != "ADJSP" || release.operands.size() != 1 ||
+                trim(release.operands[0]) != "#8") {
+                continue;
+            }
+            match = scan;
+            break;
+        }
+        if (match >= lines.size()) {
+            continue;
+        }
+        Instruction low_load;
+        Instruction high_load;
+        parse_instruction(lines[match], low_load);
+        parse_instruction(lines[match + 1], high_load);
+        edits.replace[index] = "";
+        edits.replace[index + 1] = "    PUSH R" + std::to_string(high_register);
+        edits.replace[index + 2] =
+            "    PUSH R" + std::to_string(low_register);
+        edits.replace[match] = "    POP " + low_load.operands[0];
+        edits.replace[match + 1] = "    POP " + high_load.operands[0];
+        edits.replace[match + 2] = "";
+    }
+    if (edits.replace.empty()) {
+        return 0;
+    }
+    int removed = 0;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        const auto found = edits.replace.find(index);
+        if (found == edits.replace.end()) {
+            continue;
+        }
+        if (!found->second.empty()) {
+            lines[index] = found->second;
+        } else if (!lines[index].empty()) {
+            lines[index].clear();
+            ++removed;
+        }
+    }
+    return removed;
+}
 int remove_adjacent_slot_roundtrips(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -4624,6 +4731,7 @@ std::vector<std::string> split_lines(std::string_view assembly) {
 OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
+    stats.removed += fold_stack_argument_copies(lines);
     stats.removed += remove_noop_moves(lines);
     stats.removed += remove_adjacent_slot_roundtrips(lines);
     stats.removed += fold_symbol_address_loads(lines);
