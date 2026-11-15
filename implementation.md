@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 20:50 -08:00
+> **Last updated:** 2026-11-14 21:42 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3532,6 +3532,13 @@ Newest entries at the bottom. Use the local time zone.
       copied to `R2` first. libcpp 10,867 -> 10,865 instructions; the gains are
       small because the remaining copies are live data movement. All unit suites,
       47/47 integration, and 89/89 WSL pass.
+
+- **2026-11-14 21:42 -08:00** — The clean-up round repeats more of the fold
+      sequence after the frame passes: move coalescing, a forwarded-load pass,
+      symbol address folding, address moves, dead moves, and the frame
+      load/store removers. Folding exposes work the earlier passes could not
+      see. libcpp 10,865 -> 10,834 instructions and libc 11,059 -> 10,966. All
+      unit suites, 47/47 integration, and 89/89 WSL pass.
 
 ## 10. Updating this file
 

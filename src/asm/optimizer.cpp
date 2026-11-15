@@ -4370,6 +4370,15 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_zero_frame_adjustments(lines);
     stats.removed += remove_unused_frame_prologues(lines);
     stats.removed += fold_copy_consumers(lines);
+    stats.removed += coalesce_moves(lines);
+    stats.removed += fold_address_moves(lines);
+    stats.removed += remove_dead_moves(lines);
+    stats.removed += use_absolute_symbol_addresses(lines);
+    stats.removed += promote_symbol_bases(lines);
+    stats.removed += fold_address_moves(lines);
+    stats.removed += remove_dead_moves(lines);
+    stats.removed += remove_dead_frame_loads(lines);
+    stats.removed += remove_dead_frame_stores(lines);
     stats.removed += remove_redundant_jumps(lines);
     stats.removed += remove_dead_functions(lines);
     for (std::string& line : lines) {
