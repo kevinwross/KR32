@@ -1302,6 +1302,7 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
 
         bool used[16] = {};
         std::vector<std::size_t> call_sites;
+        std::set<std::string> branch_targets;
         for (std::size_t index = function.begin; index < function.end;
              ++index) {
             Instruction instruction;
@@ -1310,6 +1311,10 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
             }
             if (is_call(instruction.mnemonic)) {
                 call_sites.push_back(index);
+            }
+            if (is_branch(instruction.mnemonic) &&
+                instruction.operands.size() == 1) {
+                branch_targets.insert(trim(instruction.operands[0]));
             }
             for (const std::string& operand : instruction.operands) {
                 int reg = -1;
@@ -1387,7 +1392,9 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
                 if (text.empty()) {
                     continue;
                 }
-                if (text.back() == ':') {
+                if (text.back() == ':' &&
+                    branch_targets.count(text.substr(0, text.size() - 1)) >
+                        0) {
                     spans_branch = true;
                     break;
                 }
@@ -1595,6 +1602,7 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
         }
         bool used_fp[16] = {};
         std::vector<std::size_t> call_sites;
+        std::set<std::string> branch_targets;
         for (std::size_t index = function.begin; index < function.end;
              ++index) {
             Instruction instruction;
@@ -1603,6 +1611,10 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
             }
             if (is_call(instruction.mnemonic)) {
                 call_sites.push_back(index);
+            }
+            if (is_branch(instruction.mnemonic) &&
+                instruction.operands.size() == 1) {
+                branch_targets.insert(trim(instruction.operands[0]));
             }
             for (const std::string& operand : instruction.operands) {
                 int fpr = -1;
@@ -1688,7 +1700,9 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
                 if (text.empty()) {
                     continue;
                 }
-                if (text.back() == ':') {
+                if (text.back() == ':' &&
+                    branch_targets.count(text.substr(0, text.size() - 1)) >
+                        0) {
                     spans_branch = true;
                     break;
                 }
