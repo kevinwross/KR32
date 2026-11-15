@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 04:30 -08:00
+> **Last updated:** 2026-11-15 04:53 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3592,6 +3592,23 @@ Newest entries at the bottom. Use the local time zone.
       is not yet explained. Understanding it is the first task next round; the
       approach is sound and the win is real, but it is not shippable until the
       gfx failure is traced.
+
+- **2026-11-15 04:53 -08:00** — Root cause of the callee-saved promotion failure,
+      found by tracing the syscalls of the failing image against a passing one:
+      the promoted `sys_dispatch` loses its `MOV R9, R0` / `MOV R0, R9` pair and
+      the tail-called handler receives a garbage first argument, so `gfx_create`
+      returns no surface. The pair is deleted by `remove_dead_moves`, which
+      treats a copy into an argument register before a **tail-call
+      `JMP <symbol>`** as dead. That is a pre-existing optimizer miscompile, not
+      a fault of the promotion: the jump target reads `R0`-`R3`, but the block
+      has no successor so they are not live. A standalone snippet reproduces it.
+
+      The intended fix is to mark `R0`-`R3` live at a named-target `JMP` in
+      `instruction_uses_defs`; it was attempted but misplaced twice and
+      reverted, so the tree is at `9a850b3` with the bug still present and the
+      promotion still unlanded. Fix the liveness bug first, add the snippet as
+      a regression test, then retry the promotion - it measured libc
+      10,826 -> 10,445 and libcpp 10,751 -> 10,684 before the regression.
 
 ## 10. Updating this file
 
