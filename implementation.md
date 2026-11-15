@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 13:02 -08:00
+> **Last updated:** 2026-11-15 13:14 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3806,6 +3806,16 @@ Newest entries at the bottom. Use the local time zone.
       libcpp 10,438 -> 10,399 before the front-end change below it in this log;
       all eleven parts (91 tests) and 91/91 WSL were run on the tree that
       contains both.
+
+- **2026-11-15 13:14 -08:00** — `docs/optimizations.md` brought up to date with
+      the current `-O1` pipeline: leaf promotion now names its full register
+      range, and five passes are documented that were missing (64-bit stack
+      staging as push/pop, hot-slot caching in `R8`-`R10`, call-free live-range
+      allocation for integers and floating point, `FMOV` consumer folding, and
+      redundant zero compares). The safety model gained the call-free rules. The
+      benchmark table was stale by every change of the last day; it now carries
+      instructions and bytes for `floats.c`, `libcpp.cpp`, `libc` at `-O0` and
+      `-O1`, and the kernel, with the old tick rows kept.
 
 ## 10. Updating this file
 

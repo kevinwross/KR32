@@ -165,7 +165,10 @@ target-level cleanup.
 
 20. **Leaf scalar register promotion**
    - Promotes eligible scalar frame slots in call-free, exception-free
-     functions to `R12`-`R15`.
+     functions to `R2`-`R6` and `R12`-`R15`, skipping any register the
+     function already uses.
+   - A leaf function may clobber the caller-saved scratch registers, so both
+     ranges are free to it.
    - Replaces loads and stores with register moves and rewrites adjacent
      consumers, adding one entry load per promoted slot.
    - Requires at least one removable load and avoids slots whose address
@@ -223,6 +226,58 @@ target-level cleanup.
      intervening code does not touch `Rd` or the stack pointer.
    - Removes the pair entirely when `Rd == Rs`.
 
+30. **64-bit stack staging as push/pop**
+   - Rewrites the C front end's `ADJSP #-8` plus two `STORE`s and the matching
+     two `LOAD`s plus `ADJSP #8` as `PUSH`/`POP`.
+   - The stack discipline is unchanged, and the forwarding passes can then
+     collapse the pair into moves.
+   - Only spans with no intervening stack adjustment are rewritten.
+
+31. **Hot-slot caching in the callee-saved registers**
+   - Promotes a frame slot loaded at least three times in a function that
+     calls out to `R8`-`R10`.
+   - The registers a function uses are saved in a 16-byte area below the
+     frame, which keeps `SP` 16-byte aligned at `CALL`, and restored before the
+     first `ADJSP` of every frame release, including the multi-step tail-call
+     epilogue.
+   - Skips slots whose address escapes or that are accessed at another width.
+
+32. **Call-free live-range allocation**
+   - Allocates a frame slot to a register that the function never mentions,
+     for the span between the slot's first and last access.
+   - The span must be straight-line: it ends at a label only when a branch in
+     the same function targets that label, so the per-statement `.Lline_`
+     labels do not divide it.
+   - The span must contain no call. Only a call can disturb a register the
+     function never mentions, so no save and restore are needed.
+   - Spans that do not overlap share one register, which is the allocation.
+   - Integer slots use `R2`-`R6`. `R12`-`R15` are not used in a function that
+     calls: they are safe in a leaf function (and the leaf promotion already
+     takes them there), but using them across a call breaks `os_gfx_check` for
+     a reason this pass has not isolated.
+   - A function whose whole frame moves to registers is included; the frame
+     removal handles the resulting save area.
+
+33. **Floating-point live-range allocation and move folding**
+   - Applies the same allocation to floating-point slots in `F2`-`F7`. Those
+     are caller-saved, so a call-free span needs no save and restore, and the
+     front end's expression temporaries use `F0`/`F1` only.
+   - Rewrites the loads and stores as `FMOV`, then folds an `FMOV` whose
+     destination is read by the very next instruction and named nowhere else
+     in the function into that consumer.
+   - A front end keeps the left operand of a floating-point binary expression
+     in `F2`-`F7` with `FMOV` rather than staging it through the stack; the C++
+     front end checks the right operand for calls, and the C front end, which
+     cannot inspect an operand it has not parsed, takes the register path only
+     when the next token is a number, a character, or an identifier not
+     followed by `(`.
+
+34. **Redundant zero compares**
+   - Drops `CMP Rd, #0` before `JZ`/`JNZ` when the preceding instruction is an
+     ALU operation that wrote `Rd`, because both set `Z` from the same result.
+   - Only `Z` branches are handled: `CMP` sets carry differently from the ALU
+     operations.
+
 ## Safety model
 
 The pass is deliberately conservative:
@@ -233,6 +288,8 @@ The pass is deliberately conservative:
 - Calls and returns count argument and return registers as reads.
 - Leaf register promotion only runs in functions with no calls or exception
   landing paths.
+- Call-free allocation only assigns a register the function never mentions,
+  over a straight-line span that contains no call.
 - Unwind landing pads are omitted only for direct `noexcept` calls.
 - `-O0` remains the default, so existing debug behavior is unchanged.
 - Line markers are kept so source-level debugging continues to work.
@@ -250,11 +307,20 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 
 ## Current benchmark results
 
-| Program | Build | Ticks | `.text` |
-|---|---:|---:|---:|
-| `strings.c` | `-O0` | 30,243 | — |
-| `balanced-tree.cpp` | `-O0` | 184,725 | `0x15894` |
-| `balanced-tree.cpp` | `-O1` | 166,336 | `0x15654` |
+Instruction counts are per translation unit; bytes are the linked image for the
+kernel and the object file otherwise. Ticks come from the emulator's instruction
+counter on the benchmark programs.
+
+| Program | Build | Instructions | Bytes | Ticks |
+|---|---|---:|---:|---:|
+| `examples/floats.c` | `-O1` | 289 | 10,098 | — |
+| `examples/libcpp.cpp` | `-O1` | 10,251 | 421,728 | — |
+| `src/cc/libc.c` | `-O0` | 16,287 | 447,572 | — |
+| `src/cc/libc.c` | `-O1` | 9,954 | 409,396 | — |
+| OS kernel (`kr32os`) | `-O1` | — | 62,676 | — |
+| `strings.c` | `-O0` | — | — | 30,243 |
+| `balanced-tree.cpp` | `-O0` | — | `0x15894` | 184,725 |
+| `balanced-tree.cpp` | `-O1` | — | `0x15654` | 166,336 |
 
 ## Future work beyond P0-P7
 
