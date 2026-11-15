@@ -520,6 +520,31 @@ public:
         type_aliases_["uint32_t"] = Type::make_builtin(BuiltinKind::UnsignedInt);
     }
 
+    // Calls clobber the caller-saved FP argument registers, so a value can
+    // only stay in F2..F7 across the remaining arguments if none of them call.
+    bool expression_calls(const Expr* expression) {
+        if (expression == nullptr) {
+            return false;
+        }
+        if (expression->kind == ExprKind::Call ||
+            expression->kind == ExprKind::New ||
+            expression->kind == ExprKind::Delete ||
+            expression->kind == ExprKind::Unknown) {
+            return true;
+        }
+        for (const ExprPtr& child : expression->children) {
+            if (expression_calls(child.get())) {
+                return true;
+            }
+        }
+        for (const ExprPtr& argument : expression->arguments) {
+            if (expression_calls(argument.get())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     // A conservative scan: anything not proven safe may throw.
     bool expression_may_throw(const Expr* expression) {
         if (expression == nullptr) {
@@ -4543,11 +4568,26 @@ private:
                 integer_temps.push_back(temp);
             } else if (is_fp(parameter)) {
                 gen_as_fp(*effective_arguments[index], parameter);
-                const int temp = allocate_local(parameter);
-                emit(std::string("    FSTORE.") +
-                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
-                     std::to_string(temp) + "]");
-                fp_temps.emplace_back(temp, parameter);
+                const std::size_t fp_index = fp_temps.size();
+                bool direct = fp_index >= 2;
+                for (std::size_t later = index + 1;
+                     direct && later < effective_arguments.size(); ++later) {
+                    if (expression_calls(effective_arguments[later])) {
+                        direct = false;
+                    }
+                }
+                if (direct) {
+                    // F0 already holds the value and nothing later can clobber
+                    // F2..F7, so place it with one move instead of a frame slot.
+                    emit("    FMOV F" + std::to_string(fp_index) + ", F0");
+                    fp_temps.emplace_back(-1, parameter);
+                } else {
+                    const int temp = allocate_local(parameter);
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(temp) + "]");
+                    fp_temps.emplace_back(temp, parameter);
+                }
             } else if (ClassInfo* parameter_class = class_of(parameter);
                        parameter_class != nullptr &&
                        is_register_class(parameter_class) &&
@@ -4573,6 +4613,9 @@ private:
                  std::to_string(integer_temps[index]) + "]");
         }
         for (std::size_t index = 0; index < fp_temps.size(); ++index) {
+            if (fp_temps[index].first < 0) {
+                continue;
+            }
             emit(std::string("    FLOAD.") +
                  (is_float32(fp_temps[index].second) ? "W" : "D") + " F" +
                  std::to_string(index) + ", [R7 + " +
@@ -9762,11 +9805,26 @@ private:
                 integer_temps.push_back(temp);
             } else if (is_fp(parameter)) {
                 gen_as_fp(*effective_arguments[index], parameter);
-                const int temp = allocate_local(parameter);
-                emit(std::string("    FSTORE.") +
-                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
-                     std::to_string(temp) + "]");
-                fp_temps.emplace_back(temp, parameter);
+                const std::size_t fp_index = fp_temps.size();
+                bool direct = fp_index >= 2;
+                for (std::size_t later = index + 1;
+                     direct && later < effective_arguments.size(); ++later) {
+                    if (expression_calls(effective_arguments[later])) {
+                        direct = false;
+                    }
+                }
+                if (direct) {
+                    // F0 already holds the value and nothing later can clobber
+                    // F2..F7, so place it with one move instead of a frame slot.
+                    emit("    FMOV F" + std::to_string(fp_index) + ", F0");
+                    fp_temps.emplace_back(-1, parameter);
+                } else {
+                    const int temp = allocate_local(parameter);
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(temp) + "]");
+                    fp_temps.emplace_back(temp, parameter);
+                }
             } else if (ClassInfo* parameter_class = class_of(parameter);
                        parameter_class != nullptr &&
                        is_register_class(parameter_class) &&
@@ -9792,6 +9850,9 @@ private:
                  std::to_string(integer_temps[index]) + "]");
         }
         for (std::size_t index = 0; index < fp_temps.size(); ++index) {
+            if (fp_temps[index].first < 0) {
+                continue;
+            }
             emit(std::string("    FLOAD.") +
                  (is_float32(fp_temps[index].second) ? "W" : "D") + " F" +
                  std::to_string(index) + ", [R7 + " +
@@ -9883,11 +9944,26 @@ private:
                 integer_temps.push_back(temp);
             } else if (is_fp(parameter)) {
                 gen_as_fp(*effective_arguments[index], parameter);
-                const int temp = allocate_local(parameter);
-                emit(std::string("    FSTORE.") +
-                     (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
-                     std::to_string(temp) + "]");
-                fp_temps.emplace_back(temp, parameter);
+                const std::size_t fp_index = fp_temps.size();
+                bool direct = fp_index >= 2;
+                for (std::size_t later = index + 1;
+                     direct && later < effective_arguments.size(); ++later) {
+                    if (expression_calls(effective_arguments[later])) {
+                        direct = false;
+                    }
+                }
+                if (direct) {
+                    // F0 already holds the value and nothing later can clobber
+                    // F2..F7, so place it with one move instead of a frame slot.
+                    emit("    FMOV F" + std::to_string(fp_index) + ", F0");
+                    fp_temps.emplace_back(-1, parameter);
+                } else {
+                    const int temp = allocate_local(parameter);
+                    emit(std::string("    FSTORE.") +
+                         (is_float32(parameter) ? "W" : "D") + " F0, [R7 + " +
+                         std::to_string(temp) + "]");
+                    fp_temps.emplace_back(temp, parameter);
+                }
             } else if (ClassInfo* parameter_class = class_of(parameter);
                        parameter_class != nullptr &&
                        is_register_class(parameter_class) &&
@@ -9918,6 +9994,9 @@ private:
                  std::to_string(integer_temps[index]) + "]");
         }
         for (std::size_t index = 0; index < fp_temps.size(); ++index) {
+            if (fp_temps[index].first < 0) {
+                continue;
+            }
             emit(std::string("    FLOAD.") +
                  (is_float32(fp_temps[index].second) ? "W" : "D") + " F" +
                  std::to_string(index) + ", [R7 + " +

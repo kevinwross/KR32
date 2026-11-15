@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 08:22 -08:00
+> **Last updated:** 2026-11-15 09:04 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3681,6 +3681,21 @@ Newest entries at the bottom. Use the local time zone.
       draft of the test: the encoder places `fd` at bit 21 and `fs1` at bit 17, so
       the assembler's `0xC06A0032` is authoritative. All eleven parts (91 tests)
       and 91/91 WSL pass.
+
+- **2026-11-15 09:04 -08:00** — First use of `FMOV`: FP arguments whose target
+      register is `F2`-`F7` are placed with one move instead of a frame slot,
+      when no later argument calls anything that could clobber them. It does not
+      fire on `examples/libcpp.cpp` - the measured FP traffic there is `F0`/`F1`
+      local-variable and temporary traffic, with only two loads reaching `F2` and
+      none beyond - so `libcpp` stays at 10,576.
+
+      Caching hot FP slots in `F8`-`F15` through the promotion machinery was
+      implemented and measured: 16 `FMOV` replaced 6 `FLOAD`s but the save and
+      restore added more, for libcpp 10,576 -> 10,594 and libc 10,142 -> 10,147.
+      It was reverted. The cache only pays once an `FMOV Fd, Fk` can fold into
+      its consumer (`FADD F0, F1, F2` becoming `FADD F0, F8, F2`), which needs an
+      FP-aware copy fold that does not exist yet. All eleven parts (91 tests) and
+      91/91 WSL pass.
 
 ## 10. Updating this file
 
