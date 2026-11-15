@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 03:58 -08:00
+> **Last updated:** 2026-11-15 04:30 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3575,6 +3575,23 @@ Newest entries at the bottom. Use the local time zone.
       `KR32_TEST_PART_ROWS` at the end of `tests/CMakeLists.txt` and is
       documented in `docs/testing.md`. All eleven parts pass, and WSL passes
       91/91 (the two new files included).
+
+- **2026-11-15 04:30 -08:00** — Callee-saved promotion prototype, not landed.
+      Promoting frequently loaded slots to `R8`-`R10` in functions that call
+      out (91% of the remaining frame loads live in those functions) gave libc
+      10,826 -> 10,445 and libcpp 10,751 -> 10,684 with frame loads 1,512 ->
+      786, and the save/restore was structurally sound: every promoted function
+      saved in a 16-byte aligned area and restored on every exit.
+
+      It was reverted because `os_gfx_check` and `os_gfx_demo` fail
+      deterministically with it: the console stays visible, which means
+      `gfx_create` returned no surface before `con_hide`. Every subset tried
+      passes on its own - user-side gfx functions only, kernel-side gfx only,
+      both together, only `gfx_create`, and all non-gfx functions - while the
+      full set fails, so the trigger is not a single miscompiled function and
+      is not yet explained. Understanding it is the first task next round; the
+      approach is sound and the win is real, but it is not shippable until the
+      gfx failure is traced.
 
 ## 10. Updating this file
 
