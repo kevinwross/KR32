@@ -1478,6 +1478,298 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
     }
     return removed;
 }
+int parse_fp_register(const std::string& text, int& reg) {
+    if (text.size() < 2 || (text[0] != 'F' && text[0] != 'f')) {
+        return 0;
+    }
+    int value = 0;
+    for (std::size_t index = 1; index < text.size(); ++index) {
+        if (text[index] < '0' || text[index] > '9') {
+            return 0;
+        }
+        value = value * 10 + (text[index] - '0');
+    }
+    if (value < 0 || value > 15) {
+        return 0;
+    }
+    reg = value;
+    return 1;
+}
+
+// An FMOV whose destination is read by the very next instruction and named
+// nowhere else in the function is a pure copy: substitute the source register
+// in the consumer and drop the move.
+int fold_fp_move_consumers(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        for (std::size_t index = function.begin; index + 1 < function.end;
+             ++index) {
+            Instruction move;
+            if (!parse_instruction(lines[index], move) ||
+                move.mnemonic != "FMOV" || move.operands.size() != 2) {
+                continue;
+            }
+            int destination = 0;
+            int source = 0;
+            if (!parse_fp_register(move.operands[0], destination) ||
+                !parse_fp_register(move.operands[1], source) ||
+                destination == source) {
+                continue;
+            }
+            std::size_t next = index + 1;
+            while (next < function.end && lines[next].empty()) {
+                ++next;
+            }
+            if (next >= function.end) {
+                continue;
+            }
+            Instruction consumer;
+            if (!parse_instruction(lines[next], consumer)) {
+                continue;
+            }
+            const std::string& mnemonic = consumer.mnemonic;
+            if (mnemonic.size() < 2 || mnemonic[0] != 'F' ||
+                mnemonic == "FLOAD.W" || mnemonic == "FLOAD.D" ||
+                mnemonic == "FSTORE.W" || mnemonic == "FSTORE.D" ||
+                mnemonic == "FMOV") {
+                continue;
+            }
+            const std::string target = "F" + std::to_string(destination);
+            bool read_by_consumer = false;
+            for (std::size_t operand = 1; operand < consumer.operands.size();
+                 ++operand) {
+                if (trim(consumer.operands[operand]) == target) {
+                    read_by_consumer = true;
+                }
+            }
+            if (!read_by_consumer) {
+                continue;
+            }
+            int mentions = 0;
+            for (std::size_t scan = function.begin; scan < function.end;
+                 ++scan) {
+                Instruction other;
+                if (!parse_instruction(lines[scan], other)) {
+                    continue;
+                }
+                for (const std::string& operand : other.operands) {
+                    if (trim(operand) == target) {
+                        ++mentions;
+                    }
+                }
+            }
+            if (mentions != 2) {
+                continue;
+            }
+            for (std::size_t operand = 1; operand < consumer.operands.size();
+                 ++operand) {
+                if (trim(consumer.operands[operand]) == target) {
+                    consumer.operands[operand] = "F" + std::to_string(source);
+                }
+            }
+            lines[next] = format_instruction(consumer);
+            lines[index].clear();
+            ++removed;
+        }
+    }
+    return removed;
+}
+
+// Floating-point slots follow the same rule as the integer ones, in F2-F7:
+// those are caller-saved, so a call-free span needs no save and restore, and
+// the front end's expression temporaries use F0 and F1.
+int promote_call_free_fp_ranges(std::vector<std::string>& lines,
+                                int& rewritten) {
+    int removed = 0;
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        bool skip = false;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            if (lines[index].find(".Lcs_") != std::string::npos) {
+                skip = true;
+                break;
+            }
+        }
+        if (skip) {
+            continue;
+        }
+        bool used_fp[16] = {};
+        std::vector<std::size_t> call_sites;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            if (is_call(instruction.mnemonic)) {
+                call_sites.push_back(index);
+            }
+            for (const std::string& operand : instruction.operands) {
+                int fpr = -1;
+                if (parse_fp_register(operand, fpr)) {
+                    used_fp[fpr] = true;
+                }
+            }
+        }
+        struct FpSlot {
+            std::size_t first = 0;
+            std::size_t last = 0;
+            int loads = 0;
+            int stores = 0;
+            bool saw = false;
+            bool blocked = false;
+            bool first_is_store = false;
+        };
+        std::map<int, FpSlot> slots;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            const bool fp_load = instruction.mnemonic == "FLOAD.W" ||
+                                 instruction.mnemonic == "FLOAD.D";
+            const bool fp_store = instruction.mnemonic == "FSTORE.W" ||
+                                  instruction.mnemonic == "FSTORE.D";
+            FpSlot& info = slots[slot];
+            if (!fp_load && !fp_store) {
+                info.blocked = true;
+                continue;
+            }
+            if (!info.saw) {
+                info.saw = true;
+                info.first = index;
+                info.first_is_store = fp_store;
+            }
+            info.last = index;
+            if (fp_load) {
+                ++info.loads;
+            } else {
+                ++info.stores;
+            }
+        }
+        std::vector<int> free_fp;
+        for (int reg = 2; reg <= 7; ++reg) {
+            if (!used_fp[reg]) {
+                free_fp.push_back(reg);
+            }
+        }
+        struct FpCandidate {
+            int slot = 0;
+            std::size_t first = 0;
+            std::size_t last = 0;
+        };
+        std::vector<FpCandidate> candidates;
+        for (const auto& entry : slots) {
+            const FpSlot& info = entry.second;
+            if (info.blocked || !info.saw || !info.first_is_store ||
+                info.stores < 1 || info.loads < 1) {
+                continue;
+            }
+            bool spans_call = false;
+            for (const std::size_t call : call_sites) {
+                if (call >= info.first && call <= info.last) {
+                    spans_call = true;
+                    break;
+                }
+            }
+            if (spans_call) {
+                continue;
+            }
+            bool spans_branch = false;
+            for (std::size_t index = info.first + 1; index <= info.last;
+                 ++index) {
+                const std::string text = trim(lines[index]);
+                if (text.empty()) {
+                    continue;
+                }
+                if (text.back() == ':') {
+                    spans_branch = true;
+                    break;
+                }
+                Instruction scanned;
+                if (parse_instruction(lines[index], scanned) &&
+                    is_branch(scanned.mnemonic)) {
+                    spans_branch = true;
+                    break;
+                }
+            }
+            if (spans_branch) {
+                continue;
+            }
+            candidates.push_back(FpCandidate{entry.first, info.first,
+                                             info.last});
+        }
+        if (candidates.empty() || free_fp.empty()) {
+            continue;
+        }
+        // Leave a function alone when every slot would move to a register.
+        if (candidates.size() >= slots.size()) {
+            continue;
+        }
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const FpCandidate& left, const FpCandidate& right) {
+                      return left.first < right.first;
+                  });
+        std::vector<std::size_t> busy_until(free_fp.size(), 0);
+        std::map<int, int> assigned;
+        for (const FpCandidate& candidate : candidates) {
+            for (std::size_t reg = 0; reg < free_fp.size(); ++reg) {
+                if (busy_until[reg] > candidate.first) {
+                    continue;
+                }
+                busy_until[reg] = candidate.last + 1;
+                assigned[candidate.slot] = free_fp[reg];
+                break;
+            }
+        }
+        if (assigned.empty()) {
+            continue;
+        }
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            const bool fp_load = instruction.mnemonic == "FLOAD.W" ||
+                                 instruction.mnemonic == "FLOAD.D";
+            const bool fp_store = instruction.mnemonic == "FSTORE.W" ||
+                                  instruction.mnemonic == "FSTORE.D";
+            if (!fp_load && !fp_store) {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            const auto found = assigned.find(slot);
+            if (found == assigned.end()) {
+                continue;
+            }
+            const std::string cached = "F" + std::to_string(found->second);
+            Instruction move;
+            move.mnemonic = "FMOV";
+            if (fp_load) {
+                move.operands.push_back(instruction.operands[0]);
+                move.operands.push_back(cached);
+            } else {
+                move.operands.push_back(cached);
+                move.operands.push_back(instruction.operands[0]);
+            }
+            lines[index] = format_instruction(move);
+            ++rewritten;
+            ++removed;
+        }
+    }
+    return removed;
+}
 int promote_leaf_scalars(std::vector<std::string>& lines) {
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
@@ -4963,6 +5255,8 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += promote_leaf_scalars(lines);
     stats.removed += promote_call_surviving_scalars(lines, stats.rewritten);
     stats.removed += promote_call_free_ranges(lines, stats.rewritten);
+    stats.removed += promote_call_free_fp_ranges(lines, stats.rewritten);
+    stats.removed += fold_fp_move_consumers(lines);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += forward_stack_temporaries(lines);

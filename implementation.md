@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 10:08 -08:00
+> **Last updated:** 2026-11-15 10:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3726,6 +3726,16 @@ Newest entries at the bottom. Use the local time zone.
       alone. libc 10,142 -> 10,061 instructions and libcpp 10,576 -> 10,515;
       kernel 64,248 -> 62,704 bytes. All eleven parts (91 tests) and 91/91 WSL
       pass.
+
+- **2026-11-15 10:36 -08:00** — Floating-point slots join the call-free
+      allocation, in `F2`-`F7`: those are caller-saved, so a call-free span
+      needs no save and restore, and the front end's expression temporaries use
+      `F0`/`F1`. A new fold substitutes the cached register into the consumer of
+      an `FMOV` whose destination is named nowhere else, which is what makes the
+      cache pay. libcpp 10,515 -> 10,443 instructions with 303 `FMOV` and FP
+      loads 521 -> 369; libc 10,061 -> 10,059. All eleven parts (91 tests) and
+      91/91 WSL pass. The first `FMOV` in the assembly is now emitted by the
+      optimizer rather than the front end.
 
 ## 10. Updating this file
 
