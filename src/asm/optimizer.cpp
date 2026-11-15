@@ -1285,6 +1285,199 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
     return 0;
 }
 
+int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
+    int removed = 0;
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        bool has_exception_path = false;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            if (lines[index].find(".Lcs_") != std::string::npos) {
+                has_exception_path = true;
+                break;
+            }
+        }
+        if (has_exception_path) {
+            continue;
+        }
+
+        bool used[16] = {};
+        std::vector<std::size_t> call_sites;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            if (is_call(instruction.mnemonic)) {
+                call_sites.push_back(index);
+            }
+            for (const std::string& operand : instruction.operands) {
+                int reg = -1;
+                if (parse_register(operand, reg) ||
+                    parse_register_address(operand, reg)) {
+                    if (reg >= 0 && reg < 16) {
+                        used[reg] = true;
+                    }
+                }
+            }
+        }
+        struct SlotInfo {
+            std::size_t first = 0;
+            std::size_t last = 0;
+            int loads = 0;
+            int stores = 0;
+            bool saw = false;
+            bool blocked = false;
+            bool first_is_store = false;
+        };
+        std::map<int, SlotInfo> slots;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            SlotInfo& info = slots[slot];
+            if (!info.saw) {
+                info.saw = true;
+                info.first = index;
+                info.first_is_store = instruction.mnemonic == "STORE";
+            }
+            info.last = index;
+            if (instruction.mnemonic == "LOAD") {
+                ++info.loads;
+            } else if (instruction.mnemonic == "STORE") {
+                ++info.stores;
+            } else {
+                info.blocked = true;
+            }
+        }
+        struct Candidate {
+            int slot = 0;
+            int loads = 0;
+            std::size_t first = 0;
+            std::size_t last = 0;
+        };
+        std::vector<Candidate> candidates;
+        for (const auto& entry : slots) {
+            const SlotInfo& info = entry.second;
+            if (info.blocked || !info.saw || !info.first_is_store ||
+                info.stores < 1 || info.loads < 1) {
+                continue;
+            }
+            bool spans_call = false;
+            for (const std::size_t call : call_sites) {
+                if (call >= info.first && call <= info.last) {
+                    spans_call = true;
+                    break;
+                }
+            }
+            if (spans_call) {
+                continue;
+            }
+            bool spans_branch = false;
+            for (std::size_t index = info.first + 1; index <= info.last;
+                 ++index) {
+                const std::string text = trim(lines[index]);
+                if (text.empty()) {
+                    continue;
+                }
+                if (text.back() == ':') {
+                    spans_branch = true;
+                    break;
+                }
+                Instruction scanned;
+                if (parse_instruction(lines[index], scanned) &&
+                    is_branch(scanned.mnemonic)) {
+                    spans_branch = true;
+                    break;
+                }
+            }
+            if (spans_branch) {
+                continue;
+            }
+            candidates.push_back(
+                Candidate{entry.first, info.loads, info.first, info.last});
+        }
+        if (candidates.empty()) {
+            continue;
+        }
+        std::vector<int> free_registers;
+        for (int reg = 2; reg <= 6; ++reg) {
+            if (used[reg]) {
+                continue;
+            }
+            free_registers.push_back(reg);
+        }
+        if (free_registers.empty()) {
+            continue;
+        }
+        std::sort(candidates.begin(), candidates.end(),
+                  [](const Candidate& left, const Candidate& right) {
+                      return left.first < right.first;
+                  });
+        std::vector<std::size_t> busy_until(free_registers.size(), 0);
+        std::map<int, int> assigned;
+        for (const Candidate& candidate : candidates) {
+            for (std::size_t reg = 0; reg < free_registers.size(); ++reg) {
+                if (busy_until[reg] > candidate.first) {
+                    continue;
+                }
+                busy_until[reg] = candidate.last + 1;
+                assigned[candidate.slot] = free_registers[reg];
+                break;
+            }
+        }
+        if (assigned.empty()) {
+            continue;
+        }
+        // Leave a function alone when every frame slot would move to a register:
+        // the later frame removal does not expect the save area that the
+        // call-crossing promotion left behind.
+        if (assigned.size() >= slots.size()) {
+            continue;
+        }
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            if (instruction.mnemonic != "LOAD" &&
+                instruction.mnemonic != "STORE") {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            const auto found = assigned.find(slot);
+            if (found == assigned.end()) {
+                continue;
+            }
+            const std::string cached = "R" + std::to_string(found->second);
+            Instruction move;
+            move.mnemonic = "MOV";
+            if (instruction.mnemonic == "LOAD") {
+                move.operands.push_back(instruction.operands[0]);
+                move.operands.push_back(cached);
+            } else {
+                move.operands.push_back(cached);
+                move.operands.push_back(instruction.operands[0]);
+            }
+            lines[index] = format_instruction(move);
+            ++rewritten;
+            ++removed;
+        }
+    }
+    return removed;
+}
 int promote_leaf_scalars(std::vector<std::string>& lines) {
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
@@ -4769,6 +4962,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
     stats.removed += promote_call_surviving_scalars(lines, stats.rewritten);
+    stats.removed += promote_call_free_ranges(lines, stats.rewritten);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += forward_stack_temporaries(lines);

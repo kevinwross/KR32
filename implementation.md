@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 09:33 -08:00
+> **Last updated:** 2026-11-15 10:08 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3713,6 +3713,19 @@ Newest entries at the bottom. Use the local time zone.
       `main` is consistent (save area `ADJSP #-16` paired with
       `LOAD R8, [SP + 0]; ADJSP #16; RET`). The remaining fault is a specific
       transform in the gfx path and needs a per-function bisect.
+
+- **2026-11-15 10:08 -08:00** — Call-free live-range allocation landed with two
+      restrictions found by bisecting `os_gfx_check`. Per-function whitelists
+      showed that no single gfx module breaks: `main`, both halves of the user
+      gfx library, and both halves of the kernel gfx code each pass alone, so the
+      fault is not a bad transform in one function. Restricting the register pool
+      to `R2`-`R6` makes both `os_gfx_check` and `run_os_user` pass, which
+      implicates `R12`-`R15`; why the OS depends on them is not yet known and is
+      the next thing to establish. Spans are also restricted to straight-line
+      code, and a function whose entire frame would move to registers is left
+      alone. libc 10,142 -> 10,061 instructions and libcpp 10,576 -> 10,515;
+      kernel 64,248 -> 62,704 bytes. All eleven parts (91 tests) and 91/91 WSL
+      pass.
 
 ## 10. Updating this file
 
