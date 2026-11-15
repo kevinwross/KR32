@@ -456,5 +456,11 @@ foreach(part_row IN LISTS KR32_TEST_PART_ROWS)
     string(REPLACE "|" ";" part_fields "${part_row}")
     list(GET part_fields 0 part_label)
     list(REMOVE_AT part_fields 0)
-    set_property(TEST ${part_fields} APPEND PROPERTY LABELS "${part_label}")
+    # Tests behind the UI/platform options are absent when those options are
+    # off, but the part rows above stay the same for every configuration.
+    foreach(part_test IN LISTS part_fields)
+        if(TEST ${part_test})
+            set_property(TEST ${part_test} APPEND PROPERTY LABELS "${part_label}")
+        endif()
+    endforeach()
 endforeach()
