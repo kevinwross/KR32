@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 17:59 -08:00
+> **Last updated:** 2026-11-14 18:28 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3488,6 +3488,17 @@ Newest entries at the bottom. Use the local time zone.
 
       libcpp 11,825 -> 11,579 instructions. libc unchanged. All unit suites run
       one file at a time, 47/47 integration, and 89/89 WSL pass.
+
+- **2026-11-14 18:28 -08:00** — Third C++ batch, committed at three changes
+      rather than five to keep the tree green before a long pause. The throw
+      scan now resolves direct calls by name (namespace lookup, then the owning
+      class), so a function that only calls non-throwing functions is non-throwing
+      too. Integer and `long long` binary operations keep the left operand on the
+      stack instead of a frame slot, which lets the optimizer forward it.
+
+      libcpp 11,579 -> 11,442 instructions (-1.2%); frame loads 1,336 -> 1,148,
+      frame stores 971 -> 794. All unit suites, 47/47 integration, and 89/89 WSL
+      pass.
 
 ## 10. Updating this file
 

@@ -548,7 +548,41 @@ public:
         case ExprKind::Cast:
         case ExprKind::InitializerList:
             break;
-        case ExprKind::Call:
+        case ExprKind::Call: {
+            const Expr* callee = expression->children.empty()
+                                     ? nullptr
+                                     : expression->children[0].get();
+            if (callee != nullptr && callee->kind == ExprKind::Name) {
+                std::vector<Function*> candidates =
+                    lookup_functions(callee->name, analysis_prefix_);
+                if (candidates.empty() && analysis_owner_ != nullptr &&
+                    callee->name.parts.size() == 1) {
+                    for (ClassInfo* current = analysis_owner_; current != nullptr;
+                         current = current->base) {
+                        const auto found =
+                            current->methods.find(callee->name.parts[0]);
+                        if (found != current->methods.end()) {
+                            candidates = found->second;
+                            break;
+                        }
+                    }
+                }
+                if (!candidates.empty()) {
+                    for (const Function* candidate : candidates) {
+                        if (!candidate->cannot_throw) {
+                            return true;
+                        }
+                    }
+                    for (const ExprPtr& argument : expression->arguments) {
+                        if (expression_may_throw(argument.get())) {
+                            return true;
+                        }
+                    }
+                    return false;
+                }
+            }
+            return true;
+        }
         case ExprKind::New:
         case ExprKind::Delete:
         case ExprKind::Lambda:
@@ -648,6 +682,10 @@ public:
         }
     }
 
+    // Namespace prefix and owning class of the function whose body the throw
+    // scan is in.
+    std::string analysis_prefix_;
+
     std::string run(const TranslationUnit& unit) {
         debug_record("S 0 " + unit.source_name);
         collect_classes(unit.declarations, "");
@@ -668,6 +706,11 @@ public:
                 if (function->decl == nullptr || function->decl->body == nullptr) {
                     continue;
                 }
+                const std::size_t separator = function->qualified.rfind("::");
+                analysis_prefix_ = separator == std::string::npos
+                                       ? ""
+                                       : function->qualified.substr(0, separator);
+                analysis_owner_ = function->owner;
                 const bool safe = !statement_may_throw(function->decl->body.get()) &&
                                   (!function->is_constructor ||
                                    !construction_may_throw(function->owner, 0));
@@ -852,6 +895,9 @@ private:
         bool vtables_built = false;
         bool laid_out = false;
     };
+
+    // Owning class of the function whose body the throw scan is in.
+    ClassInfo* analysis_owner_ = nullptr;
 
     struct Local {
         TypePtr type;
@@ -6312,10 +6358,10 @@ private:
                      " R1, R1, #31");
             }
         }
-        const int left_temp =
-            allocate_local(Type::make_builtin(BuiltinKind::Int));
-        emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
-        emit("    STORE R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+        // The left value waits on the stack; the two words come back in
+        // reverse order.
+        emit("    PUSH R0");
+        emit("    PUSH R1");
         gen_expr(*expression.children[1]);
         const Expr* right_literal = expression.children[1].get();
         const bool literal_compare =
@@ -6337,8 +6383,8 @@ private:
             emit("    MOV R4, R0");
             emit("    MOV R5, R1");
         }
-        emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
-        emit("    LOAD R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+        emit("    POP R1");
+        emit("    POP R0");
         if (literal_compare) {
             const long long value = right_literal->integer;
             const std::string high = std::to_string(static_cast<long long>(
@@ -7144,11 +7190,12 @@ private:
             }
         }
         gen_expr(*expression.children[0]);
-        const int left_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-        emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
+        // The left operand waits on the stack so the optimizer can keep it in
+        // a register while the right operand is evaluated.
+        emit("    PUSH R0");
         gen_expr(*expression.children[1]);
         emit("    MOV R1, R0");
-        emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
+        emit("    POP R0");
 
         if (op == "-" && is_pointer(left_type) && is_pointer(right_type)) {
             const int element_size =
