@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 16:36 -08:00
+> **Last updated:** 2026-11-14 17:59 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3475,6 +3475,19 @@ Newest entries at the bottom. Use the local time zone.
       libcpp 13,046 -> 11,851 instructions (-9.2%); `.Llogicend` sites 60 -> 6,
       `.Landfalse` 39 -> 5. libc unchanged at 11,059. Windows unit suites (run
       one file at a time), 47/47 integration, and 89/89 WSL pass.
+
+- **2026-11-14 17:59 -08:00** — Second C++ batch. `long long` literals carry
+      their real high word (`value >> 32`, not `0`/`-1`), and a comparison
+      against a signed literal compares the two 32-bit halves directly, with a
+      single high-word test for zero. Calls to a function whose body holds no
+      throw, try, new, or call skip the landing pads (143 -> 94 sites) and the
+      exception-pending checks after constructors and destructors (36 -> 17).
+      The flag iterates to a fixpoint and a constructor also checks its bases
+      and class-type members, so an implicit member construction cannot hide a
+      throw.
+
+      libcpp 11,825 -> 11,579 instructions. libc unchanged. All unit suites run
+      one file at a time, 47/47 integration, and 89/89 WSL pass.
 
 ## 10. Updating this file
 

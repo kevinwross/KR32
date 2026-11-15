@@ -520,6 +520,134 @@ public:
         type_aliases_["uint32_t"] = Type::make_builtin(BuiltinKind::UnsignedInt);
     }
 
+    // A conservative scan: anything not proven safe may throw.
+    bool expression_may_throw(const Expr* expression) {
+        if (expression == nullptr) {
+            return false;
+        }
+        switch (expression->kind) {
+        case ExprKind::IntegerLiteral:
+        case ExprKind::FloatLiteral:
+        case ExprKind::StringLiteral:
+        case ExprKind::CharacterLiteral:
+        case ExprKind::BoolLiteral:
+        case ExprKind::NullptrLiteral:
+        case ExprKind::Name:
+        case ExprKind::This:
+        case ExprKind::Scope:
+        case ExprKind::Sizeof:
+        case ExprKind::Alignof:
+        case ExprKind::Typeid:
+            break;
+        case ExprKind::Unary:
+        case ExprKind::Binary:
+        case ExprKind::Assign:
+        case ExprKind::Conditional:
+        case ExprKind::Index:
+        case ExprKind::Member:
+        case ExprKind::Cast:
+        case ExprKind::InitializerList:
+            break;
+        case ExprKind::Call:
+        case ExprKind::New:
+        case ExprKind::Delete:
+        case ExprKind::Lambda:
+        case ExprKind::Unknown:
+        default:
+            return true;
+        }
+        for (const ExprPtr& child : expression->children) {
+            if (expression_may_throw(child.get())) {
+                return true;
+            }
+        }
+        for (const ExprPtr& argument : expression->arguments) {
+            if (expression_may_throw(argument.get())) {
+                return true;
+            }
+        }
+        for (const ExprPtr& argument : expression->placement_arguments) {
+            if (expression_may_throw(argument.get())) {
+                return true;
+            }
+        }
+        if (expression_may_throw(expression->new_initializer.get())) {
+            return true;
+        }
+        return false;
+    }
+
+    bool statement_may_throw(const Stmt* statement) {
+        if (statement == nullptr) {
+            return false;
+        }
+        switch (statement->kind) {
+        case StmtKind::Empty:
+        case StmtKind::Break:
+        case StmtKind::Continue:
+        case StmtKind::Goto:
+        case StmtKind::Label:
+            return false;
+        case StmtKind::Throw:
+        case StmtKind::Try:
+            return true;
+        case StmtKind::Unknown:
+        default:
+            return true;
+        case StmtKind::Compound:
+            for (const StmtPtr& child : statement->statements) {
+                if (statement_may_throw(child.get())) {
+                    return true;
+                }
+            }
+            return false;
+        case StmtKind::Expression:
+        case StmtKind::Return:
+            return expression_may_throw(statement->expression.get());
+        case StmtKind::Declaration:
+            if (statement->declaration) {
+                if (expression_may_throw(statement->declaration->initializer.get())) {
+                    return true;
+                }
+                for (const Initializer& initializer :
+                     statement->declaration->initializers) {
+                    for (const ExprPtr& argument : initializer.arguments) {
+                        if (expression_may_throw(argument.get())) {
+                            return true;
+                        }
+                    }
+                }
+            }
+            return false;
+        case StmtKind::If:
+            return expression_may_throw(statement->condition.get()) ||
+                   statement_may_throw(statement->body.get()) ||
+                   statement_may_throw(statement->else_body.get());
+        case StmtKind::While:
+        case StmtKind::DoWhile:
+            return expression_may_throw(statement->condition.get()) ||
+                   statement_may_throw(statement->body.get());
+        case StmtKind::For:
+        case StmtKind::RangeFor:
+            return expression_may_throw(statement->condition.get()) ||
+                   expression_may_throw(statement->increment.get()) ||
+                   statement_may_throw(statement->body.get());
+        case StmtKind::Switch:
+            if (expression_may_throw(statement->expression.get())) {
+                return true;
+            }
+            for (const StmtPtr& child : statement->statements) {
+                if (statement_may_throw(child.get())) {
+                    return true;
+                }
+            }
+            return false;
+        case StmtKind::Case:
+        case StmtKind::Default:
+            return expression_may_throw(statement->expression.get());
+        }
+    }
+
     std::string run(const TranslationUnit& unit) {
         debug_record("S 0 " + unit.source_name);
         collect_classes(unit.declarations, "");
@@ -531,6 +659,27 @@ public:
             return {};
         }
         emit_globals();
+        // Iterate to a fixpoint so a constructor sees the flag of the
+        // constructors it invokes.
+        for (int pass = 0; pass < 16; ++pass) {
+            bool changed = false;
+            for (const std::unique_ptr<Function>& stored : function_storage_) {
+                Function* function = stored.get();
+                if (function->decl == nullptr || function->decl->body == nullptr) {
+                    continue;
+                }
+                const bool safe = !statement_may_throw(function->decl->body.get()) &&
+                                  (!function->is_constructor ||
+                                   !construction_may_throw(function->owner, 0));
+                if (safe != function->cannot_throw) {
+                    function->cannot_throw = safe;
+                    changed = true;
+                }
+            }
+            if (!changed) {
+                break;
+            }
+        }
         for (std::size_t index = 0; index < function_storage_.size(); ++index) {
             Function* function = function_storage_[index].get();
             if (function->defined && emitted_functions_.insert(function).second) {
@@ -626,6 +775,9 @@ private:
         bool extern_c = false;
         bool variadic = false;
         bool is_noexcept = false;
+        // The body contains no throw, try, new, or call, so a call to it
+        // cannot transfer control through the unwinder.
+        bool cannot_throw = false;
         bool from_template = false;
         std::map<std::string, TypePtr> template_bindings;
         bool defined = false;
@@ -4379,6 +4531,10 @@ private:
                  std::to_string(index) + ", [R7 + " +
                  std::to_string(fp_temps[index].first) + "]");
         }
+        if (constructor->cannot_throw) {
+            emit("    CALL " + constructor->symbol);
+            return;
+        }
         const std::string call_start = new_label("ctor_call_start");
         const std::string call_end = new_label("ctor_call_end");
         emit(call_start + ":");
@@ -4464,7 +4620,9 @@ private:
         }
         emit("    LOAD R0, [R7 + " + std::to_string(address_temp) + "]");
         emit("    CALL " + destructor->symbol);
-        emit_pending_check();
+        if (!destructor->cannot_throw) {
+            emit_pending_check();
+        }
     }
 
     void store_new_value(const TypePtr& type, const Expr& value, int address_temp) {
@@ -6159,8 +6317,11 @@ private:
         emit("    STORE R0, [R7 + " + std::to_string(left_temp) + "]");
         emit("    STORE R1, [R7 + " + std::to_string(left_temp + 4) + "]");
         gen_expr(*expression.children[1]);
-        if (!is_long_long(right)) {
-            const Expr* right_literal = expression.children[1].get();
+        const Expr* right_literal = expression.children[1].get();
+        const bool literal_compare =
+            comparison && right_literal->kind == ExprKind::IntegerLiteral &&
+            !unsigned_operation;
+        if (!literal_compare && !is_long_long(right)) {
             if (right_literal->kind == ExprKind::IntegerLiteral &&
                 !is_unsigned_integer(right)) {
                 emit("    MOV R5, #" +
@@ -6172,12 +6333,95 @@ private:
                      " R5, R5, #31");
             }
             emit("    MOV R4, R0");
-        } else {
+        } else if (!literal_compare) {
             emit("    MOV R4, R0");
             emit("    MOV R5, R1");
         }
         emit("    LOAD R0, [R7 + " + std::to_string(left_temp) + "]");
         emit("    LOAD R1, [R7 + " + std::to_string(left_temp + 4) + "]");
+        if (literal_compare) {
+            const long long value = right_literal->integer;
+            const std::string high = std::to_string(static_cast<long long>(
+                static_cast<std::int32_t>(static_cast<std::uint32_t>(
+                    static_cast<unsigned long long>(value) >> 32))));
+            // The low word is a 32-bit pattern; format it as such.
+            const std::string low = std::to_string(static_cast<long long>(
+                static_cast<std::int32_t>(static_cast<std::uint32_t>(
+                    static_cast<unsigned long long>(value)))));
+            const std::string is_true = new_label("lltrue");
+            const std::string is_false = new_label("llfalse");
+            const std::string done = new_label("lldone");
+            const bool zero = value == 0;
+            if (zero) {
+                if (op == "<") {
+                    emit("    CMP R1, #0");
+                    emit("    JGE " + is_false);
+                } else if (op == ">=") {
+                    emit("    CMP R1, #0");
+                    emit("    JLT " + is_false);
+                } else if (op == "==") {
+                    emit("    CMP R1, #0");
+                    emit("    JNZ " + is_false);
+                    emit("    CMP R0, #0");
+                    emit("    JZ " + is_true);
+                    emit("    JMP " + is_false);
+                } else if (op == "!=") {
+                    emit("    CMP R1, #0");
+                    emit("    JNZ " + is_true);
+                    emit("    CMP R0, #0");
+                    emit("    JZ " + is_false);
+                    emit("    JMP " + is_true);
+                } else if (op == ">") {
+                    emit("    CMP R1, #0");
+                    emit("    JGT " + is_true);
+                    emit("    JLT " + is_false);
+                    emit("    CMP R0, #0");
+                    emit("    JNZ " + is_true);
+                    emit("    JMP " + is_false);
+                } else {
+                    emit("    CMP R1, #0");
+                    emit("    JGT " + is_false);
+                    emit("    CMP R0, #0");
+                    emit("    JZ " + is_true);
+                    emit("    JMP " + is_false);
+                }
+            } else {
+                emit("    CMP R1, #" + high);
+                if (op == "==") {
+                    emit("    JNZ " + is_false);
+                    emit("    CMP R0, #" + low);
+                    emit("    JZ " + is_true);
+                    emit("    JMP " + is_false);
+                } else if (op == "!=") {
+                    emit("    JNZ " + is_true);
+                    emit("    CMP R0, #" + low);
+                    emit("    JZ " + is_false);
+                    emit("    JMP " + is_true);
+                } else if (op == "<" || op == "<=") {
+                    // The low halves are unsigned, so compare them that way.
+                    emit("    JLT " + is_true);
+                    emit("    JGT " + is_false);
+                    emit("    CMP R0, #" + low);
+                    emit(std::string("    ") +
+                         (op == "<" ? "JCS " : "JLS ") + is_true);
+                    emit("    JMP " + is_false);
+                } else {
+                    emit("    JGT " + is_true);
+                    emit("    JLT " + is_false);
+                    emit("    CMP R0, #" + low);
+                    emit(std::string("    ") +
+                         (op == ">" ? "JHI " : "JNC ") + is_true);
+                    emit("    JMP " + is_false);
+                }
+            }
+            emit(is_true + ":");
+            emit("    MOV R0, #1");
+            emit("    JMP " + done);
+            emit(is_false + ":");
+            emit("    MOV R0, #0");
+            emit(done + ":");
+            return Type::make_builtin(BuiltinKind::Bool);
+        }
         if (comparison) {
             const std::string is_true = new_label("lltrue");
             const std::string is_false = new_label("llfalse");
@@ -8396,7 +8640,8 @@ private:
             emit("    LEA R4, [R7 + " + std::to_string(class_result_temp) + "]");
         }
         const bool skip_unwind =
-            function->is_noexcept && !virtual_dispatch;
+            (function->is_noexcept || function->cannot_throw) &&
+            !virtual_dispatch;
         const std::string call_start = new_label("cs_start");
         if (!skip_unwind) {
             emit(call_start + ":");
@@ -9207,6 +9452,40 @@ private:
         }
     }
 
+    // A constructor also runs the implicit construction of its bases and its
+    // class-type members, so it can throw when one of those can.
+    bool construction_may_throw(ClassInfo* info, int depth) {
+        if (info == nullptr || depth > 32) {
+            return true;
+        }
+        if (info->base != nullptr) {
+            for (const Function* constructor : info->base->constructors) {
+                if (!constructor->cannot_throw) {
+                    return true;
+                }
+            }
+        }
+        for (const MemberInfo& member : info->members) {
+            TypePtr type = member.type;
+            if (type != nullptr && type->kind == TypeKind::Array) {
+                type = type->element;
+            }
+            ClassInfo* member_class = class_of(type);
+            if (member_class == nullptr) {
+                continue;
+            }
+            for (const Function* constructor : member_class->constructors) {
+                if (!constructor->cannot_throw) {
+                    return true;
+                }
+            }
+            if (construction_may_throw(member_class, depth + 1)) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     Function* find_constructor(ClassInfo* info, std::size_t argument_count) {
         for (ClassInfo* current = info; current != nullptr; current = current->base) {
             for (Function* constructor : current->constructors) {
@@ -9387,7 +9666,9 @@ private:
                  std::to_string(fp_temps[index].first) + "]");
         }
         emit("    CALL " + constructor->symbol);
-        emit_pending_check();
+        if (!constructor->cannot_throw) {
+            emit_pending_check();
+        }
     }
 
     void construct_object_from_expression(ClassInfo* info, int offset,
@@ -9511,7 +9792,9 @@ private:
                  std::to_string(fp_temps[index].first) + "]");
         }
         emit("    CALL " + constructor->symbol);
-        emit_pending_check();
+        if (!constructor->cannot_throw) {
+            emit_pending_check();
+        }
     }
 
     Function* find_destructor(ClassInfo* info) {
@@ -9561,7 +9844,9 @@ private:
             if (Function* base_constructor = find_constructor(info->base, 0)) {
                 emit("    LOAD R0, [R7 + " + std::to_string(this_offset_) + "]");
                 emit("    CALL " + base_constructor->symbol);
-                emit_pending_check();
+                if (!base_constructor->cannot_throw) {
+                    emit_pending_check();
+                }
             }
         }
         set_vptr(*info);
