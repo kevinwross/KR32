@@ -4364,6 +4364,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += promote_symbol_bases(lines);
     stats.removed += forward_cfg_frame_loads(lines);
     stats.removed += remove_dead_frame_loads(lines);
+    stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += remove_dead_frame_stores(lines);
 
     stats.removed += remove_zero_frame_adjustments(lines);

@@ -2765,3 +2765,36 @@ TEST_CASE("C++ typedef names resolve for struct types") {
     CHECK(program.ok);
     CHECK(program.result == 9);
 }
+
+TEST_CASE("long long comparisons in conditions cover every operator") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long small = 5;\n"
+        "    long long large = 8589934593LL;\n"
+        "    long long negative = -3;\n"
+        "    long long sameHigh = 8589934592LL;\n"
+        "    if (!(small < large)) return 1;\n"
+        "    if (!(small <= small)) return 2;\n"
+        "    if (large > small) { } else return 3;\n"
+        "    if (!(large >= large)) return 4;\n"
+        "    if (small == large) return 5;\n"
+        "    if (!(small != large)) return 6;\n"
+        "    if (!(negative < 0)) return 7;\n"
+        "    if (negative >= 0) return 8;\n"
+        "    if (!(negative < small)) return 9;\n"
+        "    if (!(sameHigh < large)) return 10;\n"
+        "    if (sameHigh >= large) return 11;\n"
+        "    if (!(large == 8589934593LL)) return 12;\n"
+        "    if (!(sameHigh < 8589934593LL)) return 14;\n"
+        "    if (sameHigh >= 8589934593LL) return 15;\n"
+        "    if (!(large > 8589934592LL)) return 16;\n"
+        "    if (large <= 8589934592LL) return 17;\n"
+        "    while (negative < 0) negative = negative + 1;\n"
+        "    if (negative != 0) return 13;\n"
+        "    return 0;\n"
+        "}\n",
+        true);
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}

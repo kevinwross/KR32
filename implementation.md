@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 19:32 -08:00
+> **Last updated:** 2026-11-14 20:17 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3513,6 +3513,18 @@ Newest entries at the bottom. Use the local time zone.
       survived in most C++ output; a local adjacency pass removes them safely
       (labels may sit between). libcpp 11,114 -> 11,057 instructions. All unit
       suites, 47/47 integration, and 89/89 WSL pass.
+
+- **2026-11-14 20:17 -08:00** — Two changes. The push/pop fold runs once more in
+      the clean-up round, because earlier folds turn nested pairs into
+      `PUSH Rx ; POP Rx` after its first pass; libcpp 11,057 -> 10,902. Long long
+      comparisons in `if`/`while` conditions branch directly instead of building
+      0/1 and testing it; 10,902 -> 10,867. The new branch table was wrong twice
+      and a new regression test caught both: the ISA treats carry as *no borrow*,
+      so `JCS` means unsigned `>=` and `JNC` means `<` - the round-4 literal
+      comparison table had the same pair swapped, and is fixed here too.
+
+      The test covers all six operators, negative values, equal high words, and
+      literal boundaries. All unit suites, 47/47 integration, and 89/89 WSL pass.
 
 ## 10. Updating this file
 

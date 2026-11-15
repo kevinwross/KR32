@@ -6121,10 +6121,96 @@ private:
         const TypePtr left_type = type_of(*expression.children[0]);
         const TypePtr right_type = type_of(*expression.children[1]);
         if (is_fp(left_type) || is_fp(right_type) ||
-            is_long_long(left_type) || is_long_long(right_type) ||
             class_of(left_type) != nullptr ||
             class_of(right_type) != nullptr) {
             return false;
+        }
+        if (is_long_long(left_type) || is_long_long(right_type)) {
+            if (is_unsigned_operation(left_type, right_type)) {
+                return false;
+            }
+            gen_expr(*expression.children[0]);
+            if (!is_long_long(left_type)) {
+                emit("    MOV R1, R0");
+                emit("    SAR R1, R1, #31");
+            }
+            emit("    PUSH R0");
+            emit("    PUSH R1");
+            gen_expr(*expression.children[1]);
+            if (!is_long_long(right_type)) {
+                emit("    MOV R5, R0");
+                emit("    SAR R5, R5, #31");
+            } else {
+                emit("    MOV R5, R1");
+            }
+            emit("    MOV R4, R0");
+            emit("    POP R1");
+            emit("    POP R0");
+            const std::string skip = new_label("llcmp");
+            emit("    CMP R1, R5");
+            if (jump_on_true) {
+                if (op == "==") {
+                    emit("    JNZ " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JZ " + target_label);
+                } else if (op == "!=") {
+                    emit("    JNZ " + target_label);
+                    emit("    CMP R0, R4");
+                    emit("    JNZ " + target_label);
+                } else if (op == "<") {
+                    emit("    JLT " + target_label);
+                    emit("    JGT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JNC " + target_label);
+                } else if (op == "<=") {
+                    emit("    JLT " + target_label);
+                    emit("    JGT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JLS " + target_label);
+                } else if (op == ">") {
+                    emit("    JGT " + target_label);
+                    emit("    JLT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JHI " + target_label);
+                } else {
+                    emit("    JGT " + target_label);
+                    emit("    JLT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JCS " + target_label);
+                }
+            } else {
+                if (op == "==") {
+                    emit("    JNZ " + target_label);
+                    emit("    CMP R0, R4");
+                    emit("    JNZ " + target_label);
+                } else if (op == "!=") {
+                    emit("    JNZ " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JZ " + target_label);
+                } else if (op == "<") {
+                    emit("    JGT " + target_label);
+                    emit("    JLT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JCS " + target_label);
+                } else if (op == "<=") {
+                    emit("    JGT " + target_label);
+                    emit("    JLT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JHI " + target_label);
+                } else if (op == ">") {
+                    emit("    JLT " + target_label);
+                    emit("    JGT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JLS " + target_label);
+                } else {
+                    emit("    JLT " + target_label);
+                    emit("    JGT " + skip);
+                    emit("    CMP R0, R4");
+                    emit("    JNC " + target_label);
+                }
+            }
+            emit(skip + ":");
+            return true;
         }
         gen_expr(*expression.children[0]);
         Local* right_local = nullptr;
@@ -6445,14 +6531,14 @@ private:
                     emit("    JGT " + is_false);
                     emit("    CMP R0, #" + low);
                     emit(std::string("    ") +
-                         (op == "<" ? "JCS " : "JLS ") + is_true);
+                         (op == "<" ? "JNC " : "JLS ") + is_true);
                     emit("    JMP " + is_false);
                 } else {
                     emit("    JGT " + is_true);
                     emit("    JLT " + is_false);
                     emit("    CMP R0, #" + low);
                     emit(std::string("    ") +
-                         (op == ">" ? "JHI " : "JNC ") + is_true);
+                         (op == ">" ? "JHI " : "JCS ") + is_true);
                     emit("    JMP " + is_false);
                 }
             }
