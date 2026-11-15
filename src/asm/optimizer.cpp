@@ -1441,12 +1441,7 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
         if (assigned.empty()) {
             continue;
         }
-        // Leave a function alone when every frame slot would move to a register:
-        // the later frame removal does not expect the save area that the
-        // call-crossing promotion left behind.
-        if (assigned.size() >= slots.size()) {
-            continue;
-        }
+
         for (std::size_t index = function.begin; index < function.end;
              ++index) {
             Instruction instruction;
@@ -1713,10 +1708,7 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
         if (candidates.empty() || free_fp.empty()) {
             continue;
         }
-        // Leave a function alone when every slot would move to a register.
-        if (candidates.size() >= slots.size()) {
-            continue;
-        }
+
         std::sort(candidates.begin(), candidates.end(),
                   [](const FpCandidate& left, const FpCandidate& right) {
                       return left.first < right.first;

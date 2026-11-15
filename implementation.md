@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 10:46 -08:00
+> **Last updated:** 2026-11-15 11:44 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3748,6 +3748,23 @@ Newest entries at the bottom. Use the local time zone.
       `R2`-`R6`, and the source comment now says what is actually known.
       Lowering the call-crossing threshold from three loads to two was also
       measured and is worse (10,071 / 10,463), so it stays at three.
+
+- **2026-11-15 11:44 -08:00** — Removed the whole-frame guards from the call-free
+      allocation. They were added on the theory that the frame removal could not
+      cope with a function whose frame vanished entirely; that theory was wrong,
+      and the frame removal handles the save area correctly. Dropping the guards
+      promotes functions of which every slot moves to a register: libc 10,059 ->
+      10,029 instructions and libcpp 10,443 -> 10,438; the object is 409,696
+      bytes and the kernel 62,696.
+
+      Two optimizer unit tests had to change and it is worth being precise about
+      why: they asserted that a frame load survives after its register is
+      clobbered, which was the right assertion before the slot was promoted. The
+      promoted form is `MOV R2, R0 ; LOAD R0, [R0] ; MOV R0, R2`, which restores
+      the *stored* value rather than the clobbered one, so the tests now assert
+      the memory form is gone and the value comes back from R2. Both gates pass
+      after rebuilding *both* targets — an earlier Windows pass in this round
+      was against a stale `kr32_tests.exe` because only `kr32` had been rebuilt.
 
 ## 10. Updating this file
 

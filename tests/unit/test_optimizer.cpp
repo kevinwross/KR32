@@ -1054,7 +1054,7 @@ TEST_CASE("assembly optimizer folds a copied literal") {
     CHECK(assembly.find("MOV R0, #1") == std::string::npos);
 }
 
-TEST_CASE("assembly optimizer keeps a frame load after its register is clobbered") {
+TEST_CASE("assembly optimizer restores a clobbered slot from its register") {
     std::string assembly =
         ".text\n"
         ".global probe\n"
@@ -1067,10 +1067,13 @@ TEST_CASE("assembly optimizer keeps a frame load after its register is clobbered
         assembler::optimize_assembly(assembly);
     INFO(assembly);
     (void)stats;
-    CHECK(assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
+    // The slot lives in R2 for its call-free span, so the read after the
+    // clobber comes from that register rather than the frame.
+    CHECK(assembly.find("LOAD R0, [R7 + 0]") == std::string::npos);
+    CHECK(assembly.find("MOV R0, R2") != std::string::npos);
 }
 
-TEST_CASE("assembly optimizer repeats a frame load after a clobber") {
+TEST_CASE("assembly optimizer repeats a slot read from its register") {
     std::string assembly =
         ".text\n"
         ".global probe\n"
@@ -1084,7 +1087,8 @@ TEST_CASE("assembly optimizer repeats a frame load after a clobber") {
         assembler::optimize_assembly(assembly);
     INFO(assembly);
     (void)stats;
-    CHECK(assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
+    CHECK(assembly.find("LOAD R0, [R7 + 0]") == std::string::npos);
+    CHECK(assembly.find("MOV R0, R2") != std::string::npos);
 }
 
 TEST_CASE("assembly optimizer keeps a copy before a tail call") {
