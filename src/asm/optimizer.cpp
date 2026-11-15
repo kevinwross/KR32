@@ -507,6 +507,18 @@ void instruction_uses_defs(const Instruction& instruction,
                            RegisterMask& uses, RegisterMask& defs) {
     uses = 0;
     defs = 0;
+    // A jump to a named target leaves the function: the target reads the
+    // argument registers, so they are live even though this block has no
+    // successor. Without this, a copy into R0..R3 before a tail call is
+    // deleted as dead and the target receives a stale argument.
+    if (instruction.mnemonic == "JMP" && instruction.operands.size() == 1 &&
+        !instruction.operands[0].empty() &&
+        instruction.operands[0][0] != '.') {
+        for (int reg = 0; reg < 4; ++reg) {
+            uses = static_cast<RegisterMask>(uses | bit_for_register(reg));
+        }
+        return;
+    }
     if (instruction.mnemonic == "RETW") {
         uses = bit_for_register(0) | bit_for_register(1);
         return;

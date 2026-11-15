@@ -1086,3 +1086,28 @@ TEST_CASE("assembly optimizer repeats a frame load after a clobber") {
     (void)stats;
     CHECK(assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
 }
+
+TEST_CASE("assembly optimizer keeps a copy before a tail call") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    MOV R9, R0\n"
+        "    MOV R0, #454656\n"
+        "    LOAD R0, [R0 + 4]\n"
+        "    CMP R0, #66\n"
+        "    JNZ .Ldone\n"
+        "    MOV R0, R9\n"
+        "    JMP sys_read\n"
+        ".Ldone:\n"
+        "    MOV R0, R9\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    // The jump target reads R0, so the copy must survive.
+    const std::size_t jump = assembly.find("JMP sys_read");
+    REQUIRE(jump != std::string::npos);
+    CHECK(assembly.rfind("MOV R0, R9", jump) != std::string::npos);
+}

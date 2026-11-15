@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 04:53 -08:00
+> **Last updated:** 2026-11-15 05:11 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3609,6 +3609,15 @@ Newest entries at the bottom. Use the local time zone.
       promotion still unlanded. Fix the liveness bug first, add the snippet as
       a regression test, then retry the promotion - it measured libc
       10,826 -> 10,445 and libcpp 10,751 -> 10,684 before the regression.
+
+- **2026-11-15 05:11 -08:00** — Fixed the tail-call liveness bug. A `JMP` to a
+      named target leaves the function and the target reads `R0`-`R3`, but the
+      block has no successor, so those registers were not live-out and
+      `remove_dead_moves` deleted a copy into them as dead. `instruction_uses_defs`
+      now marks `R0`-`R3` used at a named-target `JMP`. This is a correctness
+      fix, not a size win: libc grows 10,826 -> 10,843 instructions because the
+      seventeen argument copies it was deleting are needed. A regression test
+      covers the shape, and all eleven parts plus 91/91 WSL pass.
 
 ## 10. Updating this file
 
