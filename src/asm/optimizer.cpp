@@ -1383,8 +1383,15 @@ int promote_leaf_scalars(std::vector<std::string>& lines) {
             }
         }
 
+        // A leaf function may clobber the caller-saved scratch registers
+        // freely, so R2-R6 are available in addition to R12-R15.
         std::vector<int> free_registers;
         for (int reg = 12; reg < 16; ++reg) {
+            if (!used_register[reg]) {
+                free_registers.push_back(reg);
+            }
+        }
+        for (int reg = 2; reg <= 6; ++reg) {
             if (!used_register[reg]) {
                 free_registers.push_back(reg);
             }

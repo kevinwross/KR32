@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 07:09 -08:00
+> **Last updated:** 2026-11-15 07:34 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3664,6 +3664,13 @@ Newest entries at the bottom. Use the local time zone.
          cache already takes all three callee-saved registers. Reducing them
          further needs function-wide allocation with live-range splitting, not a
          block-local pass.
+
+- **2026-11-15 07:34 -08:00** — A leaf function may clobber the caller-saved
+      scratch registers, so the leaf promotion now draws from `R2`-`R6` as well
+      as `R12`-`R15`, skipping any the function already uses. More slots fit,
+      and the freed frame accesses fold into the operations. libc 10,205 ->
+      10,142 instructions and libcpp 10,664 -> 10,576. All eleven parts
+      (91 tests) and 91/91 WSL pass.
 
 ## 10. Updating this file
 
