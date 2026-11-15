@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 18:28 -08:00
+> **Last updated:** 2026-11-14 18:56 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3499,6 +3499,13 @@ Newest entries at the bottom. Use the local time zone.
       libcpp 11,579 -> 11,442 instructions (-1.2%); frame loads 1,336 -> 1,148,
       frame stores 971 -> 794. All unit suites, 47/47 integration, and 89/89 WSL
       pass.
+
+- **2026-11-14 18:56 -08:00** — Floating-point expression values stop
+      round-tripping through frame slots. A binary operation keeps the right
+      value in `F0` and reloads only the left into `F1`, and the compound
+      assignment does the same with its address on the stack. `FLOAD` 674 -> 521,
+      `FSTORE` 467 -> 314, libcpp 11,442 -> 11,114 instructions (-2.9%). All
+      unit suites, 47/47 integration, and 89/89 WSL pass.
 
 ## 10. Updating this file
 

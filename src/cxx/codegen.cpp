@@ -6298,38 +6298,34 @@ private:
         emit(std::string("    FSTORE.") + (is_float32(result_type) ? "W" : "D") +
              " F0, [R7 + " + std::to_string(left_temp) + "]");
         gen_as_fp(*expression.children[1], result_type);
-        const int right_temp = allocate_local(result_type);
-        emit(std::string("    FSTORE.") + (is_float32(result_type) ? "W" : "D") +
-             " F0, [R7 + " + std::to_string(right_temp) + "]");
+        // The right value stays in F0; the left is reloaded into F1.
         emit(std::string("    FLOAD.") + (is_float32(result_type) ? "W" : "D") +
              " F1, [R7 + " + std::to_string(left_temp) + "]");
-        emit(std::string("    FLOAD.") + (is_float32(result_type) ? "W" : "D") +
-             " F2, [R7 + " + std::to_string(right_temp) + "]");
         if (compare) {
             if (op == "==") {
-                emit("    FEQ" + suffix + " R0, F1, F2");
+                emit("    FEQ" + suffix + " R0, F1, F0");
             } else if (op == "!=") {
-                emit("    FEQ" + suffix + " R0, F1, F2");
+                emit("    FEQ" + suffix + " R0, F1, F0");
                 emit("    XOR R0, R0, #1");
             } else if (op == "<") {
-                emit("    FLT" + suffix + " R0, F1, F2");
+                emit("    FLT" + suffix + " R0, F1, F0");
             } else if (op == "<=") {
-                emit("    FLE" + suffix + " R0, F1, F2");
+                emit("    FLE" + suffix + " R0, F1, F0");
             } else if (op == ">") {
-                emit("    FLT" + suffix + " R0, F2, F1");
+                emit("    FLT" + suffix + " R0, F0, F1");
             } else {
-                emit("    FLE" + suffix + " R0, F2, F1");
+                emit("    FLE" + suffix + " R0, F0, F1");
             }
             return Type::make_builtin(BuiltinKind::Bool);
         }
         if (op == "+") {
-            emit("    FADD" + suffix + " F0, F1, F2");
+            emit("    FADD" + suffix + " F0, F1, F0");
         } else if (op == "-") {
-            emit("    FSUB" + suffix + " F0, F1, F2");
+            emit("    FSUB" + suffix + " F0, F1, F0");
         } else if (op == "*") {
-            emit("    FMUL" + suffix + " F0, F1, F2");
+            emit("    FMUL" + suffix + " F0, F1, F0");
         } else if (op == "/") {
-            emit("    FDIV" + suffix + " F0, F1, F2");
+            emit("    FDIV" + suffix + " F0, F1, F0");
         } else {
             diagnose_once(expression, "unsupported floating-point operator: " + op);
         }
@@ -7303,39 +7299,34 @@ private:
         const std::string suffix = is_float32(lhs_type) ? ".S" : ".D";
         const std::string width = is_float32(lhs_type) ? "W" : "D";
         gen_address(*expression.children[0]);
-        const int address_temp = allocate_local(Type::make_builtin(BuiltinKind::Int));
-        emit("    STORE R0, [R7 + " + std::to_string(address_temp) + "]");
+        emit("    PUSH R0");
         if (expression.text == "=") {
             gen_as_fp(*expression.children[1], lhs_type);
         } else {
             const std::string op =
                 expression.text.substr(0, expression.text.size() - 1);
-            emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+            emit("    POP R1");
+            emit("    PUSH R1");
             emit("    FLOAD." + width + " F0, [R1]");
             const int left_temp = allocate_local(lhs_type);
             emit("    FSTORE." + width + " F0, [R7 + " +
                  std::to_string(left_temp) + "]");
             gen_as_fp(*expression.children[1], lhs_type);
-            const int right_temp = allocate_local(lhs_type);
-            emit("    FSTORE." + width + " F0, [R7 + " +
-                 std::to_string(right_temp) + "]");
             emit("    FLOAD." + width + " F1, [R7 + " +
                  std::to_string(left_temp) + "]");
-            emit("    FLOAD." + width + " F2, [R7 + " +
-                 std::to_string(right_temp) + "]");
             if (op == "+") {
-                emit("    FADD" + suffix + " F0, F1, F2");
+                emit("    FADD" + suffix + " F0, F1, F0");
             } else if (op == "-") {
-                emit("    FSUB" + suffix + " F0, F1, F2");
+                emit("    FSUB" + suffix + " F0, F1, F0");
             } else if (op == "*") {
-                emit("    FMUL" + suffix + " F0, F1, F2");
+                emit("    FMUL" + suffix + " F0, F1, F0");
             } else if (op == "/") {
-                emit("    FDIV" + suffix + " F0, F1, F2");
+                emit("    FDIV" + suffix + " F0, F1, F0");
             } else {
                 diagnose_once(expression, "unsupported floating-point assignment");
             }
         }
-        emit("    LOAD R1, [R7 + " + std::to_string(address_temp) + "]");
+        emit("    POP R1");
         emit("    FSTORE." + width + " F0, [R1]");
         return lhs_type;
     }
