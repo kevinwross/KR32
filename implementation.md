@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 10:36 -08:00
+> **Last updated:** 2026-11-15 10:46 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3736,6 +3736,18 @@ Newest entries at the bottom. Use the local time zone.
       loads 521 -> 369; libc 10,061 -> 10,059. All eleven parts (91 tests) and
       91/91 WSL pass. The first `FMOV` in the assembly is now emitted by the
       optimizer rather than the front end.
+
+- **2026-11-15 10:46 -08:00** — Narrowed the `R12`-`R15` question. Giving the
+      call-free allocation the full pool (`R2`-`R6` plus `R12`-`R15`) breaks
+      `os_gfx_check`; restricting the extra registers to functions with **no
+      call at all** passes both OS gfx tests and `run_os_user`. So the fault is
+      specific to `R12`-`R15` in a function that calls, not to those registers or
+      to the pass. The extension gains nothing, though: leaf functions already
+      have their slots promoted into `R12`-`R15` by the leaf pass, so libc and
+      libcpp come out identical (10,059 / 10,443). The pool therefore stays
+      `R2`-`R6`, and the source comment now says what is actually known.
+      Lowering the call-crossing threshold from three loads to two was also
+      measured and is worse (10,071 / 10,463), so it stays at three.
 
 ## 10. Updating this file
 
