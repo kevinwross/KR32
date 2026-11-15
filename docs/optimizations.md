@@ -313,7 +313,7 @@ counter on the benchmark programs.
 
 | Program | Build | Instructions | Bytes | Ticks |
 |---|---|---:|---:|---:|
-| `examples/floats.c` | `-O1` | 280 | 10,062 | — |
+| `examples/floats.c` | `-O1` | 223 | 6,127 | — |
 | `examples/libcpp.cpp` | `-O1` | 10,251 | 421,728 | — |
 | `src/cc/libc.c` | `-O0` | 16,233 | 447,356 | — |
 | `src/cc/libc.c` | `-O1` | 9,900 | 409,180 | — |

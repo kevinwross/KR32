@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 14:10 -08:00
+> **Last updated:** 2026-11-15 14:51 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3850,6 +3850,18 @@ Newest entries at the bottom. Use the local time zone.
       configuration (FTZ/DAZ, extended precision), not arithmetic. The document
       is draft 0.5 with the review recorded in §14, and Q9/Q10 remain the two
       decisions for the operator.
+
+- **2026-11-15 14:51 -08:00** — `examples/floats.c` modernised to use `printf`.
+      The example predates the console printer's support for floating point: it
+      walked strings and formatted integers by hand, and its one `printf` call
+      had no prototype. Without a prototype the C front end compiles a call with
+      the fixed-parameter convention, so a `double` variadic argument went to
+      `F0` and `va_arg` read an empty stack slot - which is why the new line
+      printed 0.000000. All of `main`'s output now goes through `printf`, the
+      hand-written helpers are gone, and the file declares the prototype.
+      `run_c_floats_variadic` asserts the printed value and was checked to fail
+      without the declaration. The example is 223 instructions at `-O1` (was
+      280) and 6,127 bytes. All eleven parts (93 tests) and 93/93 WSL pass.
 
 ## 10. Updating this file
 

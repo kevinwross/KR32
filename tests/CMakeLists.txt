@@ -288,6 +288,16 @@ add_test(NAME build_c_floats
 set_tests_properties(build_c_floats PROPERTIES
     PASS_REGULAR_EXPRESSION "global 4.5 squared = 20")
 
+# A floating-point variadic argument must reach printf's va_arg on the stack.
+# An undeclared printf is compiled with the fixed-parameter convention and
+# prints 0.000000, so this asserts the value rather than the build.
+add_test(NAME run_c_floats_variadic
+    COMMAND $<TARGET_FILE:kr32> build
+        ${CMAKE_SOURCE_DIR}/examples/floats.c
+        -o ${CMAKE_BINARY_DIR}/floats-variadic.k32 --run)
+set_tests_properties(run_c_floats_variadic PROPERTIES
+    PASS_REGULAR_EXPRESSION "fpCrazyTown result = -20.142857")
+
 add_test(NAME build_c_varargs
     COMMAND $<TARGET_FILE:kr32> build
         ${CMAKE_SOURCE_DIR}/examples/varargs.c
@@ -448,7 +458,7 @@ set(KR32_TEST_PART_ROWS    "part01|unit_test_cxx_codegen_2b|unit_test_optimizer"
     "part06|unit_test_cxx_codegen_5|unit_test_cxx_codegen_8|unit_test_cxx_codegen_7|unit_test_cc_8"
     "part07|unit_test_cxx_codegen_6|unit_test_cc_2|unit_test_cc_6|unit_test_cc_3|unit_test_threads"
     "part08|unit_test_cc_5|unit_test_cc_4|unit_test_cc_7|unit_test_ui|unit_test_fast|unit_test_assembler|unit_test_container|unit_test_devices|unit_test_graphics|unit_test_guest_headers|unit_test_linker|unit_test_machine|unit_test_object_assembler|unit_test_privilege|unit_test_terminal|unit_test_embedded_os|unit_test_cxx_abi|unit_test_cxx_api|unit_test_cxx_parser"
-    "part09|bios_smoke|boundary_bad|boundary_clean|build_c_binarytree|build_c_floats|build_c_hello|build_c_libc|build_c_strings|build_c_types|build_c_varargs|build_hello|cli_cxx_help|cli_help|cli_stub|cli_version|cxx_tool_bad_emit|cxx_tool_help|cxx_tool_missing_input|cxx_tool_missing_output_path|dap_smoke|debug_dump|display_screen_shot|fp_demo|host_smoke|link_smoke|matrix_demo|run_cxx_balanced_tree|run_cxx_demo|run_cxx_libc|run_cxx_matrix|run_cxx_tls|run_demo|run_mainentry|run_os_smoke|shell_smoke|ui_headless|ui_headless_cxx|ui_headless_os|ui_smoke"
+    "part09|bios_smoke|boundary_bad|boundary_clean|build_c_binarytree|build_c_floats|run_c_floats_variadic|build_c_hello|build_c_libc|build_c_strings|build_c_types|build_c_varargs|build_hello|cli_cxx_help|cli_help|cli_stub|cli_version|cxx_tool_bad_emit|cxx_tool_help|cxx_tool_missing_input|cxx_tool_missing_output_path|dap_smoke|debug_dump|display_screen_shot|fp_demo|host_smoke|link_smoke|matrix_demo|run_cxx_balanced_tree|run_cxx_demo|run_cxx_libc|run_cxx_matrix|run_cxx_tls|run_demo|run_mainentry|run_os_smoke|shell_smoke|ui_headless|ui_headless_cxx|ui_headless_os|ui_smoke"
     "part10|os_console_screen|run_os_boot|run_os_embedded|os_gfx_check"
     "part11|run_os_user|run_os_fault_timer|run_os_shell|os_gfx_demo"
     )
