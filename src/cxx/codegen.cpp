@@ -567,6 +567,7 @@ public:
                         }
                     }
                 }
+
                 if (!candidates.empty()) {
                     for (const Function* candidate : candidates) {
                         if (!candidate->cannot_throw) {
@@ -7738,10 +7739,17 @@ private:
             if (expression.text == "=") {
                 const TypePtr value_type = type_of(*expression.children[1]);
                 if (!is_long_long(value_type)) {
-                    emit("    MOV R1, R0");
-                    emit(std::string("    ") +
-                         (is_unsigned_integer(value_type) ? "SHR" : "SAR") +
-                         " R1, R1, #31");
+                    const Expr* value = expression.children[1].get();
+                    if (value->kind == ExprKind::IntegerLiteral &&
+                        !is_unsigned_integer(value_type)) {
+                        emit("    MOV R1, #" +
+                             std::string(value->integer < 0 ? "-1" : "0"));
+                    } else {
+                        emit("    MOV R1, R0");
+                        emit(std::string("    ") +
+                             (is_unsigned_integer(value_type) ? "SHR" : "SAR") +
+                             " R1, R1, #31");
+                    }
                 }
             }
             emit("    MOV R2, R1");
@@ -10725,18 +10733,24 @@ private:
             if (is_long_long(type)) {
                 const TypePtr initializer_type = type_of(*initializer);
                 if (!is_long_long(initializer_type)) {
-                    emit("    MOV R1, R0");
-                    emit(std::string("    ") +
-                         (is_unsigned_integer(initializer_type) ? "SHR" : "SAR") +
-                         " R1, R1, #31");
+                    if (initializer->kind == ExprKind::IntegerLiteral &&
+                        !is_unsigned_integer(initializer_type)) {
+                        emit("    MOV R1, #" +
+                             std::string(initializer->integer < 0 ? "-1" : "0"));
+                    } else {
+                        emit("    MOV R1, R0");
+                        emit(std::string("    ") +
+                             (is_unsigned_integer(initializer_type) ? "SHR"
+                                                                    : "SAR") +
+                             " R1, R1, #31");
+                    }
                 }
-                emit("    MOV R2, R1");
             }
             const std::string frame =
                 "[R7 + " + std::to_string(local.offset) + "]";
             if (is_long_long(type)) {
                 emit("    STORE R0, " + frame);
-                emit("    STORE R2, [R7 + " +
+                emit("    STORE R1, [R7 + " +
                      std::to_string(local.offset + 4) + "]");
             } else if (is_byte_builtin(type)) {
                 emit("    STORE8 R0, " + frame);
