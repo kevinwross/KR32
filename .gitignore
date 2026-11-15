@@ -30,3 +30,6 @@ Thumbs.db
 
 # Local third-party SDK installs (scripts re-create these)
 /third_party/SDL2/
+
+# Cross-session handoff drop (see ..\KRCompiler\inbox\kr32-To-krCompiler.md)
+/inbox/
