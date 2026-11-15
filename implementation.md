@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 14:09 -08:00
+> **Last updated:** 2026-11-15 14:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3837,6 +3837,19 @@ Newest entries at the bottom. Use the local time zone.
       sign-extended. The document is now draft 0.4, the §13 golden-vector item is
       closed, and §12 states that the table is a sample rather than the coverage.
       All eleven parts (92 tests) and 92/92 WSL pass.
+
+- **2026-11-15 14:10 -08:00** — Opcode-map review closed and the Q9/Q10 decision
+      brief written (`docs/isa-v1-freeze.md`). The review used the disassembler
+      as the oracle over all 128 top-level slots: 72 are recognised, exactly the
+      72 the document lists, no undocumented slot, no missing one, every mnemonic
+      matches (`0x39` renders `JNC` through the documented condition alias), and
+      a reserved slot executed for the purpose raises `#UD` with `PC` unchanged
+      and no instruction retired. The brief records that the ISA's FP operation
+      set is correctly rounded and has no FMA or transcendental functions, so a
+      soft-float library buys nothing for bit-exactness; the hazards are host
+      configuration (FTZ/DAZ, extended precision), not arithmetic. The document
+      is draft 0.5 with the review recorded in §14, and Q9/Q10 remain the two
+      decisions for the operator.
 
 ## 10. Updating this file
 

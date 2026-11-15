@@ -1,6 +1,6 @@
 # KR32 Instruction Set v1 — Draft
 
-> **Status:** draft 0.4, 2026-11-15. For review; **not frozen**. Encoding
+> **Status:** draft 0.5, 2026-11-15. For review; **not frozen**. Encoding
 > decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
 > becomes v1 only after the golden vectors in §12 are checked and the open items
 > in §13 are closed.
@@ -614,10 +614,13 @@ the implementation agrees; it also rebuilds every row above from its fields.
   the open question is whether to require a soft-float library for bit-exact
   results on every host (`KR32-plan.md` Q10).
 - **Optional FP.** v1 always has FP; a no-FP profile is still open (`Q9`).
-- **Opcode map review.** Every reserved range is intentional; `SLT`/`SLTU` now
-  occupy `0x18`/`0x19`. Confirm nothing else is missing before freezing.
 - **Assembler syntax.** Register names, `#` immediates, `.long`, and the
   `JCOND` aliases need one pass against the parser plan.
+
+The two remaining decisions, and the evidence for them, are in
+`docs/isa-v1-freeze.md`: the optional no-FP profile (Q9) and bit-exact floating
+point (Q10).
+
 ## 14. Revision history
 
 | Revision | Date | Change |
@@ -625,3 +628,4 @@ the implementation agrees; it also rebuilds every row above from its fields.
 | 0.2 | 2026-11-01 | Baseline recorded in this document's status note: encoding decisions D8, D13-D16, D20-D22, D51, and D52 applied; §12 golden vectors and §13 open items still to be resolved before v1 is frozen. |
 | 0.3 | 2026-11-15 | Added `FMOV Fd, Fs` (FP escape function `0x032`), an FPR-to-FPR copy of all 64 bits. It exists so a cached floating-point value can reach an operand register without a memory round trip; before it, the compiler staged every FP value through a frame slot. Golden encoding for `FMOV F3, F5` is `0xC06A0032` (§6.2, `tests/unit/test_encoding.cpp`). |
 | 0.4 | 2026-11-15 | Golden vectors recomputed from §2.1 by an encoder that does not call the implementation: `tests/unit/test_golden_vectors.cpp` covers every opcode in §4 and both widths, and rebuilds each §12 row from its fields. It found one defect in this document: §4.4 claimed 71 of 128 top-level slots in use and 57 reserved; the map uses 72 and reserves 56. The §13 golden-vector item is closed by that coverage. |
+| 0.5 | 2026-11-15 | Opcode-map review closed: the disassembler recognises exactly the 72 documented slots and no others, every mnemonic matches, and a reserved slot executed for the purpose raises `#UD` without retiring, so reserved ranges are traps. Recorded with the Q9/Q10 decision brief in `docs/isa-v1-freeze.md`. |
