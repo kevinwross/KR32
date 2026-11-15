@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 22:11 -08:00
+> **Last updated:** 2026-11-15 03:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3547,6 +3547,25 @@ Newest entries at the bottom. Use the local time zone.
       10,826 instructions (frame loads 1,618 -> 1,512, stores 943 -> 905) and
       libcpp 10,834 -> 10,751 (1,081 -> 1,037, 774 -> 753). All unit suites,
       47/47 integration, and 89/89 WSL pass.
+
+- **2026-11-15 03:09 -08:00** — Optimization campaign closed for both compilers.
+      Final `-O1` numbers against the `-O0` baseline: C library 16,332 -> 10,826
+      instructions and 447,752 -> 412,884 bytes (33.7% and 7.8% smaller); the OS
+      kernel 85,032 -> 64,960 bytes (23.6%); the C++ `examples/libcpp.cpp`
+      13,046 -> 10,751 instructions (17.6%). The shared optimizer carries the
+      bulk of the wins: upward-exposed liveness, absolute addressing, symbol
+      bases, frame promotion and forwarding, copy and literal folding, identity
+      and round-trip removal, stack-based operands, and a throw analysis that
+      drops exception bookkeeping for bodies that cannot throw.
+
+      What remains is a different class of work, recorded here so it is not
+      re-discovered: expression values still go through a frame slot or stack
+      word (about 2,400 accesses in libc, 1,790 in libcpp), the promoted
+      registers are limited to `R12`-`R15` and require a call-free body, and
+      the last 91 exception landing sites need type inference in the throw
+      scan. A block-local register allocator with deferred stores is the next
+      project; it should pay more in C, which carries 23.4% frame traffic
+      against C++ at 17.1%.
 
 ## 10. Updating this file
 
