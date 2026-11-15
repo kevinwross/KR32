@@ -1,0 +1,888 @@
+#include "cxx_test_support.h"
+
+
+TEST_CASE("algorithm copy duplicates arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int source[3] = { 1, 2, 3 };\n"
+        "    int target[3] = { 0, 0, 0 };\n"
+        "    int* end = std::copy(source, source + 3, target);\n"
+        "    if (end != target + 3) return 1;\n"
+        "    if (target[0] != 1 || target[2] != 3) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    char output[4] = \"xxx\";\n"
+        "    std::copy(text, text + 3, output);\n"
+        "    if (output[0] != 'a' || output[2] != 'c') return 3;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    double copied[2] = { 0.0, 0.0 };\n"
+        "    std::copy(reals, reals + 2, copied);\n"
+        "    return copied[0] == 1.5 && copied[1] == 2.5 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("algorithm find locates elements") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    if (std::find(values, values + 4, 3) != values + 2) return 1;\n"
+        "    if (std::find(values, values + 4, 9) != values + 4) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    if (std::find(text, text + 3, 'b') != text + 1) return 3;\n"
+        "    double reals[2] = { 1.5, 2.5 };\n"
+        "    return std::find(reals, reals + 2, 2.5) == reals + 1 ? 0 : 4;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("algorithm fill sets arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    std::fill(values, values + 4, 7);\n"
+        "    if (values[0] != 7 || values[3] != 7) return 1;\n"
+        "    double reals[3] = { 0.0, 0.0, 0.0 };\n"
+        "    std::fill(reals, reals + 3, 1.5);\n"
+        "    if (reals[0] != 1.5 || reals[2] != 1.5) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    std::fill(text, text + 3, 'z');\n"
+        "    return text[0] == 'z' && text[2] == 'z' ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("algorithm reverse orders arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 1, 2, 3, 4 };\n"
+        "    std::reverse(values, values + 4);\n"
+        "    if (values[0] != 4 || values[3] != 1) return 1;\n"
+        "    double reals[3] = { 1.5, 2.5, 3.5 };\n"
+        "    std::reverse(reals, reals + 3);\n"
+        "    if (reals[0] != 3.5 || reals[2] != 1.5) return 2;\n"
+        "    char text[4] = \"abc\";\n"
+        "    std::reverse(text, text + 3);\n"
+        "    return text[0] == 'c' && text[2] == 'a' ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("algorithm sort orders arrays") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    int values[4] = { 3, 1, 4, 2 };\n"
+        "    std::sort(values, values + 4);\n"
+        "    if (values[0] != 1 || values[3] != 4) return 1;\n"
+        "    double reals[3] = { 2.5, 0.5, 1.5 };\n"
+        "    std::sort(reals, reals + 3);\n"
+        "    if (reals[0] != 0.5 || reals[2] != 2.5) return 2;\n"
+        "    char text[4] = \"dcba\";\n"
+        "    std::sort(text, text + 4);\n"
+        "    return text[0] == 'a' && text[3] == 'd' ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("algorithm clamp bounds values") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    if (std::clamp(9, 1, 4) != 4) return 1;\n"
+        "    if (std::clamp(-2, 0, 5) != 0) return 2;\n"
+        "    if (std::clamp(3, 1, 4) != 3) return 3;\n"
+        "    if (std::clamp(2.5, 1.0, 2.0) != 2.0) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string starts and ends with strings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    std::string prefix(\"he\");\n"
+        "    std::string suffix(\"lo\");\n"
+        "    if (!text.starts_with(prefix)) return 1;\n"
+        "    if (!text.ends_with(suffix)) return 2;\n"
+        "    if (text.starts_with(\"xy\")) return 3;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string contains substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    if (!text.contains(\"ell\")) return 1;\n"
+        "    if (text.contains(\"xyz\")) return 2;\n"
+        "    std::string needle(\"lo\");\n"
+        "    return text.contains(needle) ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("char assignments preserve neighboring bytes") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    char text[4] = \"abc\";\n"
+        "    text[0] = 'x';\n"
+        "    if (text[1] != 'b') return 1;\n"
+        "    char& reference = text[2];\n"
+        "    reference = 'z';\n"
+        "    if (text[2] != 'z') return 2;\n"
+        "    std::string value(\"abc\");\n"
+        "    value.front() = 'x';\n"
+        "    value.back() = 'z';\n"
+        "    return value == \"xbz\" ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("const strings expose front and back") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    const std::string text(\"abc\");\n"
+        "    if (text.front() != 'a') return 1;\n"
+        "    if (text.back() != 'c') return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string assigns repeated characters") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    text.assign(3, 'x');\n"
+        "    return text == \"xxx\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string constructor overloads rank by conversion") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string repeated(3, 'x');\n"
+        "    if (repeated != \"xxx\") return 1;\n"
+        "    std::string prefix(\"abcdef\", 3);\n"
+        "    return prefix == \"abc\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string replaces with repeated characters") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"abc\");\n"
+        "    text.replace(1, 1, 2, 'x');\n"
+        "    return text == \"axxc\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string erases all characters") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    text.erase();\n"
+        "    return text.empty() ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string constructs from substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    std::string part(text, 1, 3);\n"
+        "    if (part != \"ell\") return 1;\n"
+        "    std::string tail(text, 3, 100);\n"
+        "    if (tail != \"lo\") return 2;\n"
+        "    std::string direct(\"hello\", 1, 3);\n"
+        "    return direct == \"ell\" ? 0 : 3;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("reference-returning calls are lvalues") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "std::string& identity(std::string& text) { return text; }\n"
+        "int main() {\n"
+        "    std::string text(\"a\");\n"
+        "    identity(text) += \"b\";\n"
+        "    return text == \"ab\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string reserves capacity") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"ab\");\n"
+        "    text.reserve(100);\n"
+        "    if (text.capacity() < 100) return 1;\n"
+        "    if (text != \"ab\") return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string shrinks to fit") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    text.reserve(100);\n"
+        "    text.resize(2);\n"
+        "    text.shrink_to_fit();\n"
+        "    return text == \"he\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string append supports chaining") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"a\");\n"
+        "    text.append(\"b\").append(\"c\");\n"
+        "    return text == \"abc\" ? 0 : 1;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string assigns substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello\");\n"
+        "    std::string part(\"xxworldyy\");\n"
+        "    text.assign(part, 2, 5);\n"
+        "    if (text != \"world\") return 1;\n"
+        "    text.assign(\"QQdoneRR\", 2, 4);\n"
+        "    return text == \"done\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string appends substrings") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"ab\");\n"
+        "    std::string part(\"xxcdyy\");\n"
+        "    text.append(part, 2, 2);\n"
+        "    if (text != \"abcd\") return 1;\n"
+        "    text.append(\"QQefRR\", 2, 2);\n"
+        "    return text == \"abcdef\" ? 0 : 2;\n"
+        "}\n");
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("string repeated-character constructor compiles") {
+    const cxx::Result compiled = cxx::compile(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(3, 'x');\n"
+        "    return text.size() == 3 ? 0 : 1;\n"
+        "}\n");
+    CHECK(compiled.ok);
+}
+
+TEST_CASE("enums expose integer constants and scoped names") {
+    const ProgramResult program = compile_and_run(
+        "enum Color { Red, Green = 4, Blue };\n"
+        "enum class Mode { Off, On };\n"
+        "namespace N { enum Flags { None = 0, One = 1, Two = 2 }; }\n"
+        "class Box { public: enum Kind { Small = 1, Large = 2 }; };\n"
+        "int main() {\n"
+        "    if (Red != 0 || Green != 4 || Blue != 5) return 1;\n"
+        "    if (N::One != 1 || Box::Large != 2) return 5;\n"
+        "    int values[N::Two];\n"
+        "    if (sizeof(values) != 8) return 6;\n"
+        "    Color color = Blue;\n"
+        "    if (color != Blue) return 2;\n"
+        "    Mode mode = Mode::On;\n"
+        "    switch (mode) {\n"
+        "    case Mode::Off: return 3;\n"
+        "    case Mode::On: break;\n"
+        "    default: return 4;\n"
+        "    }\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("global unsized arrays infer length and initialize") {
+    const ProgramResult program = compile_and_run(
+        "char text[] = \"abc\";\n"
+        "int values[] = {5, 6, 7};\n"
+        "int main() {\n"
+        "    if (sizeof(text) != 4) return 1;\n"
+        "    if (text[2] != 'c' || text[3] != 0) return 2;\n"
+        "    if (sizeof(values) != 12) return 3;\n"
+        "    if (values[0] != 5 || values[2] != 7) return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("unsized arrays infer length from initializer lists") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    int values[] = {1, 2, 3, 4};\n"
+        "    if (sizeof(values) != 16) return 1;\n"
+        "    return values[3] == 4 ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("local char arrays initialize from string literals") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    char buffer[8] = \"abc\";\n"
+        "    if (buffer[0] != 'a' || buffer[1] != 'b' || buffer[2] != 'c') {\n"
+        "        return 1;\n"
+        "    }\n"
+        "    if (buffer[3] != 0) return 2;\n"
+        "    char inferred[] = \"abc\";\n"
+        "    if (sizeof(inferred) != 4) return 3;\n"
+        "    if (inferred[2] != 'c') return 4;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("namespace class references match unqualified parameter types") {
+    const ProgramResult program = compile_and_run(
+        "namespace N {\n"
+        "class A { public: int x; };\n"
+        "int read(A& value) { return value.x; }\n"
+        "}\n"
+        "int main() {\n"
+        "    N::A a;\n"
+        "    a.x = 7;\n"
+        "    return N::read(a) == 7 ? 0 : 1;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("64-bit unary minus carries into the high word") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long value = 1234567890123LL;\n"
+        "    if (-value != -1234567890123LL) return 1;\n"
+        "    if ((int)((-value) >> 32) != -288) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("64-bit returns preserve the high word") {
+    const ProgramResult program = compile_and_run(
+        "long long make() { return -123; }\n"
+        "int main() {\n"
+        "    long long value = make();\n"
+        "    if (value != -123) return 1;\n"
+        "    if ((int)(value >> 32) != -1) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("function pointers can be called directly") {
+    const ProgramResult program = compile_and_run(
+        "int add(int left, int right) { return left + right; }\n"
+        "int main() {\n"
+        "    int (*operation)(int, int) = add;\n"
+        "    if (operation(2, 3) != 5) return 1;\n"
+        "    operation = add;\n"
+        "    return operation(4, 5) == 9 ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("<cstdlib> converts C strings") {
+    const ProgramResult program = compile_and_run(
+        "#include <cstdlib>\n"
+        "#include <cstdlib>\n"
+        "int compare_ints(const void* left, const void* right) {\n"
+        "    int a = *(const int*)left;\n"
+        "    int b = *(const int*)right;\n"
+        "    return a < b ? -1 : (a > b ? 1 : 0);\n"
+        "}\n"
+        "int main() {\n"
+        "    if (std::atoi(\"42\") != 42) return 1;\n"
+        "    if (std::atoi(\"-7\") != -7) return 2;\n"
+        "    if (std::atof(\"2.5\") != 2.5) return 3;\n"
+        "    char* end;\n"
+        "    if (std::strtol(\"123x\", &end, 10) != 123 || end[0] != 'x') return 4;\n"
+        "    if (std::strtoul(\"ffz\", &end, 16) != 255 || end[0] != 'z') return 5;\n"
+        "    if (std::labs(-7) != 7) return 6;\n"
+        "    int values[5];\n"
+        "    values[0] = 4; values[1] = 1; values[2] = 5;\n"
+        "    values[3] = 2; values[4] = 3;\n"
+        "    std::qsort(values, 5, sizeof(int), compare_ints);\n"
+        "    for (int index = 0; index < 5; ++index) {\n"
+        "        if (values[index] != index + 1) return 7;\n"
+        "    }\n"
+        "    int key = 3;\n"
+        "    int* found = (int*)std::bsearch(&key, values, 5, sizeof(int), compare_ints);\n"
+        "    if (found == 0 || *found != 3) return 8;\n"
+        "    if (std::strtod(\"2.5x\", &end) != 2.5 || end[0] != 'x') return 9;\n"
+        "    if (std::strtod(\"1.5e2x\", &end) != 150.0 || end[0] != 'x') return 10;\n"
+        "    if (std::atof(\"1e2\") != 100.0) return 11;\n"
+        "    if (std::strtoll(\"-123z\", &end, 10) != -123) return 12;\n"
+        "    if (std::strtoull(\"123z\", &end, 10) != 123) return 13;\n"
+        "    if (std::llabs(-1234567890123LL) != 1234567890123LL) return 14;\n"
+        "    if (std::strtof(\"1.5x\", &end) != 1.5f || end[0] != 'x') return 15;\n"
+        "    if (std::strtold(\"2.5x\", &end) != 2.5L || end[0] != 'x') return 16;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("<cmath> provides scalar math") {
+    const ProgramResult program = compile_and_run(
+        "#include <cmath>\n"
+        "#include <cmath>\n"
+        "int main() {\n"
+        "    if (std::abs(-3) != 3) return 1;\n"
+        "    if (std::abs(-2.5) != 2.5) return 2;\n"
+        "    if (std::sqrt(9.0) != 3.0) return 3;\n"
+        "    if (std::fabs(-2.0) != 2.0) return 4;\n"
+        "    if (std::sqrt(4.0f) != 2.0f) return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("<algorithm> provides std::min and std::max") {
+    const ProgramResult program = compile_and_run(
+        "#include <algorithm>\n"
+        "#include <algorithm>\n"
+        "int main() {\n"
+        "    if (std::min(3, 5) != 3) return 1;\n"
+        "    if (std::max(3, 5) != 5) return 2;\n"
+        "    if (std::min(2.5, 1.5) != 1.5) return 3;\n"
+        "    if (std::max(2.5, 1.5) != 2.5) return 4;\n"
+        "    if (std::min('b', 'a') != 'a') return 5;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("C++ #line updates source identity") {
+    const ProgramResult program = compile_and_run(
+        "#line 10 \"custom.cpp\"\n"
+        "int main() {\n"
+        "    if (__LINE__ != 11) return 1;\n"
+        "    return __FILE__[0] == 'c' ? 0 : 2;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("C++ #warning directives are accepted") {
+    const ProgramResult program = compile_and_run(
+        "#warning this should not stop compilation\n"
+        "int main() { return 0; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("__func__ names the current function") {
+    const ProgramResult program = compile_and_run(
+        "const char* name() { return __func__; }\n"
+        "struct Widget {\n"
+        "    const char* method() const { return __func__; }\n"
+        "};\n"
+        "namespace tools { const char* helper() { return __func__; } }\n"
+        "int main() {\n"
+        "    const char* function = name();\n"
+        "    if (function[0] != 'n' || function[3] != 'e') return 1;\n"
+        "    Widget widget;\n"
+        "    const char* method = widget.method();\n"
+        "    if (method[0] != 'm' || method[5] != 'd') return 2;\n"
+        "    const char* helper = tools::helper();\n"
+        "    return helper[0] == 'h' ? 0 : 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("assignments convert between class types") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int value;\n"
+        "    Target() : value(0) {}\n"
+        "    Target(const Source& source) : value(source.value + 1) {}\n"
+        "};\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target target;\n"
+        "    target = source;\n"
+        "    return target.value - 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("returns convert between class types") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int first;\n"
+        "    int second;\n"
+        "    Target(const Source& source)\n"
+        "        : first(source.value + 1), second(7) {}\n"
+        "};\n"
+        "Target make(Source source) { return source; }\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target target = make(source);\n"
+        "    if (target.first != 5) return 1;\n"
+        "    return target.second - 7;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("constructors accept class arguments by value") {
+    const ProgramResult program = compile_and_run(
+        "struct Source { int value; };\n"
+        "struct Target {\n"
+        "    int value;\n"
+        "    Target(Source source) : value(source.value + 1) {}\n"
+        "};\n"
+        "int take(Target target) { return target.value; }\n"
+        "int main() {\n"
+        "    Source source;\n"
+        "    source.value = 4;\n"
+        "    Target direct(source);\n"
+        "    if (direct.value != 5) return 1;\n"
+        "    Target copied = source;\n"
+        "    if (copied.value != 5) return 2;\n"
+        "    return take(source) - 5;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("C-style casts construct class temporaries") {
+    const ProgramResult program = compile_and_run(
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    explicit Number(int input) : value(input) {}\n"
+        "};\n"
+        "int take(Number value) { return value.value; }\n"
+        "int main() {\n"
+        "    if (take((Number)5) != 5) return 1;\n"
+        "    Number source(3);\n"
+        "    Number copy = (Number)source;\n"
+        "    if (copy.value != 3) return 2;\n"
+        "    Number direct = (Number)6;\n"
+        "    return direct.value - 6;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("explicit constructors reject implicit conversions") {
+    const cxx::Result implicit = cxx::compile(
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    explicit Number(int input) : value(input) {}\n"
+        "};\n"
+        "int main() { Number value = 5; return value.value; }\n");
+    CHECK_FALSE(implicit.ok);
+
+    const ProgramResult direct = compile_and_run(
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    explicit Number(int input) : value(input) {}\n"
+        "};\n"
+        "int take(Number value) { return value.value; }\n"
+        "int main() {\n"
+        "    Number direct(5);\n"
+        "    if (direct.value != 5) return 1;\n"
+        "    return take(Number(6)) - 6;\n"
+        "}\n");
+    CHECK(direct.ok);
+    CHECK(direct.result == 0);
+}
+
+TEST_CASE("default arguments fill missing call parameters") {
+    const ProgramResult program = compile_and_run(
+        "int sum(int a, int b = 2, int c = 3) { return a + b + c; }\n"
+        "int value(int a = 4) { return a; }\n"
+        "class Box {\n"
+        "public:\n"
+        "    int total;\n"
+        "    Box() : total(0) {}\n"
+        "    int add(int amount = 3) { total = total + amount; return total; }\n"
+        "};\n"
+        "class Defaulted {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Defaulted(int input = 5) : value(input) {}\n"
+        "};\n"
+        "class Pair {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Pair(int a, int b = 2) : value(a + b) {}\n"
+        "};\n"
+        "Defaulted defaulted_global;\n"
+        "int main() {\n"
+        "    if (sum(1) != 6) return 1;\n"
+        "    if (sum(1, 5) != 9) return 2;\n"
+        "    if (sum(1, 5, 6) != 12) return 3;\n"
+        "    if (value() != 4) return 4;\n"
+        "    Box box;\n"
+        "    if (box.add() != 3) return 5;\n"
+        "    if (box.add(4) != 7) return 6;\n"
+        "    Defaulted local_defaulted;\n"
+        "    if (local_defaulted.value != 5) return 7;\n"
+        "    if (defaulted_global.value != 5) return 8;\n"
+        "    Defaulted copy_defaulted = 4;\n"
+        "    if (copy_defaulted.value != 4) return 9;\n"
+        "    Pair pair(3);\n"
+        "    if (pair.value != 5) return 10;\n"
+        "    Pair pair_copy = 4;\n"
+        "    if (pair_copy.value != 6) return 11;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("operator arrow forwards member access") {
+    const ProgramResult program = compile_and_run(
+        "struct Point { int x; int y; };\n"
+        "class Box {\n"
+        "public:\n"
+        "    Point* pointer;\n"
+        "    Box(Point* value) : pointer(value) {}\n"
+        "    Point* operator->() { return pointer; }\n"
+        "};\n"
+        "int main() {\n"
+        "    Point point;\n"
+        "    point.x = 7;\n"
+        "    point.y = 8;\n"
+        "    Box box(&point);\n"
+        "    if (box->x != 7) return 1;\n"
+        "    if (box->y != 8) return 2;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("this pointer supports compound assignment") {
+    const ProgramResult program = compile_and_run(
+        "class Counter {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Counter(int input) : value(input) {}\n"
+        "    Counter& operator+=(const Counter& other) {\n"
+        "        value = value + other.value;\n"
+        "        return *this;\n"
+        "    }\n"
+        "    Counter& add(const Counter& other) {\n"
+        "        (*this) += other;\n"
+        "        return *this;\n"
+        "    }\n"
+        "};\n"
+        "int main() {\n"
+        "    Counter left(1);\n"
+        "    Counter right(2);\n"
+        "    left.add(right);\n"
+        "    return left.value - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("namespace classes resolve unqualified self parameters") {
+    const ProgramResult program = compile_and_run(
+        "namespace outer {\n"
+        "class Number {\n"
+        "public:\n"
+        "    int value;\n"
+        "    Number(int input) : value(input) {}\n"
+        "    Number& operator+=(const Number& other) {\n"
+        "        value = value + other.value;\n"
+        "        return *this;\n"
+        "    }\n"
+        "};\n"
+        "}\n"
+        "int main() {\n"
+        "    outer::Number left(1);\n"
+        "    outer::Number right(2);\n"
+        "    left += right;\n"
+        "    return left.value - 3;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("standard iostream manipulators set the output base") {
+    const ProgramResult program = compile_and_run(
+        "#include <iostream>\n"
+        "int main() {\n"
+        "    std::cout << std::hex << 255 << std::endl;\n"
+        "    std::cout << std::dec << 255 << std::endl;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+    CHECK(program.output == "ff\n255\n");
+}
+
+TEST_CASE("std::string supports find, substr, front, and back") {
+    const ProgramResult program = compile_and_run(
+        "#include <string>\n"
+        "int main() {\n"
+        "    std::string text(\"hello world\");\n"
+        "    if (text.find(\"world\") != 6) return 1;\n"
+        "    std::string part = text.substr(6, 5);\n"
+        "    if (part != \"world\") return 2;\n"
+        "    if (text.front() != 'h') return 3;\n"
+        "    if (text.back() != 'd') return 4;\n"
+        "    if (text.rfind(\"l\") != 9) return 5;\n"
+        "    if (text.compare(\"hello world\") != 0) return 6;\n"
+        "    text.push_back('!');\n"
+        "    if (text != \"hello world!\") return 7;\n"
+        "    text.pop_back();\n"
+        "    if (text.find('l') != 2) return 8;\n"
+        "    if (text.rfind('l') != 9) return 9;\n"
+        "    return 0;\n"
+        "}\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("C++ can use the C FILE type") {
+    const ProgramResult program = compile_and_run(
+        "#include <stdio.h>\n"
+        "int main() { FILE* stream = 0; return stream == 0 ? 0 : 1; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}
+
+TEST_CASE("C++ typedef names resolve for struct types") {
+    const ProgramResult program = compile_and_run(
+        "typedef struct Node { int value; } Node;\n"
+        "int main() { Node node; node.value = 9; return node.value; }\n");
+    CHECK(program.ok);
+    CHECK(program.result == 9);
+}
+
+TEST_CASE("long long comparisons in conditions cover every operator") {
+    const ProgramResult program = compile_and_run(
+        "int main() {\n"
+        "    long long small = 5;\n"
+        "    long long large = 8589934593LL;\n"
+        "    long long negative = -3;\n"
+        "    long long sameHigh = 8589934592LL;\n"
+        "    if (!(small < large)) return 1;\n"
+        "    if (!(small <= small)) return 2;\n"
+        "    if (large > small) { } else return 3;\n"
+        "    if (!(large >= large)) return 4;\n"
+        "    if (small == large) return 5;\n"
+        "    if (!(small != large)) return 6;\n"
+        "    if (!(negative < 0)) return 7;\n"
+        "    if (negative >= 0) return 8;\n"
+        "    if (!(negative < small)) return 9;\n"
+        "    if (!(sameHigh < large)) return 10;\n"
+        "    if (sameHigh >= large) return 11;\n"
+        "    if (!(large == 8589934593LL)) return 12;\n"
+        "    if (!(sameHigh < 8589934593LL)) return 14;\n"
+        "    if (sameHigh >= 8589934593LL) return 15;\n"
+        "    if (!(large > 8589934592LL)) return 16;\n"
+        "    if (large <= 8589934592LL) return 17;\n"
+        "    while (negative < 0) negative = negative + 1;\n"
+        "    if (negative != 0) return 13;\n"
+        "    return 0;\n"
+        "}\n",
+        true);
+    INFO(program.diagnostics);
+    CHECK(program.ok);
+    CHECK(program.result == 0);
+}

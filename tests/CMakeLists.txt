@@ -41,6 +41,8 @@ set(KR32_TEST_SOURCES
     cxx/test_cxx_parser.cpp
     cxx/test_cxx_codegen_1.cpp
     cxx/test_cxx_codegen_2.cpp
+    cxx/test_cxx_codegen_2b.cpp
+    cxx/test_cxx_codegen_2c.cpp
     cxx/test_cxx_codegen_3.cpp
     cxx/test_cxx_codegen_4.cpp
     cxx/test_cxx_codegen_5.cpp
@@ -434,3 +436,24 @@ add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j${KR32_TEST_JOBS}
     DEPENDS kr32 kr32_tests
     USES_TERMINAL)
+
+# Parts group the suites so that one invocation finishes in under three
+# minutes. See docs/testing.md; each row is "label|test|test|...".
+set(KR32_TEST_PART_ROWS    "part01|unit_test_cxx_codegen_2b|unit_test_optimizer"
+    "part02|unit_test_cxx_codegen_2c|unit_test_encoding|unit_test_version|unit_test_matrix|unit_test_boot|unit_test_fp"
+    "part03|unit_test_cxx_codegen_2|unit_test_cc_1"
+    "part04|unit_test_cxx_codegen_4|unit_test_debug|unit_test_disassembler"
+    "part05|unit_test_cxx_codegen_3|unit_test_cxx_codegen_1|unit_test_host"
+    "part06|unit_test_cxx_codegen_5|unit_test_cxx_codegen_8|unit_test_cxx_codegen_7|unit_test_cc_8"
+    "part07|unit_test_cxx_codegen_6|unit_test_cc_2|unit_test_cc_6|unit_test_cc_3|unit_test_threads"
+    "part08|unit_test_cc_5|unit_test_cc_4|unit_test_cc_7|unit_test_ui|unit_test_fast|unit_test_assembler|unit_test_container|unit_test_devices|unit_test_graphics|unit_test_guest_headers|unit_test_linker|unit_test_machine|unit_test_object_assembler|unit_test_privilege|unit_test_terminal|unit_test_embedded_os|unit_test_cxx_abi|unit_test_cxx_api|unit_test_cxx_parser"
+    "part09|bios_smoke|boundary_bad|boundary_clean|build_c_binarytree|build_c_floats|build_c_hello|build_c_libc|build_c_strings|build_c_types|build_c_varargs|build_hello|cli_cxx_help|cli_help|cli_stub|cli_version|cxx_tool_bad_emit|cxx_tool_help|cxx_tool_missing_input|cxx_tool_missing_output_path|dap_smoke|debug_dump|display_screen_shot|fp_demo|host_smoke|link_smoke|matrix_demo|run_cxx_balanced_tree|run_cxx_demo|run_cxx_libc|run_cxx_matrix|run_cxx_tls|run_demo|run_mainentry|run_os_smoke|shell_smoke|ui_headless|ui_headless_cxx|ui_headless_os|ui_smoke"
+    "part10|os_console_screen|run_os_boot|run_os_embedded|os_gfx_check"
+    "part11|run_os_user|run_os_fault_timer|run_os_shell|os_gfx_demo"
+    )
+foreach(part_row IN LISTS KR32_TEST_PART_ROWS)
+    string(REPLACE "|" ";" part_fields "${part_row}")
+    list(GET part_fields 0 part_label)
+    list(REMOVE_AT part_fields 0)
+    set_property(TEST ${part_fields} APPEND PROPERTY LABELS "${part_label}")
+endforeach()

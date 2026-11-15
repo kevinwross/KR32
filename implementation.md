@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 03:09 -08:00
+> **Last updated:** 2026-11-15 03:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3566,6 +3566,15 @@ Newest entries at the bottom. Use the local time zone.
       scan. A block-local register allocator with deferred stores is the next
       project; it should pay more in C, which carries 23.4% frame traffic
       against C++ at 17.1%.
+
+- **2026-11-15 03:58 -08:00** — The suite is split into eleven labelled parts,
+      each measured under three minutes (`part01` 131 s down to `part09` 16 s).
+      `test_cxx_codegen_2.cpp` was the blocker at 329 s, so it is split into
+      three files of 51, 50, and 50 cases (80 s, 110 s, 104 s); ctest registers
+      one entry per file, so nothing else changed. The assignment lives in
+      `KR32_TEST_PART_ROWS` at the end of `tests/CMakeLists.txt` and is
+      documented in `docs/testing.md`. All eleven parts pass, and WSL passes
+      91/91 (the two new files included).
 
 ## 10. Updating this file
 

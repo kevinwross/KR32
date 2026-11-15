@@ -78,6 +78,47 @@ The OS boot/user tests write the same `kr32os/build` tree, so they share a CTest
 cmake --build --preset windows-msvc-debug --target check-unit
 ```
 
+## Bounded parts
+
+The suite is also grouped into eleven labelled parts, so one invocation can be
+bounded instead of running the whole tree. Every part finishes in under three
+minutes on the current development host (Hukilau, measured 2026-11-15 with
+`ctest -L <part> -j 2`):
+
+| Part | Contents | Measured |
+| --- | --- | --- |
+| `part01` | `unit_test_cxx_codegen_2b`, `unit_test_optimizer` | 131 s |
+| `part02` | `unit_test_cxx_codegen_2c`, `encoding`, `version`, `matrix`, `boot`, `fp` | 93 s |
+| `part03` | `unit_test_cxx_codegen_2`, `cc_1` | 92 s |
+| `part04` | `unit_test_cxx_codegen_4`, `debug`, `disassembler` | 67 s |
+| `part05` | `unit_test_cxx_codegen_3`, `cxx_codegen_1`, `host` | 77 s |
+| `part06` | `unit_test_cxx_codegen_5`, `cxx_codegen_8`, `cxx_codegen_7`, `cc_8` | 88 s |
+| `part07` | `unit_test_cxx_codegen_6`, `cc_2`, `cc_6`, `cc_3`, `threads` | 53 s |
+| `part08` | the light unit buckets (`cc_4`, `cc_5`, `cc_7`, `ui`, `fast`, ...) | 24 s |
+| `part09` | the light integration tests (`build_*`, `run_cxx_*`, `cli_*`, `ui_*`) | 16 s |
+| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 77 s |
+| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `os_gfx_demo` | 87 s |
+
+```powershell
+$ctest = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
+foreach ($part in 1..11) {
+    $label = "part{0:D2}" -f $part
+    & $ctest --preset windows-msvc-debug -L $label -j 2
+}
+```
+
+The assignment lives at the end of `tests/CMakeLists.txt` as
+`KR32_TEST_PART_ROWS`, one row per part, `label|test|test|...`. Every test must
+appear in exactly one row; a test missing from every row is left out of all
+parts, which is why the rows are checked against `ctest -N` whenever they
+change. The part labels are appended to `unit` and `integration`, so the
+existing `-L` and `-E` filters keep working.
+
+`test_cxx_codegen_2.cpp` accounts for most of the suite's wall time, so it is
+split into `test_cxx_codegen_2.cpp`, `_2b.cpp`, and `_2c.cpp` (about 80 s, 110 s,
+and 104 s). ctest registers one entry per source file, so splitting a bucket
+needs no other change.
+
 ## Running Windows and WSL together
 
 The two platforms use separate build and OS output trees, so they can run at the
@@ -109,6 +150,11 @@ Add a new `tests/**/test_*.cpp` file to `KR32_TEST_SOURCES` in
 `tests/CMakeLists.txt`; the per-source-file loop registers it automatically.
 Keep a file under roughly a minute of runtime, or split it into numbered
 buckets with a shared support header.
+
+Then add the new test name to exactly one `KR32_TEST_PART_ROWS` row at the end
+of `tests/CMakeLists.txt`. Choose the part by the measured runtime, keeping the
+part total under three minutes; re-measure the affected part and update the
+table above.
 
 ## Display and console
 
