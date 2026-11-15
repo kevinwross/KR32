@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 05:29 -08:00
+> **Last updated:** 2026-11-15 05:48 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3627,6 +3627,13 @@ Newest entries at the bottom. Use the local time zone.
       and libcpp 10,751 -> 10,684; libc frame loads fall to 786. All eleven
       parts (91 tests) and 91/91 WSL pass, including both gfx tests that failed
       before the tail-call liveness fix.
+
+- **2026-11-15 05:48 -08:00** — `CMP Rd, #0` before `JZ`/`JNZ` is redundant when
+      the preceding instruction is an ALU operation that wrote the same register:
+      both set `Z` from the result. Only Z branches are handled because `CMP`
+      sets carry differently from the ALU operations. libc 10,463 -> 10,364
+      instructions and libcpp 10,684 -> 10,664. All eleven parts (91 tests) and
+      91/91 WSL pass.
 
 ## 10. Updating this file
 

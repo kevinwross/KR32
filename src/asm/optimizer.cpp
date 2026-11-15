@@ -3067,6 +3067,51 @@ int remove_dead_moves(std::vector<std::string>& lines) {
     return removed;
 }
 
+// An ALU operation sets Z from its result, exactly as `CMP Rd, #0` does for
+// the same value, so the compare is redundant before a Z test. Only Z branches
+// (JZ/JNZ) are handled: CMP's carry differs from the ALU operations'.
+int remove_redundant_flag_compares(std::vector<std::string>& lines) {
+    static const std::set<std::string> flag_setters = {
+        "ADD", "SUB", "AND", "OR",  "XOR", "SHL", "SHR",  "SAR",
+        "NEG", "NOT", "MUL", "DIV", "DIVS", "MOD", "MODS", "MULHU",
+        "SLT", "SLTU"};
+    int removed = 0;
+    for (std::size_t index = 0; index + 2 < lines.size(); ++index) {
+        Instruction compare;
+        if (!parse_instruction(lines[index], compare) ||
+            compare.mnemonic != "CMP" || compare.operands.size() != 2) {
+            continue;
+        }
+        int tested = 0;
+        if (!parse_register(compare.operands[0], tested) ||
+            trim(compare.operands[1]) != "#0") {
+            continue;
+        }
+        Instruction branch;
+        if (!parse_instruction(lines[index + 1], branch) ||
+            branch.operands.size() != 1) {
+            continue;
+        }
+        const std::string& jump = branch.mnemonic;
+        if (jump != "JZ" && jump != "JNZ") {
+            continue;
+        }
+        Instruction producer;
+        if (!parse_instruction(lines[index - 1], producer) ||
+            flag_setters.find(producer.mnemonic) == flag_setters.end() ||
+            producer.operands.size() < 2) {
+            continue;
+        }
+        int written = 0;
+        if (!parse_register(producer.operands[0], written) ||
+            written != tested || written == 7 || written == 11) {
+            continue;
+        }
+        lines[index].clear();
+        ++removed;
+    }
+    return removed;
+}
 int remove_redundant_jumps(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index < lines.size(); ++index) {
@@ -4651,6 +4696,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += remove_dead_moves(lines);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += remove_dead_frame_stores(lines);
+    stats.removed += remove_redundant_flag_compares(lines);
     stats.removed += remove_redundant_jumps(lines);
     stats.removed += remove_dead_functions(lines);
     for (std::string& line : lines) {
