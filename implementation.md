@@ -3766,6 +3766,22 @@ Newest entries at the bottom. Use the local time zone.
       after rebuilding *both* targets — an earlier Windows pass in this round
       was against a stale `kr32_tests.exe` because only `kr32` had been rebuilt.
 
+- **2026-11-15 11:44 -08:00** — Cross-call splitting measured before building it.
+      Of the frame accesses left after the passes, 60 slots in libc and 49 in
+      libcpp have four or more accesses inside one call-free interval and
+      therefore cross a call. Splitting one costs a store and a reload per
+      crossing, so it pays only from the third access in an interval, and those
+      intervals typically hold four or five: the whole-corpus gain is a few
+      dozen instructions at best, against a change that would touch every
+      function's epilogue. Not built.
+
+      Final state of the two levers: libc 16,332 -> 10,029 instructions
+      (-38.6%) and 447,752 -> 409,696 bytes; libcpp 13,046 -> 10,438 (-20.0%);
+      OS kernel 85,032 -> 62,696 bytes (-26.3%). Floating-point memory
+      operations in libcpp fall 835 -> 527, with 307 FMOV emitted, and
+      `FMOV Fd, Fs` is ISA v1 function 0x032 documented in `docs/isa-v1.md` §6.2
+      with its revision history at §14.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
