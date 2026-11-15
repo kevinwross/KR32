@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 13:14 -08:00
+> **Last updated:** 2026-11-15 13:41 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3816,6 +3816,15 @@ Newest entries at the bottom. Use the local time zone.
       benchmark table was stale by every change of the last day; it now carries
       instructions and bytes for `floats.c`, `libcpp.cpp`, `libc` at `-O0` and
       `-O1`, and the kernel, with the old tick rows kept.
+
+- **2026-11-15 13:41 -08:00** — Floating-point literals are their own token kind
+      (`TokenKind::Float`), not `Number`, so the C front end's register path for
+      a binary operand never matched a literal right operand and those
+      expressions still staged through the stack. Accepting `Float` removes the
+      last staging from `examples/floats.c`: `fpCrazyTown` 71 -> 62 instructions
+      with zero `ADJSP` staging, the file 289 -> 280. libc 9,954 -> 9,900 and
+      409,396 -> 409,180 bytes; libcpp unchanged at 10,251. All eleven parts
+      (91 tests) and 91/91 WSL pass.
 
 ## 10. Updating this file
 

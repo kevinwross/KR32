@@ -5114,9 +5114,11 @@ private:
                     const bool fp_register =
                         arithmetic_fp && fp_expression_depth_ < 6 &&
                         (right_token.kind == TokenKind::Number ||
+                         right_token.kind == TokenKind::Float ||
                          right_token.kind == TokenKind::Character ||
                          (right_token.kind == TokenKind::Identifier &&
                           peek(1).text != "("));
+
                     int left_register = 1;
                     if (fp_register) {
                         left_register = 2 + fp_expression_depth_;
@@ -6909,9 +6911,11 @@ private:
                     const bool fp_register =
                         arithmetic_fp && fp_expression_depth_ < 6 &&
                         (right_token.kind == TokenKind::Number ||
+                         right_token.kind == TokenKind::Float ||
                          right_token.kind == TokenKind::Character ||
                          (right_token.kind == TokenKind::Identifier &&
                           peek(1).text != "("));
+
                     int left_register = 1;
                     if (fp_register) {
                         left_register = 2 + fp_expression_depth_;

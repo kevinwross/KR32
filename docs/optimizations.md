@@ -313,10 +313,10 @@ counter on the benchmark programs.
 
 | Program | Build | Instructions | Bytes | Ticks |
 |---|---|---:|---:|---:|
-| `examples/floats.c` | `-O1` | 289 | 10,098 | — |
+| `examples/floats.c` | `-O1` | 280 | 10,062 | — |
 | `examples/libcpp.cpp` | `-O1` | 10,251 | 421,728 | — |
-| `src/cc/libc.c` | `-O0` | 16,287 | 447,572 | — |
-| `src/cc/libc.c` | `-O1` | 9,954 | 409,396 | — |
+| `src/cc/libc.c` | `-O0` | 16,233 | 447,356 | — |
+| `src/cc/libc.c` | `-O1` | 9,900 | 409,180 | — |
 | OS kernel (`kr32os`) | `-O1` | — | 62,676 | — |
 | `strings.c` | `-O0` | — | — | 30,243 |
 | `balanced-tree.cpp` | `-O0` | — | `0x15894` | 184,725 |
