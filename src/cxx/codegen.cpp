@@ -6424,38 +6424,54 @@ private:
         const bool compare = op == "==" || op == "!=" || op == "<" ||
                              op == "<=" || op == ">" || op == ">=";
         gen_as_fp(*expression.children[0], result_type);
-        const int left_temp = allocate_local(result_type);
-        emit(std::string("    FSTORE.") + (is_float32(result_type) ? "W" : "D") +
-             " F0, [R7 + " + std::to_string(left_temp) + "]");
-        gen_as_fp(*expression.children[1], result_type);
-        // The right value stays in F0; the left is reloaded into F1.
-        emit(std::string("    FLOAD.") + (is_float32(result_type) ? "W" : "D") +
-             " F1, [R7 + " + std::to_string(left_temp) + "]");
+        // Keep the left value in a scratch register: the right operand's
+        // evaluation cannot clobber F2..F7, and a call is excluded because it
+        // would. Deeper nesting takes the next register up; past the pool the
+        // value is staged through a slot as before.
+        int left_register = 1;
+        if (!expression_calls(expression.children[1].get()) &&
+            fp_expression_depth_ < 6) {
+            left_register = 2 + fp_expression_depth_;
+            ++fp_expression_depth_;
+            emit("    FMOV F" + std::to_string(left_register) + ", F0");
+            gen_as_fp(*expression.children[1], result_type);
+            --fp_expression_depth_;
+        } else {
+            const int left_temp = allocate_local(result_type);
+            emit(std::string("    FSTORE.") +
+                 (is_float32(result_type) ? "W" : "D") + " F0, [R7 + " +
+                 std::to_string(left_temp) + "]");
+            gen_as_fp(*expression.children[1], result_type);
+            emit(std::string("    FLOAD.") +
+                 (is_float32(result_type) ? "W" : "D") + " F1, [R7 + " +
+                 std::to_string(left_temp) + "]");
+        }
+        const std::string left_operand = "F" + std::to_string(left_register);
         if (compare) {
             if (op == "==") {
-                emit("    FEQ" + suffix + " R0, F1, F0");
+                emit("    FEQ" + suffix + " R0, " + left_operand + ", F0");
             } else if (op == "!=") {
-                emit("    FEQ" + suffix + " R0, F1, F0");
+                emit("    FEQ" + suffix + " R0, " + left_operand + ", F0");
                 emit("    XOR R0, R0, #1");
             } else if (op == "<") {
-                emit("    FLT" + suffix + " R0, F1, F0");
+                emit("    FLT" + suffix + " R0, " + left_operand + ", F0");
             } else if (op == "<=") {
-                emit("    FLE" + suffix + " R0, F1, F0");
+                emit("    FLE" + suffix + " R0, " + left_operand + ", F0");
             } else if (op == ">") {
-                emit("    FLT" + suffix + " R0, F0, F1");
+                emit("    FLT" + suffix + " R0, F0, " + left_operand);
             } else {
-                emit("    FLE" + suffix + " R0, F0, F1");
+                emit("    FLE" + suffix + " R0, F0, " + left_operand);
             }
             return Type::make_builtin(BuiltinKind::Bool);
         }
         if (op == "+") {
-            emit("    FADD" + suffix + " F0, F1, F0");
+            emit("    FADD" + suffix + " F0, " + left_operand + ", F0");
         } else if (op == "-") {
-            emit("    FSUB" + suffix + " F0, F1, F0");
+            emit("    FSUB" + suffix + " F0, " + left_operand + ", F0");
         } else if (op == "*") {
-            emit("    FMUL" + suffix + " F0, F1, F0");
+            emit("    FMUL" + suffix + " F0, " + left_operand + ", F0");
         } else if (op == "/") {
-            emit("    FDIV" + suffix + " F0, F1, F0");
+            emit("    FDIV" + suffix + " F0, " + left_operand + ", F0");
         } else {
             diagnose_once(expression, "unsupported floating-point operator: " + op);
         }
@@ -7438,20 +7454,32 @@ private:
             emit("    POP R1");
             emit("    PUSH R1");
             emit("    FLOAD." + width + " F0, [R1]");
-            const int left_temp = allocate_local(lhs_type);
-            emit("    FSTORE." + width + " F0, [R7 + " +
-                 std::to_string(left_temp) + "]");
-            gen_as_fp(*expression.children[1], lhs_type);
-            emit("    FLOAD." + width + " F1, [R7 + " +
-                 std::to_string(left_temp) + "]");
+            int left_register = 1;
+            if (!expression_calls(expression.children[1].get()) &&
+                fp_expression_depth_ < 6) {
+                left_register = 2 + fp_expression_depth_;
+                ++fp_expression_depth_;
+                emit("    FMOV F" + std::to_string(left_register) + ", F0");
+                gen_as_fp(*expression.children[1], lhs_type);
+                --fp_expression_depth_;
+            } else {
+                const int left_temp = allocate_local(lhs_type);
+                emit("    FSTORE." + width + " F0, [R7 + " +
+                     std::to_string(left_temp) + "]");
+                gen_as_fp(*expression.children[1], lhs_type);
+                emit("    FLOAD." + width + " F1, [R7 + " +
+                     std::to_string(left_temp) + "]");
+            }
+            const std::string left_operand =
+                "F" + std::to_string(left_register);
             if (op == "+") {
-                emit("    FADD" + suffix + " F0, F1, F0");
+                emit("    FADD" + suffix + " F0, " + left_operand + ", F0");
             } else if (op == "-") {
-                emit("    FSUB" + suffix + " F0, F1, F0");
+                emit("    FSUB" + suffix + " F0, " + left_operand + ", F0");
             } else if (op == "*") {
-                emit("    FMUL" + suffix + " F0, F1, F0");
+                emit("    FMUL" + suffix + " F0, " + left_operand + ", F0");
             } else if (op == "/") {
-                emit("    FDIV" + suffix + " F0, F1, F0");
+                emit("    FDIV" + suffix + " F0, " + left_operand + ", F0");
             } else {
                 diagnose_once(expression, "unsupported floating-point assignment");
             }
@@ -12118,6 +12146,9 @@ private:
 
     std::vector<Diagnostic>& diagnostics_;
     bool optimize_ = false;
+    // Nesting depth of floating-point binary expressions that keep their left
+    // operand in a scratch register (F2..F7).
+    int fp_expression_depth_ = 0;
     std::set<Function*> inline_stack_;
     std::vector<std::unique_ptr<Function>> function_storage_;
     std::map<std::string, std::vector<Function*>> function_index_;

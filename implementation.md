@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 11:44 -08:00
+> **Last updated:** 2026-11-15 12:58 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3781,6 +3781,22 @@ Newest entries at the bottom. Use the local time zone.
       operations in libcpp fall 835 -> 527, with 307 FMOV emitted, and
       `FMOV Fd, Fs` is ISA v1 function 0x032 documented in `docs/isa-v1.md` §6.2
       with its revision history at §14.
+
+- **2026-11-15 12:58 -08:00** — Both front ends keep a floating-point binary
+      expression's left operand in a scratch register instead of staging it
+      through the stack. `expr + expr` used to cost six instructions
+      (`ADJSP`, `FSTORE`, evaluate right, `FLOAD`, `ADJSP`, op); the left now
+      goes to `F2`-`F7` with `FMOV` and the operation reads it from there, with
+      nested expressions taking the next register up. This is what `FMOV` was
+      added for. `examples/floats.c`'s `fpCrazyTown` drops from 98 to 71
+      instructions; libc 9,999 -> 9,954 and libcpp 10,399 -> 10,251.
+
+      The C++ front end checks the right operand for calls, which would clobber
+      the caller-saved registers. The C front end is a one-pass stack machine
+      and cannot inspect the operand it has not parsed yet, so it takes the
+      register path only when the next token is a number, a character, or an
+      identifier not followed by `(`, and only for `+ - * /`. All eleven parts
+      (91 tests) and 91/91 WSL pass.
 
 ## 10. Updating this file
 

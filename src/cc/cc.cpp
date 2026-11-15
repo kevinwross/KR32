@@ -4208,6 +4208,43 @@ private:
         }
     }
 
+    // The left operand arrives in an FP register rather than on the stack.
+    void gen_fp_binary_from_register(const std::string& op, const TypePtr& left,
+                                     const TypePtr& right, int reg) {
+        const std::string left_register = "F" + std::to_string(reg);
+        const TypePtr common = common_fp_type(left, right);
+        const std::string suffix =
+            common->kind == Type::Kind::Double ? ".D" : ".S";
+        if (left->kind == Type::Kind::Float &&
+            common->kind == Type::Kind::Double) {
+            emit("    FCVT.D.S " + left_register + ", " + left_register);
+        } else if (left->kind == Type::Kind::Double &&
+                   common->kind == Type::Kind::Float) {
+            emit("    FCVT.S.D " + left_register + ", " + left_register);
+        }
+        if (is_fp_type(right)) {
+            if (right->kind == Type::Kind::Float &&
+                common->kind == Type::Kind::Double) {
+                emit("    FCVT.D.S F0, F0");
+            } else if (right->kind == Type::Kind::Double &&
+                       common->kind == Type::Kind::Float) {
+                emit("    FCVT.S.D F0, F0");
+            }
+        } else {
+            emit(std::string("    FCVT") + suffix + ".W F0, R0");
+        }
+        if (op == "+") {
+            emit("    FADD" + suffix + " F0, " + left_register + ", F0");
+        } else if (op == "-") {
+            emit("    FSUB" + suffix + " F0, " + left_register + ", F0");
+        } else if (op == "*") {
+            emit("    FMUL" + suffix + " F0, " + left_register + ", F0");
+        } else if (op == "/") {
+            emit("    FDIV" + suffix + " F0, " + left_register + ", F0");
+        } else {
+            error("unsupported floating-point operator: " + op);
+        }
+    }
     void gen_binary(const std::string& op, const TypePtr& left, const TypePtr& right) {
         if (is_fp_type(left) || is_fp_type(right)) {
             gen_fp_binary(op, left, right);
@@ -5067,9 +5104,36 @@ private:
                             continue;
                         }
                     }
-                    push_value(left);
+                    const bool arithmetic_fp =
+                        is_fp_type(left) && (op == "+" || op == "-" ||
+                                             op == "*" || op == "/");
+                    // A literal or a plain variable on the right cannot call,
+                    // so F2..F7 survive it and the left value stays in a
+                    // register instead of on the stack.
+                    const Token& right_token = peek();
+                    const bool fp_register =
+                        arithmetic_fp && fp_expression_depth_ < 6 &&
+                        (right_token.kind == TokenKind::Number ||
+                         right_token.kind == TokenKind::Character ||
+                         (right_token.kind == TokenKind::Identifier &&
+                          peek(1).text != "("));
+                    int left_register = 1;
+                    if (fp_register) {
+                        left_register = 2 + fp_expression_depth_;
+                        ++fp_expression_depth_;
+                        emit("    FMOV F" + std::to_string(left_register) +
+                             ", F0");
+                    } else {
+                        push_value(left);
+                    }
                     TypePtr right = (this->*next)();
-                    gen_binary(op, left, right);
+                    if (fp_register) {
+                        --fp_expression_depth_;
+                        gen_fp_binary_from_register(op, left, right,
+                                                    left_register);
+                    } else {
+                        gen_binary(op, left, right);
+                    }
                     left = comparison
                                ? type_int()
                                : (is_fp_type(left) || is_fp_type(right)
@@ -6835,9 +6899,36 @@ private:
                             continue;
                         }
                     }
-                    push_value(left);
+                    const bool arithmetic_fp =
+                        is_fp_type(left) && (op == "+" || op == "-" ||
+                                             op == "*" || op == "/");
+                    // A literal or a plain variable on the right cannot call,
+                    // so F2..F7 survive it and the left value stays in a
+                    // register instead of on the stack.
+                    const Token& right_token = peek();
+                    const bool fp_register =
+                        arithmetic_fp && fp_expression_depth_ < 6 &&
+                        (right_token.kind == TokenKind::Number ||
+                         right_token.kind == TokenKind::Character ||
+                         (right_token.kind == TokenKind::Identifier &&
+                          peek(1).text != "("));
+                    int left_register = 1;
+                    if (fp_register) {
+                        left_register = 2 + fp_expression_depth_;
+                        ++fp_expression_depth_;
+                        emit("    FMOV F" + std::to_string(left_register) +
+                             ", F0");
+                    } else {
+                        push_value(left);
+                    }
                     TypePtr right = (this->*next)();
-                    gen_binary(op, left, right);
+                    if (fp_register) {
+                        --fp_expression_depth_;
+                        gen_fp_binary_from_register(op, left, right,
+                                                    left_register);
+                    } else {
+                        gen_binary(op, left, right);
+                    }
                     left = comparison
                                ? type_int()
                                : (is_fp_type(left) || is_fp_type(right)
@@ -6938,6 +7029,9 @@ private:
     std::string branch_false_label_;
     std::string branch_true_label_;
     bool condition_branched_ = false;
+    // Nesting depth of floating-point binary expressions that keep their left
+    // operand in a scratch register (F2..F7).
+    int fp_expression_depth_ = 0;
     int label_counter_ = 0;
     int string_counter_ = 0;
     int counter_value_ = 0;
