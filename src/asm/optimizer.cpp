@@ -305,6 +305,10 @@ int remove_forwarded_loads(std::vector<std::string>& lines, int& rewritten) {
                 }
                 remove_register(slots, destination);
             }
+            int loaded = 0;
+            if (parse_register(instruction.operands[0], loaded)) {
+                remove_register(slots, loaded);
+            }
             continue;
         }
         int destination = 0;
@@ -3008,8 +3012,8 @@ int remove_repeated_frame_loads(std::vector<std::string>& lines) {
                     }
                 }
                 loaded[slot] = destination_text;
+                continue;
             }
-            continue;
         }
         if (writes_first_operand(instruction) &&
             !instruction.operands.empty()) {

@@ -4074,14 +4074,12 @@ private:
             const int element_size =
                 base_type && base_type->element ? type_size(base_type->element) : 4;
             gen_expr(*expression.children[0]);
-            const int base_temp = allocate_local(Type::make_pointer(
-                Type::make_builtin(BuiltinKind::Int)));
-            emit("    STORE R0, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    PUSH R0");
             gen_expr(*expression.children[1]);
             if (element_size != 1) {
                 emit("    MUL R0, R0, #" + std::to_string(element_size));
             }
-            emit("    LOAD R1, [R7 + " + std::to_string(base_temp) + "]");
+            emit("    POP R1");
             emit("    ADD R0, R1, R0");
             return;
         }
@@ -6005,10 +6003,53 @@ private:
         return gen_comparison_jump(expression, true_label, true);
     }
 
+    void gen_condition_jump_true(const Expr& expression,
+                                 const std::string& true_label) {
+        if (gen_comparison_jump_true(expression, true_label)) {
+            return;
+        }
+        if (expression.kind == ExprKind::Binary &&
+            expression.children.size() == 2) {
+            const std::string& op = expression.text;
+            if (op == "||") {
+                gen_condition_jump_true(*expression.children[0], true_label);
+                gen_condition_jump_true(*expression.children[1], true_label);
+                return;
+            }
+            if (op == "&&") {
+                const std::string done = new_label("andtrue");
+                gen_condition_jump_false(*expression.children[0], done);
+                gen_condition_jump_true(*expression.children[1], true_label);
+                emit(done + ":");
+                return;
+            }
+        }
+        gen_condition(expression);
+        emit("    CMP R0, #0");
+        emit("    JNZ " + true_label);
+    }
+
     void gen_condition_jump_false(const Expr& expression,
                                   const std::string& false_label) {
         if (gen_comparison_jump_false(expression, false_label)) {
             return;
+        }
+        // Short-circuit operators branch directly instead of building 0/1.
+        if (expression.kind == ExprKind::Binary &&
+            expression.children.size() == 2) {
+            const std::string& op = expression.text;
+            if (op == "&&") {
+                gen_condition_jump_false(*expression.children[0], false_label);
+                gen_condition_jump_false(*expression.children[1], false_label);
+                return;
+            }
+            if (op == "||") {
+                const std::string done = new_label("ortrue");
+                gen_condition_jump_true(*expression.children[0], done);
+                gen_condition_jump_false(*expression.children[1], false_label);
+                emit(done + ":");
+                return;
+            }
         }
         gen_condition(expression);
         emit("    CMP R0, #0");
@@ -6100,9 +6141,18 @@ private:
             op == ">=";
         gen_expr(*expression.children[0]);
         if (!is_long_long(left)) {
-            emit("    MOV R1, R0");
-            emit(std::string("    ") +
-                 (is_unsigned_integer(left) ? "SHR" : "SAR") + " R1, R1, #31");
+            // A literal already has a known high word: 0 or the sign.
+            const Expr* left_literal = expression.children[0].get();
+            if (left_literal->kind == ExprKind::IntegerLiteral &&
+                !is_unsigned_integer(left)) {
+                emit("    MOV R1, #" +
+                     std::string(left_literal->integer < 0 ? "-1" : "0"));
+            } else {
+                emit("    MOV R1, R0");
+                emit(std::string("    ") +
+                     (is_unsigned_integer(left) ? "SHR" : "SAR") +
+                     " R1, R1, #31");
+            }
         }
         const int left_temp =
             allocate_local(Type::make_builtin(BuiltinKind::Int));
@@ -6110,9 +6160,17 @@ private:
         emit("    STORE R1, [R7 + " + std::to_string(left_temp + 4) + "]");
         gen_expr(*expression.children[1]);
         if (!is_long_long(right)) {
-            emit("    MOV R5, R0");
-            emit(std::string("    ") +
-                 (is_unsigned_integer(right) ? "SHR" : "SAR") + " R5, R5, #31");
+            const Expr* right_literal = expression.children[1].get();
+            if (right_literal->kind == ExprKind::IntegerLiteral &&
+                !is_unsigned_integer(right)) {
+                emit("    MOV R5, #" +
+                     std::string(right_literal->integer < 0 ? "-1" : "0"));
+            } else {
+                emit("    MOV R5, R0");
+                emit(std::string("    ") +
+                     (is_unsigned_integer(right) ? "SHR" : "SAR") +
+                     " R5, R5, #31");
+            }
             emit("    MOV R4, R0");
         } else {
             emit("    MOV R4, R0");

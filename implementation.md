@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-14 15:15 -08:00
+> **Last updated:** 2026-11-14 16:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3460,6 +3460,21 @@ Newest entries at the bottom. Use the local time zone.
       Tried and reverted: loading a *pointer* local directly into its argument
       register. A pointer local can live in a register, so reading its frame
       slot returns stale data; eight `<cstring>` and algorithm tests caught it.
+
+- **2026-11-14 16:36 -08:00** — First batch against `examples/libcpp.cpp` as
+      the C++ benchmark. Five changes: `if`/`while` conditions with `&&`/`||`
+      branch directly instead of building a 0/1 value and re-testing it;
+      `long long` constants carry their known high word (`MOV R1, #0` instead of
+      `MOV R1, R0 ; SAR R1, R1, #31`); an array base waits on the stack so the
+      index can be evaluated without spilling it to a frame slot; and two
+      optimizer fixes — `remove_forwarded_loads` and `remove_repeated_frame_loads`
+      both failed to invalidate a copy when a plain `LOAD` clobbered the
+      register, which the array change exposed as a miscompile in
+      `std::vector::back`.
+
+      libcpp 13,046 -> 11,851 instructions (-9.2%); `.Llogicend` sites 60 -> 6,
+      `.Landfalse` 39 -> 5. libc unchanged at 11,059. Windows unit suites (run
+      one file at a time), 47/47 integration, and 89/89 WSL pass.
 
 ## 10. Updating this file
 

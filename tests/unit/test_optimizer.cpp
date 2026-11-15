@@ -1053,3 +1053,36 @@ TEST_CASE("assembly optimizer folds a copied literal") {
     CHECK(assembly.find("MOV R1, #1") != std::string::npos);
     CHECK(assembly.find("MOV R0, #1") == std::string::npos);
 }
+
+TEST_CASE("assembly optimizer keeps a frame load after its register is clobbered") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    LOAD R0, [R0]\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
+}
+
+TEST_CASE("assembly optimizer repeats a frame load after a clobber") {
+    std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    LOAD R0, [R0]\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats stats =
+        assembler::optimize_assembly(assembly);
+    INFO(assembly);
+    (void)stats;
+    CHECK(assembly.find("LOAD R0, [R7 + 0]") != std::string::npos);
+}

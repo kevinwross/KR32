@@ -2765,4 +2765,3 @@ TEST_CASE("C++ typedef names resolve for struct types") {
     CHECK(program.ok);
     CHECK(program.result == 9);
 }
-
