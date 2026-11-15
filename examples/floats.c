@@ -45,6 +45,13 @@ double DoubleDouble(double value) {
     return value * value;
 }
 
+double fpCrazyTown(double Smack, float Crackle, double Pop, float Boom) {
+    double Fizzle =  22.0 / 7.0;
+    double Bizzle = Smack + Pop + Fizzle;
+    double Cizzle = Crackle + Boom + Fizzle;
+    return Fizzle * 2.0 + Bizzle * Crackle / 2.0 + Pop - Boom * Cizzle;
+}
+
 double MixValues(int integer_part, double double_part, float float_part) {
     return integer_part + double_part + float_part;
 }
@@ -56,8 +63,11 @@ int main(void) {
     double mixed = MixValues(3, 2.5, 1.25f);
 
     print_string("float 2.5 squared = ");
-    print_int((int)DoubleFloat(f));
+    print_int((int)DoubleFloat(f)); 
     putchar('\n');
+
+    printf("fpCrazyTown result = %f\n", fpCrazyTown(1.0, 2.0f, 3.0, 4.0f));
+
 
     print_string("double 3.25 squared = ");
     print_int((int)DoubleDouble(d));
