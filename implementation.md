@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 07:34 -08:00
+> **Last updated:** 2026-11-15 08:22 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3671,6 +3671,16 @@ Newest entries at the bottom. Use the local time zone.
       and the freed frame accesses fold into the operations. libc 10,205 ->
       10,142 instructions and libcpp 10,664 -> 10,576. All eleven parts
       (91 tests) and 91/91 WSL pass.
+
+- **2026-11-15 08:22 -08:00** — `FMOV Fd, Fs` added to ISA v1 (FP escape
+      function `0x032`), an FPR-to-FPR copy of all 64 bits: assembler and object
+      assembler, disassembler, emulator, unit tests for encoding and execution,
+      and `docs/isa-v1.md` with the instruction row, the semantics note, a golden
+      vector (`FMOV F3, F5` = `0xC06A0032`), and a new revision-history section
+      reporting draft 0.2 -> 0.3. Goldens for `FMUL`/`FMV` were wrong in my first
+      draft of the test: the encoder places `fd` at bit 21 and `fs1` at bit 17, so
+      the assembler's `0xC06A0032` is authoritative. All eleven parts (91 tests)
+      and 91/91 WSL pass.
 
 ## 10. Updating this file
 

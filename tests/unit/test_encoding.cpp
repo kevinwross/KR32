@@ -125,3 +125,9 @@ TEST_CASE("random instruction words decode without crashing") {
     }
     CHECK(true);
 }
+
+TEST_CASE("FMOV encodes in the FP escape") {
+    // fd in 24..21, fs1 in 20..17, function 0x032 (docs/isa-v1.md §6.2).
+    expect_encoding(make(0x60, 3, 5, 0, false, false, 0x032), 0xC06A0032);
+    expect_encoding(make(0x60, 15, 1, 0, false, false, 0x032), 0xC1E20032);
+}

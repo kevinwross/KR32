@@ -1,6 +1,6 @@
 # KR32 Instruction Set v1 — Draft
 
-> **Status:** draft 0.2, 2026-11-01. For review; **not frozen**. Encoding
+> **Status:** draft 0.3, 2026-11-15. For review; **not frozen**. Encoding
 > decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
 > becomes v1 only after the golden vectors in §12 are checked and the open items
 > in §13 are closed.
@@ -422,9 +422,11 @@ The same functions with bit 8 set are the `.D` forms: `0x100`–`0x10B`.
 | 0x029 | `FCVT.D.WU` | `fd, Rs` |
 | 0x030 | `FMV.W.X` | `fd, Rs` |
 | 0x031 | `FMV.X.W` | `Rd, fs` |
+| 0x032 | `FMOV` | `fd, fs` |
 
 `FMV.W.X` writes the low 32 bits and clears bits 63..32; `FMV.X.W` reads the low
-32 bits.
+32 bits. `FMOV` copies all 64 bits of the source register, so it serves both
+precisions; it leaves the integer flags unchanged.
 
 ### 6.3 Semantics
 
@@ -585,6 +587,7 @@ has its own `PTBR`. There is no TLB in v1.
 | `HALT` | `0x8600_0000` |
 | `ADJSP #-16` | `0x7C00_0FF0` |
 | `FADD.S F1, F2, F3` | `0xC024_6000` |
+| `FMOV F3, F5` | `0xC06A_0032` |
 | `MMUL T1, T2, T3` | `0xC224_6000` |
 | `BSWAP R1, R2` | `0xC424_0000` |
 | `PUSHR` | `0x9A00_0000` |
@@ -612,3 +615,9 @@ The extension word is little-endian and is always the word after the base word.
   occupy `0x18`/`0x19`. Confirm nothing else is missing before freezing.
 - **Assembler syntax.** Register names, `#` immediates, `.long`, and the
   `JCOND` aliases need one pass against the parser plan.
+## 14. Revision history
+
+| Revision | Date | Change |
+| --- | --- | --- |
+| 0.2 | 2026-11-01 | Baseline recorded in this document's status note: encoding decisions D8, D13-D16, D20-D22, D51, and D52 applied; §12 golden vectors and §13 open items still to be resolved before v1 is frozen. |
+| 0.3 | 2026-11-15 | Added `FMOV Fd, Fs` (FP escape function `0x032`), an FPR-to-FPR copy of all 64 bits. It exists so a cached floating-point value can reach an operand register without a memory round trip; before it, the compiler staged every FP value through a frame slot. Golden encoding for `FMOV F3, F5` is `0xC06A0032` (§6.2, `tests/unit/test_encoding.cpp`). |

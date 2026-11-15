@@ -441,6 +441,8 @@ std::string format_instruction(const isa::Instruction& instruction,
             out << "FMV.W.X " << freg(instruction.rd) << ", " << reg(instruction.rs1);
         } else if (base == 0x031) {
             out << "FMV.X.W " << reg(instruction.rd) << ", " << freg(instruction.rs1);
+        } else if (base == 0x032) {
+            out << "FMOV " << freg(instruction.rd) << ", " << freg(instruction.rs1);
         } else {
             out << ".word";
         }

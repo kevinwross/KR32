@@ -308,3 +308,23 @@ TEST_CASE("FLOAD and FSTORE handle 32-bit and 64-bit values") {
     REQUIRE(store.read32(kData, stored));
     CHECK(stored == f32_bits(2.5F));
 }
+
+TEST_CASE("FMOV copies a whole FP register") {
+    const Machine copy = run_fp(fp(0x032, 3, 5, 0), [](Machine& machine) {
+        machine.set_fpr(5, 0x1234'5678'9ABC'DEF0ULL);
+    });
+    CHECK(copy.fpr(3) == 0x1234'5678'9ABC'DEF0ULL);
+    CHECK(copy.fpr(5) == 0x1234'5678'9ABC'DEF0ULL);
+
+    // A single-precision value keeps its zero high word.
+    const Machine single = run_fp(fp(0x032, 7, 6, 0), [](Machine& machine) {
+        machine.set_fpr(6, f32_bits(1.5F));
+    });
+    CHECK(single.fpr(7) == f32_bits(1.5F));
+
+    // Copying a register onto itself leaves it unchanged.
+    const Machine self = run_fp(fp(0x032, 4, 4, 0), [](Machine& machine) {
+        machine.set_fpr(4, 0xDEAD'BEEF'0BAD'F00DULL);
+    });
+    CHECK(self.fpr(4) == 0xDEAD'BEEF'0BAD'F00DULL);
+}

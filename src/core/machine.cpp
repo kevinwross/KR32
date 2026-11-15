@@ -2041,6 +2041,10 @@ StepResult Machine::execute_fp(const isa::Instruction& instruction,
         regs_[fd] = static_cast<std::uint32_t>(fpr_[fs1] & kWordMask);
         return finish_next();
 
+    case 0x32: // FMOV
+        fpr_[fd] = fpr_[fs1];
+        return finish_next();
+
     default:
         return fail_ud();
     }

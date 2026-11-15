@@ -1261,7 +1261,7 @@ private:
                 {"fcvt.s.w", 0x024}, {"fcvt.s.wu", 0x025},
                 {"fcvt.w.d", 0x026}, {"fcvt.wu.d", 0x027},
                 {"fcvt.d.w", 0x028}, {"fcvt.d.wu", 0x029},
-                {"fmv.w.x", 0x030}, {"fmv.x.w", 0x031},
+                {"fmv.w.x", 0x030}, {"fmv.x.w", 0x031}, {"fmov", 0x032},
             };
             const auto conversion = conversions.find(mnemonic);
             if (conversion != conversions.end()) {
