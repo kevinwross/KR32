@@ -3643,6 +3643,28 @@ Newest entries at the bottom. Use the local time zone.
       instructions (159 saved); libcpp has no such sites. All eleven parts
       (91 tests) and 91/91 WSL pass.
 
+- **2026-11-15 07:09 -08:00** — Remaining-opportunity analysis after the
+      allocator landed. Current state: libc 10,205 instructions with 1,492 frame
+      accesses, 687 register moves, 510 ADJSP; libcpp 10,664 with 1,559 frame
+      accesses, 998 moves, 835 floating-point memory operations.
+
+      The deferred-store half of the block cache is count-neutral: a store that
+      dies in its block is already removed by the dead-store pass, and a store
+      that is live-out has to be written anyway, so the cache trades memory
+      traffic for register pressure without changing the instruction count. The
+      two remaining levers are not optimizer changes:
+
+      1. **Floating-point register move.** `F8`-`F15` are callee-saved, but with
+         no FP move instruction a cached FP value cannot reach an operand
+         register without a memory round trip. Adding `FMOV Fd, Fs` would let
+         argument staging become one move and let hot FP slots be cached. This
+         is an ISA decision.
+      2. **Global register allocation.** The 998 `libcpp` moves and 1,559 frame
+         accesses are values live across clobbers and calls; the call-crossing
+         cache already takes all three callee-saved registers. Reducing them
+         further needs function-wide allocation with live-range splitting, not a
+         block-local pass.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
