@@ -1372,6 +1372,50 @@ bool parse_symbol_address(std::string_view text, std::string& symbol) {
     return true;
 }
 
+// STORE Rx, [R7 + slot] immediately followed by LOAD Rx, [R7 + slot] is a
+// round trip through memory that leaves Rx unchanged. Labels may sit between
+// the two; a CFG pass cannot remove these when the function has an exception
+// path, but adjacency makes it safe locally.
+int remove_adjacent_slot_roundtrips(std::vector<std::string>& lines) {
+    int removed = 0;
+    for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
+        Instruction store;
+        if (!parse_instruction(lines[index], store) ||
+            store.mnemonic != "STORE" || store.operands.size() != 2) {
+            continue;
+        }
+        int stored_register = 0;
+        int stored_slot = 0;
+        if (!parse_register(store.operands[0], stored_register) ||
+            !parse_frame_slot(store.operands[1], stored_slot)) {
+            continue;
+        }
+        std::size_t next = index + 1;
+        while (next < lines.size() &&
+               (lines[next].empty() || is_label(lines[next]))) {
+            ++next;
+        }
+        if (next >= lines.size()) {
+            continue;
+        }
+        Instruction load;
+        if (!parse_instruction(lines[next], load) ||
+            load.mnemonic != "LOAD" || load.operands.size() != 2) {
+            continue;
+        }
+        int loaded_register = 0;
+        int loaded_slot = 0;
+        if (!parse_register(load.operands[0], loaded_register) ||
+            !parse_frame_slot(load.operands[1], loaded_slot) ||
+            loaded_register != stored_register ||
+            loaded_slot != stored_slot) {
+            continue;
+        }
+        lines[next].clear();
+        ++removed;
+    }
+    return removed;
+}
 int fold_symbol_address_loads(std::vector<std::string>& lines) {
     int removed = 0;
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
@@ -4265,6 +4309,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
     stats.removed += remove_noop_moves(lines);
+    stats.removed += remove_adjacent_slot_roundtrips(lines);
     stats.removed += fold_symbol_address_loads(lines);
     stats.removed += fold_symbol_offsets(lines);
     stats.removed += fold_unary_constants(lines);
