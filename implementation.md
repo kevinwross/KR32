@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 05:11 -08:00
+> **Last updated:** 2026-11-15 05:29 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3618,6 +3618,15 @@ Newest entries at the bottom. Use the local time zone.
       fix, not a size win: libc grows 10,826 -> 10,843 instructions because the
       seventeen argument copies it was deleting are needed. A regression test
       covers the shape, and all eleven parts plus 91/91 WSL pass.
+
+- **2026-11-15 05:29 -08:00** — Callee-saved promotion landed. Slots loaded at
+      least three times in a function that calls out are cached in `R8`-`R10`,
+      saved in a 16-byte area that keeps SP aligned, and restored before the
+      first ADJSP of every frame release (including the multi-step tail-call
+      epilogue that broke the first attempt). libc 10,843 -> 10,463 instructions
+      and libcpp 10,751 -> 10,684; libc frame loads fall to 786. All eleven
+      parts (91 tests) and 91/91 WSL pass, including both gfx tests that failed
+      before the tail-call liveness fix.
 
 ## 10. Updating this file
 

@@ -1044,6 +1044,247 @@ int remove_dead_frame_loads(std::vector<std::string>& lines) {
     return removed;
 }
 
+// Cache frequently loaded slots in the callee-saved registers R8-R10 for
+// functions that call out. A callee-saved register survives a call, which a
+// frame slot costs two accesses per crossing to match. The saved registers live
+// in a 16-byte area so SP keeps its 16-byte alignment at CALL.
+int promote_call_surviving_scalars(std::vector<std::string>& lines,
+                                   int& rewritten) {
+    struct Edits {
+        std::map<std::size_t, std::string> replace;
+        std::map<std::size_t, std::vector<std::string>> insert;
+    };
+    Edits edits;
+    for (const CfgFunction& function : build_cfgs(lines)) {
+        bool has_call = false;
+        bool has_exception_path = false;
+        std::size_t prologue_after = 0;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            if (lines[index].find(".Lcs_") != std::string::npos) {
+                has_exception_path = true;
+            }
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            if (is_call(instruction.mnemonic)) {
+                has_call = true;
+            }
+            if (instruction.mnemonic == "LEA" &&
+                instruction.operands.size() == 2 &&
+                trim(instruction.operands[1]) == "[SP]") {
+                int reg = 0;
+                if (parse_register(instruction.operands[0], reg) && reg == 7 &&
+                    prologue_after == 0) {
+                    prologue_after = index + 1;
+                }
+            }
+        }
+        if (!has_call || has_exception_path || prologue_after == 0) {
+            continue;
+        }
+        bool used[16] = {};
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            for (const std::string& operand : instruction.operands) {
+                int reg = -1;
+                if (parse_register(operand, reg) ||
+                    parse_register_address(operand, reg)) {
+                    if (reg >= 0 && reg < 16) {
+                        used[reg] = true;
+                    }
+                }
+            }
+        }
+        std::vector<int> registers;
+        for (const int candidate : {8, 9, 10}) {
+            if (!used[candidate]) {
+                registers.push_back(candidate);
+            }
+        }
+        if (registers.empty()) {
+            continue;
+        }
+        struct Access {
+            int loads = 0;
+            int stores = 0;
+            bool blocked = false;
+            bool saw_access = false;
+            bool first_is_store = false;
+        };
+        std::map<int, Access> slots;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            Access& access = slots[slot];
+            if (instruction.mnemonic == "LEA") {
+                access.blocked = true;
+                continue;
+            }
+            const bool load = instruction.mnemonic == "LOAD";
+            const bool store = instruction.mnemonic == "STORE";
+            if (!load && !store) {
+                // A narrow or floating-point access to the same slot blocks it.
+                access.blocked = true;
+                continue;
+            }
+            if (!access.saw_access) {
+                access.saw_access = true;
+                access.first_is_store = store;
+            }
+            if (load) {
+                ++access.loads;
+            } else {
+                ++access.stores;
+            }
+        }
+        std::vector<std::pair<int, int>> chosen;  // loads, slot
+        for (const auto& entry : slots) {
+            const Access& access = entry.second;
+            if (access.blocked || !access.saw_access || !access.first_is_store ||
+                access.loads < 3 || access.stores < 1) {
+                continue;
+            }
+            chosen.emplace_back(access.loads, entry.first);
+        }
+        std::sort(chosen.begin(), chosen.end(),
+                  [](const std::pair<int, int>& left,
+                     const std::pair<int, int>& right) {
+                      return left.first > right.first;
+                  });
+        std::map<int, int> promoted;  // slot -> register
+        for (std::size_t index = 0;
+             index < chosen.size() && index < registers.size(); ++index) {
+            promoted[chosen[index].second] = registers[index];
+        }
+        if (promoted.empty()) {
+            continue;
+        }
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction) ||
+                instruction.operands.size() != 2) {
+                continue;
+            }
+            if (instruction.mnemonic != "LOAD" &&
+                instruction.mnemonic != "STORE") {
+                continue;
+            }
+            int slot = 0;
+            if (!parse_frame_slot(instruction.operands[1], slot)) {
+                continue;
+            }
+            const auto found = promoted.find(slot);
+            if (found == promoted.end()) {
+                continue;
+            }
+            const std::string cached = "R" + std::to_string(found->second);
+            Instruction move;
+            move.mnemonic = "MOV";
+            if (instruction.mnemonic == "LOAD") {
+                move.operands.push_back(instruction.operands[0]);
+                move.operands.push_back(cached);
+            } else {
+                move.operands.push_back(cached);
+                move.operands.push_back(instruction.operands[0]);
+            }
+            edits.replace[index] = format_instruction(move);
+            ++rewritten;
+        }
+        std::vector<std::string> save;
+        save.push_back("    ADJSP #-16");
+        std::vector<std::string> restore;
+        for (std::size_t index = 0; index < registers.size(); ++index) {
+            if (index >= promoted.size()) {
+                break;
+            }
+            const std::string reg = "R" + std::to_string(registers[index]);
+            save.push_back("    STORE " + reg + ", [SP + " +
+                           std::to_string(index * 4) + "]");
+            restore.push_back("    LOAD " + reg + ", [SP + " +
+                              std::to_string(index * 4) + "]");
+        }
+        restore.push_back("    ADJSP #16");
+        edits.insert[prologue_after] = save;
+        for (std::size_t index = function.begin; index < function.end;
+             ++index) {
+            Instruction instruction;
+            if (!parse_instruction(lines[index], instruction)) {
+                continue;
+            }
+            if (instruction.mnemonic != "POP" ||
+                instruction.operands.size() != 1 ||
+                instruction.operands[0] != "R7") {
+                continue;
+            }
+            // The frame release can be several ADJSP steps (a stack argument
+            // area, then the frame). The save area sits directly below the
+            // frame, so restore before the first of them.
+            std::size_t insert_at = index;
+            std::size_t scan = index;
+            while (scan > function.begin) {
+                --scan;
+                if (lines[scan].empty()) {
+                    continue;
+                }
+                Instruction before;
+                if (!parse_instruction(lines[scan], before) ||
+                    before.mnemonic != "ADJSP" || before.operands.size() != 1 ||
+                    before.operands[0].size() < 2 ||
+                    before.operands[0][0] != '#') {
+                    break;
+                }
+                long long amount = 0;
+                try {
+                    amount = std::stoll(before.operands[0].substr(1));
+                } catch (...) {
+                    break;
+                }
+                if (amount <= 0) {
+                    break;
+                }
+                insert_at = scan;
+            }
+            edits.insert[insert_at] = restore;
+        }
+    }
+    if (edits.replace.empty()) {
+        return 0;
+    }
+    std::vector<std::string> output;
+    output.reserve(lines.size() + edits.insert.size() * 4);
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        const auto insert = edits.insert.find(index);
+        if (insert != edits.insert.end()) {
+            for (const std::string& extra : insert->second) {
+                output.push_back(extra);
+            }
+        }
+        const auto replace = edits.replace.find(index);
+        if (replace != edits.replace.end()) {
+            output.push_back(replace->second);
+        } else {
+            output.push_back(lines[index]);
+        }
+    }
+    lines = std::move(output);
+    return 0;
+}
+
 int promote_leaf_scalars(std::vector<std::string>& lines) {
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
@@ -4367,6 +4608,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += forward_cfg_frame_loads(lines, stats.rewritten);
     stats.removed += remove_dead_frame_stores(lines);
     stats.removed += promote_leaf_scalars(lines);
+    stats.removed += promote_call_surviving_scalars(lines, stats.rewritten);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
     stats.removed += forward_stack_temporaries(lines);
