@@ -727,6 +727,11 @@ std::string Session::dump() const {
                << " offset=" << variable.offset << " type=" << variable.type
                << " size=" << variable.size << "\n";
     }
+    for (const Location& location : info_.locations) {
+        output << "location " << location.function << "." << location.name << " "
+               << (location.fp ? "F" : "R") << location.reg << " 0x" << std::hex
+               << location.start << "-0x" << location.end << std::dec << "\n";
+    }
     for (const TypeInfo& type : info_.types) {
         output << "type " << type.name << " size=" << type.size << "\n";
     }

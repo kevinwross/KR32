@@ -1056,6 +1056,9 @@ struct PendingLocation {
     std::string name;
     int reg = 0;
     bool fp = false;
+    // A pass that inserts instructions cannot report line indices, so it asks
+    // for the whole function and the applier resolves the range from the label.
+    bool whole = false;
     std::size_t first = 0;
     std::size_t last = 0;
 };
@@ -1215,8 +1218,7 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
                     const auto found = names.find(entry.first);
                     if (found != names.end()) {
                         locations.push_back(PendingLocation{
-                            name, found->second, entry.second, false,
-                            function.begin + 1, function.end - 1});
+                            name, found->second, entry.second, false, true, 0, 0});
                     }
                 }
             }
@@ -1524,7 +1526,7 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, st
                     continue;
                 }
                 locations.push_back(PendingLocation{function_name, name->second,
-                                                    slot->second, true,
+                                                    slot->second, true, false,
                                                     candidate.first,
                                                     candidate.last});
             }
@@ -1844,7 +1846,7 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
                     continue;
                 }
                 locations.push_back(PendingLocation{function_name, name->second,
-                                                    slot->second, true,
+                                                    slot->second, true, false,
                                                     candidate.first,
                                                     candidate.last});
             }
@@ -2039,8 +2041,7 @@ int promote_leaf_scalars(std::vector<std::string>& lines,
                     const auto found = names.find(slot);
                     if (found != names.end()) {
                         locations.push_back(PendingLocation{
-                            name, found->second, reg, false, function.begin + 1,
-                            function.end - 1});
+                            name, found->second, reg, false, true, 0, 0});
                     }
                 }
             }
@@ -5387,8 +5388,10 @@ std::vector<std::string> split_lines(std::string_view assembly) {
 
 // Places a label at each end of a promoted interval and appends the `P` record,
 // so the debugger can read the variable from its register over exactly that
-// range. Labels go in before the records: they sit earlier in the file, and the
-// record insert is the only one whose index would otherwise move.
+// range. Line-index ranges are applied first, in reverse order so an insertion
+// cannot move a later one; whole-function ranges are resolved from the function
+// label afterwards, because the passes that ask for them insert instructions and
+// cannot report indices.
 void apply_debug_locations(std::vector<std::string>& lines,
                            std::vector<PendingLocation>& pending) {
     if (pending.empty()) {
@@ -5404,7 +5407,96 @@ void apply_debug_locations(std::vector<std::string>& lines,
     if (debug_at == lines.size()) {
         return;
     }
-    std::size_t record_at = lines.size();
+
+    // Function labels come from the F records: a user label inside a function is
+    // also a non-dot label, so "next non-dot label" is not a function boundary.
+    std::set<std::string> function_labels;
+    for (const std::string& line : lines) {
+        const std::size_t at = line.find(".asciz \"F ");
+        if (at == std::string::npos) {
+            continue;
+        }
+        const std::size_t name_at = at + 10;
+        const std::size_t name_end = line.find(' ', name_at);
+        if (name_end != std::string::npos && name_end > name_at) {
+            function_labels.insert(line.substr(name_at, name_end - name_at));
+        }
+    }
+
+    std::vector<std::string> records;
+    // One counter for the whole translation unit: every record needs its own
+    // label pair, and the passes each call this function.
+    static int counter = 0;
+    const auto add_record = [&records](const PendingLocation& location,
+                                       const std::string& start,
+                                       const std::string& end) {
+        records.push_back("    .asciz \"P " + location.function + " " +
+                          location.name + " " + (location.fp ? "F" : "R") +
+                          std::to_string(location.reg) + " " + start + " " + end +
+                          "\"");
+    };
+
+    std::vector<PendingLocation> indexed;
+    std::vector<PendingLocation> whole;
+    for (const PendingLocation& location : pending) {
+        (location.whole ? whole : indexed).push_back(location);
+    }
+    std::sort(indexed.begin(), indexed.end(),
+              [](const PendingLocation& left, const PendingLocation& right) {
+                  return left.first > right.first;
+              });
+    for (const PendingLocation& location : indexed) {
+        const std::string start = ".Lloc_" + std::to_string(counter++) + "_start";
+        const std::string end = ".Lloc_" + std::to_string(counter++) + "_end";
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(location.last) + 1,
+                     end + ":");
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(location.first),
+                     start + ":");
+        add_record(location, start, end);
+    }
+    for (const PendingLocation& location : whole) {
+        const std::string label = location.function + ":";
+        std::size_t begin = lines.size();
+        for (std::size_t index = 0; index < lines.size(); ++index) {
+            if (trim(lines[index]) == label) {
+                begin = index;
+                break;
+            }
+        }
+        if (begin == lines.size()) {
+            continue;
+        }
+        std::size_t finish = lines.size();
+        for (std::size_t index = begin + 1; index < lines.size(); ++index) {
+            const std::string text = trim(lines[index]);
+            if (!text.empty() && text.back() == ':' &&
+                function_labels.count(text.substr(0, text.size() - 1)) > 0) {
+                finish = index;
+                break;
+            }
+        }
+        if (finish == lines.size()) {
+            continue;
+        }
+        const std::string start = ".Lloc_" + std::to_string(counter++) + "_start";
+        const std::string end = ".Lloc_" + std::to_string(counter++) + "_end";
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(finish),
+                     end + ":");
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(begin) + 1,
+                     start + ":");
+        add_record(location, start, end);
+    }
+    if (records.empty()) {
+        return;
+    }
+
+    std::size_t debug_after = lines.size();
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        if (trim(lines[index]) == ".debug_info") {
+            debug_at = index;
+            break;
+        }
+    }
     for (std::size_t index = debug_at + 1; index < lines.size(); ++index) {
         const std::string text = trim(lines[index]);
         if (text.empty() || text[0] != '.') {
@@ -5415,30 +5507,10 @@ void apply_debug_locations(std::vector<std::string>& lines,
             text.rfind(".double", 0) == 0) {
             continue;
         }
-        record_at = index;
+        debug_after = index;
         break;
     }
-    std::vector<std::string> records;
-    // One counter for the whole translation unit: every record needs its own
-    // label pair, and the passes each call this function.
-    static int counter = 0;
-    std::sort(pending.begin(), pending.end(),
-              [](const PendingLocation& left, const PendingLocation& right) {
-                  return left.first > right.first;
-              });
-    for (const PendingLocation& location : pending) {
-        const std::string start = ".Lloc_" + std::to_string(counter++) + "_start";
-        const std::string end = ".Lloc_" + std::to_string(counter++) + "_end";
-        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(location.last) + 1,
-                     end + ":");
-        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(location.first),
-                     start + ":");
-        records.push_back("    .asciz \"P " + location.function + " " +
-                          location.name + " " + (location.fp ? "F" : "R") +
-                          std::to_string(location.reg) + " " + start + " " + end +
-                          "\"");
-    }
-    lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(record_at),
+    lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(debug_after),
                  records.begin(), records.end());
 }
 OptimizeStats optimize_assembly(std::string& assembly) {

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 14:10 -08:00
+> **Last updated:** 2026-11-16 14:12 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4237,6 +4237,20 @@ Newest entries at the bottom. Use the local time zone.
       The embedded OS images did not change, because the test builds are
       unoptimized and the optimizer is what emits the records. All eleven parts
       (96 tests) and 96/96 WSL pass.
+
+- **2026-11-16 14:12 -08:00** — The whole-function locations needed a second
+      design. A pass that inserts save instructions cannot report line indices,
+      so the leaf and call-surviving passes now ask for a whole-function range and
+      the applier resolves it from the function label: start after `<name>:`, end
+      at the next label whose name an `F` record declares. The first attempt used
+      `is_function_label`, which also matches a user label inside a function, so
+      ranges ended early and two functions could report the same span.
+
+      Open question before this is trustworthy: `kr32 debug kernel.k32` shows 64
+      locations, and at least one function reports two disjoint ranges for
+      different variables, which suggests a range is still wrong. The debug,
+      C front-end, and optimizer suites pass (297, 636, and 165 assertions), but
+      the ranges need checking against a disassembly before the GUI is trusted.
 
 ## 10. Updating this file
 
