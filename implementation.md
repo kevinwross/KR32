@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 09:33 -08:00
+> **Last updated:** 2026-11-16 10:14 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4121,6 +4121,28 @@ Newest entries at the bottom. Use the local time zone.
       because the harness cannot send a keyboard event; and the three-register
       `R12`-`R15` failure from the call-free pool is still unexplained. All eleven
       parts (95 tests) and 95/95 WSL pass.
+
+- **2026-11-16 10:14 -08:00** — The stub syscalls are real ones, and getting there
+      exposed an optimizer bug. `sys_getpid` now reports the caller's pid: the
+      process table gained `process_set_current`, set around the user run in
+      `run_named`. `sys_read` blocks until a newline, reading the keyboard or the
+      serial device through `console_getc`, bounds-checking the user buffer, and
+      returning the line with its newline. `sys_yield` and `sys_brk` stay no-ops
+      with the reason stated: one process at a time, and a fixed image and stack.
+      A new `readline` program reads a line and echoes it, and `run_os_user` now
+      feeds it `hello` and asserts `read: hello`.
+
+      The read returned one byte per call because `remove_adjacent_slot_roundtrips`
+      folded a `STORE R0, [R7+16]` and a later `LOAD R0, [R7+16]` into one move
+      across the loop-head label `.Lwhile_0`. A jump back to that label reaches
+      the load with R0 already holding the loop character, so the condition
+      compared the wrong register and every loop exited after one iteration - a
+      `-O1` miscompile, reproducible in six lines. The pass now treats only labels
+      that nothing branches to as transparent, and a regression test runs the
+      six-line loop with optimization on.
+
+      All eleven parts (95 tests) and 95/95 WSL pass. The embedded OS images were
+      regenerated for both platforms.
 
 ## 10. Updating this file
 

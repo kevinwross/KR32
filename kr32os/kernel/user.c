@@ -207,7 +207,9 @@ int run_named(const char *name) {
         }
         return pid;
     }
+    process_set_current(pid);
     kernel_enter_user(entry->entry, USER_STACK_TOP_VA);
+    process_set_current(0);
     int status = (int)scratch->result;
     (void)process_exit(pid, status);
     (void)process_reap(pid);

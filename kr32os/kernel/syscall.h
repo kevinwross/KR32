@@ -11,6 +11,7 @@ struct syscall_scratch {
     volatile unsigned int vector;
 };
 
+#define SYSCALL_FD_STDIN 0U
 #define SYSCALL_FD_STDOUT 1U
 #define SYSCALL_FD_STDERR 2U
 

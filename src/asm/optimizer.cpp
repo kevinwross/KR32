@@ -2244,6 +2244,20 @@ int fold_stack_argument_copies(std::vector<std::string>& lines) {
 }
 int remove_adjacent_slot_roundtrips(std::vector<std::string>& lines) {
     int removed = 0;
+    // A label is transparent only when nothing branches to it. A jump into the
+    // pair reaches the load with the register already clobbered, so folding
+    // across such a label deletes a real load: a loop head that stores the
+    // index and reloads it compared whichever register the body left behind.
+    std::set<std::string> targets;
+    for (const std::string& line : lines) {
+        Instruction instruction;
+        if (!parse_instruction(line, instruction) ||
+            !is_branch(instruction.mnemonic) ||
+            instruction.operands.size() != 1) {
+            continue;
+        }
+        targets.insert(trim(instruction.operands[0]));
+    }
     for (std::size_t index = 0; index + 1 < lines.size(); ++index) {
         Instruction store;
         if (!parse_instruction(lines[index], store) ||
@@ -2257,11 +2271,26 @@ int remove_adjacent_slot_roundtrips(std::vector<std::string>& lines) {
             continue;
         }
         std::size_t next = index + 1;
-        while (next < lines.size() &&
-               (lines[next].empty() || is_label(lines[next]))) {
+        bool crossed_target = false;
+        while (next < lines.size()) {
+            if (lines[next].empty()) {
+                ++next;
+                continue;
+            }
+            if (!is_label(lines[next])) {
+                break;
+            }
+            std::string name = trim(lines[next]);
+            if (!name.empty() && name.back() == ':') {
+                name.pop_back();
+            }
+            if (targets.count(name) > 0) {
+                crossed_target = true;
+                break;
+            }
             ++next;
         }
-        if (next >= lines.size()) {
+        if (crossed_target || next >= lines.size()) {
             continue;
         }
         Instruction load;

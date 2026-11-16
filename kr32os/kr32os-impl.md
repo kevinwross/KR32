@@ -316,6 +316,12 @@ Tasks:
       source-level OS debugging.
 - [x] Implement process table (256 entries), PID allocation, zombie exit.
 - [x] Implement syscalls: exit, write, read, yield, getpid, brk.
+      - `read` blocks until a newline, reading from the keyboard or the serial
+        device; the line is returned with its newline. `kr32os/user/readline.c`
+        is its test, run by `run_os_user`.
+      - `getpid` reports the caller's pid from the process table.
+      - `yield` and `brk` are deliberately no-ops: the kernel runs one process
+        at a time, and a user image has a fixed load address and stack.
 - [x] Implement fds 0/1/2 connected to serial.
 - [x] Implement the minimal synchronous user-return trampoline:
       - assembly saves the shell's kernel SP/PC and callee-saved state;

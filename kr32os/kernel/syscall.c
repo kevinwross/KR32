@@ -4,6 +4,7 @@
 #include "input.h"
 #include "memory.h"
 #include "syscall.h"
+#include "process.h"
 #include "user_memory.h"
 
 void sys_exit(int status) {
@@ -37,21 +38,58 @@ int sys_write(int descriptor, const char *buffer, int length) {
     return length;
 }
 
+// Reads one line from the console, which is fed by the keyboard and the serial
+// device. The call blocks: a program that wants a key waits here rather than
+// polling input_pending. Returns the bytes read, including the newline.
 int sys_read(int descriptor, char *buffer, int length) {
-    (void)descriptor;
-    (void)buffer;
-    (void)length;
-    return 0;
+    if (descriptor != SYSCALL_FD_STDIN) {
+        return -ERRNO_EBADF;
+    }
+    if (length < 0) {
+        return -ERRNO_EINVAL;
+    }
+    if (length == 0) {
+        return 0;
+    }
+    const mem_virt_t address = (mem_virt_t)buffer;
+    if (address < USER_CODE_VA || address >= USER_STACK_TOP_VA) {
+        return -ERRNO_EFAULT;
+    }
+    int index = 0;
+    while (index < length) {
+        const int character = console_getc();
+        if (character < 0) {
+            // Nothing pending: block. The serial device delivers a byte at a
+            // time, so returning a partial line here would split it.
+            continue;
+        }
+        const mem_virt_t current = address + (mem_virt_t)index;
+        const mem_phys_t physical = user_virt_to_phys(current);
+        if (physical == MEM_PHYS_NONE) {
+            return -ERRNO_EFAULT;
+        }
+        *(char *)mem_phys_to_virt(physical) = (char)character;
+        ++index;
+        if (character == '\n') {
+            break;
+        }
+    }
+    return index;
 }
 
+// The kernel runs one process at a time, so there is nothing to yield to; the
+// call is a no-op rather than an error so portable code can call it.
 int sys_yield(void) {
     return 0;
 }
 
 int sys_getpid(void) {
-    return 1;
+    return process_current();
 }
 
+// A user image is loaded at a fixed address with a fixed stack, and the kernel
+// heap belongs to the kernel, so a user program cannot move its break. The call
+// succeeds and changes nothing; init uses it to reset an address it ignores.
 int sys_brk(unsigned int address) {
     (void)address;
     return 0;

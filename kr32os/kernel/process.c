@@ -22,6 +22,7 @@ struct Process {
 typedef struct Process process_table_t[256]; /* PROCESS_MAX */
 static process_table_t table;
 static int next_pid = 1;
+static int current_pid = 0;
 
 void process_init(void) {
     int index = 0;
@@ -101,4 +102,11 @@ void process_list(void) {
         }
         ++index;
     }
+}
+void process_set_current(int pid) {
+    current_pid = pid;
+}
+
+int process_current(void) {
+    return current_pid;
 }

@@ -586,3 +586,24 @@ TEST_CASE("sizeof a string literal is its array size") {
     CHECK(compile_and_run("int main(void) { return sizeof(\"ab\" \"cd\"); }").result == 5);
     CHECK(compile_and_run("int main(void) { return sizeof(\"abc\") + 1; }").result == 5);
 }
+TEST_CASE("a loop that breaks keeps its condition after optimization") {
+    // The adjacent-slot pass folded the loop-head load across a branch-target
+    // label, so the condition compared the register the body left behind and
+    // the loop ended after one iteration.
+    const ProgramResult optimized = compile_and_run(
+        "int main(void) {\n"
+        "    int values[3] = {65, 66, 67};\n"
+        "    int index = 0;\n"
+        "    while (index < 3) {\n"
+        "        int character = values[index];\n"
+        "        ++index;\n"
+        "        if (character == '\\n') {\n"
+        "            break;\n"
+        "        }\n"
+        "    }\n"
+        "    return index;\n"
+        "}\n",
+        true);
+    CHECK(optimized.ok);
+    CHECK(optimized.result == 3);
+}

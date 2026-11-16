@@ -174,6 +174,13 @@ $userGfxCheckImage = Join-Path $build 'gfxcheck.bin'
 $userShutdownAssembly = Join-Path $build 'user_shutdown.s'
 $userShutdownObject = Join-Path $build 'user_shutdown.o'
 $userShutdownImage = Join-Path $build 'shutdown.bin'
+$userReadlineAssembly = Join-Path $build 'user_readline.s'
+$userReadlineObject = Join-Path $build 'user_readline.o'
+$userReadlineImage = Join-Path $build 'readline.bin'
+Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\readline.c'), $Opt, '-S', '-o', $userReadlineAssembly)
+Invoke-Kr32 -Arguments @('as', $userReadlineAssembly, '--object', '-o', $userReadlineObject)
+Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userReadlineObject, $userSyscallObject, $userGfxObject,
+                        '--flat', '--base', $userBase, '-o', $userReadlineImage)
 Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\shutdown.c'), $Opt, '-S', '-o', $userShutdownAssembly)
 Invoke-Kr32 -Arguments @('as', $userShutdownAssembly, '--object', '-o', $userShutdownObject)
 Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userShutdownObject, $userSyscallObject, $userGfxObject,
@@ -190,6 +197,7 @@ $wxBytes = [System.IO.File]::ReadAllBytes($userWxImage)
 $gfxDemoBytes = [System.IO.File]::ReadAllBytes($userGfxDemoImage)
 $gfxCheckBytes = [System.IO.File]::ReadAllBytes($userGfxCheckImage)
 $shutdownBytes = [System.IO.File]::ReadAllBytes($userShutdownImage)
+$readlineBytes = [System.IO.File]::ReadAllBytes($userReadlineImage)
 $initrdMagic = [uint32]0x4932334B
 $initrdVersion = [uint32]1
 $initrdHeaderSize = 12
@@ -199,9 +207,9 @@ $initrdEntryOffsetOffset = 32
 $initrdEntryOffsetSize = 36
 $initrdEntryOffsetEntry = 40
 $userCodeBase = [uint32]$userBase
-$initrdEntryCount = 6
+$initrdEntryCount = 7
 $payloadOffset = $initrdHeaderSize + $initrdEntryCount * $initrdEntrySize
-$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length + $shutdownBytes.Length)
+$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length + $shutdownBytes.Length + $readlineBytes.Length)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdMagic), 0, $initrdBytes, 0, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdVersion), 0, $initrdBytes, 4, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$initrdEntryCount), 0, $initrdBytes, 8, 4)
@@ -211,7 +219,8 @@ $entries = @(
     @{ Name = 'wx'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length; Size = $wxBytes.Length; Bytes = $wxBytes },
     @{ Name = 'gfxdemo'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length; Size = $gfxDemoBytes.Length; Bytes = $gfxDemoBytes },
     @{ Name = 'gfxcheck'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length; Size = $gfxCheckBytes.Length; Bytes = $gfxCheckBytes },
-    @{ Name = 'shutdown'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length; Size = $shutdownBytes.Length; Bytes = $shutdownBytes }
+    @{ Name = 'shutdown'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length; Size = $shutdownBytes.Length; Bytes = $shutdownBytes },
+    @{ Name = 'readline'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length + $shutdownBytes.Length; Size = $readlineBytes.Length; Bytes = $readlineBytes }
 )
 for ($index = 0; $index -lt $initrdEntryCount; ++$index) {
     $entryOffset = $initrdHeaderSize + $index * $initrdEntrySize

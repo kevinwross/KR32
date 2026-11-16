@@ -81,6 +81,10 @@ mkdir -p "$build"
 "$KR32" as "$build/user_gfxdemo.s" --object -o "$build/user_gfxdemo.o"
 "$KR32" ld "$build/crt0.o" "$build/user_gfxdemo.o" "$build/user_syscall.o" "$build/user_gfx.o" \
     --flat --base "$user_base" -o "$build/gfxdemo.bin"
+"$KR32" cc "$here/user/readline.c" $opt -S -o "$build/user_readline.s"
+"$KR32" as "$build/user_readline.s" --object -o "$build/user_readline.o"
+"$KR32" ld "$build/crt0.o" "$build/user_readline.o" "$build/user_syscall.o" "$build/user_gfx.o" \
+    --flat --base "$user_base" -o "$build/readline.bin"
 "$KR32" cc "$here/user/shutdown.c" $opt -S -o "$build/user_shutdown.s"
 "$KR32" as "$build/user_shutdown.s" --object -o "$build/user_shutdown.o"
 "$KR32" ld "$build/crt0.o" "$build/user_shutdown.o" "$build/user_syscall.o" "$build/user_gfx.o" \
@@ -92,7 +96,7 @@ mkdir -p "$build"
 python3 "$here/tools/mkinitrd.py" "$build/initrd.bin" "$build/initrd.s" \
     init="$build/init.bin" fault="$build/fault.bin" wx="$build/wx.bin" \
     gfxdemo="$build/gfxdemo.bin" gfxcheck="$build/gfxcheck.bin" \
-    shutdown="$build/shutdown.bin"
+    shutdown="$build/shutdown.bin" readline="$build/readline.bin"
 "$KR32" as "$build/initrd.s" --object -o "$build/initrd.o"
 
 "$KR32" ld "$build/entry.o" "$build/kernel.o" "$build/console.o" "$build/fb.o" "$build/shell.o" \
