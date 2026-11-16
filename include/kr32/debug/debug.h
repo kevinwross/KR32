@@ -44,6 +44,17 @@ struct Variable {
     std::uint32_t size = 0;
 };
 
+// A promoted local lives in a register over a PC range instead of in its frame
+// slot: `P <function> <name> <register> <start_label> <end_label>`.
+struct Location {
+    std::string function;
+    std::string name;
+    int reg = 0;
+    bool fp = false;
+    std::uint32_t start = 0;
+    std::uint32_t end = 0;
+};
+
 struct TypeInfo {
     std::string name;
     std::uint32_t size = 0;
@@ -75,6 +86,7 @@ struct Info {
     std::vector<Line> lines;
     std::vector<Function> functions;
     std::vector<Variable> variables;
+    std::vector<Location> locations;
     std::vector<Global> globals;
     std::vector<TypeInfo> types;
     std::vector<ClassInfo> classes;
@@ -170,6 +182,11 @@ public:
 
     [[nodiscard]] const Line* line_at(std::uint32_t pc) const;
     [[nodiscard]] const Function* function_at(std::uint32_t pc) const;
+    // The register location holding `name` at `pc`, or nullptr when the variable
+    // is in its frame slot.
+    [[nodiscard]] const Location* location_at(const std::string& function,
+                                              const std::string& name,
+                                              std::uint32_t pc) const;
     [[nodiscard]] std::vector<Frame> call_stack() const;
 
     [[nodiscard]] bool read_variable(const std::string& name,

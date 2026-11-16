@@ -2155,6 +2155,9 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         std::uint32_t address = 0;
         std::uint32_t value = 0;
         std::uint32_t size = 0;
+        // Set when the optimizer holds the variable in a register over this PC;
+        // there is no frame address to show or to read children from.
+        std::string reg_name;
         bool local = false;
         bool ok = false;
         bool header = false;
@@ -2208,7 +2211,8 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         }
 
         entries.push_back(entry);
-        if (!entry.ok || depth >= 2 || entry.size == 0) {
+        if (!entry.ok || depth >= 2 || entry.size == 0 ||
+            !entry.reg_name.empty()) {
             return;
         }
 
@@ -2289,6 +2293,12 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             entry.size = variable.size;
             entry.local = true;
             entry.key = "L:" + function->name + ":" + variable.name;
+            if (const debug::Location* location = session_.location_at(
+                    function->name, variable.name, session_.machine().pc())) {
+                entry.reg_name = (location->fp ? "F" : "R") +
+                                 std::to_string(location->reg);
+                entry.address = 0;
+            }
             std::string error;
             entry.ok = session_.read_variable(variable.name, entry.value, error);
             locals.push_back(std::move(entry));
@@ -2380,8 +2390,8 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
                     FontRole::MonoSmall);
         var_hover_rows_.push_back(
             VarHoverRow{row, entry.name, entry.type, entry.address, entry.value, entry.size,
-                        entry.local, entry.ok, entry.header, entry.array, entry.pager,
-                        entry.key, entry.page, entry.page_count});
+                        entry.reg_name, entry.local, entry.ok, entry.header, entry.array,
+                        entry.pager, entry.key, entry.page, entry.page_count});
     }
     if (entries.empty()) {
         canvas.text(rect.x + 6, rect.y + 24, "(no variables)", kDim, FontRole::MonoSmall);
@@ -2859,7 +2869,11 @@ void DebuggerUI::draw_variable_tooltip(Canvas& canvas) {
     }
     lines.push_back("type: " + (pretty_type.empty() ? "?" : pretty_type));
     lines.push_back("size: " + std::to_string(row.size) + " bytes");
-    lines.push_back("address: 0x" + hex(row.address, 8));
+    if (row.reg_name.empty()) {
+        lines.push_back("address: 0x" + hex(row.address, 8));
+    } else {
+        lines.push_back("register: " + row.reg_name);
+    }
 
     auto read_byte = [&](std::uint32_t address, std::uint32_t& value) {
         return session_.read_memory(address, 1, value);

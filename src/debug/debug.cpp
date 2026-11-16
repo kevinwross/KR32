@@ -109,6 +109,24 @@ bool parse_info(const container::Image& image, Info& info, std::string& error) {
             stream >> variable.function >> variable.name >> variable.offset >> variable.type >>
                 variable.size;
             info.variables.push_back(std::move(variable));
+        } else if (kind == 'P') {
+            Location location;
+            std::string reg;
+            std::string start_label;
+            std::string end_label;
+            stream >> location.function >> location.name >> reg >> start_label >>
+                end_label;
+            if (!resolve_symbol(symbols, start_label, location.start) ||
+                !resolve_symbol(symbols, end_label, location.end)) {
+                error = "debug location references unknown label: " + location.name;
+                return false;
+            }
+            if (!reg.empty() && (reg[0] == 'F' || reg[0] == 'f')) {
+                location.fp = true;
+            }
+            const char* digits = reg.c_str() + (reg.empty() ? 0 : 1);
+            location.reg = std::atoi(digits);
+            info.locations.push_back(std::move(location));
         } else if (kind == 'G') {
             Global global;
             std::string label;
@@ -609,6 +627,18 @@ bool Session::read_value(std::uint32_t address,
     return machine_.read32(address, value);
 }
 
+const Location* Session::location_at(const std::string& function,
+                                     const std::string& name,
+                                     std::uint32_t pc) const {
+    for (const Location& location : info_.locations) {
+        if (location.function == function && location.name == name &&
+            pc >= location.start && pc < location.end) {
+            return &location;
+        }
+    }
+    return nullptr;
+}
+
 bool Session::read_variable(const std::string& name,
                             std::uint32_t& value,
                             std::string& error) const {
@@ -619,6 +649,19 @@ bool Session::read_variable(const std::string& name,
     }
     for (const Variable& variable : info_.variables) {
         if (variable.function == function->name && variable.name == name) {
+            // A promoted variable lives in a register over its range; the frame
+            // slot is stale there because the optimizer rewrote the stores.
+            const Location* location =
+                location_at(variable.function, variable.name, machine_.pc());
+            if (location != nullptr) {
+                if (location->fp) {
+                    const std::uint64_t bits = machine_.fpr(location->reg);
+                    value = static_cast<std::uint32_t>(bits & 0xFFFF'FFFFULL);
+                } else {
+                    value = machine_.reg(static_cast<std::size_t>(location->reg));
+                }
+                return true;
+            }
             const std::uint32_t address = machine_.reg(7) + variable.offset;
             if (!read_value(address, variable.size, value)) {
                 error = "cannot read variable " + name;

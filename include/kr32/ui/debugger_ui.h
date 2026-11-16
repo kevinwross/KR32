@@ -312,6 +312,7 @@ private:
         std::uint32_t address = 0;
         std::uint32_t value = 0;
         std::uint32_t size = 0;
+        std::string reg_name;
         bool local = false;
         bool ok = false;
         bool header = false;

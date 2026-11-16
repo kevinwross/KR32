@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 11:56 -08:00
+> **Last updated:** 2026-11-16 13:26 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4201,6 +4201,20 @@ Newest entries at the bottom. Use the local time zone.
 
       All eleven parts (96 tests) and 96/96 WSL pass; the embedded OS images were
       regenerated for both platforms.
+
+- **2026-11-16 13:26 -08:00** — Debug locations, part one: the format and the
+      reader. `debug::Location` holds `P <function> <name> <register>
+      <start_label> <end_label>` with the labels resolved through the symbol
+      table, `parse_info` fills `Info::locations`, and `Session::location_at`
+      answers whether a variable is in a register at a PC. `read_variable`
+      prefers that register (GPR or FPR low word) over the frame slot, and the
+      Variables pane shows `register: R9` instead of a meaningless address and
+      stops expanding a register-held value from memory.
+
+      Nothing emits `P` records yet, so behaviour is unchanged and the debug and
+      UI tests pass. The next batch is the emitter: each promotion pass records
+      its intervals and labels are inserted around them at the end of the
+      pipeline.
 
 ## 10. Updating this file
 
