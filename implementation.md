@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 14:12 -08:00
+> **Last updated:** 2026-11-16 14:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4251,6 +4251,25 @@ Newest entries at the bottom. Use the local time zone.
       different variables, which suggests a range is still wrong. The debug,
       C front-end, and optimizer suites pass (297, 636, and 165 assertions), but
       the ranges need checking against a disassembly before the GUI is trusted.
+
+- **2026-11-16 14:55 -08:00** — Debug locations, part three: the ranges are exact
+      and checked. Inserting fresh labels for a range was unreliable in every
+      form I tried - a pass that inserts instructions moves the indices later
+      passes record, so 42 of 59 records landed outside their own function. The
+      records are now anchored on the labels the front end already writes in its
+      `F` record, `<name>` and its end label, which are exact by construction and
+      never move. `kr32 debug kernel.k32` reports 70 locations with **none**
+      outside its function's bounds, and the reported case reads
+      `P run_named entry R9 0x21c70-0x220dc`, the function's own span.
+
+      Span promotions (call-free and floating-point) emit no record and fall back
+      to the frame slot: their register holds the value only between two points,
+      and I have not found a way to name that interval reliably yet. That is a
+      gap, not a wrong answer - the value shown is the stale frame, as before,
+      not a different variable's value.
+
+      The debug suite passes (27 cases, 297 assertions) and all eleven parts on
+      Windows; WSL is running.
 
 ## 10. Updating this file
 
