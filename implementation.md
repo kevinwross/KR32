@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 19:55 -08:00
+> **Last updated:** 2026-11-15 20:45 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4011,6 +4011,23 @@ Newest entries at the bottom. Use the local time zone.
       but `NEG` is opcode `0x2E` and `NOT` is `0x2D`, both real instructions.
       §13 now records that, states that every one of its items is closed, and the
       ISA document is draft 0.9. All eleven parts (94 tests) and 94/94 WSL pass.
+
+- **2026-11-15 20:45 -08:00** — ISA v1 frozen, on the operator's decision of all five
+      options: freeze now, version `1`, encodings fixed with editorial revisions
+      allowed, a version-sync test, and an announcement to both consumers. The
+      document title drops "Draft", the status line reads "v1, frozen 2026-11-15"
+      and states that freezing the instruction set does not version the toolchain
+      (`kr32` is still 0.1.0), §13 became the freeze record, and a new §15 defines
+      change control: any encoding, semantic, or observable change needs v2,
+      editorial corrections may be dated revisions of v1, and reserved opcodes,
+      modes, and flag bits stay reserved in v1.
+
+      `kIsaVersion` reported `0.2-draft`, stale since draft 0.3, and now reports
+      `1`; `--version` reads `kr32 0.1.0 (ISA 1, container 1, M7 host services)`.
+      `tests/unit/test_version.cpp` gained a case that parses the document's
+      status line and compares it with the constant - checked to fail when the
+      constant is changed, after a first attempt that failed on the comma in
+      "v1,". All eleven parts (94 tests) and 94/94 WSL pass.
 
 ## 10. Updating this file
 

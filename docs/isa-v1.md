@@ -1,9 +1,11 @@
-# KR32 Instruction Set v1 — Draft
+# KR32 Instruction Set v1
 
-> **Status:** draft 0.9, 2026-11-15. For review; **not frozen**. Encoding
-> decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
-> becomes v1 only after the golden vectors in §12 are checked and the open items
-> in §13 are closed.
+> **Status:** v1, frozen 2026-11-15. Encoding decisions D8, D13–D16, D20–D22,
+> D51, and D52 are applied; the golden vectors in §12 are verified by an encoder
+> that does not call the implementation, and every item in §13 is closed. What
+> may change from here is defined in §15. Freezing the instruction set does not
+> version the toolchain: `kr32` itself is `0.1.0`, and this document says nothing
+> about its maturity.
 >
 > **Sources:** `KR32-plan.md` §5.3 (format), §5.8–§5.10 (FP, M, transform
 > stack), §5.11–§5.12 (paging, exceptions), and decision rows D45–D50.
@@ -611,10 +613,10 @@ recomputes the encoding of every opcode in §4 (72 of them) and of both widths
 from §2.1 with an encoder that does not call the implementation, and checks that
 the implementation agrees; it also rebuilds every row above from its fields.
 
-## 13. Before freezing
+## 13. Freeze record
 
-Every item below is closed; the list is kept as the record of what the freeze
-required and what each item found. Nothing here is waiting on a decision.
+These were the conditions for freezing v1. Every one is closed; the list is kept
+as the record of what the freeze required and what each item found.
 
 - **Pseudo-ops.** None are part of the ISA. The assembler's conveniences are the
   branch-condition aliases (`JZ` through `JLE`, with `JNZ` and `JNE` both naming
@@ -665,3 +667,20 @@ required, because every operation in §6 is correctly rounded. The evidence is i
 | 0.7 | 2026-11-15 | Assembler-syntax pass closed: `.long` added as the 32-bit alias of `.word` in both assembler paths, and the reference's directive table gained it; the COMDAT section row corrected to show that the dotted name is an argument to `.section`. Every other documented syntax rule was checked against the parser and held, including the documented absence of parentheses, `*`, `/`, and character or binary literals in expressions. |
 | 0.8 | 2026-11-15 | Data-directive item closed. The directives are specified as packed with explicit `.align` for stronger alignment, and section alignment is specified: `.rodata`, `.data`, and `.bss` are 8-byte aligned and the linker honours it. Before this, those three declared 4, so the first `double` in a section landed on a 4-byte boundary whenever `.text` ended mid-word; the assembler now declares 8 and a linker test asserts it. |
 | 0.9 | 2026-11-15 | Pseudo-op item closed. The assembler's conveniences are documented in one table, `docs/KR32ProgrammersReference.md` §3.9: the fourteen branch-condition aliases (fifteen names, since `JNZ` and `JNE` both name condition 1), `VLOAD`/`VSTORE` as the vector forms of `MLOAD`/`MSTORE`, and the directive aliases. The item's earlier claim that `NEG` was an alias is corrected: `NEG` is `0x2E` and `NOT` is `0x2D`. §13 now holds no open questions, only the freeze itself. |
+## 15. Change control
+
+**v1 is frozen.** Encodings and semantics do not change within v1.
+
+- A change to an encoding, to the meaning of an instruction, or to the machine
+  state a program can observe requires a **v2** document. It is not a v1
+  revision.
+- Editorial corrections — wording, tables, examples, or a clearer statement of
+  something already specified — may be published as dated revisions of v1. A
+  revision must not change an encoding or an observable behaviour; if a
+  correction would do so, it is a v2 change.
+- Reserved opcodes, reserved modes, and reserved flag bits stay reserved in v1.
+  Assigning one is a v2 decision, not a v1 extension.
+- The document's status line carries the frozen identifier, and
+  `include/kr32/version.h` reports the same value;
+  `tests/unit/test_version.cpp` fails if the two disagree.
+| 1.0 | 2026-11-15 | Frozen. The encoding is v1: §12's golden vectors are verified by an independent encoder covering every opcode and both widths, §13's items are closed, Q9 and Q10 are decided, and §15 defines what may change from here. `kIsaVersion` reports `1`. |
