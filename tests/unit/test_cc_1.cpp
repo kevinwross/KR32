@@ -555,4 +555,25 @@ TEST_CASE("a compiled C program supports float and double scalars") {
     CHECK(program.ok);
     CHECK(program.result == 6 + 10 + 5);
 }
+TEST_CASE("an undeclared function call is diagnosed") {
+    const cc::Result implicit = cc::compile(
+        "int main(void) { return helper(1); }\n");
+    REQUIRE(implicit.ok);
+    REQUIRE_FALSE(implicit.diagnostics.empty());
+    CHECK(implicit.diagnostics.front().message.find(
+              "implicit declaration of function 'helper'") !=
+          std::string::npos);
 
+    // A declaration, including a variadic one, keeps the call silent.
+    const cc::Result declared = cc::compile(
+        "int helper(int value);\n"
+        "int main(void) { return helper(1); }\n");
+    CHECK(declared.ok);
+    CHECK(declared.diagnostics.empty());
+
+    const cc::Result variadic = cc::compile(
+        "int printf(const char *format, ...);\n"
+        "int main(void) { return printf(\"%d\", 1); }\n");
+    CHECK(variadic.ok);
+    CHECK(variadic.diagnostics.empty());
+}

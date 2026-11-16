@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 16:27 -08:00
+> **Last updated:** 2026-11-15 16:52 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3880,6 +3880,19 @@ Newest entries at the bottom. Use the local time zone.
       of formatting), and were corrected before the fix landed. `run_c_printf_format`
       asserts "0 failures" in `part09`. All eleven parts (94 tests) and 94/94 WSL
       pass.
+
+- **2026-11-15 16:52 -08:00** — The C front end now diagnoses a call to an
+      undeclared function: `warning: implicit declaration of function 'name'`.
+      It remains a warning rather than an error because C89 declared it
+      implicitly, but no existing example or test triggers it, so the corpus was
+      already clean. The warning goes through the same `Diagnostic` channel as
+      `#warning`, so the CLI prints it with the source position and compilation
+      continues; the column points at the argument list rather than the name.
+      docs/abi.md records why it matters: without a prototype the front end
+      cannot know the callee is variadic, which is how a `printf` double reached
+      `F0` instead of the stack. A unit test covers the warning, a declared
+      prototype, and a declared variadic prototype. All eleven parts (94 tests)
+      and 94/94 WSL pass.
 
 ## 10. Updating this file
 

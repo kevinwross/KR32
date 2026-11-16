@@ -196,6 +196,11 @@ shape and adds:
   reverse order so the first variable argument is at `[SP]` at the call.
 - `float` promotes to `double`; `char`, `_Bool`, and integer types promote to
   `int`. Pointers occupy one 8-byte slot with the low 4 bytes significant.
+- A call to an undeclared function is diagnosed as an implicit declaration. It
+  still compiles, using the fixed-parameter convention, so it cannot know that
+  an undeclared callee is variadic: a `printf` called without a prototype passes
+  a `double` in `F0` and `va_arg` reads an empty stack slot. Declare the
+  prototype, or include the header that provides it.
 - `va_list` is a 4-byte `char *` pointing at the next stack slot. `va_start`
   computes `R7 + frame_size + 8` (the first argument above the return address
   and saved frame pointer); `va_arg` loads the slot and advances by 8 bytes.

@@ -1312,6 +1312,7 @@ public:
 
     Result run() {
         Result result;
+        diagnostics_ = &result.diagnostics;
         bool fatal_preprocess = false;
         for (const PreprocessMessage& message : preprocessor_messages_) {
             result.diagnostics.push_back(
@@ -1395,6 +1396,15 @@ private:
 
     [[noreturn]] void error(std::string message) {
         throw CompileError(peek().line, peek().column, std::move(message));
+    }
+
+    // A non-fatal diagnostic: compilation continues with the same code the
+    // front end would have emitted, but the caller reports it.
+    void warn(std::string message) {
+        if (diagnostics_ != nullptr) {
+            diagnostics_->push_back(
+                {peek().line, peek().column, "warning: " + message});
+        }
     }
 
     void emit(std::string line) {
@@ -6228,6 +6238,14 @@ private:
                         : signature != functions_.end()
                               ? signature->second.parameters.size()
                               : 0;
+                if (indirect_function == nullptr &&
+                    signature == functions_.end() &&
+                    lookup(name) == nullptr) {
+                    // C89 would declare it implicitly with no parameters, which
+                    // lays out a variadic call wrongly; C99 requires a
+                    // declaration.
+                    warn("implicit declaration of function '" + name + "'");
+                }
                 bool simple_arguments = false;
                 if (indirect_function == nullptr && !variadic &&
                     signature != functions_.end() && fixed_count <= 4) {
@@ -6998,6 +7016,7 @@ private:
     bool optimize_ = false;
     std::vector<PreprocessMessage> preprocessor_messages_;
     std::vector<Token> tokens_;
+    std::vector<Diagnostic>* diagnostics_ = nullptr;
     std::size_t position_ = 0;
     std::string text_;
     std::string rodata_;
