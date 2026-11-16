@@ -2623,6 +2623,10 @@ private:
         if (match(";")) {
             return;
         }
+        // The opening brace is the declaration line a breakpoint on the function
+        // entry should report, so remember where it is before consuming it.
+        const int body_line = peek().line;
+        const int body_column = peek().column;
         if (!match("{")) {
             error("expected '{' or ';'");
         }
@@ -2675,6 +2679,13 @@ private:
         return_label_ = ".Lreturn_" + name;
         emit(".global " + name);
         emit(name + ":");
+        // The prologue runs before the first statement marker, so without a
+        // marker here the entry address maps to no line: the debugger shows no
+        // source at the breakpoint and cannot take one on the declaration line.
+        emit(".Lbegin_" + name + ":");
+        debug_record("L .Lbegin_" + name + " " + std::to_string(source_id_) +
+                     " " + std::to_string(body_line) + " " +
+                     std::to_string(body_column));
         emit("    PUSH R7");
         emit("    ADJSP #-__FRAME_" + name + "__");
         emit("    LEA R7, [SP]");

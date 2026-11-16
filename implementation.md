@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 20:45 -08:00
+> **Last updated:** 2026-11-15 22:16 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4028,6 +4028,27 @@ Newest entries at the bottom. Use the local time zone.
       status line and compares it with the constant - checked to fail when the
       constant is changed, after a first attempt that failed on the comma in
       "v1,". All eleven parts (94 tests) and 94/94 WSL pass.
+
+- **2026-11-15 22:16 -08:00** — A function's entry now carries a line marker, so the
+      debugger shows source at a breakpoint there and accepts a breakpoint on the
+      declaration line. The prologue ran before the first statement marker, which
+      left the entry address unmapped: `os_gfx_check`-era testing hit this when a
+      breakpoint at `run_init`'s entry showed `<no source>` and line 66 refused a
+      breakpoint. Both front ends emit `.Lbegin_<name>` (C) or a `begin` label
+      (C++) immediately after the function label with an `L` record for the
+      opening brace's line. `kernel/user.c` now emits
+      `L .Lbegin_run_init 6 66 20`, so the entry maps to line 66 and the marker is
+      one instruction byte-free label.
+
+      The DAP smoke test then failed, and that was the useful part: the launch
+      handler stops on `main`'s *first line record*, which used to be line 5, the
+      statement - so the script's single continue ran to exit. Now the stop is the
+      entry line, the first continue reaches the breakpoint, and the second runs
+      to exit; the script's `evaluate message` also had to become `$pc`, because a
+      local does not exist before the prologue builds the frame. Both are
+      expectations that encoded the old flow, and the script now says why. Two
+      new tests pin the behaviour for C and C++. All eleven parts (94 tests) and
+      94/94 WSL pass.
 
 ## 10. Updating this file
 

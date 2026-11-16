@@ -10915,6 +10915,20 @@ private:
             emit(".text");
         }
         emit(function.symbol + ":");
+        // The prologue runs before the first statement marker, so without a
+        // marker here the entry address maps to no line: the debugger shows no
+        // source at the breakpoint and cannot take one on the declaration line.
+        if (function.decl != nullptr) {
+            const Location entry = function.decl->body != nullptr
+                                       ? function.decl->body->location
+                                       : function.decl->location;
+            if (entry.line > 0) {
+                const std::string label = new_label("begin");
+                emit(label + ":");
+                debug_record("L " + label + " 0 " + std::to_string(entry.line) +
+                             " " + std::to_string(entry.column));
+            }
+        }
         emit("    PUSH R7");
         emit("    ADJSP #-" + placeholder);
         emit("    LEA R7, [SP]");

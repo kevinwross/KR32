@@ -12,6 +12,7 @@
 #include <filesystem>
 #include <fstream>
 #include <string>
+#include <utility>
 
 using namespace kr32;
 
@@ -841,4 +842,77 @@ TEST_CASE("C debug info describes struct members and arrays") {
     }
     CHECK(found_struct);
     CHECK(found_array);
+}
+TEST_CASE("a function entry maps to its declaration line") {
+    // The prologue runs before the first statement marker, so without a marker
+    // on the declaration line the debugger shows no source at the entry and
+    // cannot take a breakpoint there.
+    const container::Image image = compile_debug_image(
+        "int add(int a, int b) {\n"
+        "    return a + b;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    return add(1, 2);\n"
+        "}\n");
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    const std::pair<const char*, int> expected[] = {{"add", 1}, {"main", 4}};
+    for (const auto& [name, declaration_line] : expected) {
+        const debug::Function* function = nullptr;
+        for (const debug::Function& candidate : info.functions) {
+            if (candidate.name == name) {
+                function = &candidate;
+            }
+        }
+        REQUIRE(function != nullptr);
+
+        const debug::Line* entry = nullptr;
+        for (const debug::Line& candidate : info.lines) {
+            if (candidate.address == function->start) {
+                entry = &candidate;
+                break;
+            }
+        }
+        INFO(name);
+        REQUIRE(entry != nullptr);
+        CHECK(entry->line == declaration_line);
+    }
+}
+TEST_CASE("a C++ function entry maps to its declaration line") {
+    const container::Image image = compile_cxx_debug_image(
+        "int add(int a, int b) {\n"
+        "    return a + b;\n"
+        "}\n"
+        "int main() {\n"
+        "    return add(1, 2);\n"
+        "}\n");
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    const std::pair<const char*, int> expected[] = {{"add", 1}, {"main", 4}};
+    for (const auto& [name, declaration_line] : expected) {
+        const debug::Function* function = nullptr;
+        for (const debug::Function& candidate : info.functions) {
+            if (candidate.name == name) {
+                function = &candidate;
+            }
+        }
+        INFO(name);
+        REQUIRE(function != nullptr);
+
+        const debug::Line* entry = nullptr;
+        for (const debug::Line& candidate : info.lines) {
+            if (candidate.address == function->start) {
+                entry = &candidate;
+                break;
+            }
+        }
+        REQUIRE(entry != nullptr);
+        CHECK(entry->line == declaration_line);
+    }
 }

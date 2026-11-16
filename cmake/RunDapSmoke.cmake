@@ -7,6 +7,8 @@ if(NOT EXISTS "${image}")
     message(FATAL_ERROR "missing ${image}; run build_c_hello first")
 endif()
 
+# The launch stops on main's entry line, so the first continue reaches the
+# breakpoint at line 5 and the second runs to exit.
 set(requests
 "{\"seq\":1,\"type\":\"request\",\"command\":\"initialize\",\"arguments\":{}}"
 "{\"seq\":2,\"type\":\"request\",\"command\":\"launch\",\"arguments\":{}}"
@@ -15,11 +17,14 @@ set(requests
 "{\"seq\":5,\"type\":\"request\",\"command\":\"stackTrace\",\"arguments\":{\"threadId\":1}}"
 "{\"seq\":6,\"type\":\"request\",\"command\":\"scopes\",\"arguments\":{\"frameId\":1}}"
 "{\"seq\":7,\"type\":\"request\",\"command\":\"variables\",\"arguments\":{\"variablesReference\":1}}"
-"{\"seq\":8,\"type\":\"request\",\"command\":\"evaluate\",\"arguments\":{\"expression\":\"message\"}}"
+# A local is not in scope before its statement runs, and the launch stop sits on
+# main's entry line, so evaluate a register instead of a local.
+"{\"seq\":8,\"type\":\"request\",\"command\":\"evaluate\",\"arguments\":{\"expression\":\"$pc\"}}"
 "{\"seq\":9,\"type\":\"request\",\"command\":\"readMemory\",\"arguments\":{\"memoryReference\":\"0x00010000\",\"count\":4}}"
 "{\"seq\":10,\"type\":\"request\",\"command\":\"next\",\"arguments\":{\"threadId\":1}}"
 "{\"seq\":11,\"type\":\"request\",\"command\":\"continue\",\"arguments\":{\"threadId\":1}}"
-"{\"seq\":12,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}"
+"{\"seq\":12,\"type\":\"request\",\"command\":\"continue\",\"arguments\":{\"threadId\":1}}"
+"{\"seq\":13,\"type\":\"request\",\"command\":\"disconnect\",\"arguments\":{}}"
 )
 
 string(ASCII 13 CR)
