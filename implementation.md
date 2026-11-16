@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 23:11 -08:00
+> **Last updated:** 2026-11-16 06:29 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4069,6 +4069,28 @@ Newest entries at the bottom. Use the local time zone.
       of stopping at a halt, so part10 is 133 s and part11 135 s against 81 s and
       85 s. Both stay inside the three-minute bound and `docs/testing.md` records
       why. All eleven parts (94 tests) and 94/94 WSL pass.
+
+- **2026-11-16 06:29 -08:00** — The graphics programs swallow the key that
+      dismisses them, and a shutdown syscall lets a program choose the host's
+      exit status. `gfxdemo` and `gfxcheck` now declare the four-byte
+      `kr32_event` the kernel already writes, wait on `input_pending`, then drain
+      `input_poll` so neither the key press nor its release reaches the shell
+      prompt.
+
+      The new `sys_shutdown(int status)` (vector 76) halts the machine with its
+      argument. `kernel_halt` now passes its status through the host exit syscall,
+      the shell's `exit [status]` takes the same path, and `kr32 display` installs
+      host services and returns the guest's status, so `run shutdown` exits 7
+      under `kr32 os` and `kr32 display` alike. A `run_os_shutdown` test runs
+      `kr32os/user/shutdown.c` and the shell command and asserts both statuses.
+
+      Implementing the shell command exposed a compiler bug: `sizeof("exit")`
+      compiled to 4 because the front end sized a string literal as a pointer.
+      `parse_sizeof` now sizes a literal as its bytes plus the terminator,
+      handling adjacency (`"ab" "cd"`) as well, and `sizeof("exit") - 1` points at
+      the argument. Only the `exit` command changed, since the other call sites
+      spell three-letter prefixes where the buggy value happened to be right.
+      All eleven parts (95 tests) and 95/95 WSL pass.
 
 ## 10. Updating this file
 
