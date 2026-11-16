@@ -916,3 +916,67 @@ TEST_CASE("a C++ function entry maps to its declaration line") {
         CHECK(entry->line == declaration_line);
     }
 }
+TEST_CASE("a promoted local reports its register location") {
+    // The optimizer rewrites a promoted slot's stores into register moves, so
+    // the frame slot is stale for the whole interval. The P record says where
+    // the value really is, and the session reads it from there.
+    const cc::Result compiled = cc::compile(
+        "int compute(int seed) {\n"
+        "    int total = seed;\n"
+        "    int index = 0;\n"
+        "    while (index < 3) {\n"
+        "        total = total + index;\n"
+        "        index = index + 1;\n"
+        "    }\n"
+        "    return total + index;\n"
+        "}\n"
+        "int main(void) {\n"
+        "    return compute(4);\n"
+        "}\n",
+        "debug-test.c", 0, true);
+    REQUIRE_MESSAGE(compiled.ok, "compile failed");
+
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    REQUIRE_FALSE(info.locations.empty());
+    bool found = false;
+    for (const debug::Location& location : info.locations) {
+        if (location.function == "compute" && location.name == "total") {
+            found = true;
+            CHECK(location.start < location.end);
+            CHECK(location.reg >= 2);
+            CHECK_FALSE(location.fp);
+        }
+    }
+    CHECK(found);
+
+    // The session reads the register the record names, not the stale frame slot.
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Location* location = nullptr;
+    for (int step = 0; step < 100000 && location == nullptr; ++step) {
+        location = session.location_at("compute", "total", session.machine().pc());
+        if (location == nullptr) {
+            (void)session.machine().step();
+        }
+    }
+    REQUIRE(location != nullptr);
+    session.machine().set_reg(static_cast<std::size_t>(location->reg), 1234);
+    std::uint32_t value = 0;
+    REQUIRE_MESSAGE(session.read_variable("total", value, error), error.c_str());
+    CHECK(value == 1234);
+}

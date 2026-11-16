@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 13:26 -08:00
+> **Last updated:** 2026-11-16 14:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4215,6 +4215,28 @@ Newest entries at the bottom. Use the local time zone.
       UI tests pass. The next batch is the emitter: each promotion pass records
       its intervals and labels are inserted around them at the end of the
       pipeline.
+
+- **2026-11-16 14:10 -08:00** — Debug locations, part two: the passes emit them.
+      Every promotion pass records the register and line range of each promoted
+      slot whose name a `V` record carries, `apply_debug_locations` inserts a
+      label at each end of the range and appends a `P` record, and each pass's
+      records are applied immediately after it returns because the leaf and
+      call-surviving passes insert save instructions that move later indices.
+
+      `kr32os/kernel/user.c` at `-O1` now emits twelve records, the one from the
+      bug report among them: `P run_named entry R9 .Lloc_0_start .Lloc_1_end`. A
+      test compiles a loop at `-O1`, finds `compute`'s `total` location, steps
+      into its range, writes the register and reads the variable back, so the
+      parse, the range check and the register read are covered together.
+
+      Two things went wrong first and are worth the note in the log: the label
+      counter restarted per call, so two records shared `.Lloc_0_start`, and the
+      helper types were declared after the first pass that used them. A round trip
+      through `kr32 as` catches the first; the compiler catches the second.
+
+      The embedded OS images did not change, because the test builds are
+      unoptimized and the optimizer is what emits the records. All eleven parts
+      (96 tests) and 96/96 WSL pass.
 
 ## 10. Updating this file
 

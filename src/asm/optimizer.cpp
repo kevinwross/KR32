@@ -8,6 +8,7 @@
 #include <map>
 #include <optional>
 #include <set>
+#include <sstream>
 #include <string>
 #include <string_view>
 #include <vector>
@@ -1048,8 +1049,41 @@ int remove_dead_frame_loads(std::vector<std::string>& lines) {
 // functions that call out. A callee-saved register survives a call, which a
 // frame slot costs two accesses per crossing to match. The saved registers live
 // in a 16-byte area so SP keeps its 16-byte alignment at CALL.
+// A promoted local: the register that holds it and the line range it covers.
+// `apply_debug_locations` turns each into labels and a `P` debug record.
+struct PendingLocation {
+    std::string function;
+    std::string name;
+    int reg = 0;
+    bool fp = false;
+    std::size_t first = 0;
+    std::size_t last = 0;
+};
+
+// The frame slots the front end named for one function, as offset -> name. The
+// debug records read `V <function> <name> <offset> <type> <size>`.
+std::map<int, std::string> debug_slot_names(const std::vector<std::string>& lines,
+                                            const std::string& function) {
+    std::map<int, std::string> names;
+    const std::string prefix = "V " + function + " ";
+    for (const std::string& line : lines) {
+        const std::size_t at = line.find(prefix);
+        if (at == std::string::npos) {
+            continue;
+        }
+        std::istringstream stream(line.substr(at + prefix.size()));
+        std::string name;
+        int offset = 0;
+        if (stream >> name >> offset) {
+            names[offset] = name;
+        }
+    }
+    return names;
+}
+
 int promote_call_surviving_scalars(std::vector<std::string>& lines,
-                                   int& rewritten) {
+                                   int& rewritten,
+                                   std::vector<PendingLocation>& locations) {
     struct Edits {
         std::map<std::size_t, std::string> replace;
         std::map<std::size_t, std::vector<std::string>> insert;
@@ -1170,6 +1204,23 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
              index < chosen.size() && index < registers.size(); ++index) {
             promoted[chosen[index].second] = registers[index];
         }
+        {
+            const std::string label = trim(lines[function.begin]);
+            const std::string name =
+                label.empty() ? std::string() : label.substr(0, label.size() - 1);
+            if (!name.empty()) {
+                const std::map<int, std::string> names =
+                    debug_slot_names(lines, name);
+                for (const auto& entry : promoted) {
+                    const auto found = names.find(entry.first);
+                    if (found != names.end()) {
+                        locations.push_back(PendingLocation{
+                            name, found->second, entry.second, false,
+                            function.begin + 1, function.end - 1});
+                    }
+                }
+            }
+        }
         if (promoted.empty()) {
             continue;
         }
@@ -1285,7 +1336,7 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
     return 0;
 }
 
-int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
+int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, std::vector<PendingLocation>& locations) {
     int removed = 0;
     for (const CfgFunction& function : build_cfgs(lines)) {
         bool has_exception_path = false;
@@ -1453,6 +1504,31 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
         if (assigned.empty()) {
             continue;
         }
+        // A promoted slot with a name gets a debug location: the pass rewrites
+        // its stores, so the frame slot stays stale for the whole interval.
+        const std::string function_label = trim(lines[function.begin]);
+        const std::string function_name = function_label.empty()
+                                              ? std::string()
+                                              : function_label.substr(0, function_label.size() - 1);
+        const std::map<int, std::string> slot_names =
+            function_name.empty() ? std::map<int, std::string>()
+                                  : debug_slot_names(lines, function_name);
+        if (!slot_names.empty()) {
+            for (const Candidate& candidate : candidates) {
+                const auto slot = assigned.find(candidate.slot);
+                if (slot == assigned.end()) {
+                    continue;
+                }
+                const auto name = slot_names.find(candidate.slot);
+                if (name == slot_names.end()) {
+                    continue;
+                }
+                locations.push_back(PendingLocation{function_name, name->second,
+                                                    slot->second, true,
+                                                    candidate.first,
+                                                    candidate.last});
+            }
+        }
 
         for (std::size_t index = function.begin; index < function.end;
              ++index) {
@@ -1591,7 +1667,8 @@ int fold_fp_move_consumers(std::vector<std::string>& lines) {
 // those are caller-saved, so a call-free span needs no save and restore, and
 // the front end's expression temporaries use F0 and F1.
 int promote_call_free_fp_ranges(std::vector<std::string>& lines,
-                                int& rewritten) {
+                                int& rewritten,
+                                std::vector<PendingLocation>& locations) {
     int removed = 0;
     for (const CfgFunction& function : build_cfgs(lines)) {
         bool skip = false;
@@ -1747,6 +1824,31 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
         if (assigned.empty()) {
             continue;
         }
+        // A promoted slot with a name gets a debug location: the pass rewrites
+        // its stores, so the frame slot stays stale for the whole interval.
+        const std::string function_label = trim(lines[function.begin]);
+        const std::string function_name = function_label.empty()
+                                              ? std::string()
+                                              : function_label.substr(0, function_label.size() - 1);
+        const std::map<int, std::string> slot_names =
+            function_name.empty() ? std::map<int, std::string>()
+                                  : debug_slot_names(lines, function_name);
+        if (!slot_names.empty()) {
+            for (const FpCandidate& candidate : candidates) {
+                const auto slot = assigned.find(candidate.slot);
+                if (slot == assigned.end()) {
+                    continue;
+                }
+                const auto name = slot_names.find(candidate.slot);
+                if (name == slot_names.end()) {
+                    continue;
+                }
+                locations.push_back(PendingLocation{function_name, name->second,
+                                                    slot->second, true,
+                                                    candidate.first,
+                                                    candidate.last});
+            }
+        }
         for (std::size_t index = function.begin; index < function.end;
              ++index) {
             Instruction instruction;
@@ -1786,7 +1888,8 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
     }
     return removed;
 }
-int promote_leaf_scalars(std::vector<std::string>& lines) {
+int promote_leaf_scalars(std::vector<std::string>& lines,
+                          std::vector<PendingLocation>& locations) {
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
     int removed = 0;
@@ -1924,6 +2027,23 @@ int promote_leaf_scalars(std::vector<std::string>& lines) {
             }
             const int slot = candidate.second;
             const int reg = free_registers[free_index];
+            // The slot lives in this register for the whole function.
+            {
+                const std::string label = trim(lines[function.begin]);
+                const std::string name =
+                    label.empty() ? std::string()
+                                  : label.substr(0, label.size() - 1);
+                if (!name.empty()) {
+                    const std::map<int, std::string> names =
+                        debug_slot_names(lines, name);
+                    const auto found = names.find(slot);
+                    if (found != names.end()) {
+                        locations.push_back(PendingLocation{
+                            name, found->second, reg, false, function.begin + 1,
+                            function.end - 1});
+                    }
+                }
+            }
 
             std::vector<std::size_t> removable_loads;
             for (std::size_t index = function.begin; index < function.end;
@@ -5265,9 +5385,66 @@ std::vector<std::string> split_lines(std::string_view assembly) {
 
 } // namespace
 
+// Places a label at each end of a promoted interval and appends the `P` record,
+// so the debugger can read the variable from its register over exactly that
+// range. Labels go in before the records: they sit earlier in the file, and the
+// record insert is the only one whose index would otherwise move.
+void apply_debug_locations(std::vector<std::string>& lines,
+                           std::vector<PendingLocation>& pending) {
+    if (pending.empty()) {
+        return;
+    }
+    std::size_t debug_at = lines.size();
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        if (trim(lines[index]) == ".debug_info") {
+            debug_at = index;
+            break;
+        }
+    }
+    if (debug_at == lines.size()) {
+        return;
+    }
+    std::size_t record_at = lines.size();
+    for (std::size_t index = debug_at + 1; index < lines.size(); ++index) {
+        const std::string text = trim(lines[index]);
+        if (text.empty() || text[0] != '.') {
+            continue;
+        }
+        if (text.rfind(".asciz", 0) == 0 || text.rfind(".byte", 0) == 0 ||
+            text.rfind(".word", 0) == 0 || text.rfind(".align", 0) == 0 ||
+            text.rfind(".double", 0) == 0) {
+            continue;
+        }
+        record_at = index;
+        break;
+    }
+    std::vector<std::string> records;
+    // One counter for the whole translation unit: every record needs its own
+    // label pair, and the passes each call this function.
+    static int counter = 0;
+    std::sort(pending.begin(), pending.end(),
+              [](const PendingLocation& left, const PendingLocation& right) {
+                  return left.first > right.first;
+              });
+    for (const PendingLocation& location : pending) {
+        const std::string start = ".Lloc_" + std::to_string(counter++) + "_start";
+        const std::string end = ".Lloc_" + std::to_string(counter++) + "_end";
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(location.last) + 1,
+                     end + ":");
+        lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(location.first),
+                     start + ":");
+        records.push_back("    .asciz \"P " + location.function + " " +
+                          location.name + " " + (location.fp ? "F" : "R") +
+                          std::to_string(location.reg) + " " + start + " " + end +
+                          "\"");
+    }
+    lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(record_at),
+                 records.begin(), records.end());
+}
 OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);
+    std::vector<PendingLocation> locations;
     stats.removed += fold_stack_argument_copies(lines);
     stats.removed += remove_noop_moves(lines);
     stats.removed += remove_adjacent_slot_roundtrips(lines);
@@ -5297,10 +5474,19 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_boolean_branches(lines);
     stats.removed += forward_cfg_frame_loads(lines, stats.rewritten);
     stats.removed += remove_dead_frame_stores(lines);
-    stats.removed += promote_leaf_scalars(lines);
-    stats.removed += promote_call_surviving_scalars(lines, stats.rewritten);
-    stats.removed += promote_call_free_ranges(lines, stats.rewritten);
-    stats.removed += promote_call_free_fp_ranges(lines, stats.rewritten);
+    {
+        std::vector<PendingLocation> leaf_locations;
+        stats.removed += promote_leaf_scalars(lines, leaf_locations);
+        apply_debug_locations(lines, leaf_locations);
+    }
+    {
+        std::vector<PendingLocation> surviving_locations;
+        stats.removed +=
+            promote_call_surviving_scalars(lines, stats.rewritten, surviving_locations);
+        apply_debug_locations(lines, surviving_locations);
+    }
+    stats.removed += promote_call_free_ranges(lines, stats.rewritten, locations);
+    stats.removed += promote_call_free_fp_ranges(lines, stats.rewritten, locations);
     stats.removed += fold_fp_move_consumers(lines);
     stats.removed += remove_dead_frame_loads(lines);
     stats.removed += fold_push_pop_pairs(lines, stats.rewritten);
@@ -5364,6 +5550,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
             line = format_instruction(instruction);
         }
     }
+    apply_debug_locations(lines, locations);
     assembly = join_lines(lines);
     return stats;
 }
