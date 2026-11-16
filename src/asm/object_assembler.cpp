@@ -463,7 +463,11 @@ public:
     ObjectAssembler(Error& error) : error_(error) {
         add_section(".text", container::SectionType::Text,
                     container::Alloc | container::Execute);
-        add_section(".rodata", container::SectionType::Rodata, container::Alloc);
+        // Rodata and writable data hold `double` values, which this ABI requires
+        // on an 8-byte boundary, so the linker must place the section itself
+        // there; an `.align` inside the section cannot fix the section's base.
+        add_section(".rodata", container::SectionType::Rodata, container::Alloc,
+                    8);
         add_section(".cpp_except", container::SectionType::Rodata,
                     container::Alloc);
         add_section(".tls", container::SectionType::Data,
@@ -475,9 +479,9 @@ public:
         add_section(".eh_frame_array", container::SectionType::Data,
                     container::Alloc | container::Write);
         add_section(".data", container::SectionType::Data,
-                    container::Alloc | container::Write);
+                    container::Alloc | container::Write, 8);
         add_section(".bss", container::SectionType::Bss,
-                    container::Alloc | container::Write);
+                    container::Alloc | container::Write, 8);
         add_section(".debug_info", container::SectionType::Debug, 0);
     }
 
@@ -495,12 +499,13 @@ public:
     }
 
 private:
-    void add_section(std::string name, container::SectionType type, std::uint32_t flags) {
+    void add_section(std::string name, container::SectionType type,
+                     std::uint32_t flags, std::uint32_t alignment = 4) {
         container::Section section;
         section.name = std::move(name);
         section.type = type;
         section.flags = flags;
-        section.alignment = 4;
+        section.alignment = alignment;
         sections_.push_back(std::move(section));
     }
 

@@ -43,6 +43,15 @@ M9.10.
 `sizeof(T)` is always a multiple of `alignof(T)`. `float` values in an FPR use
 bits 31..0 with the upper 32 bits zero; `double` uses all 64 bits.
 
+**Static data.** An object declares an alignment for each section and the linker
+honours it: `.text` and the exception, TLS, and init/fini arrays are 4-byte
+aligned, while `.rodata`, `.data`, and `.bss` are **8-byte aligned** because they
+can hold a `double`. A `double` at the start of one of those sections is
+therefore 8-byte aligned, and the compiler emits `.align 8` before every
+subsequent one. Data directives themselves are packed — `.double` writes eight
+bytes at the current offset without padding — so hand-written assembly must
+place `.align 8` before a `double` that follows smaller data.
+
 ### Aggregate layout
 
 The C bootstrap rules above remain the base. C++ extends them as follows:

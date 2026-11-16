@@ -394,6 +394,14 @@ Object path adds:
 String escapes are `\n`, `\r`, `\t`, `\0`, `\\`, `\"`; any other escaped
 character stands for itself.
 
+Data directives are **packed**: `.double` writes eight bytes at the current
+offset and pads nothing, so put `.align 8` before a `double` that follows
+smaller data. The section carries the guarantee instead: an object declares
+`.rodata`, `.data`, and `.bss` as 8-byte aligned and the linker honours it, so a
+`double` at the start of one of them is aligned. `.text` and the other data
+sections declare 4. In a raw image the offset is absolute from the image base,
+which is itself 8-byte aligned.
+
 ### 3.8 Example
 
 ```asm

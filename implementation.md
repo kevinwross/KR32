@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 19:09 -08:00
+> **Last updated:** 2026-11-15 19:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3975,6 +3975,26 @@ Newest entries at the bottom. Use the local time zone.
 
       The ISA document is draft 0.7 with the pass recorded in §13 and the
       revision history. All eleven parts (94 tests) and 94/94 WSL pass.
+
+- **2026-11-15 19:33 -08:00** — Freeze item 2, the data directives, is closed, and
+      it found a real alignment defect. Every object section declared a 4-byte
+      alignment, including `.rodata`, `.data`, and `.bss`, which hold `double`
+      values that this ABI requires on an 8-byte boundary. Whenever `.text` ended
+      mid-word the first constant of a section landed at a 4-byte address: a
+      `.data` double linked to 0x10004 in the probe. `add_section` now takes an
+      alignment and those three sections declare 8; the linker already honoured
+      the field, so the map now places `.rodata` at 0x10008 and the constants at
+      8-byte addresses. A linker test asserts it, and it was checked to fail
+      against the old value (constant at 4 mod 8) rather than passing by
+      accident - my first sensitivity check silently did not apply the edit.
+
+      The directives themselves stay packed, which is now documented rather than
+      implied: `.double` writes eight bytes at the current offset, so hand-written
+      assembly needs `.align 8`, and the section carries the guarantee otherwise.
+      docs/abi.md gained a "Static data" paragraph, the programmer's reference
+      records the packed rule and the section alignments, and the ISA document is
+      draft 0.8 with the item recorded. All eleven parts (94 tests) and 94/94 WSL
+      pass.
 
 ## 10. Updating this file
 

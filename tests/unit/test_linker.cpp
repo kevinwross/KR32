@@ -299,3 +299,39 @@ TEST_CASE("a linked executable round-trips through the container") {
     CHECK(decoded.entry == executable.entry);
     CHECK(decoded.sections.size() == executable.sections.size());
 }
+TEST_CASE("the linker aligns sections that hold eight-byte data") {
+    // One 4-byte instruction leaves .text 4-mod-8, so a section alignment of 4
+    // would place the double constant at a 4-byte boundary.
+    const container::Image object = assemble(
+        ".text\n"
+        ".global main\n"
+        "main:\n"
+        "    RET\n"
+        ".rodata\n"
+        ".global rconst\n"
+        "rconst:\n"
+        "    .double 2.0\n"
+        ".data\n"
+        ".global gdouble\n"
+        "gdouble:\n"
+        "    .double 3.0\n"
+        ".bss\n"
+        ".global gzero\n"
+        "gzero:\n"
+        "    .space 8\n");
+
+    container::Image linked;
+    linker::Map map;
+    linker::Error error;
+    const std::vector<container::Image> inputs{object};
+    REQUIRE_MESSAGE(
+        linker::link(inputs, linker::Options{}, linked, map, error),
+        error.message);
+
+    for (const char* name : {"rconst", "gdouble", "gzero"}) {
+        const container::Symbol* symbol = find_symbol(linked, name);
+        REQUIRE(symbol != nullptr);
+        INFO(name);
+        CHECK((symbol->value % 8U) == 0U);
+    }
+}

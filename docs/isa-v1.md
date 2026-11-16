@@ -1,6 +1,6 @@
 # KR32 Instruction Set v1 — Draft
 
-> **Status:** draft 0.7, 2026-11-15. For review; **not frozen**. Encoding
+> **Status:** draft 0.8, 2026-11-15. For review; **not frozen**. Encoding
 > decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
 > becomes v1 only after the golden vectors in §12 are checked and the open items
 > in §13 are closed.
@@ -615,10 +615,18 @@ the implementation agrees; it also rebuilds every row above from its fields.
 
 - **Pseudo-ops.** `JZ`/`JNZ`/…, `VLOAD`/`VSTORE`, and `NEG`-style aliases belong
   to the assembler, not the ISA.
-- **Data directives.** `.byte`, `.word`, `.float`, and `.double` emit scalar
-  data; `.float` writes one little-endian binary32 word per value and `.double`
-  writes two little-endian binary64 words per value. The object assembler keeps
-  the same encoding.
+- **Data directives.** Checked and stated normatively. `.byte` is one byte,
+  `.word` and `.long` are one little-endian 32-bit word, `.float` is one
+  little-endian binary32 word, and `.double` is two little-endian binary64 words;
+  both assembler paths emit the same bytes. The directives are packed, so a
+  `double` after smaller data needs an explicit `.align 8`. Alignment is a
+  section property instead: `.rodata`, `.data`, and `.bss` declare an 8-byte
+  alignment that the linker honours, and the other sections declare 4, so a
+  `double` at the start of a data section is aligned. That closes the gap this
+  item found - `.rodata`, `.data`, and `.bss` used to declare 4, which put the
+  first `double` of a section at a 4-byte boundary whenever `.text` ended
+  mid-word. `.byte`/`.word`/`.float`/`.double` behaviour is covered by
+  `tests/unit/test_linker.cpp`.
 
 - **Assembler syntax.** Checked against the programmer's reference (§3.1-§3.7):
   register names, `#` immediates, the operand forms, and the `JCOND` aliases all
@@ -646,3 +654,4 @@ required, because every operation in §6 is correctly rounded. The evidence is i
 | 0.5 | 2026-11-15 | Opcode-map review closed: the disassembler recognises exactly the 72 documented slots and no others, every mnemonic matches, and a reserved slot executed for the purpose raises `#UD` without retiring, so reserved ranges are traps. Recorded with the Q9/Q10 decision brief in `docs/isa-v1-freeze.md`. |
 | 0.6 | 2026-11-15 | Q9 and Q10 decided and recorded as policy. v1 always has floating point; a no-FP profile is out of scope for v1. Host IEEE arithmetic is the specification, with subnormal results preserved and one rounding per operation at the operation's precision (§6.3), so no soft-float library is required. The evidence for both decisions is in `docs/isa-v1-freeze.md`. |
 | 0.7 | 2026-11-15 | Assembler-syntax pass closed: `.long` added as the 32-bit alias of `.word` in both assembler paths, and the reference's directive table gained it; the COMDAT section row corrected to show that the dotted name is an argument to `.section`. Every other documented syntax rule was checked against the parser and held, including the documented absence of parentheses, `*`, `/`, and character or binary literals in expressions. |
+| 0.8 | 2026-11-15 | Data-directive item closed. The directives are specified as packed with explicit `.align` for stronger alignment, and section alignment is specified: `.rodata`, `.data`, and `.bss` are 8-byte aligned and the linker honours it. Before this, those three declared 4, so the first `double` in a section landed on a 4-byte boundary whenever `.text` ended mid-word; the assembler now declares 8 and a linker test asserts it. |
