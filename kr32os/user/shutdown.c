@@ -2,8 +2,7 @@
    the program's status. The exit-code test runs this and checks that status. */
 
 #include <kr32/con.h>
-
-void sys_shutdown(int status);
+#include <kr32/sys.h>
 
 int main(void) {
     con_puts("shutdown: exiting with status 7\n");

@@ -5,11 +5,7 @@
 #define INIT_IDENTITY "init: pid 1\n"
 #define INIT_IDENTITY_LENGTH 12
 
-int sys_write(int descriptor, const char *buffer, int length);
-int sys_read(int descriptor, char *buffer, int length);
-int sys_yield(void);
-int sys_getpid(void);
-int sys_brk(unsigned int address);
+#include <kr32/sys.h>
 
 int main(void) {
     int i; 

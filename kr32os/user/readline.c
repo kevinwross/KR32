@@ -2,8 +2,7 @@
    the serial-driven tests can exercise. */
 
 #include <kr32/con.h>
-
-int sys_read(int descriptor, char *buffer, int length);
+#include <kr32/sys.h>
 
 int main(void) {
     char line[64];

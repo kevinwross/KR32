@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 10:14 -08:00
+> **Last updated:** 2026-11-16 10:39 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4143,6 +4143,21 @@ Newest entries at the bottom. Use the local time zone.
 
       All eleven parts (95 tests) and 95/95 WSL pass. The embedded OS images were
       regenerated for both platforms.
+
+- **2026-11-16 10:39 -08:00** — Item 2 of the gap list: a guest header for the
+      syscall layer. `<kr32/sys.h>` is the sixth synthesized header and declares
+      the descriptors as an enum (`KR32_STDIN/STDOUT/STDERR`) plus `sys_write`,
+      `sys_read`, `sys_exit`, `sys_getpid`, `sys_yield`, `sys_brk`, `sys_halt`,
+      and `sys_shutdown`. Both front ends register it; `init`, `readline`, and
+      `shutdown` include it and no longer declare syscalls by hand.
+
+      `#define` cannot appear in a synthesized header: the injection happens
+      while directives are being processed, so the defines are emitted as text
+      and never expanded - `KR32_STDOUT` came back as an unknown variable. An
+      enum works, and it reads the same at the call site.
+
+      All eleven parts (95 tests) and 95/95 WSL pass; the embedded OS images were
+      regenerated.
 
 ## 10. Updating this file
 

@@ -522,6 +522,10 @@ std::string preprocess(std::string_view source, const std::string& source_name,
                     if (injected_guest_headers.insert(include_name).second) {
                         result += kr32::cc::kGuestInputHeader;
                     }
+                } else if (include_name == "kr32/sys.h") {
+                    if (injected_guest_headers.insert(include_name).second) {
+                        result += kr32::cc::kGuestSysHeader;
+                    }
                 } else if (directive.find("unistd.h") != std::string::npos) {
                     result +=
                         "int access(const char *path, int mode); "

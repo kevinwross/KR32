@@ -83,4 +83,15 @@ inline constexpr std::string_view kGuestInputHeader =
     "int input_pending(void);\n"
     "int input_poll(kr32_event *event);\n";
 
+inline constexpr std::string_view kGuestSysHeader =
+    "enum { KR32_STDIN = 0, KR32_STDOUT = 1, KR32_STDERR = 2 };\n"
+    "int sys_write(int descriptor, const void *buffer, int length);\n"
+    "int sys_read(int descriptor, char *buffer, int length);\n"
+    "int sys_getpid(void);\n"
+    "int sys_yield(void);\n"
+    "int sys_brk(unsigned int address);\n"
+    "void sys_exit(int status);\n"
+    "void sys_halt(void);\n"
+    "void sys_shutdown(int status);\n";
+
 } // namespace kr32::cc

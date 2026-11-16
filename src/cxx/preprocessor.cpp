@@ -589,6 +589,14 @@ private:
                 }
                 return;
             }
+            if (header.find("kr32/sys.h") != std::string::npos) {
+                if (!kr32_sys_header_injected_) {
+                    kr32_sys_header_injected_ = true;
+                    append_line("extern \"C\" {\n" +
+                                std::string(kr32::cc::kGuestSysHeader) + "}\n");
+                }
+                return;
+            }
             if (header.find("<utility>") != std::string::npos) {
                 if (!utility_header_injected_) {
                     utility_header_injected_ = true;
@@ -5534,6 +5542,7 @@ private:
     bool kr32_gfx_header_injected_ = false;
     bool kr32_con_header_injected_ = false;
     bool kr32_input_header_injected_ = false;
+    bool kr32_sys_header_injected_ = false;
     bool climits_header_injected_ = false;
     bool cfloat_header_injected_ = false;
     bool stdio_header_injected_ = false;

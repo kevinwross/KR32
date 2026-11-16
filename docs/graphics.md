@@ -379,6 +379,7 @@ Proposed header names and contents:
 | `<kr32/gfx.h>` | `gfx_surface`, `GFX_RGB`, drawing and text functions |
 | `<kr32/con.h>` | `con_*` |
 | `<kr32/input.h>` | `kr32_event`, `input_*` |
+| `<kr32/sys.h>` | the syscall layer: `KR32_STDIN/STDOUT/STDERR`, `sys_write`, `sys_read`, `sys_exit`, `sys_getpid`, `sys_yield`, `sys_brk`, `sys_halt`, `sys_shutdown` |
 
 Prefixes stay short: `fb_`, `gfx_`, `con_`, `input_`. The headers are already
 scoped by their `<kr32/...>` names, and the freestanding libc exposes
