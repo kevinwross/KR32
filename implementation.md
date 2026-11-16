@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 07:37 -08:00
+> **Last updated:** 2026-11-16 09:33 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4108,6 +4108,19 @@ Newest entries at the bottom. Use the local time zone.
       attempt at the script edit also broke `--serial-input` into
       `---serial-input` in two scripts, which the boot and embedded tests caught
       immediately. All eleven parts (95 tests) and 95/95 WSL pass.
+
+- **2026-11-16 09:33 -08:00** — Two gaps in the guest headers. The compiler already
+      ships a built-in `<kr32/input.h>` carrying the four-byte `kr32_event` and
+      the two input calls, so `gfxdemo` and `gfxcheck` now include it instead of
+      redeclaring both, and `con_hide` was missing from `<kr32/con.h>` altogether -
+      added. Neither program needs a local declaration now.
+
+      What remains open, in the order I would take it: `sys_read`, `sys_yield`,
+      `sys_brk`, and `sys_getpid` are still stubs, so a user program cannot read
+      stdin or learn its pid; no automated test covers the key-driven exit
+      because the harness cannot send a keyboard event; and the three-register
+      `R12`-`R15` failure from the call-free pool is still unexplained. All eleven
+      parts (95 tests) and 95/95 WSL pass.
 
 ## 10. Updating this file
 

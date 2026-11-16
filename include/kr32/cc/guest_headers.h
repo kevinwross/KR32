@@ -70,7 +70,8 @@ inline constexpr std::string_view kGuestConHeader =
     "void con_clear(void);\n"
     "void con_set_colors(int fg_index, int bg_index);\n"
     "void con_set_cursor(int visible);\n"
-    "void con_present(void);\n";
+    "void con_present(void);\n"
+    "void con_hide(int hidden);\n";
 
 inline constexpr std::string_view kGuestInputHeader =
     "typedef struct kr32_event {\n"

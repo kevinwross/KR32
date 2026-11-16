@@ -6,17 +6,7 @@
 
 #include <kr32/con.h>
 #include <kr32/gfx.h>
-
-typedef struct kr32_event_user {
-    unsigned char ascii;
-    unsigned char modifiers;
-    unsigned char scancode;
-    unsigned char type;
-} kr32_event;
-
-int input_pending(void);
-int input_poll(kr32_event *event);
-void con_hide(int hidden);
+#include <kr32/input.h>
 
 int main(void) {
     gfx_surface *screen = gfx_create(800, 600);
