@@ -7,8 +7,11 @@ if(NOT DEFINED KR32 OR NOT DEFINED SOURCE_DIR OR NOT DEFINED BINARY_DIR OR
     message(FATAL_ERROR "KR32, SOURCE_DIR, BINARY_DIR, WORK, PROGRAM, and CHECKS are required")
 endif()
 if(NOT DEFINED STEPS)
-    # Graphics work moves a lot of memory; give it room to finish.
-    set(STEPS 25000000)
+    # The frame is presented well inside this budget; the programs then wait for
+    # a key, which this harness cannot send, so the run ends at the budget with
+    # the frame still on screen. Five million steps is over the three million
+    # that already draw the frame, and keeps the test near ten seconds.
+    set(STEPS 5000000)
 endif()
 
 file(MAKE_DIRECTORY "${WORK}")

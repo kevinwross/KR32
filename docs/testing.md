@@ -96,12 +96,14 @@ minutes on the current development host (Hukilau, measured 2026-11-15 with
 | `part07` | `unit_test_cxx_codegen_6`, `cc_2`, `cc_6`, `cc_3`, `threads` | 5 | 55 s |
 | `part08` | the light unit buckets (`cc_4`, `cc_5`, `cc_7`, `ui`, `fast`, `machine`, ...) | 19 | 30 s |
 | `part09` | the light integration tests (`build_*`, `run_c*`, `run_cxx_*`, `cli_*`, `ui_*`) | 41 | 22 s |
-| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 4 | 133 s |
-| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `run_os_shutdown`, `os_gfx_demo` | 5 | 155 s |
+| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 4 | 101 s |
+| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `run_os_shutdown`, `os_gfx_demo` | 5 | 119 s |
 
-`part10` and `part11` carry the two graphics programs, which wait for a key
-rather than halting, so each runs the harness's full 25,000,000-step budget
-instead of stopping at a halt.
+`part10` and `part11` boot the OS in several configurations. The shell-driven
+runs end with `exit 0` and assert the host exit status, so they stop at the halt
+rather than at the step budget. The two graphics programs wait for a key that the
+harness cannot send, so `RunGfxProgram.cmake` samples them at 5,000,000 steps,
+which is past the roughly 3,000,000 that draw the frame.
 
 ```powershell
 $ctest = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"

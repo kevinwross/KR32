@@ -23,7 +23,7 @@ if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR "KR32OS M4 build failed")
 endif()
 
-set(_input "ls\nrun init\nrun wx\nrun fault\nexit\n")
+set(_input "ls\nrun init\nrun wx\nrun fault\nexit 0\n")
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
             --bios "${_osdir}/bios.bin" --max-steps 12000000

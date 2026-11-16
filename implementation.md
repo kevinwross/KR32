@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 06:29 -08:00
+> **Last updated:** 2026-11-16 07:37 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4091,6 +4091,23 @@ Newest entries at the bottom. Use the local time zone.
       the argument. Only the `exit` command changed, since the other call sites
       spell three-letter prefixes where the buggy value happened to be right.
       All eleven parts (95 tests) and 95/95 WSL pass.
+
+- **2026-11-16 07:37 -08:00** — The part10 and part11 harnesses end their runs
+      through the exit API. Every shell-driven script now sends `exit 0` and
+      asserts the host status, so the run stops at the halt instead of the step
+      budget; `run_os_fault`'s timer leg does the same. The two graphics tests
+      cannot use it because the programs wait for a key the harness cannot send,
+      so `RunGfxProgram.cmake` samples at 5,000,000 steps - past the roughly
+      3,000,000 that draw the frame - which took those tests from 72 s to 28 s
+      each. `part10` is 101 s and `part11` 119 s, from 133 s and 155 s.
+
+      Refreshing the embedded OS images was required: `run_os_embedded` failed
+      with `unknown command: exit 0` because `kr32.exe` carried the previous
+      kernel. `scripts/update-os.ps1 -CMake <path>` and `scripts/update-os.sh`
+      regenerated `src/resources/os/{windows,linux}/{bios,kernel}.k32`. My first
+      attempt at the script edit also broke `--serial-input` into
+      `---serial-input` in two scripts, which the boot and embedded tests caught
+      immediately. All eleven parts (95 tests) and 95/95 WSL pass.
 
 ## 10. Updating this file
 

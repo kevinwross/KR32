@@ -39,7 +39,7 @@ endif()
 
 # Boot runs millions of steps with interrupts enabled, so the timer has
 # advanced before the shell prompt; one mem query observes it.
-set(_timer_input "mem\nexit\n")
+set(_timer_input "mem\nexit 0\n")
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
             --bios "${_osdir}/bios.bin" --max-steps 24000000

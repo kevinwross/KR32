@@ -23,7 +23,7 @@ if(NOT _build_result EQUAL 0)
     message(FATAL_ERROR "KR32OS M2 build failed")
 endif()
 
-set(_input "help\necho hello\nmem\nexit\n")
+set(_input "help\necho hello\nmem\nexit 0\n")
 execute_process(
     COMMAND "${KR32}" os "${_osdir}/kernel.bin"
             --bios "${_osdir}/bios.bin" --max-steps 12000000
