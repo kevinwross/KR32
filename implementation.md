@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 17:23 -08:00
+> **Last updated:** 2026-11-15 18:36 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3936,6 +3936,24 @@ Newest entries at the bottom. Use the local time zone.
       separate investigation with a poor return against the safe pool. The pool
       stays `R2`-`R6` and the source comment now records the matrix's conclusion.
       All eleven parts (94 tests) and 94/94 WSL pass.
+
+- **2026-11-15 18:36 -08:00** — Q9 and Q10 decided by the operator: option 1 for
+      each. The ISA document is draft 0.6. Q9: v1 always has floating point, and
+      a no-FP profile is out of scope for v1. Q10: host IEEE arithmetic is the
+      specification, with two conditions now normative in §6.3 - subnormal
+      results are preserved (no flush-to-zero, no denormals-are-zero), and each
+      operation rounds once at its own precision (no wider intermediates) - so no
+      soft-float library is required. §13 is down to three documentation items
+      and no longer lists either question.
+
+      A conformance test backs the rounding rule: "single precision rounds once
+      to nearest even" in `tests/unit/test_fp.cpp` checks that 1.0f + 2^-24
+      rounds down to 1.0f, that 1.0f + 3*2^-24 rounds up to 0x3F800002 (a tie
+      whose even side is the second significand - my first expectation of
+      0x3F800001 was wrong and the emulator was right), that 2.0f + 2^-23 stays
+      at 2.0f, and that the same tie in double stays at 1.0. Subnormals and
+      canonical NaNs were already covered. All eleven parts (94 tests) and 94/94
+      WSL pass.
 
 ## 10. Updating this file
 

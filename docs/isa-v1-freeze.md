@@ -1,6 +1,8 @@
 # ISA v1 freeze: map review and the two open decisions
 
-**Status:** input for the operator's decision on freezing ISA v1.
+**Status:** decided 2026-11-15. The operator accepted **option 1 for Q9** and
+**option 1 for Q10**; the decisions are recorded in `docs/isa-v1.md` §6.3, §13,
+and the revision history.
 **Date:** 2026-11-15.
 
 This note closes the opcode-map review that `docs/isa-v1.md` §13 lists as an open
@@ -121,12 +123,23 @@ FMA or transcendentals, this decision must be revisited: those *are* host
 dependent, and at that point a software reference becomes the only way to stay
 bit-exact.
 
-## 4. What is left for the operator
+## 4. The decision
 
-1. **Q9:** confirm "FP-always for v1, no-FP profile out of scope" (or ask for a
-   profile document).
-2. **Q10:** confirm the host-IEEE policy with the two stated conditions, or
-   require soft-float.
-3. **Then freeze:** with both answered, §13's remaining items are the pseudo-op
-   list, the data-directive wording, and the assembler-syntax pass — all
-   documentation work, none of which can change the encoding.
+Both questions were answered on 2026-11-15 by accepting option 1 in each case.
+
+- **Q9 accepted: v1 is FP-always, and a no-FP profile is out of scope for v1.**
+  A profile, if one is ever wanted, is a separate subset document against a
+  frozen v1 and will not change v1.
+- **Q10 accepted: host IEEE arithmetic is the specification**, with the two host
+  conditions now normative in §6.3 — subnormal results are preserved (no
+  flush-to-zero, no denormals-are-zero), and each operation rounds once at its
+  own precision (no wider intermediates). No soft-float library is required,
+  because every operation in §6 is correctly rounded and none is a fused
+  multiply-add or a transcendental.
+- The rounding rule is covered by `tests/unit/test_fp.cpp` ("single precision
+  rounds once to nearest even"), and subnormals and canonical NaNs were already
+  covered by the neighbouring cases.
+
+**What is left before freezing** is documentation only: §13's pseudo-op list,
+the data-directive wording, and the assembler-syntax pass. None of them can
+change the encoding.

@@ -277,6 +277,40 @@ TEST_CASE("denormals and FP division by zero do not trap") {
     CHECK(divide_zero.fpr(0) == f32_bits(std::numeric_limits<float>::infinity()));
 }
 
+TEST_CASE("single precision rounds once to nearest even") {
+    // 1.0f + 2^-24 is exactly halfway between 1.0f and 1.0f + 2^-23, so it
+    // rounds to the even significand. A result computed in double and rounded
+    // afterwards would differ only in rarer cases, but a host that rounds
+    // differently at this boundary fails here.
+    const Machine tie_down = run_fp(fp(0x000), [](Machine& machine) {
+        machine.set_fpr(1, f32_bits(1.0F));
+        machine.set_fpr(2, f32_bits(std::ldexp(1.0F, -24)));
+    });
+    CHECK(tie_down.fpr(0) == f32_bits(1.0F));
+
+    // One and a half ulp is the next tie; the even side is 1 + 2 ulp.
+    const Machine tie_up = run_fp(fp(0x000), [](Machine& machine) {
+        machine.set_fpr(1, f32_bits(1.0F));
+        machine.set_fpr(2, f32_bits(3.0F * std::ldexp(1.0F, -24)));
+    });
+    CHECK(tie_up.fpr(0) == 0x3F80'0002U);
+
+    // 2.0f + 2^-23 is halfway to 2.0f + 2^-22 and the even significand is 2.0f.
+    const Machine even_down = run_fp(fp(0x000), [](Machine& machine) {
+        machine.set_fpr(1, f32_bits(2.0F));
+        machine.set_fpr(2, f32_bits(std::ldexp(1.0F, -23)));
+    });
+    CHECK(even_down.fpr(0) == f32_bits(2.0F));
+
+    // The double form has 29 more significand bits, so the same tie lands on
+    // the odd side and rounds up instead.
+    const Machine wide = run_fp(fp(0x100), [](Machine& machine) {
+        machine.set_fpr(1, f64_bits(1.0));
+        machine.set_fpr(2, f64_bits(std::ldexp(1.0, -53)));
+    });
+    CHECK(wide.fpr(0) == f64_bits(1.0));
+}
+
 TEST_CASE("FLOAD and FSTORE handle 32-bit and 64-bit values") {
     Machine load = make_machine();
     load.reset(kBase);

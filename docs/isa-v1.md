@@ -1,6 +1,6 @@
 # KR32 Instruction Set v1 — Draft
 
-> **Status:** draft 0.5, 2026-11-15. For review; **not frozen**. Encoding
+> **Status:** draft 0.6, 2026-11-15. For review; **not frozen**. Encoding
 > decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
 > becomes v1 only after the golden vectors in §12 are checked and the open items
 > in §13 are closed.
@@ -441,6 +441,15 @@ precisions; it leaves the integer flags unchanged.
   bits.
 - Out-of-range float-to-integer conversions saturate: NaN and `+inf` produce the
   maximum, `-inf` the minimum, and values below zero produce zero for unsigned.
+- **Subnormal results are preserved.** An implementation must not enable
+  flush-to-zero or denormals-are-zero. Operations that produce a subnormal
+  return it, and subnormal operands are not treated as zero.
+- **Each operation rounds once**, from its exact value, at the precision of the
+  operation: `.S` to binary32, `.D` to binary64. Intermediate results must not be
+  carried in a wider format than the operation. This is what makes the host IEEE
+  arithmetic the specification rather than a suggestion: every operation in §6
+  is correctly rounded, and the set contains no fused multiply-add and no
+  transcendental function.
 
 ### 6.4 FP loads and stores
 
@@ -610,16 +619,17 @@ the implementation agrees; it also rebuilds every row above from its fields.
   data; `.float` writes one little-endian binary32 word per value and `.double`
   writes two little-endian binary64 words per value. The object assembler keeps
   the same encoding.
-- **FP determinism.** The policy is host IEEE with canonical NaNs and no traps;
-  the open question is whether to require a soft-float library for bit-exact
-  results on every host (`KR32-plan.md` Q10).
-- **Optional FP.** v1 always has FP; a no-FP profile is still open (`Q9`).
+
 - **Assembler syntax.** Register names, `#` immediates, `.long`, and the
   `JCOND` aliases need one pass against the parser plan.
 
-The two remaining decisions, and the evidence for them, are in
-`docs/isa-v1-freeze.md`: the optional no-FP profile (Q9) and bit-exact floating
-point (Q10).
+Two former items are decided and no longer open. **Q9:** v1 always has floating
+point, and a no-FP profile is out of scope for v1 — if one is ever wanted it is a
+separate subset document against a frozen v1. **Q10:** the policy is host IEEE
+arithmetic with canonical NaNs, no traps, and the two conditions in §6.3
+(subnormals preserved, one rounding per operation); a soft-float library is not
+required, because every operation in §6 is correctly rounded. The evidence is in
+`docs/isa-v1-freeze.md`.
 
 ## 14. Revision history
 
@@ -629,3 +639,4 @@ point (Q10).
 | 0.3 | 2026-11-15 | Added `FMOV Fd, Fs` (FP escape function `0x032`), an FPR-to-FPR copy of all 64 bits. It exists so a cached floating-point value can reach an operand register without a memory round trip; before it, the compiler staged every FP value through a frame slot. Golden encoding for `FMOV F3, F5` is `0xC06A0032` (§6.2, `tests/unit/test_encoding.cpp`). |
 | 0.4 | 2026-11-15 | Golden vectors recomputed from §2.1 by an encoder that does not call the implementation: `tests/unit/test_golden_vectors.cpp` covers every opcode in §4 and both widths, and rebuilds each §12 row from its fields. It found one defect in this document: §4.4 claimed 71 of 128 top-level slots in use and 57 reserved; the map uses 72 and reserves 56. The §13 golden-vector item is closed by that coverage. |
 | 0.5 | 2026-11-15 | Opcode-map review closed: the disassembler recognises exactly the 72 documented slots and no others, every mnemonic matches, and a reserved slot executed for the purpose raises `#UD` without retiring, so reserved ranges are traps. Recorded with the Q9/Q10 decision brief in `docs/isa-v1-freeze.md`. |
+| 0.6 | 2026-11-15 | Q9 and Q10 decided and recorded as policy. v1 always has floating point; a no-FP profile is out of scope for v1. Host IEEE arithmetic is the specification, with subnormal results preserved and one rounding per operation at the operation's precision (§6.3), so no soft-float library is required. The evidence for both decisions is in `docs/isa-v1-freeze.md`. |
