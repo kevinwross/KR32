@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 10:39 -08:00
+> **Last updated:** 2026-11-16 11:05 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4158,6 +4158,18 @@ Newest entries at the bottom. Use the local time zone.
 
       All eleven parts (95 tests) and 95/95 WSL pass; the embedded OS images were
       regenerated.
+
+- **2026-11-16 11:05 -08:00** — Item 3 of the gap list: the dismissal path is
+      tested. Both graphics programs now block in `sys_read`, which serves the
+      keyboard and the serial device, instead of polling `input_pending` and
+      draining `input_poll`; a byte queued after the run command stands in for the
+      user's key. `run_os_gfx_dismiss` sends one byte to each program and asserts
+      `exit status 0` followed by `HALTED exit=0`, which covers the path that was
+      untested before. The screenshot tests still send nothing, so they sample the
+      frame as before.
+
+      `part11` is now six tests and 167 s; all eleven parts (96 tests) and 96/96
+      WSL pass, and the embedded OS images were regenerated for both platforms.
 
 ## 10. Updating this file
 

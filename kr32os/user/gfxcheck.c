@@ -3,7 +3,7 @@
 
 #include <kr32/con.h>
 #include <kr32/gfx.h>
-#include <kr32/input.h>
+#include <kr32/sys.h>
 
 int main(void) {
     gfx_surface *screen = gfx_create(800, 600);
@@ -19,14 +19,11 @@ int main(void) {
     gfx_fill_rect(screen, 400, 400, 50, 50, 0x000000FFU);
     gfx_line(screen, 0, 599, 799, 0, 0x0000FF00U);
     gfx_present(screen, 0, 0, 800, 600);
-    /* Wait for a key so the frame is visible for as long as the user wants it.
-       The screenshot harness sends no key, so it samples this frame. */
-    while (input_pending() == 0) {
-    }
-    // Drain the key press and its release so neither reaches the shell prompt.
-    kr32_event event;
-    while (input_poll(&event) != 0) {
-    }
+    /* Block until a key or a serial byte arrives, so the frame stays visible for
+       as long as the user wants it. The screenshot harness sends neither, so it
+       samples this frame; the dismiss test sends a byte instead. */
+    char key = 0;
+    (void)sys_read(KR32_STDIN, &key, 1);
     con_hide(0);
     return 0;
 }

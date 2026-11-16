@@ -394,6 +394,14 @@ if(KR32_BUILD_UI)
     set_tests_properties(ui_headless_os PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")
 
+    add_test(NAME run_os_gfx_dismiss
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -P ${CMAKE_SOURCE_DIR}/cmake/RunOsGfxDismiss.cmake)
+    set_tests_properties(run_os_gfx_dismiss PROPERTIES LABELS "integration" RESOURCE_LOCK kr32os_build)
+
     add_test(NAME run_os_shutdown
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
@@ -477,7 +485,7 @@ set(KR32_TEST_PART_ROWS    "part01|unit_test_cxx_codegen_2b|unit_test_optimizer"
     "part08|unit_test_cc_5|unit_test_cc_4|unit_test_cc_7|unit_test_ui|unit_test_fast|unit_test_assembler|unit_test_container|unit_test_devices|unit_test_graphics|unit_test_guest_headers|unit_test_linker|unit_test_machine|unit_test_object_assembler|unit_test_privilege|unit_test_terminal|unit_test_embedded_os|unit_test_cxx_abi|unit_test_cxx_api|unit_test_cxx_parser"
     "part09|bios_smoke|boundary_bad|boundary_clean|build_c_binarytree|build_c_floats|run_c_floats_variadic|run_c_printf_format|build_c_hello|build_c_libc|build_c_strings|build_c_types|build_c_varargs|build_hello|cli_cxx_help|cli_help|cli_stub|cli_version|cxx_tool_bad_emit|cxx_tool_help|cxx_tool_missing_input|cxx_tool_missing_output_path|dap_smoke|debug_dump|display_screen_shot|fp_demo|host_smoke|link_smoke|matrix_demo|run_cxx_balanced_tree|run_cxx_demo|run_cxx_libc|run_cxx_matrix|run_cxx_tls|run_demo|run_mainentry|run_os_smoke|shell_smoke|ui_headless|ui_headless_cxx|ui_headless_os|ui_smoke"
     "part10|os_console_screen|run_os_boot|run_os_embedded|os_gfx_check"
-    "part11|run_os_user|run_os_fault_timer|run_os_shell|run_os_shutdown|os_gfx_demo"
+    "part11|run_os_user|run_os_fault_timer|run_os_shell|run_os_shutdown|run_os_gfx_dismiss|os_gfx_demo"
     )
 foreach(part_row IN LISTS KR32_TEST_PART_ROWS)
     string(REPLACE "|" ";" part_fields "${part_row}")

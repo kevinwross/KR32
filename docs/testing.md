@@ -97,7 +97,7 @@ minutes on the current development host (Hukilau, measured 2026-11-15 with
 | `part08` | the light unit buckets (`cc_4`, `cc_5`, `cc_7`, `ui`, `fast`, `machine`, ...) | 19 | 30 s |
 | `part09` | the light integration tests (`build_*`, `run_c*`, `run_cxx_*`, `cli_*`, `ui_*`) | 41 | 22 s |
 | `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 4 | 101 s |
-| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `run_os_shutdown`, `os_gfx_demo` | 5 | 119 s |
+| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `run_os_shutdown`, `run_os_gfx_dismiss`, `os_gfx_demo` | 6 | 167 s |
 
 `part10` and `part11` boot the OS in several configurations. The shell-driven
 runs end with `exit 0` and assert the host exit status, so they stop at the halt

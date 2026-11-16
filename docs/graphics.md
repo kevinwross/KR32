@@ -457,9 +457,11 @@ int main(void) {
 The shipped examples are `kr32os/user/gfxdemo.c` and `kr32os/user/gfxcheck.c`;
 `os_gfx_demo` and `os_gfx_check` boot the OS, run them through the shell, and
 check pixels in the screenshot. Both programs hide the console while the frame
-is on screen, wait for a key, then restore the console and return through the
-normal exit path, so the shell reports a status and keeps running instead of the
-machine halting. The screenshot harness sends no key, so it samples the frame.
+is on screen, block in `sys_read` for a key or a serial byte, then restore the
+console and return through the normal exit path, so the shell reports a status
+and keeps running instead of the machine halting. The screenshot harness sends
+neither, so it samples the frame; `run_os_gfx_dismiss` sends a byte to cover the
+dismissal path.
 
 Animated box with dirty rectangles (user mode):
 
