@@ -49,6 +49,14 @@ bool load_os_images(DebuggerUI& debugger, const kr32::os::ImagePaths& paths,
                                    error);
 }
 
+// The guest's exit status, so a program that shuts the machine down decides the
+// host process's status; a run that only reaches its step budget reports 0.
+int guest_exit_code(const core::Machine& machine) {
+    if (!machine.halted() || !machine.exit_code_set()) {
+        return 0;
+    }
+    return static_cast<int>(machine.exit_code() & 0xFFU);
+}
 int run(int argc, char** argv) {    std::string image_path;
     std::string ppm_path;
     std::string os_path;
@@ -209,7 +217,8 @@ int run(int argc, char** argv) {    std::string image_path;
         window.present(*canvas);
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
-    return 0;
+    // The debugger reports the guest's status the way run, os, and display do.
+    return guest_exit_code(debugger.session().machine());
 }
 
 namespace {
@@ -388,14 +397,6 @@ bool write_screen_shot(const std::string& path,
 
 } // namespace
 
-// The guest's exit status, so a program that shuts the machine down decides the
-// host process's status; a run that only reaches its step budget reports 0.
-int guest_exit_code(const core::Machine& machine) {
-    if (!machine.halted() || !machine.exit_code_set()) {
-        return 0;
-    }
-    return static_cast<int>(machine.exit_code() & 0xFFU);
-}
 
 int run_display(int argc, char** argv) {
     std::string image_path;

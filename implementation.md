@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 11:05 -08:00
+> **Last updated:** 2026-11-16 11:29 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4170,6 +4170,18 @@ Newest entries at the bottom. Use the local time zone.
 
       `part11` is now six tests and 167 s; all eleven parts (96 tests) and 96/96
       WSL pass, and the embedded OS images were regenerated for both platforms.
+
+- **2026-11-16 11:29 -08:00** — Item 4 of the gap list: the GUI debugger reports the
+      guest's exit status. `DebuggerUi` gained a `session()` accessor, and `run`
+      ends with the same `guest_exit_code` helper that `run`, `os`, and `display`
+      use, moved above both runners. A guest that never halts still reports 0, so
+      the smoke and headless tests are unchanged.
+
+      Verification is by construction rather than by test: the helper is the one
+      the display tests exercise (`display ... run shutdown` exits 7), and the
+      windowed path is the only one that can halt a guest - `--headless` renders a
+      single frame without stepping, so no automated test can reach it. The four
+      UI tests and all eleven parts (96 tests) and 96/96 WSL pass.
 
 ## 10. Updating this file
 

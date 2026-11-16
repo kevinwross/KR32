@@ -49,6 +49,8 @@ public:
     // Routes one packed keyboard event to the guest while the screen is focused.
     void guest_key(std::uint32_t word);
     [[nodiscard]] const std::string& status() const { return status_; }
+    // The session the guest runs in, for the exit status the host reports.
+    [[nodiscard]] const debug::Session& session() const { return session_; }
     [[nodiscard]] const std::string& source_path() const { return source_view_path_; }
     [[nodiscard]] std::size_t breakpoint_count() const {
         return session_.breakpoints().size();
