@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 14:55 -08:00
+> **Last updated:** 2026-11-16 15:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4270,6 +4270,21 @@ Newest entries at the bottom. Use the local time zone.
 
       The debug suite passes (27 cases, 297 assertions) and all eleven parts on
       Windows; WSL is running.
+
+- **2026-11-16 15:15 -08:00** — The span-promotion records are deferred, and the
+      reason is now understood. I re-enabled them and pointed the insertion at
+      "the line after the debug section's last data line", but the records still
+      landed before `.rodata`: the `.debug_info` line moves during the pipeline,
+      so any index into it is stale by the time another pass runs. Insertion is
+      the wrong tool here - records must be appended to the section without
+      referring to a line number, which means either a placeholder line the front
+      end emits inside `.debug_info`, or appending to the debug text separate from
+      the line vector.
+
+      Reverted to the verified state: 70 whole-function records, none outside its
+      function, `run_named.entry` reading R9 over the function's own span. Span
+      promotions fall back to the frame slot, which shows a stale value, not a
+      different variable's value. That is the honest gap.
 
 ## 10. Updating this file
 
