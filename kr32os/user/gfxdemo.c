@@ -7,7 +7,15 @@
 #include <kr32/con.h>
 #include <kr32/gfx.h>
 
+typedef struct kr32_event_user {
+    unsigned char ascii;
+    unsigned char modifiers;
+    unsigned char scancode;
+    unsigned char type;
+} kr32_event;
+
 int input_pending(void);
+int input_poll(kr32_event *event);
 void con_hide(int hidden);
 
 int main(void) {
@@ -26,6 +34,10 @@ int main(void) {
     /* Wait for a key so the frame is visible for as long as the user wants it.
        The screenshot harness sends no key, so it samples this frame. */
     while (input_pending() == 0) {
+    }
+    // Drain the key press and its release so neither reaches the shell prompt.
+    kr32_event event;
+    while (input_poll(&event) != 0) {
     }
     con_hide(0);
     return 0;

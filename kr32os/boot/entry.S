@@ -14,8 +14,10 @@ putchar:
     SYSCALL #33
     RET
 
+; R0 carries the status, which becomes the machine's exit code.
     .global kernel_halt
 kernel_halt:
+    SYSCALL #32
     HALT
 
     .global kernel_break

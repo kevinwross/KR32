@@ -388,6 +388,15 @@ bool write_screen_shot(const std::string& path,
 
 } // namespace
 
+// The guest's exit status, so a program that shuts the machine down decides the
+// host process's status; a run that only reaches its step budget reports 0.
+int guest_exit_code(const core::Machine& machine) {
+    if (!machine.halted() || !machine.exit_code_set()) {
+        return 0;
+    }
+    return static_cast<int>(machine.exit_code() & 0xFFU);
+}
+
 int run_display(int argc, char** argv) {
     std::string image_path;
     std::string shot_path;
@@ -476,6 +485,14 @@ int run_display(int argc, char** argv) {
     devices.attach_machine(machine);
     machine.attach_devices(&devices);
 
+    // Host services carry the exit syscall the kernel's shutdown path uses, so a
+    // program's status becomes this process's status here as it does under `kr32
+    // run` and `kr32 os`. Echo stays off because the display shows the terminal.
+    vm::HostOptions host_options;
+    host_options.echo_console = false;
+    vm::Host host(host_options);
+    host.install(machine);
+
     std::string error;
     if (os_mode) {
         os::ImagePaths paths;
@@ -509,7 +526,7 @@ int run_display(int argc, char** argv) {
             std::fprintf(stderr, "kr32 display: %s\n", error.c_str());
             return 1;
         }
-        return 0;
+        return guest_exit_code(machine);
     }
 
     kr32::platform::Window window;
@@ -559,7 +576,7 @@ int run_display(int argc, char** argv) {
         }
         std::this_thread::sleep_for(std::chrono::milliseconds(16));
     }
-    return 0;
+    return guest_exit_code(machine);
 }
 
 } // namespace kr32::ui

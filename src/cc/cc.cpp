@@ -5520,18 +5520,37 @@ private:
 
     TypePtr parse_sizeof(bool alignment) {
         TypePtr type;
+        // A string literal is an array, so its size is its bytes plus the
+        // terminator, not the width of the pointer it decays to elsewhere.
+        bool sized_literal = false;
+        int literal_size = 0;
         if (match("(")) {
             if (is_type_start()) {
                 type = parse_type();
                 expect(")");
+            } else if (peek().kind == TokenKind::String) {
+                while (peek().kind == TokenKind::String) {
+                    literal_size += static_cast<int>(take().text.size());
+                }
+                ++literal_size;
+                expect(")");
+                sized_literal = true;
             } else {
                 type = parse_unevaluated_expression();
                 expect(")");
             }
+        } else if (peek().kind == TokenKind::String) {
+            while (peek().kind == TokenKind::String) {
+                literal_size += static_cast<int>(take().text.size());
+            }
+            ++literal_size;
+            sized_literal = true;
         } else {
             type = parse_unevaluated_unary();
         }
-        const int value = alignment ? type->alignment() : type->size();
+        const int value = sized_literal
+                              ? (alignment ? 1 : literal_size)
+                              : (alignment ? type->alignment() : type->size());
         emit("    MOV R0, #" + std::to_string(value));
         return type_int();
     }

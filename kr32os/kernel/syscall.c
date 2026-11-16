@@ -118,5 +118,9 @@ int sys_dispatch(int argument0, int argument1, int argument2) {
         kernel_halt(0);
         return 0;
     }
+    if (scratch->vector == SYSCALL_SHUTDOWN) {
+        kernel_halt(argument0);
+        return 0;
+    }
     return -ERRNO_ENOSYS;
 }

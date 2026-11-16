@@ -21,6 +21,15 @@ static int string_equal(const char *left, const char *right) {
     return *left == '\0' && *right == '\0';
 }
 
+static int string_value(const char *text) {
+    int value = 0;
+    while (*text >= '0' && *text <= '9') {
+        value = value * 10 + (*text - '0');
+        ++text;
+    }
+    return value;
+}
+
 static int starts_with(const char *text, const char *prefix) {
     while (*prefix != '\0') {
         if (*text != *prefix) return 0;
@@ -66,7 +75,7 @@ static void run_command(const char *line) {
         return;
     }
     if (string_equal(line, "help")) {
-        console_write("help echo clear mem ps ls cat run exit\n");
+        console_write("help echo clear mem ps ls cat run exit [status]\n");
     } else if (starts_with(line, "echo")) {
         const char *argument = line + (sizeof("echo") - 1);
         while (*argument == ' ') ++argument;
@@ -105,8 +114,10 @@ static void run_command(const char *line) {
         }
     } else if (string_equal(line, "crash")) {
         kernel_break();
-    } else if (string_equal(line, "exit")) {
-        kernel_halt(0);
+    } else if (starts_with(line, "exit")) {
+        const char *status = line + (sizeof("exit") - 1);
+        while (*status == ' ') ++status;
+        kernel_halt(string_value(status));
     } else {
         console_write("unknown command: ");
         console_write(line);

@@ -206,8 +206,11 @@ flip alone. `gfx_pixel`, `gfx_hline`, and `gfx_vline` are one-pixel or one-row
 
 The syscall numbers are: `sys_gfx` 70, the surface allocator 71, `input_poll`
 72, `input_pending` 73, console control 74 (colour, cursor, clear, present,
-hide), and `sys_halt` 75, which halts the machine with the current frame on
-screen so a screenshot is deterministic.
+hide), `sys_halt` 75, which halts the machine with status 0, and `sys_shutdown`
+76, which halts the machine with its argument as the exit status. A program that
+calls `sys_shutdown(n)` makes the host process exit with `n`, under `kr32 run`,
+`kr32 os`, and `kr32 display` alike; the shell's `exit [status]` command takes the
+same path.
 
 ## 4. Drawing primitives (`<kr32/gfx.h>`)
 

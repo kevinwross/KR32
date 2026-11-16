@@ -577,3 +577,12 @@ TEST_CASE("an undeclared function call is diagnosed") {
     CHECK(variadic.ok);
     CHECK(variadic.diagnostics.empty());
 }
+TEST_CASE("sizeof a string literal is its array size") {
+    // A string literal is an array, so sizeof counts its bytes and terminator;
+    // treating it as a pointer made `line + (sizeof("exit") - 1)` point one byte
+    // short, which broke the shell's `exit <status>` argument.
+    CHECK(compile_and_run("int main(void) { return sizeof(\"abc\"); }").result == 4);
+    CHECK(compile_and_run("int main(void) { return sizeof(\"\"); }").result == 1);
+    CHECK(compile_and_run("int main(void) { return sizeof(\"ab\" \"cd\"); }").result == 5);
+    CHECK(compile_and_run("int main(void) { return sizeof(\"abc\") + 1; }").result == 5);
+}
