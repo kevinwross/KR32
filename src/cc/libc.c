@@ -2051,9 +2051,20 @@ static int format_double_fixed(char *buffer, double value, int precision, int fl
         scale = scale * 10.0;
         index = index + 1;
     }
-    double scaled = value * scale + 0.5;
+    double scaled = value * scale;
     unsigned int whole = (unsigned int)(scaled / scale);
-    unsigned int fraction = (unsigned int)(scaled - (double)whole * scale);
+    double remainder = scaled - (double)whole * scale;
+    unsigned int fraction = (unsigned int)remainder;
+    // A tie rounds to the even digit, which is what C and IEEE-754 require.
+    double tail = remainder - (double)fraction;
+    // The tie tests the parity of the last retained digit: the whole part when
+    // no fractional digits are printed, otherwise the last fraction digit.
+    unsigned int parity = precision == 0 ? whole : fraction;
+    if (tail > 0.5) {
+        fraction = fraction + 1;
+    } else if (tail == 0.5 && (parity & 1) != 0) {
+        fraction = fraction + 1;
+    }
     if ((double)fraction >= scale) {
         whole = whole + 1;
         fraction = 0;
@@ -2134,16 +2145,28 @@ static int format_double_exp(char *buffer, double value, int precision, int flag
         scale = scale * 10.0;
         index = index + 1;
     }
-    double scaled = value * scale + 0.5;
-    if (scaled >= scale * 10.0) {
+    double scaled = value * scale;
+    unsigned int whole = (unsigned int)(scaled / scale);
+    double remainder = scaled - (double)whole * scale;
+    unsigned int fraction = (unsigned int)remainder;
+    double tail = remainder - (double)fraction;
+    // The tie tests the parity of the last retained digit: the whole part when
+    // no fractional digits are printed, otherwise the last fraction digit.
+    unsigned int parity = precision == 0 ? whole : fraction;
+    if (tail > 0.5) {
+        fraction = fraction + 1;
+    } else if (tail == 0.5 && (parity & 1) != 0) {
+        fraction = fraction + 1;
+    }
+    if ((double)fraction >= scale) {
+        fraction = 0;
+        whole = whole + 1;
+    }
+    if (whole > 9) {
         value = value / 10.0;
         exponent = exponent + 1;
-        scaled = value * scale + 0.5;
-    }
-    unsigned int whole = (unsigned int)(scaled / scale);
-    unsigned int fraction = (unsigned int)(scaled - (double)whole * scale);
-    if (whole > 9) {
-        whole = 9;
+        whole = 1;
+        fraction = 0;
     }
     buffer[position] = (char)('0' + (int)whole);
     position = position + 1;

@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 14:51 -08:00
+> **Last updated:** 2026-11-15 16:27 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3862,6 +3862,24 @@ Newest entries at the bottom. Use the local time zone.
       `run_c_floats_variadic` asserts the printed value and was checked to fail
       without the declaration. The example is 223 instructions at `-O1` (was
       280) and 6,127 bytes. All eleven parts (93 tests) and 93/93 WSL pass.
+
+- **2026-11-15 16:27 -08:00** — `printf` format coverage and a rounding fix. The
+      new `examples/printf-format.c` formats 42 cases with `snprintf` and
+      compares them, and it found four defects: `%.0f` of 2.5, 0.5 and -2.5 and
+      `%.1f` of 2.25 all rounded half away from zero, where C and IEEE-754 round
+      ties to even. Both float formatters now scale without the `+ 0.5` bias and
+      test the parity of the last retained digit - the whole part when no
+      fraction is printed, otherwise the last fraction digit. The first attempt
+      tested `fraction` unconditionally and left `%.0f` of 3.5 at 3.
+
+      The "space flag prints 0" defect I reported earlier is not real: `% d` is
+      an integer conversion, and passing a double to it reads the low word, which
+      is zero. The float conversions with a space flag (`% f`, `% e`, `% g`) were
+      correct all along. Two of the suite's own expectations were wrong as well
+      (`%o` of 42 is 52 without `#`, and the `%%` check compared literals instead
+      of formatting), and were corrected before the fix landed. `run_c_printf_format`
+      asserts "0 failures" in `part09`. All eleven parts (94 tests) and 94/94 WSL
+      pass.
 
 ## 10. Updating this file
 
