@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 11:29 -08:00
+> **Last updated:** 2026-11-16 11:56 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4182,6 +4182,25 @@ Newest entries at the bottom. Use the local time zone.
       windowed path is the only one that can halt a guest - `--headless` renders a
       single frame without stepping, so no automated test can reach it. The four
       UI tests and all eleven parts (96 tests) and 96/96 WSL pass.
+
+- **2026-11-16 11:56 -08:00** — Item 5, and the answer to the `R12`-`R15` question:
+      the pool was blocked by the label-folding bug fixed earlier today, not by
+      anything about the registers. With `remove_adjacent_slot_roundtrips` correct,
+      the full pool keeps `os_gfx_check` green - all three checked pixels match -
+      where three registers used to break it, and the two/four-register pattern
+      was an artefact of which code shapes the bug happened to hit.
+
+      The win is smaller than I once guessed and is measured as an A/B in the same
+      tree: `libc` 9,975 -> 9,936 instructions and `libcpp` 10,280 -> 10,277. The
+      pool comment and `docs/optimizations.md` now say so instead of describing an
+      unexplained failure. The benchmark table's instruction counts are refreshed
+      with one measurement method, and its byte column is emptied for the library
+      rows: a program image carries the shared runtime and debug information, so
+      the old per-file byte figures compared links rather than code. The kernel
+      row keeps its size, now 73,072 bytes because the initrd gained two programs.
+
+      All eleven parts (96 tests) and 96/96 WSL pass; the embedded OS images were
+      regenerated for both platforms.
 
 ## 10. Updating this file
 

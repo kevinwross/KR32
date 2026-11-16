@@ -1414,20 +1414,22 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
         if (candidates.empty()) {
             continue;
         }
-        // R2-R6 are the pool: they are caller-saved, so only a call can
-        // disturb them, and the span is call-free. R12-R15 are excluded, not
-        // because the rewrite is wrong for them - each of the four keeps the OS
-        // gfx test passing on its own, and all four together pass again - but
-        // because particular combinations change the code enough to trip a
-        // latent defect elsewhere: three of them reproduce the console-over-frame
-        // failure while two and four do not. That sensitivity is not this pass's
-        // to fix, and the safe pool keeps the OS green.
+        // R2-R6 and R12-R15 are all caller-saved, so only a call can disturb
+        // them and the span is call-free. The four high registers were excluded
+        // for a while because some combinations broke the OS gfx test; that was
+        // remove_adjacent_slot_roundtrips folding a load across a branch-target
+        // label, and the pool is complete again now that the pass is fixed.
         std::vector<int> free_registers;
         for (int reg = 2; reg <= 6; ++reg) {
             if (used[reg]) {
                 continue;
             }
             free_registers.push_back(reg);
+        }
+        for (int reg = 12; reg <= 15; ++reg) {
+            if (!used[reg]) {
+                free_registers.push_back(reg);
+            }
         }
         if (free_registers.empty()) {
             continue;

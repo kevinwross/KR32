@@ -251,10 +251,11 @@ target-level cleanup.
    - The span must contain no call. Only a call can disturb a register the
      function never mentions, so no save and restore are needed.
    - Spans that do not overlap share one register, which is the allocation.
-   - Integer slots use `R2`-`R6`. `R12`-`R15` are not used in a function that
-     calls: they are safe in a leaf function (and the leaf promotion already
-     takes them there), but using them across a call breaks `os_gfx_check` for
-     a reason this pass has not isolated.
+   - Integer slots use `R2`-`R6` and `R12`-`R15`, all caller-saved. The high
+     four were excluded while some combinations broke `os_gfx_check`; the cause
+     was `remove_adjacent_slot_roundtrips` folding a load across a branch-target
+     label, not this pass, so the pool is complete. Against the five-register
+     pool it removes 39 instructions from `libc` and 3 from `libcpp`.
    - A function whose whole frame moves to registers is included; the frame
      removal handles the resulting save area.
 
@@ -307,17 +308,18 @@ Unset the variable (or run without it) to exercise the normal `-O0` path.
 
 ## Current benchmark results
 
-Instruction counts are per translation unit; bytes are the linked image for the
-kernel and the object file otherwise. Ticks come from the emulator's instruction
-counter on the benchmark programs.
+Instruction counts are per translation unit, counted from the emitted assembly.
+The only byte figure is the linked kernel image: a program image also carries the
+shared runtime and its debug information, so a per-file byte count says more
+about what was linked than about the code.
 
 | Program | Build | Instructions | Bytes | Ticks |
 |---|---|---:|---:|---:|
-| `examples/floats.c` | `-O1` | 223 | 6,127 | — |
-| `examples/libcpp.cpp` | `-O1` | 10,251 | 421,728 | — |
-| `src/cc/libc.c` | `-O0` | 16,233 | 447,356 | — |
-| `src/cc/libc.c` | `-O1` | 9,900 | 409,180 | — |
-| OS kernel (`kr32os`) | `-O1` | — | 62,676 | — |
+| `examples/floats.c` | `-O1` | 223 | — | — |
+| `examples/libcpp.cpp` | `-O1` | 10,277 | — | — |
+| `src/cc/libc.c` | `-O0` | 16,334 | — | — |
+| `src/cc/libc.c` | `-O1` | 9,936 | — | — |
+| OS kernel (`kr32os`) | `-O1` | — | 73,072 | — |
 | `strings.c` | `-O0` | — | — | 30,243 |
 | `balanced-tree.cpp` | `-O0` | — | `0x15894` | 184,725 |
 | `balanced-tree.cpp` | `-O1` | — | `0x15654` | 166,336 |
