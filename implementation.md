@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 16:52 -08:00
+> **Last updated:** 2026-11-15 17:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3893,6 +3893,24 @@ Newest entries at the bottom. Use the local time zone.
       `F0` instead of the stack. A unit test covers the warning, a declared
       prototype, and a declared variadic prototype. All eleven parts (94 tests)
       and 94/94 WSL pass.
+
+- **2026-11-15 17:20 -08:00** — `R12`-`R15` investigation, narrowed but not
+      resolved, and the part-label skip rule documented. Three experiments: with
+      the call-free pool extended to **one** extra register at a time, `R12`,
+      `R13`, `R14` and `R15` each keep `os_gfx_check` passing (pixel `000000`);
+      the full set fails, as before. Padding the passing build with 560 bytes of
+      constants grows the image from 6,348 to 6,908 bytes and it still passes, so
+      a plain code-size shift is not the trigger either. That rules out "one
+      register the OS relies on" and "any size change", and leaves an interaction
+      between several promotions. The pool stays `R2`-`R6`.
+
+      `docs/testing.md` now records the part-label skip rule and carries measured
+      times and test counts for all eleven parts, and the configure step prints
+      every row it skips: with `KR32_BUILD_UI=OFF` it reports `unit_test_ui`,
+      `os_console_screen`, `os_gfx_check`, `display_screen_shot`, `ui_headless`,
+      `ui_headless_cxx`, `ui_headless_os`, and `ui_smoke`. That is also how a
+      renamed test will show up. All eleven parts (94 tests, slowest 141 s) and
+      94/94 WSL pass.
 
 ## 10. Updating this file
 

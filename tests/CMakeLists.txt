@@ -480,6 +480,11 @@ foreach(part_row IN LISTS KR32_TEST_PART_ROWS)
     foreach(part_test IN LISTS part_fields)
         if(TEST ${part_test})
             set_property(TEST ${part_test} APPEND PROPERTY LABELS "${part_label}")
+        else()
+            # A row may name a test this configuration does not build, such as
+            # the UI suites when KR32_BUILD_UI is off. Report it so a renamed
+            # test cannot silently drop out of every part.
+            message(STATUS "part ${part_label}: '${part_test}' is not defined in this configuration")
         endif()
     endforeach()
 endforeach()

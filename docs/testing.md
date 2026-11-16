@@ -85,19 +85,19 @@ bounded instead of running the whole tree. Every part finishes in under three
 minutes on the current development host (Hukilau, measured 2026-11-15 with
 `ctest -L <part> -j 2`):
 
-| Part | Contents | Measured |
-| --- | --- | --- |
-| `part01` | `unit_test_cxx_codegen_2b`, `unit_test_optimizer` | 131 s |
-| `part02` | `unit_test_cxx_codegen_2c`, `encoding`, `version`, `matrix`, `boot`, `fp` | 93 s |
-| `part03` | `unit_test_cxx_codegen_2`, `cc_1` | 92 s |
-| `part04` | `unit_test_cxx_codegen_4`, `debug`, `disassembler` | 67 s |
-| `part05` | `unit_test_cxx_codegen_3`, `cxx_codegen_1`, `host` | 77 s |
-| `part06` | `unit_test_cxx_codegen_5`, `cxx_codegen_8`, `cxx_codegen_7`, `cc_8` | 88 s |
-| `part07` | `unit_test_cxx_codegen_6`, `cc_2`, `cc_6`, `cc_3`, `threads` | 53 s |
-| `part08` | the light unit buckets (`cc_4`, `cc_5`, `cc_7`, `ui`, `fast`, ...) | 24 s |
-| `part09` | the light integration tests (`build_*`, `run_cxx_*`, `cli_*`, `ui_*`) | 16 s |
-| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 77 s |
-| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `os_gfx_demo` | 87 s |
+| Part | Contents | Tests | Measured |
+| --- | --- | ---: | ---: |
+| `part01` | `unit_test_cxx_codegen_2b`, `unit_test_optimizer` | 2 | 141 s |
+| `part02` | `unit_test_cxx_codegen_2c`, `encoding`, `golden_vectors`, `version`, `matrix`, `boot`, `fp` | 7 | 81 s |
+| `part03` | `unit_test_cxx_codegen_2`, `cc_1` | 2 | 90 s |
+| `part04` | `unit_test_cxx_codegen_4`, `debug`, `disassembler` | 3 | 70 s |
+| `part05` | `unit_test_cxx_codegen_3`, `cxx_codegen_1`, `host` | 3 | 76 s |
+| `part06` | `unit_test_cxx_codegen_5`, `cxx_codegen_8`, `cxx_codegen_7`, `cc_8` | 4 | 96 s |
+| `part07` | `unit_test_cxx_codegen_6`, `cc_2`, `cc_6`, `cc_3`, `threads` | 5 | 55 s |
+| `part08` | the light unit buckets (`cc_4`, `cc_5`, `cc_7`, `ui`, `fast`, `machine`, ...) | 19 | 30 s |
+| `part09` | the light integration tests (`build_*`, `run_c*`, `run_cxx_*`, `cli_*`, `ui_*`) | 41 | 22 s |
+| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 4 | 81 s |
+| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `os_gfx_demo` | 4 | 85 s |
 
 ```powershell
 $ctest = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
@@ -113,6 +113,18 @@ appear in exactly one row; a test missing from every row is left out of all
 parts, which is why the rows are checked against `ctest -N` whenever they
 change. The part labels are appended to `unit` and `integration`, so the
 existing `-L` and `-E` filters keep working.
+
+A row may also name a test that a configuration does not build — the UI suites
+when `KR32_BUILD_UI` is off, for instance. Those rows are skipped rather than
+aborting the configure step, and the configure output names each one:
+
+```text
+-- part part09: 'ui_headless' is not defined in this configuration
+```
+
+Read that list after a configure that turns an option off. The same message
+appears for a test that was renamed without updating its row, which is the way a
+test silently drops out of every part.
 
 `test_cxx_codegen_2.cpp` accounts for most of the suite's wall time, so it is
 split into `test_cxx_codegen_2.cpp`, `_2b.cpp`, and `_2c.cpp` (about 80 s, 110 s,
