@@ -1,6 +1,6 @@
 # KR32 Instruction Set v1 — Draft
 
-> **Status:** draft 0.6, 2026-11-15. For review; **not frozen**. Encoding
+> **Status:** draft 0.7, 2026-11-15. For review; **not frozen**. Encoding
 > decisions D8, D13–D16, D20–D22, D51, and D52 are applied. The encoding
 > becomes v1 only after the golden vectors in §12 are checked and the open items
 > in §13 are closed.
@@ -620,8 +620,13 @@ the implementation agrees; it also rebuilds every row above from its fields.
   writes two little-endian binary64 words per value. The object assembler keeps
   the same encoding.
 
-- **Assembler syntax.** Register names, `#` immediates, `.long`, and the
-  `JCOND` aliases need one pass against the parser plan.
+- **Assembler syntax.** Checked against the programmer's reference (§3.1-§3.7):
+  register names, `#` immediates, the operand forms, and the `JCOND` aliases all
+  behave as documented, and the documented limits on expressions (a sum of terms,
+  no `*`, `/`, or parentheses) are real. The one gap was `.long`, which is named
+  above but did not exist; it is now a 32-bit alias of `.word` in both assembler
+  paths. The only other correction was a reference wording fix, since a COMDAT
+  section is written `.section .text.<name>` rather than as a bare directive.
 
 Two former items are decided and no longer open. **Q9:** v1 always has floating
 point, and a no-FP profile is out of scope for v1 — if one is ever wanted it is a
@@ -640,3 +645,4 @@ required, because every operation in §6 is correctly rounded. The evidence is i
 | 0.4 | 2026-11-15 | Golden vectors recomputed from §2.1 by an encoder that does not call the implementation: `tests/unit/test_golden_vectors.cpp` covers every opcode in §4 and both widths, and rebuilds each §12 row from its fields. It found one defect in this document: §4.4 claimed 71 of 128 top-level slots in use and 57 reserved; the map uses 72 and reserves 56. The §13 golden-vector item is closed by that coverage. |
 | 0.5 | 2026-11-15 | Opcode-map review closed: the disassembler recognises exactly the 72 documented slots and no others, every mnemonic matches, and a reserved slot executed for the purpose raises `#UD` without retiring, so reserved ranges are traps. Recorded with the Q9/Q10 decision brief in `docs/isa-v1-freeze.md`. |
 | 0.6 | 2026-11-15 | Q9 and Q10 decided and recorded as policy. v1 always has floating point; a no-FP profile is out of scope for v1. Host IEEE arithmetic is the specification, with subnormal results preserved and one rounding per operation at the operation's precision (§6.3), so no soft-float library is required. The evidence for both decisions is in `docs/isa-v1-freeze.md`. |
+| 0.7 | 2026-11-15 | Assembler-syntax pass closed: `.long` added as the 32-bit alias of `.word` in both assembler paths, and the reference's directive table gained it; the COMDAT section row corrected to show that the dotted name is an argument to `.section`. Every other documented syntax rule was checked against the parser and held, including the documented absence of parentheses, `*`, `/`, and character or binary literals in expressions. |

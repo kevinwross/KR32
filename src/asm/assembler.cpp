@@ -772,7 +772,7 @@ private:
         if (name == ".byte") {
             return advance(static_cast<std::uint32_t>(statement.operands.size()), statement.line);
         }
-        if (name == ".word") {
+        if (name == ".word" || name == ".long") {
             return advance(static_cast<std::uint32_t>(statement.operands.size() * 4U), statement.line);
         }
         if (name == ".float") {
@@ -1594,7 +1594,7 @@ private:
             }
             return true;
         }
-        if (name == ".word") {
+        if (name == ".word" || name == ".long") {
             for (const std::string& operand : statement.operands) {
                 Expr value;
                 if (!eval_expr(operand, symbols_, false, value, error_, statement.line)) {

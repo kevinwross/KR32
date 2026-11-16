@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 18:36 -08:00
+> **Last updated:** 2026-11-15 19:09 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3954,6 +3954,27 @@ Newest entries at the bottom. Use the local time zone.
       at 2.0f, and that the same tie in double stays at 1.0. Subnormals and
       canonical NaNs were already covered. All eleven parts (94 tests) and 94/94
       WSL pass.
+
+- **2026-11-15 19:09 -08:00** — Freeze item 3, the assembler-syntax pass, is
+      closed. `.long` did not exist: the ISA document named it, no directive
+      table listed it, and `kr32 as` rejected it. It is now the 32-bit alias of
+      `.word` (C''s `long` is 32 bits in this ABI) in both assembler paths, with a
+      test that compares its bytes against `.word` for a value and a symbol.
+
+      The rest of the pass was a cross-check of
+      `docs/KR32ProgrammersReference.md` §3.1-§3.7 against the parser, and it
+      held: lowercase mnemonics, mixed-case registers, `.equ`/`.set`, `.org`,
+      `.align`/`.space`, negative immediates, label expressions, and the object
+      path''s `.section`, `.extern`, `.string`, `.globl`, and `.weak` all behave
+      as documented. The documented limits are real too - no parentheses, no `*`
+      or `/`, and no character or binary literals in expressions - so the
+      failures I first took for defects were the document being right. One
+      wording bug: §3.7 listed `.text.<name>` as a directive, but it is the
+      argument to `.section` (`.section .text.foo` works, a bare `.text.foo` does
+      not), and the row now says so.
+
+      The ISA document is draft 0.7 with the pass recorded in §13 and the
+      revision history. All eleven parts (94 tests) and 94/94 WSL pass.
 
 ## 10. Updating this file
 

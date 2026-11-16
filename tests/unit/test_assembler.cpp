@@ -151,3 +151,21 @@ TEST_CASE("undefined symbols and duplicate labels are reported") {
         "start:\nstart:\n", kr32::assembler::Options{}, result, error));
     CHECK(error.line == 2);
 }
+TEST_CASE("the long directive is a 32-bit word") {
+    // `.long` is the 32-bit alias of `.word`: C's long is 32 bits in this ABI.
+    const auto long_values = assemble_ok(
+        ".data\n"
+        "value:\n"
+        "    .long 0x11223344\n"
+        "    .long value\n");
+    REQUIRE(long_values.bytes.size() == 8);
+    CHECK(word_at(long_values.bytes) == 0x1122'3344U);
+    CHECK(word_at(long_values.bytes, 4) == 0x0001'0000U);
+
+    const auto word_values = assemble_ok(
+        ".data\n"
+        "value:\n"
+        "    .word 0x11223344\n"
+        "    .word value\n");
+    CHECK(long_values.bytes == word_values.bytes);
+}

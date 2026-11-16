@@ -645,7 +645,7 @@ private:
             constants_[statement.operands[0]] = value.value;
             return true;
         }
-        if (name == ".word") {
+        if (name == ".word" || name == ".long") {
             return advance(static_cast<std::uint32_t>(statement.operands.size() * 4U),
                            statement.line);
         }
@@ -1584,7 +1584,7 @@ private:
             name == ".extern" || name == ".equ" || name == ".set") {
             return true;
         }
-        if (name == ".word") {
+        if (name == ".word" || name == ".long") {
             for (const std::string& operand : statement.operands) {
                 Expr value;
                 if (!eval_expr(operand, constants_, value, error_, statement.line)) {

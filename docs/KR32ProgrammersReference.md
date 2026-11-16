@@ -374,6 +374,7 @@ Raw path:
 | `.space N`, `.zero N` | emit `N` zero bytes |
 | `.byte v, ...` | one or more 8-bit values |
 | `.word v, ...` | one or more 32-bit values; symbols resolve to absolute addresses |
+| `.long v, ...` | the same as `.word`: C's `long` is 32 bits in this ABI |
 | `.float v, ...` | one binary32 per value |
 | `.double v, ...` | one binary64 per value (two little-endian words) |
 | `.asciz "s", ...` | bytes plus a terminating zero, per string |
@@ -384,7 +385,7 @@ Object path adds:
 | Directive | Effect |
 | --- | --- |
 | `.section NAME` or one of the known section directives | switch the current section |
-| `.text.<name>`, `.data.<name>`, `.bss.<name>` | a COMDAT section for that name |
+| `.section .text.<name>`, `.section .data.<name>`, `.section .bss.<name>` | a COMDAT section for that name; the dotted name is the argument to `.section`, not a directive of its own |
 | `.global` / `.globl` / `.weak` | export a symbol, with the given binding |
 | `.extern NAME` | mark a symbol as imported |
 | `.string "s"` | bytes plus a terminating zero |
