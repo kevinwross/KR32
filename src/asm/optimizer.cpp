@@ -1415,10 +1415,13 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten) {
             continue;
         }
         // R2-R6 are the pool: they are caller-saved, so only a call can
-        // disturb them, and the span is call-free. R12-R15 are excluded: a
-        // leaf function may use them safely (the leaf promotion already does),
-        // but using them in a function that calls breaks os_gfx_check for a
-        // reason this pass has not isolated.
+        // disturb them, and the span is call-free. R12-R15 are excluded, not
+        // because the rewrite is wrong for them - each of the four keeps the OS
+        // gfx test passing on its own, and all four together pass again - but
+        // because particular combinations change the code enough to trip a
+        // latent defect elsewhere: three of them reproduce the console-over-frame
+        // failure while two and four do not. That sensitivity is not this pass's
+        // to fix, and the safe pool keeps the OS green.
         std::vector<int> free_registers;
         for (int reg = 2; reg <= 6; ++reg) {
             if (used[reg]) {

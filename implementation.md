@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 17:20 -08:00
+> **Last updated:** 2026-11-15 17:23 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3911,6 +3911,31 @@ Newest entries at the bottom. Use the local time zone.
       `ui_headless_cxx`, `ui_headless_os`, and `ui_smoke`. That is also how a
       renamed test will show up. All eleven parts (94 tests, slowest 141 s) and
       94/94 WSL pass.
+
+- **2026-11-15 17:23 -08:00** — `R12`-`R15` closed as code-shape sensitivity, not an
+      allocator defect. The complete experiment matrix, all against
+      `os_gfx_check` with the same kernel and sources:
+
+      | Extra registers | Image | Result |
+      | --- | ---: | --- |
+      | none (shipped) | 6,348 B | passes |
+      | `R12` | 5,9xx B | passes |
+      | `R13` | | passes |
+      | `R14` | | passes |
+      | `R15` | | passes |
+      | `R12 R13` | 6,144 B | passes |
+      | `R14 R15` | 6,144 B | passes |
+      | `R12 R13 R14` | 5,904 B | **fails** |
+      | `R12 R13 R14 R15` | 5,944 B | passes |
+
+      Adding the fourth register makes the failure disappear again, which no
+      register-conflict or size-limit explanation survives. A plain 560-byte
+      padding of the passing build also passes, so it is not raw size either.
+      The pass is sound for every configuration tried; particular code shapes
+      trip a latent defect elsewhere in the OS, and chasing that shape is a
+      separate investigation with a poor return against the safe pool. The pool
+      stays `R2`-`R6` and the source comment now records the matrix's conclusion.
+      All eleven parts (94 tests) and 94/94 WSL pass.
 
 ## 10. Updating this file
 
