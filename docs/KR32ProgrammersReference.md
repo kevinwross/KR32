@@ -435,6 +435,59 @@ and `K` marks kernel mode.
 
 ---
 
+### 3.9 Aliases
+
+An alias is an assembler convenience that maps to exactly one real encoding.
+Nothing in this section adds an opcode; the ISA document is authoritative for
+every encoding named here.
+
+**Branch condition aliases.** Each is `JCOND` (`0x39`) with the condition in the
+16..13 field.
+
+| Alias | Condition | Meaning |
+| --- | --- | --- |
+| `JZ` | 0 | equal / zero |
+| `JNZ`, `JNE` | 1 | not equal |
+| `JCS` | 2 | carry set |
+| `JNC` | 3 | carry clear |
+| `JMI` | 4 | minus |
+| `JPL` | 5 | plus |
+| `JVS` | 6 | overflow set |
+| `JVC` | 7 | overflow clear |
+| `JHI` | 8 | unsigned higher |
+| `JLS` | 9 | unsigned lower or same |
+| `JGE` | 10 | signed greater or equal |
+| `JLT` | 11 | signed less than |
+| `JGT` | 12 | signed greater than |
+| `JLE` | 13 | signed less or equal |
+
+Conditions 14 and 15 are reserved for `JCOND` itself and have no mnemonic:
+`JCOND` is not accepted as a mnemonic either, so only the aliases above reach the
+instruction.
+
+**Vector aliases.** `VLOAD` and `VSTORE` are `MLOAD` (`0x52`) and `MSTORE`
+(`0x53`) with `L = 1`, which selects the 16-byte vector form; with `L = 0` the
+same opcodes move a 64-byte matrix. The strided form that takes a third operand
+is matrix-only, so `VLOAD`/`VSTORE` reject it.
+
+**Not aliases.** `NOP`, `NOT` (`0x2D`), `NEG` (`0x2E`), `RET`, `HALT`, `BRK`, and
+`FENCE` are instructions in their own right, as are `RDCR`/`WRCR` and
+`RDSP`/`WRSP`. `MOV`, `LOAD`, and `STORE` are instructions, not extensions of
+anything.
+
+**Directive aliases.**
+
+| Alias | Same as | Notes |
+| --- | --- | --- |
+| `.globl` | `.global` | `.weak` is a different binding, not an alias |
+| `.set` | `.equ` | |
+| `.zero` | `.space` | |
+| `.balign` | `.align` | both take a byte count; neither is a power of two |
+| `.string` | `.asciz` | bytes plus a terminator |
+
+Two directives look like aliases but are not. `.ascii` omits the terminator that
+`.asciz` and `.string` add. `.p2align N` is accepted by the raw path only and
+takes a power of two — it aligns to `2^N` — so a source that uses it is raw-only.
 ## 4. Linking, C, and C++
 
 ### 4.1 Objects and the linker

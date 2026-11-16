@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 19:33 -08:00
+> **Last updated:** 2026-11-15 19:55 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -3995,6 +3995,22 @@ Newest entries at the bottom. Use the local time zone.
       records the packed rule and the section alignments, and the ISA document is
       draft 0.8 with the item recorded. All eleven parts (94 tests) and 94/94 WSL
       pass.
+
+- **2026-11-15 19:55 -08:00** — Freeze item 1, the pseudo-ops, is closed and
+      with it all three remaining items. The assembler's conveniences now live in
+      one table, `docs/KR32ProgrammersReference.md` §3.9: the fourteen
+      branch-condition aliases (fifteen names, since `JNZ` and `JNE` both name
+      condition 1), `VLOAD`/`VSTORE` as the vector forms of `MLOAD`/`MSTORE` with
+      `L = 1`, and the directive aliases. Building the table found two documented
+      facts worth stating: `JCOND` itself is not accepted as a mnemonic, so
+      conditions 14 and 15 are unreachable from source, and `.p2align` is
+      accepted by the raw path only, which the table now says instead of leaving
+      a source that works in one path and fails in the other unexplained.
+
+      The item's own wording was the defect: it claimed "`NEG`-style aliases",
+      but `NEG` is opcode `0x2E` and `NOT` is `0x2D`, both real instructions.
+      §13 now records that, states that every one of its items is closed, and the
+      ISA document is draft 0.9. All eleven parts (94 tests) and 94/94 WSL pass.
 
 ## 10. Updating this file
 
