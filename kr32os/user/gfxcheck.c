@@ -4,7 +4,8 @@
 #include <kr32/con.h>
 #include <kr32/gfx.h>
 
-extern void sys_halt(void);
+int input_pending(void);
+void con_hide(int hidden);
 
 int main(void) {
     gfx_surface *screen = gfx_create(800, 600);
@@ -20,8 +21,10 @@ int main(void) {
     gfx_fill_rect(screen, 400, 400, 50, 50, 0x000000FFU);
     gfx_line(screen, 0, 599, 799, 0, 0x0000FF00U);
     gfx_present(screen, 0, 0, 800, 600);
-    /* The screenshot harness samples at a fixed step count. Halt with this
-       frame on screen so the shell cannot repaint over it. */
-    sys_halt();
+    /* Wait for a key so the frame is visible for as long as the user wants it.
+       The screenshot harness sends no key, so it samples this frame. */
+    while (input_pending() == 0) {
+    }
+    con_hide(0);
     return 0;
 }

@@ -211,6 +211,9 @@ int run_named(const char *name) {
     int status = (int)scratch->result;
     (void)process_exit(pid, status);
     (void)process_reap(pid);
+    // A program may have hidden the console, so the shell always comes back
+    // visible; otherwise its prompt would be invisible after such a program.
+    console_hide(0);
 
     index = 0;
     while (index < pages) {

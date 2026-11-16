@@ -1,11 +1,14 @@
 /* Draws a simple scene through the host graphics commands and presents it.
-   The console is hidden first so the terminal does not paint over the frame;
-   it stays hidden after the demo so the drawing remains visible. */
+   The console is hidden first so the terminal does not paint over the frame.
+   The frame stays on screen until a key arrives; then the console comes back
+   and the program returns through the normal exit path, so the shell reports a
+   status and keeps running instead of the machine halting. */
 
 #include <kr32/con.h>
 #include <kr32/gfx.h>
 
-extern void sys_halt(void);
+int input_pending(void);
+void con_hide(int hidden);
 
 int main(void) {
     gfx_surface *screen = gfx_create(800, 600);
@@ -20,8 +23,10 @@ int main(void) {
     gfx_line(screen, 100, 260, 700, 260, 0x00F06060U);
     gfx_text(screen, 100, 300, "KR32 gfx demo", 0x00E6EDF3U, 0x00101820U);
     gfx_present(screen, 0, 0, 800, 600);
-    /* The screenshot harness samples at a fixed step count. Halt with this
-       frame on screen so the shell cannot repaint over it. */
-    sys_halt();
+    /* Wait for a key so the frame is visible for as long as the user wants it.
+       The screenshot harness sends no key, so it samples this frame. */
+    while (input_pending() == 0) {
+    }
+    con_hide(0);
     return 0;
 }

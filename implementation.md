@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-15 22:16 -08:00
+> **Last updated:** 2026-11-15 23:11 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4049,6 +4049,26 @@ Newest entries at the bottom. Use the local time zone.
       expectations that encoded the old flow, and the script now says why. Two
       new tests pin the behaviour for C and C++. All eleven parts (94 tests) and
       94/94 WSL pass.
+
+- **2026-11-15 23:11 -08:00** — `gfxdemo` and `gfxcheck` exit through the normal
+      path instead of halting the machine. Both ended with `sys_halt()` so the
+      screenshot harness would find the frame on screen, which made `run gfxdemo`
+      kill the whole system at `kernel_halt`. They now hide the console, draw,
+      wait for a key with `input_pending()`, restore the console and return 0, so
+      the shell prints `exit status 0` and keeps running. The harness sends no
+      key, so it still samples the frame.
+
+      The kernel needed the other half: `run_named` restores console visibility
+      when a program returns, so a program that hid the console cannot leave the
+      shell prompt invisible. Verified both branches by screen: with the key wait
+      the three checked pixels still match (101820, 30A030, F06060); with a
+      temporary bounded wait the screen becomes the terminal's own background
+      101820, proving the exit path ran and the console came back.
+
+      Cost: the two gfx parts now run the harness's full 25M-step budget instead
+      of stopping at a halt, so part10 is 133 s and part11 135 s against 81 s and
+      85 s. Both stay inside the three-minute bound and `docs/testing.md` records
+      why. All eleven parts (94 tests) and 94/94 WSL pass.
 
 ## 10. Updating this file
 

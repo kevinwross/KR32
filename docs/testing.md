@@ -96,8 +96,12 @@ minutes on the current development host (Hukilau, measured 2026-11-15 with
 | `part07` | `unit_test_cxx_codegen_6`, `cc_2`, `cc_6`, `cc_3`, `threads` | 5 | 55 s |
 | `part08` | the light unit buckets (`cc_4`, `cc_5`, `cc_7`, `ui`, `fast`, `machine`, ...) | 19 | 30 s |
 | `part09` | the light integration tests (`build_*`, `run_c*`, `run_cxx_*`, `cli_*`, `ui_*`) | 41 | 22 s |
-| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 4 | 81 s |
-| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `os_gfx_demo` | 4 | 85 s |
+| `part10` | `os_console_screen`, `run_os_boot`, `run_os_embedded`, `os_gfx_check` | 4 | 133 s |
+| `part11` | `run_os_user`, `run_os_fault_timer`, `run_os_shell`, `os_gfx_demo` | 4 | 135 s |
+
+`part10` and `part11` carry the two graphics programs, which wait for a key
+rather than halting, so each runs the harness's full 25,000,000-step budget
+instead of stopping at a halt.
 
 ```powershell
 $ctest = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
