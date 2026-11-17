@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17 07:12 -08:00
+> **Last updated:** 2026-11-17T09:12:21-08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -994,6 +994,14 @@ cd /mnt/c/Users/kevin/source/repos/KR32
 cmake --preset linux-gcc
 cmake --build --preset linux-gcc
 ctest --preset linux-gcc
+```
+
+Native Linux ARM64:
+
+```bash
+cmake --preset linux-arm64-gcc
+cmake --build --preset linux-arm64-gcc
+ctest --preset linux-arm64-gcc
 ```
 
 Sanitizers:
@@ -4667,6 +4675,31 @@ Newest entries at the bottom. Use the local time zone.
 
       Item 2 of the plan is closed by measurement rather than code: 335 cases,
       335 compilations, so there is nothing to cache.
+
+- **2026-11-17T09:12:21-08:00** — Arm64 gate measured on native hardware instead
+      of extrapolated. Host: four-core aarch64, Debian 13, GCC 14.2.0, Clang
+      19.1.7, CMake 3.31.6, Ninja 1.12.1. Clean tree, no competing load, and
+      `ctest --preset` at the preset's four jobs:
+
+      | Preset | configure | clean build | gate tests | total | status |
+      | --- | ---: | ---: | ---: | ---: | --- |
+      | `linux-arm64-gcc` | 1 s | 117 s | 131 s | **249 s** | 97/97 pass |
+      | `linux-clang` | 1 s | 135 s | 144 s | **280 s** | 97/97 pass |
+      | `linux-asan` | 1 s | 155 s | 609 s | **765 s** | 85/85 pass |
+
+      Every gate is green on Arm64. The sanitizer's 85 is the 97 minus the nine
+      UI/display tests that `KR32_BUILD_UI=OFF` never registers. A cold gate also
+      pays one KR32OS image build inside the `kr32os_images` fixture, so these
+      test columns are higher than a repeat run on a warm tree (105 s and 113 s
+      for GCC and Clang); the ASan column is dominated by its codegen buckets,
+      the slowest at 300 s.
+
+      Four jobs is load-bearing here, not cosmetic. At the previous eight the
+      ASan gate failed with two timeouts: `unit_test_cxx_codegen_2b` and
+      `unit_test_cxx_codegen_2c` crossed the 600 s watchdog on four cores, and
+      both pass in 204 s and 155 s when run alone. `cf215e1` sets four jobs for
+      every test preset and records the reason; developers on larger machines
+      can still pass a bigger `-j`.
 
 ## 10. Updating this file
 
