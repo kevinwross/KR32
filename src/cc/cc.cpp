@@ -1466,7 +1466,10 @@ private:
         case Type::Kind::Float: return "float";
         case Type::Kind::Double: return "double";
         case Type::Kind::Pointer: {
-            const TypePtr base = type->pointer_base.lock();
+            // The pointee lives in pointer_base for a tagged type and in base
+            // for every other one, so both must be consulted or every pointer
+            // reads as void *.
+            const TypePtr base = type->element();
             return base ? type_name(base) + " *" : "void *";
         }
         case Type::Kind::Array:
@@ -1509,7 +1512,7 @@ private:
                              std::to_string(member.type ? member.type->size() : 0));
             }
         } else if (type->kind == Type::Kind::Pointer) {
-            debug_type(type->pointer_base.lock());
+            debug_type(type->element());
         } else if (type->kind == Type::Kind::Array) {
             debug_type(type->base);
         }

@@ -607,3 +607,18 @@ TEST_CASE("a loop that breaks keeps its condition after optimization") {
     CHECK(optimized.ok);
     CHECK(optimized.result == 3);
 }
+TEST_CASE("debug records name a pointer's pointee") {
+    // type_pointer keeps a tagged pointee in pointer_base and every other one in
+    // base; reading only pointer_base reported every pointer as void *.
+    const cc::Result compiled = cc::compile(
+        "struct item { int value; };\n"
+        "int count(const char *name, int *values, struct item *entry) {\n"
+        "    return name != 0 && values != 0 && entry != 0;\n"
+        "}\n",
+        "pointer-test.c");
+    REQUIRE(compiled.ok);
+    CHECK(compiled.assembly.find("V count name 0 char_* 4") != std::string::npos);
+    CHECK(compiled.assembly.find("V count values 4 int_* 4") != std::string::npos);
+    CHECK(compiled.assembly.find("struct:item_*") != std::string::npos);
+    CHECK(compiled.assembly.find("V count entry 8 void_*") == std::string::npos);
+}

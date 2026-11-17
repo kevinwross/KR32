@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 18:20 -08:00
+> **Last updated:** 2026-11-16 18:50 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4332,6 +4332,21 @@ Newest entries at the bottom. Use the local time zone.
       depend on a line position again, which is what the pipeline's insertions
       keep moving. The contract is now in `docs/debug.md` next to the record
       table and in a comment where the record is written.
+
+- **2026-11-16 18:50 -08:00** — Yes, a bug: every C pointer was recorded as
+      `void_*`. `type_pointer` keeps a tagged pointee in `pointer_base` and every
+      other one in `base`, but `type_name` read only `pointer_base`, so
+      `const char *name` reached the debug records as `void *` while
+      `struct initrd_entry *` came through correctly. Both readers now use
+      `Type::element()`, which consults both fields, and `debug_type` recurses the
+      same way. `run_named.name` is `char_*`, `source` is `unsigned_char_*`, and
+      the six records that still say `void_*` are the genuine ones.
+
+      The C++ front end was already right - it records `char*` and `int*` - so
+      this was C only. A test compiles `const char *`, `int *`, and `struct item *`
+      parameters and asserts the records name each pointee. The embedded images
+      were regenerated for both platforms; Debug and Release both built; all
+      eleven parts (96 tests) and 96/96 WSL pass.
 
 ## 10. Updating this file
 
