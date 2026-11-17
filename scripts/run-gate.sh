@@ -7,9 +7,11 @@
 # machine 80% of its logical processors.
 set -e
 preset="${1:-linux-gcc}"
+# NUMBER_OF_PROCESSORS is set by Windows and by CI runners; nproc is the fallback.
+cores="${NUMBER_OF_PROCESSORS:-$(nproc)}"
 case "$(uname -m)" in
     aarch64|arm64) jobs=4 ;;
-    *) jobs=$(( $(nproc) * 8 / 10 )); [ "$jobs" -lt 1 ] && jobs=1 ;;
+    *) jobs=$(( cores * 8 / 10 )); [ "$jobs" -lt 1 ] && jobs=1 ;;
 esac
 # The sanitizer gate is CPU-bound with a 600 s per-test watchdog, so it keeps the
 # four-job cap whatever the core count.

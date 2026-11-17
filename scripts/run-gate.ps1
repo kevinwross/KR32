@@ -11,8 +11,16 @@ param(
     [switch]$NoTests
 )
 
+# NUMBER_OF_PROCESSORS is set by Windows and by CI runners, so read it rather
+# than a WMI query; the runtime count is the fallback when it is absent.
 $architecture = $env:PROCESSOR_ARCHITECTURE
-$cores = (Get-CimInstance Win32_ComputerSystem).NumberOfLogicalProcessors
+$cores = 0
+if ($env:NUMBER_OF_PROCESSORS) {
+    $cores = [int]$env:NUMBER_OF_PROCESSORS
+}
+if ($cores -lt 1) {
+    $cores = [Environment]::ProcessorCount
+}
 if ($architecture -eq "ARM64") {
     $jobs = 4
 } else {

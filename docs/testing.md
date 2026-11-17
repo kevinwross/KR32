@@ -77,7 +77,8 @@ bash scripts/run-gate.sh                   # build + tests, WSL / Linux
 ```
 
 An Arm64 machine runs four jobs; any other machine runs 80% of its logical
-processors (12 cores -> 9, 6 cores -> 4). The sanitizer preset is capped at
+processors (12 cores -> 9, 6 cores -> 4). Both read `NUMBER_OF_PROCESSORS`, which
+Windows and CI runners set, falling back to the runtime count or `nproc`. The sanitizer preset is capped at
 four regardless: it is CPU-bound, and more jobs oversubscribe a small machine so
 that its codegen buckets cross the 600 s per-test watchdog. Both scripts print
 the architecture, the core count and the job count they chose before they start,
