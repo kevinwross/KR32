@@ -11045,6 +11045,13 @@ private:
             local.is_parameter = true;
             if (!parameter.name.parts.empty()) {
                 local_scopes_.back()[parameter.name.parts.back()] = local;
+                // Parameters get the same V record a local declaration emits, so the
+                // debugger can show them and not only the body's locals.
+                debug_record("V " + current_function_->qualified + " " +
+                             parameter.name.parts.back() + " " +
+                             std::to_string(local.offset) + " " +
+                             debug_type(local.type) + " " +
+                             std::to_string(std::max(1, type_size(local.type))));
             }
             if (!local.is_reference && is_fp(local.type)) {
                 if (fp_argument < 8) {

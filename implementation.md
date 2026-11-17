@@ -4885,6 +4885,41 @@ Newest entries at the bottom. Use the local time zone.
 
       Gates: 97 of 97 on Windows (226 s at 9 jobs) and 97 of 97 on WSL.
 
+- **2026-11-17 11:40 -08:00** — Item 1 done, and it took four bugs, not one.
+
+      **The one that made the `F2` record:** the integer span pass constructed its
+      location with `fp = true`, so an integer register was recorded in the FP
+      register file. `this`, held in `R2`, was reported as `F2`. The FP pass keeps
+      `fp = true` and the integer passes now pass `false`.
+
+      **The type guards.** A slot can be reused for a different variable later in the
+      same function - `this` in the prologue, a float temporary after - so a
+      promotion is now recorded only when the register class matches the type the V
+      record declares: an FP promotion requires `float`/`double`, a GPR promotion
+      requires anything else. Without this rule the FP pass recorded the temporary
+      under the name `this`.
+
+      **The label-to-name mapping.** The passes looked up V records by the code label
+      (`_Z3addii`, `_ZN12BalancedTreeD1Ev`) while the records carry the qualified name
+      (`add`, `BalancedTree::~BalancedTree`), so **no C++ promoted local had ever
+      produced a P record**. `debug_function_names` maps label to name from the `F`
+      records, and the record's function field now carries the name, which is what
+      `append_location_records` looks up.
+
+      **The parameter records.** The C++ front end bound each parameter to a slot and
+      emitted no `V` record for it, so a C++ frame showed its body's locals and not
+      the arguments. It now emits the same record a local declaration does. The
+      destructor's own `qualified` name was fixed in the previous commit because it
+      collided with the constructor's and made the mapping name the destructor's
+      locals after the constructor's.
+
+      A test compiles `int add(int a, int b)`, checks both parameters are recorded
+      with their types and sizes, runs to a breakpoint after the prologue and reads
+      `a == 20` and `b == 22` through the debugger, then builds the same source at
+      `-O1` and checks a promoted parameter has a `P` record in a GPR. 24 assertions.
+
+      Gates: 97 of 97 on Windows (257 s at 9 jobs) and 97 of 97 on WSL.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

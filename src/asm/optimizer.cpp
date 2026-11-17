@@ -1197,11 +1197,51 @@ std::pair<std::string, std::string> bracket_labels(
     return {start, end};
 }
 
-// The frame slots the front end named for one function, as offset -> name. The
-// debug records read `V <function> <name> <offset> <type> <size>`.
-std::map<int, std::string> debug_slot_names(const std::vector<std::string>& lines,
-                                            const std::string& function) {
-    std::map<int, std::string> names;
+// The debug name of each function, keyed by the label its code starts at. A C++
+// symbol is mangled (_Z3addii) while its V records carry the qualified name
+// (BalancedTree::add), so a pass that looks up slots by the code label finds
+// nothing and reports no locations for any C++ local or parameter.
+std::map<std::string, std::string> debug_function_names(
+    const std::vector<std::string>& lines) {
+    std::map<std::string, std::string> names;
+    for (const std::string& line : lines) {
+        const std::size_t at = line.find(".asciz \"F ");
+        if (at == std::string::npos) {
+            continue;
+        }
+        std::istringstream stream(line.substr(at + 10));
+        std::string name;
+        std::string start;
+        if (stream >> name >> start) {
+            names[start] = name;
+        }
+    }
+    return names;
+}
+
+std::string debug_name_of(const std::map<std::string, std::string>& names,
+                          const std::string& label) {
+    const auto found = names.find(label);
+    return found == names.end() ? label : found->second;
+}
+
+// A frame slot the front end named for one function. The debug records read
+// `V <function> <name> <offset> <type> <size>`; the type matters because a slot
+// can be reused for a different variable later in the function, so a promotion
+// must not be recorded under a name whose type disagrees with the register class
+// it was promoted into.
+struct DebugSlot {
+    std::string name;
+    std::string type;
+};
+
+bool debug_type_is_fp(const std::string& type) {
+    return type.rfind("float", 0) == 0 || type.rfind("double", 0) == 0;
+}
+
+std::map<int, DebugSlot> debug_slot_names(const std::vector<std::string>& lines,
+                                          const std::string& function) {
+    std::map<int, DebugSlot> names;
     const std::string prefix = "V " + function + " ";
     for (const std::string& line : lines) {
         const std::size_t at = line.find(prefix);
@@ -1211,8 +1251,9 @@ std::map<int, std::string> debug_slot_names(const std::vector<std::string>& line
         std::istringstream stream(line.substr(at + prefix.size()));
         std::string name;
         int offset = 0;
-        if (stream >> name >> offset) {
-            names[offset] = name;
+        std::string type;
+        if (stream >> name >> offset >> type) {
+            names[offset] = DebugSlot{name, type};
         }
     }
     return names;
@@ -1221,6 +1262,7 @@ std::map<int, std::string> debug_slot_names(const std::vector<std::string>& line
 int promote_call_surviving_scalars(std::vector<std::string>& lines,
                                    int& rewritten,
                                    std::vector<PendingLocation>& locations) {
+    const std::map<std::string, std::string> debug_names = debug_function_names(lines);
     struct Edits {
         std::map<std::size_t, std::string> replace;
         std::map<std::size_t, std::vector<std::string>> insert;
@@ -1350,14 +1392,15 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
             const std::string name =
                 label.empty() ? std::string() : label.substr(0, label.size() - 1);
             if (!name.empty()) {
-                const std::map<int, std::string> names =
-                    debug_slot_names(lines, name);
+                const std::map<int, DebugSlot> names =
+                    debug_slot_names(lines, debug_name_of(debug_names, name));
                 for (const auto& entry : promoted) {
                     const auto found = names.find(entry.first);
-                    if (found != names.end()) {
-                        locations.push_back(PendingLocation{
-                            name, found->second, entry.second, false, true, 0, 0});
+                    if (found == names.end() || debug_type_is_fp(found->second.type)) {
+                        continue;
                     }
+                    locations.push_back(PendingLocation{
+                        debug_name_of(debug_names, name), found->second.name, entry.second, false, true, 0, 0});
                 }
             }
         }
@@ -1477,6 +1520,7 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
 }
 
 int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, std::vector<PendingLocation>& locations) {
+    const std::map<std::string, std::string> debug_names = debug_function_names(lines);
     int removed = 0;
     // A function with exception paths is not skipped here: a candidate span
     // contains no call, so no throw can leave it half-way, and every landing pad
@@ -1646,9 +1690,9 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, st
         const std::string function_name = function_label.empty()
                                               ? std::string()
                                               : function_label.substr(0, function_label.size() - 1);
-        const std::map<int, std::string> slot_names =
-            function_name.empty() ? std::map<int, std::string>()
-                                  : debug_slot_names(lines, function_name);
+        const std::map<int, DebugSlot> slot_names =
+            function_name.empty() ? std::map<int, DebugSlot>()
+                                  : debug_slot_names(lines, debug_name_of(debug_names, function_name));
         if (!slot_names.empty()) {
             for (const Candidate& candidate : candidates) {
                 const auto slot = assigned.find(candidate.slot);
@@ -1656,14 +1700,20 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, st
                     continue;
                 }
                 const auto name = slot_names.find(candidate.slot);
-                if (name == slot_names.end()) {
+                // The span passes promote integer values; a slot whose record says
+                // floating point is a different variable that reused the offset.
+                if (name == slot_names.end() || debug_type_is_fp(name->second.type)) {
                     continue;
                 }
                 const auto bracket =
                     bracket_labels(lines, candidate.first, candidate.last);
                 if (!bracket.first.empty()) {
-                    PendingLocation location{function_name, name->second,
-                                             slot->second, true, false,
+                    // This is the integer span pass: the register is a GPR, so the
+                    // record must not name the FP register file. Passing fp=true here
+                    // made an integer slot read as F<n>, which is how `this` in R2
+                    // came to be reported as F2.
+                    PendingLocation location{debug_name_of(debug_names, function_name), name->second.name,
+                                             slot->second, false, false,
                                              candidate.first, candidate.last};
                     location.start_label = bracket.first;
                     location.end_label = bracket.second;
@@ -1811,6 +1861,7 @@ int fold_fp_move_consumers(std::vector<std::string>& lines) {
 int promote_call_free_fp_ranges(std::vector<std::string>& lines,
                                 int& rewritten,
                                 std::vector<PendingLocation>& locations) {
+    const std::map<std::string, std::string> debug_names = debug_function_names(lines);
     int removed = 0;
     // Same reasoning as the integer span pass above: no call inside the span
     // means no throw inside it, so the landing pads cannot observe the values.
@@ -1967,9 +2018,9 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
         const std::string function_name = function_label.empty()
                                               ? std::string()
                                               : function_label.substr(0, function_label.size() - 1);
-        const std::map<int, std::string> slot_names =
-            function_name.empty() ? std::map<int, std::string>()
-                                  : debug_slot_names(lines, function_name);
+        const std::map<int, DebugSlot> slot_names =
+            function_name.empty() ? std::map<int, DebugSlot>()
+                                  : debug_slot_names(lines, debug_name_of(debug_names, function_name));
         if (!slot_names.empty()) {
             for (const FpCandidate& candidate : candidates) {
                 const auto slot = assigned.find(candidate.slot);
@@ -1977,14 +2028,21 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
                     continue;
                 }
                 const auto name = slot_names.find(candidate.slot);
-                if (name == slot_names.end()) {
+                // This is the floating-point pass, so the slot's record must agree:
+                // a slot whose record says integer is a different variable that
+                // reused the offset later in the function.
+                if (name == slot_names.end() || !debug_type_is_fp(name->second.type)) {
                     continue;
                 }
                 const auto bracket =
                     bracket_labels(lines, candidate.first, candidate.last);
                 if (!bracket.first.empty()) {
-                    PendingLocation location{function_name, name->second,
-                                             slot->second, true, false,
+                    // This is the integer span pass: the register is a GPR, so the
+                    // record must not name the FP register file. Passing fp=true here
+                    // made an integer slot read as F<n>, which is how `this` in R2
+                    // came to be reported as F2.
+                    PendingLocation location{debug_name_of(debug_names, function_name), name->second.name,
+                                             slot->second, false, false,
                                              candidate.first, candidate.last};
                     location.start_label = bracket.first;
                     location.end_label = bracket.second;
@@ -2033,6 +2091,7 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
 }
 int promote_leaf_scalars(std::vector<std::string>& lines,
                           std::vector<PendingLocation>& locations) {
+    const std::map<std::string, std::string> debug_names = debug_function_names(lines);
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
     int removed = 0;
@@ -2181,12 +2240,12 @@ int promote_leaf_scalars(std::vector<std::string>& lines,
                     label.empty() ? std::string()
                                   : label.substr(0, label.size() - 1);
                 if (!name.empty()) {
-                    const std::map<int, std::string> names =
-                        debug_slot_names(lines, name);
+                    const std::map<int, DebugSlot> names =
+                        debug_slot_names(lines, debug_name_of(debug_names, name));
                     const auto found = names.find(slot);
-                    if (found != names.end()) {
+                    if (found != names.end() && !debug_type_is_fp(found->second.type)) {
                         locations.push_back(PendingLocation{
-                            name, found->second, reg, false, true, 0, 0});
+                            debug_name_of(debug_names, name), found->second.name, reg, false, true, 0, 0});
                     }
                 }
             }

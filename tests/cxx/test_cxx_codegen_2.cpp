@@ -868,3 +868,96 @@ TEST_CASE("a derived class exposes the members it inherits") {
     CHECK(members[2].offset == 8);
     CHECK(debug::class_members(info, "Missing").empty());
 }
+TEST_CASE("C++ parameters are recorded, readable, and promoted") {
+    // The front end bound each parameter to a slot but emitted no V record for it,
+    // so the debugger could show a body's locals and not the arguments that
+    // produced them. A promoted parameter also needs a P record, because the slot
+    // its V record names stops being written.
+    const std::string source =
+        "int add(int a, int b) {\n"
+        "    int sum = a + b;\n"
+        "    return sum;\n"
+        "}\n"
+        "int main() { return add(20, 22); }\n";
+    const cxx::Result compiled = cxx::compile(source);
+    REQUIRE(compiled.ok);
+    container::Image object;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, object, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({object, runtime}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    int parameters = 0;
+    for (const debug::Variable& variable : info.variables) {
+        if (variable.function == "add" && (variable.name == "a" || variable.name == "b")) {
+            ++parameters;
+            CHECK(variable.type == "int");
+            CHECK(variable.size == 4);
+        }
+    }
+    CHECK(parameters == 2);
+
+    // Read them where the debugger would: the statement after the prologue, so the
+    // argument registers have been stored into the slots the records name.
+    debug::Session session;
+    REQUIRE_MESSAGE(session.load(image, error), error.c_str());
+    const debug::Function* function = nullptr;
+    for (const debug::Function& candidate : session.info().functions) {
+        if (candidate.name == "add") {
+            function = &candidate;
+        }
+    }
+    REQUIRE(function != nullptr);
+    std::uint32_t statement = function->start;
+    for (const debug::Line& line : session.info().lines) {
+        if (line.line == 2 && line.address > function->start &&
+            line.address < function->end) {
+            statement = line.address;
+        }
+    }
+    CHECK(statement > function->start);
+    session.set_breakpoint(statement);
+    (void)session.run(100000);
+    REQUIRE(session.at_breakpoint());
+    std::uint32_t value = 0;
+    std::string read_error;
+    REQUIRE_MESSAGE(session.read_variable("a", value, read_error), read_error.c_str());
+    CHECK(value == 20);
+    REQUIRE_MESSAGE(session.read_variable("b", value, read_error), read_error.c_str());
+    CHECK(value == 22);
+
+    // An optimized build promotes a parameter out of its slot, and the record that
+    // says so must exist or the reader falls back to a slot nothing writes.
+    cxx::Options options;
+    options.optimize = true;
+    const cxx::Result optimized = cxx::compile(source, options);
+    REQUIRE(optimized.ok);
+    container::Image optimized_object;
+    REQUIRE_MESSAGE(assembler::assemble_object(optimized.assembly, optimized_object, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image optimized_image;
+    REQUIRE_MESSAGE(linker::link({optimized_object, runtime}, linker::Options{},
+                                 optimized_image, map, link_error),
+                    link_error.message.c_str());
+    debug::Info optimized_info;
+    REQUIRE_MESSAGE(debug::parse_info(optimized_image, optimized_info, error), error.c_str());
+    bool promoted_parameter = false;
+    for (const debug::Location& location : optimized_info.locations) {
+        if (location.function == "add" &&
+            (location.name == "a" || location.name == "b")) {
+            promoted_parameter = true;
+            CHECK_FALSE(location.fp);
+        }
+    }
+    CHECK(promoted_parameter);
+}
