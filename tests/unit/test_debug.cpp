@@ -1035,3 +1035,63 @@ TEST_CASE("a call-free span reports a range narrower than its function") {
     }
     CHECK(narrow);
 }
+TEST_CASE("the shipped kernel names its promoted locals") {
+    // The debugger reads the same records the shipped images carry; if this one
+    // is absent, the GUI falls back to the frame slot and shows 0.
+    const char* candidates[] = {
+        KR32_SOURCE_DIR "/src/resources/os/windows/kernel.k32",
+        KR32_SOURCE_DIR "/src/resources/os/linux/kernel.k32",
+    };
+    container::Image image;
+    bool loaded = false;
+    for (const char* path : candidates) {
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            continue;
+        }
+        std::vector<std::uint8_t> bytes(std::istreambuf_iterator<char>(input), {});
+        container::Error container_error;
+        if (container::read(bytes, image, container_error)) {
+            loaded = true;
+            break;
+        }
+    }
+    REQUIRE(loaded);
+
+    // The OS path merges kernel and BIOS debug info; it must carry the location
+    // records too, which is what `gui --os` and `debug --os` use.
+    debug::Session session;
+    std::string error;
+    container::Image bios;
+    bool have_bios = false;
+    for (const char* path : {KR32_SOURCE_DIR "/src/resources/os/windows/bios.k32",
+                             KR32_SOURCE_DIR "/src/resources/os/linux/bios.k32"}) {
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            continue;
+        }
+        std::vector<std::uint8_t> bytes(std::istreambuf_iterator<char>(input), {});
+        container::Error container_error;
+        have_bios = container::read(bytes, bios, container_error);
+        if (have_bios) {
+            break;
+        }
+    }
+    REQUIRE(have_bios);
+    REQUIRE_MESSAGE(session.load_os(image, bios, error), error.c_str());
+    CHECK_FALSE(session.info().locations.empty());
+
+    const debug::Function* function = nullptr;
+    for (const debug::Function& candidate : session.info().functions) {
+        if (candidate.name == "run_named" && candidate.start < candidate.end) {
+            function = &candidate;
+        }
+    }
+    REQUIRE(function != nullptr);
+    const debug::Location* location =
+        session.location_at("run_named", "entry", function->start + 8);
+    REQUIRE(location != nullptr);
+    CHECK(location->start == function->start);
+    CHECK(location->end == function->end);
+    CHECK_FALSE(location->fp);
+}

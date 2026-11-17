@@ -2211,9 +2211,17 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         }
 
         entries.push_back(entry);
+        // A register-held value has no address of its own, but a pointer still
+        // has a target: expand through its value rather than its (absent) slot.
+        const bool register_pointer = !entry.reg_name.empty() &&
+                                      !entry.type.empty() &&
+                                      entry.type.back() == '*';
         if (!entry.ok || depth >= 2 || entry.size == 0 ||
-            !entry.reg_name.empty()) {
+            (!entry.reg_name.empty() && !register_pointer)) {
             return;
+        }
+        if (register_pointer) {
+            entry.address = entry.value;
         }
 
         if (entry.array) {

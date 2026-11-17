@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 16:15 -08:00
+> **Last updated:** 2026-11-16 18:11 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4305,6 +4305,25 @@ Newest entries at the bottom. Use the local time zone.
       All eleven parts (96 tests) and 96/96 WSL pass. The embedded OS images are
       unchanged: the test builds are unoptimized, and the optimizer is what emits
       the records.
+
+- **2026-11-16 18:11 -08:00** — The debugger was right; the OS loader threw the
+      records away. `Session::set_debug_info` merges a kernel and a BIOS image and
+      copied every vector of `Info` except the new `locations`, so `gui --os` and
+      `debug --os` had none while a single executable did. One missing copy line;
+      a test now loads the shipped kernel **through `load_os`**, finds
+      `run_named.entry` at the function's start, and fails without that line.
+
+      Two things came out of the report. The Release binary the operator first
+      ran was a day old - only the Debug preset had been built since the work
+      started - so both presets are built and verified now. And a register-held
+      pointer could not be expanded, because the pane stopped at "no address";
+      it now dereferences through the value, so `entry` expands to its
+      `initrd_entry` while the row still shows `register: R9`.
+
+      The embedded images were rebuilt from scratch for both platforms:
+      `kernel.k32` grew by about 4 KB of debug text because the shipped build is
+      optimized and now carries 73 location records. All eleven parts (96 tests)
+      and 96/96 WSL pass; Debug and Release both built.
 
 ## 10. Updating this file
 

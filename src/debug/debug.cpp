@@ -257,6 +257,8 @@ bool Session::set_debug_info(const container::Image& image,
                            parsed.functions.end());
     info_.variables.insert(info_.variables.end(), parsed.variables.begin(),
                            parsed.variables.end());
+    info_.locations.insert(info_.locations.end(), parsed.locations.begin(),
+                           parsed.locations.end());
     info_.globals.insert(info_.globals.end(), parsed.globals.begin(),
                          parsed.globals.end());
     info_.types.insert(info_.types.end(), parsed.types.begin(), parsed.types.end());
