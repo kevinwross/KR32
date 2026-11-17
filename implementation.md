@@ -4862,6 +4862,29 @@ Newest entries at the bottom. Use the local time zone.
       run exited `-1` after 130 s with no failing test, which was an interruption
       rather than a failure; it was re-run rather than reported.
 
+- **2026-11-17 11:35 -08:00** — Item 1, step 1 done: a destructor's debug records carry
+      its own name. `build_member` computed `qualified` as
+      `owner->qualified + "::" + base_name` for every member function, and a C++
+      destructor's `base_name` is the class name without the `~`, so the F and V
+      records for `BalancedTree::~BalancedTree` said
+      `BalancedTree::BalancedTree` - the constructor's name - while the symbol was
+      the destructor's. The name now takes the `~` in both naming branches.
+
+      That was not sufficient, and the reason is the real one behind the `F2`
+      record: the destructor's slot 0 holds `this` in the prologue and a **float**
+      temporary later, and the FP promotion pass promoted the float and recorded it
+      under the name the V record gives offset 0 - `this`. So the next step is a type
+      check when recording: an FP promotion must only be recorded for a V record
+      whose declared type is floating point, and a GPR promotion only for one that is
+      not. Then the parameter records can go in, and the label-to-name mapping with
+      them.
+
+      The mapping itself was re-applied, verified to produce records, and reverted:
+      it turns one misnamed record into one misnamed record visible in the GUI, which
+      is worse than none until the type check exists.
+
+      Gates: 97 of 97 on Windows (226 s at 9 jobs) and 97 of 97 on WSL.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

@@ -1768,7 +1768,12 @@ private:
                                     declaration.name.parts.end() - 1);
             owner = find_class(class_name);
             if (owner) {
-                qualified = owner->qualified + "::" + base_name;
+                // A destructor's name is the class name prefixed with ~; without it the
+                // F and V records for the destructor collide with the constructor's, and
+                // a reader that maps code labels to names by F record assigns the
+                // destructor's locals to the constructor.
+                qualified = destructor ? owner->qualified + "::~" + base_name
+                                       : owner->qualified + "::" + base_name;
                 if (base_name == owner->qualified.substr(
                                      owner->qualified.find_last_of(':') + 1) &&
                     !destructor) {
@@ -1779,7 +1784,8 @@ private:
             }
         } else {
             owner = find_class(prefix);
-            qualified = owner ? owner->qualified + "::" + base_name
+            qualified = owner ? (destructor ? owner->qualified + "::~" + base_name
+                                            : owner->qualified + "::" + base_name)
                               : qualify(prefix, declaration.name);
         }
         if ((constructor || destructor) && !owner) {
