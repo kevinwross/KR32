@@ -1095,3 +1095,16 @@ TEST_CASE("the shipped kernel names its promoted locals") {
     CHECK(location->end == function->end);
     CHECK_FALSE(location->fp);
 }
+TEST_CASE("a pointer type is recognised however it is spelled") {
+    // C++ writes `char*`, C writes `char_*` in its debug records, and the C
+    // front end's prose form is `char *`. Reading only one left the others looking
+    // like aggregates, which is why `this` would not expand.
+    CHECK(debug::pointee_type("char*") == "char");
+    CHECK(debug::pointee_type("char_*") == "char");
+    CHECK(debug::pointee_type("char *") == "char");
+    CHECK(debug::pointee_type("BalancedTree*") == "BalancedTree");
+    CHECK(debug::pointee_type("struct:initrd_entry_*") == "struct:initrd_entry");
+    CHECK(debug::pointee_type("int").empty());
+    CHECK(debug::pointee_type("").empty());
+    CHECK(debug::pointee_type("int[16]").empty());
+}

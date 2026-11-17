@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17 04:15 -08:00
+> **Last updated:** 2026-11-17 04:45 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4606,6 +4606,19 @@ Newest entries at the bottom. Use the local time zone.
       class, parses the object's debug info, and checks the names and offsets
       (0, 4, 8 - the classes have no vtable, which my first expectations got
       wrong).
+
+      All eleven parts (96 tests) and 96/96 WSL pass; Debug and Release built.
+
+- **2026-11-17 04:45 -08:00** — `this` expands too. It is a pointer, and the panel
+      only recognised the two spellings the C front end produces (`char_*` and
+      `char *`); the C++ front end writes `BalancedTree*` with no separator, so the
+      type was treated as an aggregate name, `class_members` found nothing, and the
+      row stayed closed. The tooltip already checked for a trailing `*` and worked,
+      which is why the hover could dereference a pointer the panel would not.
+
+      `debug::pointee_type` now owns the rule: trim a trailing `*`, then any
+      separators before it, and answer empty for a non-pointer. Both front ends'
+      spellings, and `struct:initrd_entry_*`, are covered by a test.
 
       All eleven parts (96 tests) and 96/96 WSL pass; Debug and Release built.
 

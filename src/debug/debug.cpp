@@ -45,6 +45,20 @@ constexpr std::uint32_t kErrorIo = 0xFFFF'FFFFU;
 
 } // namespace
 
+std::string pointee_type(const std::string& type) {
+    std::string trimmed = type;
+    while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '_')) {
+        trimmed.pop_back();
+    }
+    if (trimmed.empty() || trimmed.back() != '*') {
+        return {};
+    }
+    trimmed.pop_back();
+    while (!trimmed.empty() && (trimmed.back() == ' ' || trimmed.back() == '_')) {
+        trimmed.pop_back();
+    }
+    return trimmed;
+}
 std::vector<Member> class_members(const Info& info, const std::string& type) {
     std::vector<Member> members;
     std::set<std::string> seen;

@@ -2258,15 +2258,9 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             return;
         }
 
-        std::string pointee;
-        bool pointer = false;
-        if (type.size() >= 2 && type.compare(type.size() - 2, 2, "_*") == 0) {
-            pointee = type.substr(0, type.size() - 2);
-            pointer = true;
-        } else if (type.size() >= 2 && type.compare(type.size() - 2, 2, " *") == 0) {
-            pointee = type.substr(0, type.size() - 2);
-            pointer = true;
-        }
+        // The front ends spell a pointer three ways; the model decides which.
+        const std::string pointee = debug::pointee_type(type);
+        const bool pointer = !pointee.empty();
 
         const std::string structure = pointer ? pointee : type;
         // Inherited members live in the base class's record; a derived object with

@@ -118,6 +118,12 @@ struct ThreadInfo {
 [[nodiscard]] std::vector<Member> class_members(const Info& info,
                                                const std::string& type);
 
+// What a pointer type points at, or an empty string when the type is not a
+// pointer. The front ends spell a pointer three ways - `char*` from C++, and
+// `char_*` or `char *` from C - so a reader that strips only one of them treats
+// the others as an aggregate and shows nothing.
+[[nodiscard]] std::string pointee_type(const std::string& type);
+
 class Session {
 public:
     Session();
