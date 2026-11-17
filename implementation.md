@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 22:45 -08:00
+> **Last updated:** 2026-11-16 23:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4491,6 +4491,38 @@ Newest entries at the bottom. Use the local time zone.
       Nothing was changed for this; the goal stays open. The suite has no case for
       this class, and a running test - not an assembly-shape test - is what it
       needs, because every shape I compared above matched.
+
+- **2026-11-16 22:45 -08:00** — The pass is found, or near enough to name the fault.
+      In `__kr32_unwind_continue` the sequence that restores the frame before
+      jumping into a landing pad is
+
+      ```text
+          MOV R7, R2
+          SETSP R7
+          JMP R9
+      ```
+
+      At `-O1`, `MOV R7, R2` is **deleted** and `SETSP R7` stays, so the landing
+      pad runs with whatever `R7` held. It is not folded into `SETSP R2`, which
+      would be equivalent; the move is simply gone. That is why the catch's
+      personality sees a frame it did not expect and falls through to the no-match
+      path. Both reproducers fail for this reason at both sizes.
+
+      The deleting pass is **not** one of the six that explicitly skip
+      `destination == 7`; they would leave the move alone. It is a pass that
+      treats "move into the frame pointer" as dead frame setup. Identification by
+      bisection failed on the attempt: stopping the pipeline early left the
+      function warning-unreachable, the build was rejected by `/WX`, and the run
+      used a stale binary. The next attempt should wrap the tail in `#if` instead
+      of `return`, so the build stays valid.
+
+      A second, independent hazard was confirmed and then reverted: the unwinder
+      is written as entry-shared slices (`__kr32_throw` loads two values and jumps
+      into `__kr32_unwind_continue`), so promoting a slot in either slice rewrites
+      the loads on one side and leaves the uses on the other reading the old
+      registers. A guard that skips slices entered or left by a `JMP` does stop
+      that promotion, but the miscompile persists without it, so the guard is not
+      the fix - and it was not gate-verified, so it is not committed.
 
 ## 10. Updating this file
 
