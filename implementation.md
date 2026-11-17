@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 18:50 -08:00
+> **Last updated:** 2026-11-16 19:20 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4234,9 +4234,10 @@ Newest entries at the bottom. Use the local time zone.
       helper types were declared after the first pass that used them. A round trip
       through `kr32 as` catches the first; the compiler catches the second.
 
-      The embedded OS images did not change, because the test builds are
-      unoptimized and the optimizer is what emits the records. All eleven parts
-      (96 tests) and 96/96 WSL pass.
+      The embedded OS images did not change because the OS sources had not
+      changed in that batch; the OS build is optimized by default, which is what
+      puts the records in the shipped images. All eleven parts (96 tests) and
+      96/96 WSL pass.
 
 - **2026-11-16 14:12 -08:00** — The whole-function locations needed a second
       design. A pass that inserts save instructions cannot report line indices,
@@ -4302,9 +4303,10 @@ Newest entries at the bottom. Use the local time zone.
       `-Wextra` also rejected brace-initialising the new struct fields, so the
       struct gained a constructor.
 
-      All eleven parts (96 tests) and 96/96 WSL pass. The embedded OS images are
-      unchanged: the test builds are unoptimized, and the optimizer is what emits
-      the records.
+      All eleven parts (96 tests) and 96/96 WSL pass. The embedded OS images were
+      unchanged in that batch because the OS sources had not changed; the OS
+      build is optimized by default, which is why the shipped images carry the
+      records at all.
 
 - **2026-11-16 18:11 -08:00** — The debugger was right; the OS loader threw the
       records away. `Session::set_debug_info` merges a kernel and a BIOS image and
@@ -4347,6 +4349,16 @@ Newest entries at the bottom. Use the local time zone.
       parameters and asserts the records name each pointee. The embedded images
       were regenerated for both platforms; Debug and Release both built; all
       eleven parts (96 tests) and 96/96 WSL pass.
+
+- **2026-11-16 19:20 -08:00** — Two log entries said the OS test builds are
+      unoptimized. They are not: `kr32os/build.ps1` defaults `-Opt` to `-O1` (and
+      `build.sh` mirrors it), so every OS build the tests trigger is optimized,
+      and the `KR32OS_OPT` variable or `-Opt` only overrides that default. The
+      images were unchanged in those batches because the OS sources had not
+      changed, not because they were built without the optimizer. Corrected in
+      place. Also recorded for reference: both front ends default to `-O0`, the
+      flag is a boolean (`-O1` and bare `-O` enable it, `-O0` disables it), and
+      `-O2` is rejected as an unknown argument.
 
 ## 10. Updating this file
 
