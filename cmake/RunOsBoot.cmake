@@ -2,6 +2,9 @@ if(NOT DEFINED KR32 OR NOT DEFINED SOURCE_DIR OR NOT DEFINED BINARY_DIR)
     message(FATAL_ERROR "KR32, SOURCE_DIR, and BINARY_DIR are required")
 endif()
 
+if(DEFINED SKIP_BUILD)
+    set(_build_result 0)
+else()
 if(WIN32)
     execute_process(
         COMMAND powershell -NoProfile -ExecutionPolicy Bypass
@@ -12,6 +15,7 @@ else()
         COMMAND "${CMAKE_COMMAND}" -E env "KR32=${KR32}"
                 bash "${SOURCE_DIR}/kr32os/build.sh"
         RESULT_VARIABLE _build_result)
+endif()
 endif()
 if(WIN32)
     set(_osdir "${SOURCE_DIR}/kr32os/build/windows")

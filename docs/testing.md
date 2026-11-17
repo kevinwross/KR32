@@ -74,12 +74,16 @@ without a `-j` argument. Measured on this machine: the whole suite went from 388
 of test time to **155 s** on WSL, and the Windows preset runs all 96 tests in
 **383 s**.
 
-The OS boot/user tests write the same `kr32os/build` tree, so they share a CTest
-`RESOURCE_LOCK` and run one at a time even under `-j`. Each of the six also runs
-`kr32os/build.ps1` itself, which is most of its cost - 65 s per test on Windows
-against 12 s on WSL - and about 200 s of the Windows total. Building the images in
-one CTest `FIXTURES_SETUP` test and having the six declare
-`FIXTURES_REQUIRED` would remove both the repeated build and the lock.
+The OS boot/user tests no longer build the images themselves. `kr32os_images` is a
+CTest `FIXTURES_SETUP` test that runs `kr32os/build.ps1` once, and every test that
+boots the OS declares `FIXTURES_REQUIRED kr32os_images` and passes
+`-DSKIP_BUILD=1`, so the build happens once per gate instead of once per test.
+They also no longer hold a `RESOURCE_LOCK`: they only read the tree the fixture
+wrote.
+
+The difference is large because a full KR32OS build was most of each test's cost:
+`run_os_shutdown` went from 65 s to 3.4 s on Windows, and the CPU time of the
+label covering the OS tests from 203 to 59 seconds.
 
 `check-unit` runs only the doctest slices:
 

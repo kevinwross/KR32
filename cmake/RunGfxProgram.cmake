@@ -17,12 +17,17 @@ endif()
 file(MAKE_DIRECTORY "${WORK}")
 if(WIN32)
     set(_osdir "${SOURCE_DIR}/kr32os/build/windows")
+else()
+    set(_osdir "${SOURCE_DIR}/kr32os/build/linux")
+endif()
+if(DEFINED SKIP_BUILD)
+    set(_build_result 0)
+elseif(WIN32)
     execute_process(
         COMMAND powershell -NoProfile -ExecutionPolicy Bypass
                 -File "${SOURCE_DIR}/kr32os/build.ps1" -Kr32 "${KR32}"
         RESULT_VARIABLE _build_result)
 else()
-    set(_osdir "${SOURCE_DIR}/kr32os/build/linux")
     execute_process(
         COMMAND "${CMAKE_COMMAND}" -E env "KR32=${KR32}"
                 bash "${SOURCE_DIR}/kr32os/build.sh"

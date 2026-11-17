@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17 04:45 -08:00
+> **Last updated:** 2026-11-17 07:00 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4621,6 +4621,24 @@ Newest entries at the bottom. Use the local time zone.
       spellings, and `struct:initrd_entry_*`, are covered by a test.
 
       All eleven parts (96 tests) and 96/96 WSL pass; Debug and Release built.
+
+- **2026-11-17 07:00 -08:00** — The OS tests build KR32OS once per gate instead of
+      once each. Seven `cmake/RunOs*.cmake` scripts ran `kr32os/build.ps1`
+      themselves - 65 s per test on Windows - and shared a `RESOURCE_LOCK` so they
+      ran one at a time. They now take `-DSKIP_BUILD=1`, `kr32os_images` is a
+      `FIXTURES_SETUP` test that builds the images once, and each declares
+      `FIXTURES_REQUIRED kr32os_images`. The lock is gone because they only read
+      the tree the fixture wrote.
+
+      `run_os_shutdown` 65 s -> **3.4 s**; the OS label's CPU time 203 -> **59**
+      seconds. Wall numbers from the two gate runs are inflated because another
+      session was building at the same time, so the sec*proc figures are the
+      trustworthy comparison.
+
+      Every test still runs: 96 of 96 on both platforms. Two mistakes on the way:
+      the generated wrap produced `endif()endif()`, and removing the lock left an
+      empty `set_tests_properties(... PROPERTIES)`, both of which the configure
+      step caught.
 
 ## 10. Updating this file
 

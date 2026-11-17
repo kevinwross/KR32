@@ -199,21 +199,21 @@ add_test(NAME bios_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunBiosSmoke.cmake)
 
 add_test(NAME run_os_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsSmoke.cmake)
 
 if(KR32_EMBED_OS)
     add_test(NAME run_os_embedded
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
-            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsEmbedded.cmake)
 endif()
 
@@ -221,38 +221,33 @@ add_test(NAME run_os_boot
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsBoot.cmake)
 
 add_test(NAME run_os_shell
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsShell.cmake)
 
 add_test(NAME run_os_fault_timer
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsFault.cmake)
 
 add_test(NAME run_os_user
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsUser.cmake)
 
-# These tests regenerate the same kr32os/build/windows tree. Serialize them
-# under one resource lock so `ctest -j` cannot interleave their object files.
-set_tests_properties(
-    run_os_boot
-    run_os_shell
-    run_os_fault_timer
-    run_os_user
-    PROPERTIES RESOURCE_LOCK kr32os_build)
+# These tests share the images the kr32os_images fixture builds and no longer
+# write into that tree, so they need no resource lock: the fixture's
+# FIXTURES_REQUIRED entry above covers the ordering.
 
 add_test(NAME build_hello
     COMMAND $<TARGET_FILE:kr32> build
@@ -264,7 +259,7 @@ add_test(NAME link_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunLinkSmoke.cmake)
 
 add_test(NAME build_c_hello
@@ -350,20 +345,20 @@ add_test(NAME host_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
         -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunHostSmoke.cmake)
 
 add_test(NAME dap_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunDapSmoke.cmake)
 set_tests_properties(dap_smoke PROPERTIES DEPENDS build_c_hello)
 
 add_test(NAME shell_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
-        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
         -P ${CMAKE_SOURCE_DIR}/cmake/RunShellSmoke.cmake)
 
 if(KR32_BUILD_UI)
@@ -394,50 +389,71 @@ if(KR32_BUILD_UI)
     set_tests_properties(ui_headless_os PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")
 
+    # The KR32OS images are built once here; the tests that boot them skip their
+    # own build (they pass -DSKIP_BUILD=1) and depend on this fixture. Running the
+    # build in each test cost 65 s per test on Windows and forced them to
+    # serialise on a shared RESOURCE_LOCK.
+    add_test(NAME kr32os_images
+        COMMAND ${CMAKE_COMMAND}
+            -DKR32=$<TARGET_FILE:kr32>
+            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
+            -P ${CMAKE_SOURCE_DIR}/cmake/BuildOsImages.cmake)
+    set_tests_properties(kr32os_images PROPERTIES
+        LABELS "integration"
+        FIXTURES_SETUP kr32os_images)
+    foreach(_os_test
+            run_os_gfx_dismiss run_os_shutdown run_os_user run_os_shell
+            run_os_fault_timer run_os_boot os_gfx_demo os_gfx_check
+            os_console_screen)
+        if(TEST ${_os_test})
+            set_tests_properties(${_os_test} PROPERTIES
+                FIXTURES_REQUIRED kr32os_images)
+        endif()
+    endforeach()
     add_test(NAME run_os_gfx_dismiss
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
             -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsGfxDismiss.cmake)
-    set_tests_properties(run_os_gfx_dismiss PROPERTIES LABELS "integration" RESOURCE_LOCK kr32os_build)
+    set_tests_properties(run_os_gfx_dismiss PROPERTIES LABELS "integration")
 
     add_test(NAME run_os_shutdown
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
             -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsShutdown.cmake)
-    set_tests_properties(run_os_shutdown PROPERTIES LABELS "integration" RESOURCE_LOCK kr32os_build)
+    set_tests_properties(run_os_shutdown PROPERTIES LABELS "integration")
 
     add_test(NAME os_gfx_demo
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
             -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
             -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx-demo
             -DPROGRAM=gfxdemo
             "-DCHECKS=10,10,101820;150,150,30A030;400,260,F06060"
             -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxProgram.cmake)
-    set_tests_properties(os_gfx_demo PROPERTIES LABELS "integration" RESOURCE_LOCK kr32os_build)
+    set_tests_properties(os_gfx_demo PROPERTIES LABELS "integration")
 
     add_test(NAME os_gfx_check
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
             -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR}
+            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
             -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx-check
             -DPROGRAM=gfxcheck
             "-DCHECKS=10,10,000000;150,150,FF0000;425,425,0000FF;799,0,00FF00;0,599,00FF00"
             -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxProgram.cmake)
-    set_tests_properties(os_gfx_check PROPERTIES LABELS "integration" RESOURCE_LOCK kr32os_build)
+    set_tests_properties(os_gfx_check PROPERTIES LABELS "integration")
 
     add_test(NAME os_console_screen
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
             -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-console
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsConsole.cmake)
-    set_tests_properties(os_console_screen PROPERTIES LABELS "integration" RESOURCE_LOCK kr32os_build)
+    set_tests_properties(os_console_screen PROPERTIES LABELS "integration")
 endif()
 
 add_test(NAME boundary_clean
