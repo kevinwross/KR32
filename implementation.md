@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 22:13 -08:00
+> **Last updated:** 2026-11-16 22:45 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4465,6 +4465,32 @@ Newest entries at the bottom. Use the local time zone.
       went unnoticed.
 
       All eleven parts (96 tests) and 96/96 WSL pass.
+
+- **2026-11-16 22:45 -08:00** — The `catch` miscompile is narrowed but **not
+      fixed**. The minimal reproducer is `try { throw 7; } catch (int v) { return v; }`:
+      `-O0` exits 0, `-O1` exits 1. It needs the throw and the catch together -
+      a destructor alone, or a `try` without a throw, is correct at both levels.
+
+      Ruled out by direct comparison of the two emitted assemblies, all identical:
+
+      - the `keep` body and the `main` body;
+      - the LSDA (`.word 1, 1, .Lcatch_clause_14`);
+      - the EH descriptor and its one call site
+        (`.Lthrow_start_8`..`.Lthrow_end_9` -> `.Lcs_throw_landing_10`);
+      - `__kr32_personality_v0`, which is emitted *into the translation unit* as a
+        weak symbol, so `-O1` compiles the exception runtime too - the first
+        hypothesis that the runtime is fixed assembly was wrong for C++;
+      - the function bounds reported by the debug records.
+
+      That leaves the 64-byte `.text` difference between the two images
+      unexplained: something in the translation unit differs and I have not
+      localised it. The next steps are a full textual diff of the two assembly
+      files with label numbers normalised, and a binary search over the pipeline
+      by disabling pass groups until the exit code flips.
+
+      Nothing was changed for this; the goal stays open. The suite has no case for
+      this class, and a running test - not an assembly-shape test - is what it
+      needs, because every shape I compared above matched.
 
 ## 10. Updating this file
 
