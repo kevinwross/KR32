@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17 07:00 -08:00
+> **Last updated:** 2026-11-17 07:10 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4639,6 +4639,17 @@ Newest entries at the bottom. Use the local time zone.
       the generated wrap produced `endif()endif()`, and removing the lock left an
       empty `set_tests_properties(... PROPERTIES)`, both of which the configure
       step caught.
+
+- **2026-11-17 07:10 -08:00** — The codegen suites are not worth caching: measured,
+      **335 test cases and 335 compilations**, one distinct program each, with 39
+      further `cxx::compile` calls behind them. A cache keyed by source text would
+      almost never hit, so the idea is dropped rather than built. Their cost is
+      intrinsic to the coverage - one program per case - and is now absorbed by
+      running eight jobs.
+
+      Still open from the same goal: measuring a clean host build to say what a
+      compiler cache would save. It needs the tree to itself and another session is
+      building, so it is deferred rather than estimated.
 
 ## 10. Updating this file
 
