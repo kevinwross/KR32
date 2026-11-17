@@ -91,8 +91,8 @@ Measured with all 97 tests, the count that includes the `kr32os_images` fixture:
 
 | Platform | jobs | build | tests (wall) | tests (CPU) |
 | --- | ---: | ---: | ---: | ---: |
-| Windows, 12 processors | 9 | 2 s | **220 s** | 2928 sec*proc |
-| WSL, 6 processors | 4 | 1 s | **106 s** | 1616 sec*proc |
+| Windows, 12 processors | 9 | 2 s | **248 s** | 3529 sec*proc |
+| WSL, 6 processors | 4 | 1 s | **112 s** | 845 sec*proc |
 
 Quote the wall figure with its conditions. Two runs of the same 97 tests at the
 same job count measured 220 s and 264 s because another build was running
