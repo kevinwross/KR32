@@ -2,8 +2,8 @@
 
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
-#include "kr32/container/container.h"
 #include "kr32/cxx/cxx.h"
+#include "kr32/container/container.h"
 #include "kr32/debug/debug.h"
 #include "kr32/isa/encoding.h"
 #include "kr32/link/linker.h"
@@ -1107,4 +1107,60 @@ TEST_CASE("a pointer type is recognised however it is spelled") {
     CHECK(debug::pointee_type("int").empty());
     CHECK(debug::pointee_type("").empty());
     CHECK(debug::pointee_type("int[16]").empty());
+}
+TEST_CASE("the member expansion covers the three shapes the panel broke on") {
+    // Each of these reached the GUI as a broken row: a pointer held in a register,
+    // an object whose fields are all inherited, and a C++ pointer type with no
+    // separator before the star. The model is what the panel now calls, so a
+    // regression here is a regression in the panel.
+    const cxx::Result compiled = cxx::compile(
+        "class Base { public: int root_; int count_; };\n"
+        "class Derived : public Base { public: int extra_; };\n"
+        "int main() { Derived d; d.root_ = 1; return d.root_; }\n");
+    REQUIRE(compiled.ok);
+    container::Image object;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, object, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({object, runtime}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+    // A reader that always succeeds and reports the address's low byte, so the
+    // entries prove they were resolved rather than only listed.
+    const auto read = [](std::uint32_t address, std::uint32_t size,
+                         std::uint32_t& value) {
+        value = address + size;
+        return true;
+    };
+
+    // An inherited-only object expands to the base's fields.
+    const std::vector<debug::MemberEntry> inherited =
+        debug::member_entries(info, "Derived", 0x1000, read);
+    REQUIRE(inherited.size() == 3);
+    CHECK(inherited[0].name == "root_");
+    CHECK(inherited[0].address == 0x1000);
+    CHECK(inherited[2].name == "extra_");
+    CHECK(inherited[2].address == 0x1008);
+    CHECK(inherited[0].ok);
+
+    // A pointer resolves through the value it holds, and a C++ spelling with no
+    // separator before the star is still a pointer.
+    const std::vector<debug::MemberEntry> through_pointer =
+        debug::member_entries(info, "Derived*", 0x2000, read);
+    REQUIRE(through_pointer.size() == 3);
+    CHECK(through_pointer[1].name == "count_");
+    CHECK(through_pointer[1].address == 0x2004);
+
+    // A scalar pointer has no members, and neither does a non-aggregate.
+    CHECK(debug::member_entries(info, "char*", 0x2000, read).empty());
+    CHECK(debug::member_entries(info, "int", 0x2000, read).empty());
 }

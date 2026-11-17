@@ -2265,23 +2265,24 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         const std::string structure = pointer ? pointee : type;
         // Inherited members live in the base class's record; a derived object with
         // no fields of its own shows nothing without them.
-        const std::vector<debug::Member> members =
-            debug::class_members(session_.info(), structure);
-        if (members.empty()) {
-            return;
-        }
-        const std::uint32_t base = pointer ? entry.value : entry.address;
-        for (const debug::Member& member : members) {
+        const std::uint32_t storage = pointer ? entry.value : entry.address;
+        const std::vector<debug::MemberEntry> members = debug::member_entries(
+            session_.info(), type, storage,
+            [&](std::uint32_t address, std::uint32_t size, std::uint32_t& value) {
+                return session_.read_memory(address, size, value);
+            });
+        for (const debug::MemberEntry& member : members) {
             if (entries.size() >= 256) break;
             Entry child;
             child.name = "." + member.name;
             child.type = member.type;
-            child.address = base + member.offset;
+            child.address = member.address;
             child.size = member.size;
             child.local = entry.local;
             child.indent = entry.indent + 1;
             child.key = entry.key + "." + member.name;
-            child.ok = session_.read_memory(child.address, child.size, child.value);
+            child.ok = member.ok;
+            child.value = member.value;
             append_entry(std::move(child), depth + 1);
         }
     };

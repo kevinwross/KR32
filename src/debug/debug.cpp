@@ -59,6 +59,30 @@ std::string pointee_type(const std::string& type) {
     }
     return trimmed;
 }
+std::vector<MemberEntry> member_entries(
+    const Info& info, const std::string& type, std::uint32_t storage,
+    const std::function<bool(std::uint32_t, std::uint32_t, std::uint32_t&)>& read) {
+    std::vector<MemberEntry> entries;
+    const std::string pointee = pointee_type(type);
+    const bool pointer = !pointee.empty();
+    const std::vector<Member> members =
+        class_members(info, pointer ? pointee : type);
+    if (members.empty()) {
+        return entries;
+    }
+    const std::uint32_t base = storage;
+    for (const Member& member : members) {
+        MemberEntry entry;
+        entry.name = member.name;
+        entry.type = member.type;
+        entry.address = base + member.offset;
+        entry.size = member.size;
+        entry.ok = read != nullptr &&
+                   read(entry.address, entry.size, entry.value);
+        entries.push_back(entry);
+    }
+    return entries;
+}
 std::vector<Member> class_members(const Info& info, const std::string& type) {
     std::vector<Member> members;
     std::set<std::string> seen;

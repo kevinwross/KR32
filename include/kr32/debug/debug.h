@@ -124,6 +124,26 @@ struct ThreadInfo {
 // the others as an aggregate and shows nothing.
 [[nodiscard]] std::string pointee_type(const std::string& type);
 
+// One member of an aggregate, resolved to an address and read through the caller's
+// memory access. This is the expansion the Variables panel shows; keeping it here
+// rather than inside the panel is what makes it testable.
+struct MemberEntry {
+    std::string name;
+    std::string type;
+    std::uint32_t address = 0;
+    std::uint32_t size = 0;
+    std::uint32_t value = 0;
+    bool ok = false;
+};
+
+// The members to show for a value of `type`, or an empty list when the type is
+// neither an aggregate nor a pointer to one. `storage` is the address of the value,
+// or the value itself when the type is a pointer. Bases are included, and a
+// register-held pointer is dereferenced through `storage` rather than its address.
+[[nodiscard]] std::vector<MemberEntry> member_entries(
+    const Info& info, const std::string& type, std::uint32_t storage,
+    const std::function<bool(std::uint32_t, std::uint32_t, std::uint32_t&)>& read);
+
 class Session {
 public:
     Session();

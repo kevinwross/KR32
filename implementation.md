@@ -4748,6 +4748,28 @@ Newest entries at the bottom. Use the local time zone.
       Both gates green: 97 of 97 on Windows (247.8 s at 9 jobs) and 97 of 97 on
       WSL (124 s at 4 jobs).
 
+- **2026-11-17 10:53 -08:00** — Gap 3 closed: the member expansion moved out of the
+      panel and into the model. Three bugs reached the window this week - a
+      register-held `this`, an inherited-only class showing nothing, and
+      `BalancedTree*` not recognised as a pointer - and none could be tested where
+      it lived, because the logic sat inside the panel's draw function with an
+      `Entry` struct full of layout state.
+
+      `debug::member_entries` now answers what a value's members are: it resolves
+      the pointee through `pointee_type`, walks bases through `class_members`, and
+      takes a `read` callback so the caller supplies memory access. The panel calls
+      it and keeps only its own layout fields. A test covers all three shapes -
+      inherited fields with their addresses, a pointer resolved through the value it
+      holds, and a scalar pointer or non-aggregate yielding nothing.
+
+      Also corrected: both gate CPU totals in `docs/testing.md` were summed from a
+      label list that a `tail` capture had truncated. From full logs they are
+      Windows 3529 sec*proc over 248 s at 9 jobs, and WSL 845 sec*proc over 112 s at
+      4 jobs - the WSL figure was overstated by roughly half.
+
+      Both gates green: 97 of 97 on Windows (268 s at 9 jobs) and 97 of 97 on WSL
+      (118 s at 4 jobs).
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
