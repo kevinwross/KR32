@@ -1061,7 +1061,53 @@ struct PendingLocation {
     bool whole = false;
     std::size_t first = 0;
     std::size_t last = 0;
+    // Filled for a span promotion with the labels that bracket its interval;
+    // whole-function records take theirs from the F record at append time.
+    std::string start_label;
+    std::string end_label;
+
+    PendingLocation() = default;
+    PendingLocation(std::string function_name, std::string variable_name,
+                    int register_index, bool is_fp, bool whole_function,
+                    std::size_t first_line = 0, std::size_t last_line = 0)
+        : function(std::move(function_name)),
+          name(std::move(variable_name)),
+          reg(register_index),
+          fp(is_fp),
+          whole(whole_function),
+          first(first_line),
+          last(last_line) {}
 };
+
+// The label names that bracket a line range: the first label at or after the
+// start and the last one at or before the end. Names survive the insertions a
+// pass makes, where indices do not.
+std::pair<std::string, std::string> bracket_labels(
+    const std::vector<std::string>& lines, std::size_t first, std::size_t last) {
+    std::string start;
+    std::string end;
+    for (std::size_t index = first; index <= last && index < lines.size(); ++index) {
+        const std::string text = trim(lines[index]);
+        if (text.empty() || text.back() != ':') {
+            continue;
+        }
+        const std::string name = text.substr(0, text.size() - 1);
+        // The function's own boundary labels sit outside the interval; anything
+        // else, including the statement and loop markers, marks a point inside it.
+        if (name.rfind(".Lend_", 0) == 0 || name.rfind(".Lreturn_", 0) == 0 ||
+            name.rfind(".Lbegin_", 0) == 0) {
+            continue;
+        }
+        if (start.empty()) {
+            start = name;
+        }
+        end = name;
+    }
+    if (start == end) {
+        return {};
+    }
+    return {start, end};
+}
 
 // The frame slots the front end named for one function, as offset -> name. The
 // debug records read `V <function> <name> <offset> <type> <size>`.
@@ -1525,10 +1571,16 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, st
                 if (name == slot_names.end()) {
                     continue;
                 }
-                locations.push_back(PendingLocation{function_name, name->second,
-                                                    slot->second, true, false,
-                                                    candidate.first,
-                                                    candidate.last});
+                const auto bracket =
+                    bracket_labels(lines, candidate.first, candidate.last);
+                if (!bracket.first.empty()) {
+                    PendingLocation location{function_name, name->second,
+                                             slot->second, true, false,
+                                             candidate.first, candidate.last};
+                    location.start_label = bracket.first;
+                    location.end_label = bracket.second;
+                    locations.push_back(std::move(location));
+                }
             }
         }
 
@@ -1845,10 +1897,16 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
                 if (name == slot_names.end()) {
                     continue;
                 }
-                locations.push_back(PendingLocation{function_name, name->second,
-                                                    slot->second, true, false,
-                                                    candidate.first,
-                                                    candidate.last});
+                const auto bracket =
+                    bracket_labels(lines, candidate.first, candidate.last);
+                if (!bracket.first.empty()) {
+                    PendingLocation location{function_name, name->second,
+                                             slot->second, true, false,
+                                             candidate.first, candidate.last};
+                    location.start_label = bracket.first;
+                    location.end_label = bracket.second;
+                    locations.push_back(std::move(location));
+                }
             }
         }
         for (std::size_t index = function.begin; index < function.end;
@@ -5391,10 +5449,24 @@ std::vector<std::string> split_lines(std::string_view assembly) {
 // end, whatever the record says in general. Inserting fresh labels turned out to
 // be unreliable - a pass's insertions move the indices that later passes record
 // - while these labels are exact and never move.
-void apply_debug_locations(std::vector<std::string>& lines,
-                           std::vector<PendingLocation>& pending) {
+// Appends one `P` record per location to the `.debug_info` section of the final
+// text. This runs after every pass, so no index can go stale: the section is
+// located in the text that is about to be written out.
+void append_location_records(std::string& assembly,
+                             const std::vector<PendingLocation>& pending) {
     if (pending.empty()) {
         return;
+    }
+    std::vector<std::string> lines;
+    std::size_t begin = 0;
+    while (begin <= assembly.size()) {
+        const std::size_t end = assembly.find('\n', begin);
+        lines.push_back(assembly.substr(
+            begin, end == std::string::npos ? std::string::npos : end - begin));
+        if (end == std::string::npos) {
+            break;
+        }
+        begin = end + 1;
     }
     std::size_t debug_at = lines.size();
     std::map<std::string, std::pair<std::string, std::string>> bounds;
@@ -5409,51 +5481,56 @@ void apply_debug_locations(std::vector<std::string>& lines,
         }
         std::istringstream stream(text.substr(9));
         std::string name;
-        std::string begin_label;
+        std::string start_label;
         std::string end_label;
-        if (stream >> name >> begin_label >> end_label) {
-            bounds[name] = {begin_label, end_label};
+        if (stream >> name >> start_label >> end_label) {
+            bounds[name] = {start_label, end_label};
         }
     }
     if (debug_at == lines.size()) {
         return;
     }
-
     std::vector<std::string> records;
     for (const PendingLocation& location : pending) {
-        if (!location.whole) {
-            // A span promotion cannot name a range reliably yet; the variable
-            // falls back to its frame slot rather than risk a wrong value.
-            continue;
+        std::string start_label = location.start_label;
+        std::string end_label = location.end_label;
+        if (location.whole) {
+            const auto found = bounds.find(location.function);
+            if (found == bounds.end()) {
+                continue;
+            }
+            start_label = found->second.first;
+            end_label = found->second.second;
         }
-        const auto found = bounds.find(location.function);
-        if (found == bounds.end()) {
+        if (start_label.empty() || end_label.empty()) {
             continue;
         }
         records.push_back("    .asciz \"P " + location.function + " " +
                           location.name + " " + (location.fp ? "F" : "R") +
-                          std::to_string(location.reg) + " " + found->second.first +
-                          " " + found->second.second + "\"");
+                          std::to_string(location.reg) + " " + start_label + " " +
+                          end_label + "\"");
     }
     if (records.empty()) {
         return;
     }
-    std::size_t insert_at = lines.size();
+    std::size_t insert_at = debug_at + 1;
     for (std::size_t index = debug_at + 1; index < lines.size(); ++index) {
         const std::string text = trim(lines[index]);
-        if (text.empty() || text[0] != '.') {
+        if (text.empty() || text.rfind(".asciz", 0) == 0 ||
+            text.rfind(".byte", 0) == 0) {
+            insert_at = index + 1;
             continue;
         }
-        if (text.rfind(".asciz", 0) == 0 || text.rfind(".byte", 0) == 0 ||
-            text.rfind(".word", 0) == 0 || text.rfind(".align", 0) == 0 ||
-            text.rfind(".double", 0) == 0) {
-            continue;
-        }
-        insert_at = index;
         break;
     }
     lines.insert(lines.begin() + static_cast<std::ptrdiff_t>(insert_at),
                  records.begin(), records.end());
+    std::string joined;
+    for (const std::string& line : lines) {
+        joined += line;
+        joined += '\n';
+    }
+    assembly = std::move(joined);
 }
 OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
@@ -5487,28 +5564,35 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_boolean_branches(lines);
     stats.removed += forward_cfg_frame_loads(lines, stats.rewritten);
     stats.removed += remove_dead_frame_stores(lines);
+    std::vector<PendingLocation> locations;
     {
         std::vector<PendingLocation> leaf_locations;
         stats.removed += promote_leaf_scalars(lines, leaf_locations);
-        apply_debug_locations(lines, leaf_locations);
+        locations.insert(locations.end(), leaf_locations.begin(),
+                         leaf_locations.end());
     }
     {
         std::vector<PendingLocation> surviving_locations;
         stats.removed +=
             promote_call_surviving_scalars(lines, stats.rewritten, surviving_locations);
-        apply_debug_locations(lines, surviving_locations);
+        locations.insert(locations.end(), surviving_locations.begin(),
+                         surviving_locations.end());
     }
     {
         std::vector<PendingLocation> free_locations;
         stats.removed +=
             promote_call_free_ranges(lines, stats.rewritten, free_locations);
-        apply_debug_locations(lines, free_locations);
+
+        locations.insert(locations.end(), free_locations.begin(),
+                         free_locations.end());
     }
     {
         std::vector<PendingLocation> fp_locations;
         stats.removed +=
             promote_call_free_fp_ranges(lines, stats.rewritten, fp_locations);
-        apply_debug_locations(lines, fp_locations);
+
+        locations.insert(locations.end(), fp_locations.begin(),
+                         fp_locations.end());
     }
     stats.removed += fold_fp_move_consumers(lines);
     stats.removed += remove_dead_frame_loads(lines);
@@ -5574,6 +5658,7 @@ OptimizeStats optimize_assembly(std::string& assembly) {
         }
     }
     assembly = join_lines(lines);
+    append_location_records(assembly, locations);
     return stats;
 }
 

@@ -980,3 +980,58 @@ TEST_CASE("a promoted local reports its register location") {
     REQUIRE_MESSAGE(session.read_variable("total", value, error), error.c_str());
     CHECK(value == 1234);
 }
+TEST_CASE("a call-free span reports a range narrower than its function") {
+    // `sum` is live across a call-free stretch before the call, so the call-free
+    // promotion holds it in a register only for that stretch. The record must
+    // name a range inside the function, not the whole of it.
+    const cc::Result compiled = cc::compile(
+        "int helper(int value) { return value + 1; }\n"
+        "int measure(int seed) {\n"
+        "    int left = seed * 2;\n"
+        "    int right = left + 3;\n"
+        "    left = right * 2;\n"
+        "    int tail = helper(right);\n"
+        "    return tail + left;\n"
+        "}\n"
+        "int main(void) { return measure(4); }\n",
+        "debug-test.c", 0, true);
+    REQUIRE_MESSAGE(compiled.ok, "compile failed");
+
+    container::Image user;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image runtime;
+    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
+                    assembly_error.message.c_str());
+    container::Image image;
+    linker::Map map;
+    linker::Error link_error;
+    REQUIRE_MESSAGE(linker::link({user, runtime}, linker::Options{}, image, map, link_error),
+                    link_error.message.c_str());
+
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, error), error.c_str());
+
+    const debug::Function* function = nullptr;
+    for (const debug::Function& candidate : info.functions) {
+        if (candidate.name == "measure") {
+            function = &candidate;
+        }
+    }
+    REQUIRE(function != nullptr);
+    bool narrow = false;
+    for (const debug::Location& location : info.locations) {
+        if (location.function != "measure" || location.name != "right") {
+            continue;
+        }
+        CHECK(location.start >= function->start);
+        CHECK(location.end <= function->end);
+        CHECK(location.start < location.end);
+        if (location.start > function->start || location.end < function->end) {
+            narrow = true;
+        }
+    }
+    CHECK(narrow);
+}

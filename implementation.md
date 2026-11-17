@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 15:15 -08:00
+> **Last updated:** 2026-11-16 16:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4285,6 +4285,26 @@ Newest entries at the bottom. Use the local time zone.
       function, `run_named.entry` reading R9 over the function's own span. Span
       promotions fall back to the frame slot, which shows a stale value, not a
       different variable's value. That is the honest gap.
+
+- **2026-11-16 16:15 -08:00** — Debug locations complete. The label-insertion problem
+      is gone: a span promotion records the names of the labels that already
+      bracket its interval (statement and loop markers, skipping the function's
+      own boundary labels), and the records are appended once at the end, after
+      every pass, to the text that is about to be written. Nothing is inserted
+      into the debug section and no index survives a pass, which removes the whole
+      class of failure that produced 42 out-of-range records this morning.
+
+      `kr32 debug kernel.k32` now reports 73 locations - 70 whole-function and 3
+      span - with none outside its function's bounds. A second test compiles a
+      function whose local dies before a call, asserts the record names a range
+      narrower than the function and inside it, and would have caught the earlier
+      behaviour; the debug suite is 28 cases and 307 assertions. GCC's
+      `-Wextra` also rejected brace-initialising the new struct fields, so the
+      struct gained a constructor.
+
+      All eleven parts (96 tests) and 96/96 WSL pass. The embedded OS images are
+      unchanged: the test builds are unoptimized, and the optimizer is what emits
+      the records.
 
 ## 10. Updating this file
 
