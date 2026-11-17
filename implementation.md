@@ -4920,6 +4920,24 @@ Newest entries at the bottom. Use the local time zone.
 
       Gates: 97 of 97 on Windows (257 s at 9 jobs) and 97 of 97 on WSL.
 
+- **2026-11-17 11:50 -08:00** — Class instances collapse in the Variables panel. They
+      were always expanded, so one object with ten fields pushed every other local
+      off the view. An aggregate row is now a row the operator clicks to open,
+      collapsed by default, reusing the state map the array rows already had
+      (`aggregate_expanded_`, keyed by the row's key path, cleared with the others).
+      The row still shows `{...}` and its own value while closed.
+
+      The parameter records were already reaching the debugger: `kr32 debug` on a
+      linked `-O1` image lists all four for `BalancedTree::insert` - `node` at 4,
+      `data` at 8, `created` at 12, `this` at 0. So the window that showed only
+      `created` was running a binary from before the parameter commit, not a
+      compiler that still omitted them.
+
+      Gates: 97 of 97 on Windows (243 s at 9 jobs) and 97 of 97 on WSL. Two Windows
+      runs launched through `pwsh -File scripts/run-gate.ps1` exited `-1` with no
+      summary; running `ctest` directly gave the result above, so the interruption is
+      in the nested shell invocation rather than in a test.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

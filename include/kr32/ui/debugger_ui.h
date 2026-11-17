@@ -318,6 +318,8 @@ private:
         bool header = false;
         bool array = false;
         bool pager = false;
+        // Set on a class or struct row, which the operator opens and closes.
+        bool aggregate = false;
         std::string key;
         int page = 0;
         int page_count = 1;
@@ -327,6 +329,8 @@ private:
     bool locals_expanded_ = true;
     bool globals_expanded_ = true;
     std::map<std::string, bool> array_expanded_;
+    // Which aggregates the operator has opened, keyed by the row's key path.
+    std::map<std::string, bool> aggregate_expanded_;
     std::map<std::string, int> array_pages_;
     int last_variable_click_ = -1;
     std::chrono::steady_clock::time_point last_variable_click_time_{};

@@ -768,6 +768,7 @@ bool DebuggerUI::load(const std::string& path, std::string& error) {
     source_scroll_ = 0;
     asm_scroll_ = 0;
     array_expanded_.clear();
+    aggregate_expanded_.clear();
     array_pages_.clear();
     continuous_run_ = false;
     continuous_has_target_ = false;
@@ -918,6 +919,7 @@ bool DebuggerUI::load_os_memory(const std::vector<std::uint8_t>& kernel,
     source_scroll_ = 0;
     asm_scroll_ = 0;
     array_expanded_.clear();
+    aggregate_expanded_.clear();
     array_pages_.clear();
     continuous_run_ = false;
     continuous_has_target_ = false;
@@ -2163,6 +2165,10 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         bool header = false;
         bool array = false;
         bool pager = false;
+        // An aggregate row the operator can open and close. Collapsed by default:
+        // an object with many fields otherwise pushes every other local off the
+        // panel.
+        bool aggregate = false;
         bool expanded = true;
         int page = 0;
         int page_count = 1;
@@ -2265,6 +2271,16 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         const std::string structure = pointer ? pointee : type;
         // Inherited members live in the base class's record; a derived object with
         // no fields of its own shows nothing without them.
+        // An aggregate is a row the operator opens, not something that always
+        // expands: a class with ten fields buries the rest of the frame.
+        const std::map<std::string, bool>::const_iterator open =
+            aggregate_expanded_.find(entry.key);
+        const bool is_open = open != aggregate_expanded_.end() && open->second;
+        entry.aggregate = true;
+        entry.expanded = is_open;
+        if (!is_open) {
+            return;
+        }
         const std::uint32_t storage = pointer ? entry.value : entry.address;
         const std::vector<debug::MemberEntry> members = debug::member_entries(
             session_.info(), type, storage,
@@ -2397,7 +2413,8 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         var_hover_rows_.push_back(
             VarHoverRow{row, entry.name, entry.type, entry.address, entry.value, entry.size,
                         entry.reg_name, entry.local, entry.ok, entry.header, entry.array,
-                        entry.pager, entry.key, entry.page, entry.page_count});
+                        entry.pager, entry.aggregate, entry.key, entry.page,
+                        entry.page_count});
     }
     if (entries.empty()) {
         canvas.text(rect.x + 6, rect.y + 24, "(no variables)", kDim, FontRole::MonoSmall);
@@ -4089,6 +4106,13 @@ bool DebuggerUI::click(int x, int y, int width, int height) {
             array_pages_[row.key] = page;
             status_ = "array page " + std::to_string(page + 1) + "/" +
                       std::to_string(row.page_count);
+            return true;
+        }
+        if (row.aggregate) {
+            const auto open = aggregate_expanded_.find(row.key);
+            const bool currently_open = open != aggregate_expanded_.end() && open->second;
+            aggregate_expanded_[row.key] = !currently_open;
+            last_variable_click_ = -1;
             return true;
         }
         if (row.array) {
