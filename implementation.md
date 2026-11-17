@@ -4701,6 +4701,32 @@ Newest entries at the bottom. Use the local time zone.
       every test preset and records the reason; developers on larger machines
       can still pass a bigger `-j`.
 
+- **2026-11-17 10:40 -08:00** — C++ parameters in the debug info turned out to be two
+      bugs, and only the first was where I expected. The front end binds every
+      parameter to a slot and emits no `V` record; adding the record is three lines
+      and it works - a test that breaks on the statement after the prologue reads
+      `a == 20` and `b == 22` through the debugger. It is **not committed**, because
+      the second bug makes it wrong at `-O1`:
+
+      **The promotion passes look up `V` records by the code label.** `_Z3addii`
+      versus `add`: the passes call `debug_slot_names(lines, <function label>)`,
+      while the records carry the qualified source name, so they match nothing and
+      **no C++ promoted local has ever produced a `P` record**. C works only because
+      its labels and names coincide. With the parameter `V` records in place, the
+      optimizer removes the frame at `-O1` and the record then points at a slot
+      nothing writes - worse than no record at all, so it was reverted rather than
+      shipped.
+
+      Fixing the lookup is a two-line change (map the code label to the name in the
+      `F` record), and it does make C++ produce `P` records - but the first one it
+      produced was `P _ZN12BalancedTreeD1Ev this F2 ...`, a pointer reported in an
+      FP register. Either the promotion put a pointer in an FP register or the
+      name-to-offset match is wrong, and neither may be committed without checking.
+      That is the next round's work: fix the lookup, then verify the records it
+      produces against the emitted code rather than assuming them.
+
+      Tree is back at `824a8ea` with nothing changed.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
