@@ -69,8 +69,17 @@ count. Equivalent direct command:
 ctest --test-dir .\build\windows-msvc -C Debug -j24 --output-on-failure
 ```
 
+Every test preset runs eight jobs, so `ctest --preset <preset>` is parallel
+without a `-j` argument. Measured on this machine: the whole suite went from 388 s
+of test time to **155 s** on WSL, and the Windows preset runs all 96 tests in
+**383 s**.
+
 The OS boot/user tests write the same `kr32os/build` tree, so they share a CTest
-`RESOURCE_LOCK` and run one at a time even under `-j`.
+`RESOURCE_LOCK` and run one at a time even under `-j`. Each of the six also runs
+`kr32os/build.ps1` itself, which is most of its cost - 65 s per test on Windows
+against 12 s on WSL - and about 200 s of the Windows total. Building the images in
+one CTest `FIXTURES_SETUP` test and having the six declare
+`FIXTURES_REQUIRED` would remove both the repeated build and the lock.
 
 `check-unit` runs only the doctest slices:
 

@@ -132,6 +132,9 @@
       "configuration": "Debug",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -140,6 +143,9 @@
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -147,6 +153,9 @@
       "configurePreset": "windows-ninja",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -154,6 +163,9 @@
       "configurePreset": "windows-ninja-release",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -161,6 +173,9 @@
       "configurePreset": "linux-gcc",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -168,6 +183,9 @@
       "configurePreset": "linux-clang",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -175,6 +193,9 @@
       "configurePreset": "linux-arm64-gcc",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     },
     {
@@ -182,6 +203,9 @@
       "configurePreset": "linux-asan",
       "output": {
         "outputOnFailure": true
+      },
+      "execution": {
+        "jobs": 8
       }
     }
   ]
