@@ -360,7 +360,7 @@ void print_help() {
         "\n"
         "Options for as:  -o <path> --object --base <addr> --listing <path>\n"
         "Options for ld:  -o <image.k32> --map <path> --sym <path> --base <addr> --flat --strip\n"
-        "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip -O0|-O1 "
+        "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip -O0|-O1 (default -O1) "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value>\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
         "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats "
@@ -764,7 +764,7 @@ int command_build(int argc, char** argv) {
     linker::Options options;
     bool run = false;
     bool strip = false;
-    bool optimize = false;
+    bool optimize = true;
     vm::HostOptions host_options;
 #ifdef KR32_HAS_UI
     host_options.file_dialog = platform_file_dialog();
@@ -952,14 +952,14 @@ int command_build(int argc, char** argv) {
 }
 
 void print_cc_usage() {
-    std::printf("Usage: kr32 cc <file.c> [-S] [-O0|-O1] [-o <path>] [--source-id <n>]\n");
+    std::printf("Usage: kr32 cc <file.c> [-S] [-O0|-O1] [-o <path>] [--source-id <n>]\n       Optimization defaults to -O1; pass -O0 to compile without it.\n");
 }
 
 int command_cc(int argc, char** argv) {
     std::string source;
     std::string output;
     bool assembly_only = false;
-    bool optimize = false;
+    bool optimize = true;
     int source_id = 0;
 
     for (int index = 2; index < argc; ++index) {
@@ -1054,14 +1054,14 @@ int command_cc(int argc, char** argv) {
 }
 
 void print_cxx_usage() {
-    std::printf("Usage: kr32 cxx <file.cpp> [-S] [-O0|-O1] [-o <path>]\n");
+    std::printf("Usage: kr32 cxx <file.cpp> [-S] [-O0|-O1] [-o <path>]\n       Optimization defaults to -O1; pass -O0 to compile without it.\n");
 }
 
 int command_cxx(int argc, char** argv) {
     std::string source;
     std::string output;
     bool assembly_only = false;
-    bool optimize = false;
+    bool optimize = true;
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--help" || argument == "-h") {

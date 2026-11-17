@@ -1115,3 +1115,32 @@ TEST_CASE("assembly optimizer keeps a copy before a tail call") {
     REQUIRE(jump != std::string::npos);
     CHECK(assembly.rfind("MOV R0, R9", jump) != std::string::npos);
 }
+TEST_CASE("a reload survives an argument move but not a clobber") {
+    // BalancedTree::add stores `this`, moves an argument, then reloads `this`.
+    // The move does not write the register, so the reload is redundant; a write
+    // to the register makes it necessary again.
+    std::string assembly =
+        ".text\n"
+        ".global add\n"
+        "add:\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    MOV R3, R1\n"
+        ".Lline_1:\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats moved = assembler::optimize_assembly(assembly);
+    CHECK(moved.removed >= 1);
+    CHECK(assembly.find("LOAD R0, [R7 + 0]") == std::string::npos);
+
+    std::string clobbered =
+        ".text\n"
+        ".global add\n"
+        "add:\n"
+        "    STORE R0, [R7 + 0]\n"
+        "    CALL fn\n"
+        "    LOAD R0, [R7 + 0]\n"
+        "    RET\n";
+    const assembler::OptimizeStats clobber = assembler::optimize_assembly(clobbered);
+    CHECK(clobber.removed == 0);
+    CHECK(clobbered.find("LOAD R0, [R7 + 0]") != std::string::npos);
+}

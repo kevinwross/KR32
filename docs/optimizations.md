@@ -1,9 +1,11 @@
 # Compiler optimizations
 
-`kr32 cc`, `kr32 cxx`, and `kr32 build` accept `-O0` (the default) and `-O1`.
-`-O1` runs a conservative post-generation peephole pass over the assembly
-produced by either front end. The pass is shared, so C and C++ receive the same
-target-level cleanup.
+`kr32 cc`, `kr32 cxx`, and `kr32 build` default to `-O1`, which runs a
+conservative post-generation peephole pass over the assembly produced by either
+front end. The pass is shared, so C and C++ receive the same target-level
+cleanup. `-O0` disables it. The front-end APIs keep `optimize = false` as their
+own default, so a caller that embeds a front end chooses explicitly rather than
+inheriting the command line's choice.
 
 ## Current `-O1` passes
 
@@ -292,19 +294,17 @@ The pass is deliberately conservative:
 - Call-free allocation only assigns a register the function never mentions,
   over a straight-line span that contains no call.
 - Unwind landing pads are omitted only for direct `noexcept` calls.
-- `-O0` remains the default, so existing debug behavior is unchanged.
+- Debug information describes the promoted registers, so stepping through
+  optimized code still shows named locals.
 - Line markers are kept so source-level debugging continues to work.
 
 ## Verification
 
-The full C and C++ test suite can be run with optimization enabled:
-
-```powershell
-$env:KR32_TEST_OPTIMIZE='1'
-ctest --test-dir build/windows-msvc -C Debug -j24 --output-on-failure
-```
-
-Unset the variable (or run without it) to exercise the normal `-O0` path.
+Both paths run in the same gate. The unit suites call the front ends directly and
+pass `optimize` explicitly, so they still pin the unoptimized code shape;
+`test_optimizer.cpp` covers the passes. The integration tests build through
+`kr32 build`, which now defaults to `-O1`, so every program in `examples/` is
+compiled with the passes enabled on each gate.
 
 ## Current benchmark results
 

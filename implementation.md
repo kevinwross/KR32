@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 19:20 -08:00
+> **Last updated:** 2026-11-16 20:40 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4359,6 +4359,44 @@ Newest entries at the bottom. Use the local time zone.
       place. Also recorded for reference: both front ends default to `-O0`, the
       flag is a boolean (`-O1` and bare `-O` enable it, `-O0` disables it), and
       `-O2` is rejected as an unknown argument.
+
+- **2026-11-16 20:40 -08:00** — `-O1` is the default, and the C++ front end gets
+      more of the optimizer. Two changes beyond the default:
+
+      **Exception-bearing functions are no longer skipped by the span passes.**
+      The C++ front end emits a landing-pad label in every function that can
+      throw (192 of them in `balanced-tree.cpp`), and all four promotion passes
+      skipped any function containing one. A span candidate contains no call by
+      construction, so no throw can leave it half-way and every landing pad sits
+      outside every span; the skip was unnecessary for the two span passes. The
+      leaf and call-surviving passes still skip these functions, because their
+      values do cross a call and an exception there is a difference I have not
+      proven safe.
+
+      **The slot-roundtrip fold looks through transparent instructions.** It only
+      inspected the instruction immediately after the store, so one argument move
+      defeated it - which is exactly the shape the C++ front end emits, storing
+      `this` and reloading it around the argument moves. It now walks over label
+      lines, register moves that do not write the stored register, `CMP`, `PUSH`,
+      `ADJSP` and `NOP`.
+
+      Measured at `-O1` against `-O0`, counted from the emitted assembly:
+
+      | Source | -O0 | -O1 | reduction |
+      | --- | ---: | ---: | ---: |
+      | `balanced-tree.cpp` | 1308 | 1112 | 15.0% (1169 before the span lift) |
+      | `matrix.cpp` | 1080 | 868 | 19.6% |
+      | `hello.cpp` | 258 | 233 | 9.7% |
+      | `binarytree.c` | 869 | 514 | 40.9% |
+      | `libc.c` | - | 9936 | unchanged, as expected |
+
+      The C++ gap that remains is the leaf and call-surviving promotion, still
+      skipped for those functions. The widened fold is correct and covered by a
+      test that keeps a reload across a call, but it does not move these numbers:
+      the shape it targets is produced by later passes after it has run, which is
+      the next thing to fix.
+
+      All eleven parts (96 tests) and 96/96 WSL pass; both presets built.
 
 ## 10. Updating this file
 

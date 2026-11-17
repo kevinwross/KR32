@@ -1386,19 +1386,11 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
 
 int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, std::vector<PendingLocation>& locations) {
     int removed = 0;
+    // A function with exception paths is not skipped here: a candidate span
+    // contains no call, so no throw can leave it half-way, and every landing pad
+    // is outside every span. The call-surviving and leaf passes still skip these
+    // functions because their values do cross a call.
     for (const CfgFunction& function : build_cfgs(lines)) {
-        bool has_exception_path = false;
-        for (std::size_t index = function.begin; index < function.end;
-             ++index) {
-            if (lines[index].find(".Lcs_") != std::string::npos) {
-                has_exception_path = true;
-                break;
-            }
-        }
-        if (has_exception_path) {
-            continue;
-        }
-
         bool used[16] = {};
         std::vector<std::size_t> call_sites;
         std::set<std::string> branch_targets;
@@ -1724,18 +1716,9 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
                                 int& rewritten,
                                 std::vector<PendingLocation>& locations) {
     int removed = 0;
+    // Same reasoning as the integer span pass above: no call inside the span
+    // means no throw inside it, so the landing pads cannot observe the values.
     for (const CfgFunction& function : build_cfgs(lines)) {
-        bool skip = false;
-        for (std::size_t index = function.begin; index < function.end;
-             ++index) {
-            if (lines[index].find(".Lcs_") != std::string::npos) {
-                skip = true;
-                break;
-            }
-        }
-        if (skip) {
-            continue;
-        }
         bool used_fp[16] = {};
         std::vector<std::size_t> call_sites;
         std::set<std::string> branch_targets;
@@ -2451,6 +2434,11 @@ int remove_adjacent_slot_roundtrips(std::vector<std::string>& lines) {
             !parse_frame_slot(store.operands[1], stored_slot)) {
             continue;
         }
+        // Walk forward to the reload. A label is transparent unless something
+        // branches to it, and so is an instruction that cannot disturb the slot
+        // or the register: the C++ front end stores `this` and reloads it around
+        // argument moves, and the immediate-only version of this fold missed
+        // every one of those.
         std::size_t next = index + 1;
         bool crossed_target = false;
         while (next < lines.size()) {
@@ -2458,18 +2446,37 @@ int remove_adjacent_slot_roundtrips(std::vector<std::string>& lines) {
                 ++next;
                 continue;
             }
-            if (!is_label(lines[next])) {
+            if (is_label(lines[next])) {
+                std::string name = trim(lines[next]);
+                if (!name.empty() && name.back() == ':') {
+                    name.pop_back();
+                }
+                if (targets.count(name) > 0) {
+                    crossed_target = true;
+                    break;
+                }
+                ++next;
+                continue;
+            }
+            Instruction between;
+            if (!parse_instruction(lines[next], between)) {
                 break;
             }
-            std::string name = trim(lines[next]);
-            if (!name.empty() && name.back() == ':') {
-                name.pop_back();
+            if (between.mnemonic == "MOV" && between.operands.size() == 2) {
+                int destination = 0;
+                if (parse_register(between.operands[0], destination) &&
+                    destination == stored_register) {
+                    break;
+                }
+                ++next;
+                continue;
             }
-            if (targets.count(name) > 0) {
-                crossed_target = true;
-                break;
+            if (between.mnemonic == "CMP" || between.mnemonic == "PUSH" ||
+                between.mnemonic == "ADJSP" || between.mnemonic == "NOP") {
+                ++next;
+                continue;
             }
-            ++next;
+            break;
         }
         if (crossed_target || next >= lines.size()) {
             continue;

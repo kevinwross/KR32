@@ -531,7 +531,8 @@ gaps and `.bss` zero-filled; that image is what `vm --base <base>` expects.
 `build` detects the language from the extension, compiles C or C++, assembles
 the result with the object assembler, links the shared C/C++ libc runtime
 object, writes a `.k32`, and runs it with `--run`. `-O1` enables the peephole
-passes in [optimizations.md](optimizations.md); `-O0` is the default.
+passes in [optimizations.md](optimizations.md); it is the default, and `-O0`
+disables them.
 
 Compiled programs link against the freestanding runtime, not a host libc:
 `printf`, `malloc`, `free`, string routines, `operator new`/`delete`,
