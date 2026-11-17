@@ -4788,6 +4788,33 @@ Newest entries at the bottom. Use the local time zone.
 
       Tree reverted; nothing committed from the attempt.
 
+- **2026-11-17 11:15 -08:00** — Gap 4 answered, and gap 5 recorded as accepted.
+
+      **The optimizer is linear, with a large constant.** Instrumentation failed
+      twice, so the question was answered by scaling instead: a synthetic input of
+      independent functions compiled at both levels.
+
+      | functions | `-O0` | `-O1` | ratio | instructions `-O0` -> `-O1` |
+      | ---: | ---: | ---: | ---: | ---: |
+      | 200 | 0.32 s | 12.22 s | 38x | 4828 -> 1423 |
+      | 400 | 0.63 s | 24.79 s | 39x | 9428 -> 2623 |
+
+      Doubling the input doubles the time and does not change the ratio, so nothing
+      is quadratic; the cost is about **2.5 ms per instruction** at `-O1`, which is
+      what makes `libcpp` take 42 s for 9846 instructions. The goal said to fix it
+      *if superlinear*: it is not, so the remaining work is constant-factor (the
+      pipeline re-parses every line in each of ~70 passes, and
+      `debug_function_names`/`debug_slot_names` walk the file per promotion pass),
+      which is a separate optimization rather than a defect.
+
+      **Gap 5, decided:** the C++ code-size difference stays. By instruction count
+      C++ reduces 22.8% against C's 44.3%; by the machine's own ticks they are level
+      at 1.18x and 1.13x. Closing the gap means letting the leaf and call-surviving
+      passes run in functions that carry a real handler, and a `catch` can read the
+      slot those passes rewrite - so the safe version of that change does not exist
+      today, and the shared-slice guard that keeps exceptions correct stays. The
+      difference is recorded here rather than "fixed" by weakening the guard.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

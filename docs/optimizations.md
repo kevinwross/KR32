@@ -305,6 +305,21 @@ The pass is deliberately conservative:
   optimized code still shows named locals.
 - Line markers are kept so source-level debugging continues to work.
 
+## Accepted difference from C
+
+C++ output is larger than C output per function: 22.8% fewer instructions at `-O1`
+against C's 44.3% on the examples, while the machine's own tick counts are level
+(1.18x and 1.13x). The residue is the leaf and call-surviving promotion, which still
+skips any function carrying an exception handler: a `catch` clause reads the frame
+slot such a promotion rewrites, so promoting there would show the wrong value after
+a throw. The guard that keeps the unwinder's shared slices out of the promotion
+stays as well, and costs the C++ examples about 2%.
+
+Closing the difference needs either a promotion that keeps the slot coherent across
+a handler, or a front end that emits a landing pad only where a handler can read
+through it. Neither exists today; the difference is accepted rather than paid for
+with a correctness risk.
+
 ## Verification
 
 Both paths run in the same gate. The unit suites call the front ends directly and
