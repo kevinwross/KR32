@@ -4770,6 +4770,24 @@ Newest entries at the bottom. Use the local time zone.
       Both gates green: 97 of 97 on Windows (268 s at 9 jobs) and 97 of 97 on WSL
       (118 s at 4 jobs).
 
+- **2026-11-17 11:05 -08:00** — Gap 4 attempted and **not established**: which pass
+      owns `libcpp`'s compile time at `-O1`. Three harness attempts each died on
+      build plumbing rather than on the measurement:
+
+      1. A per-pass timing macro: my regex rewrote the macro's own body into a
+         self-call, and after fixing that the `#define` still would not compile.
+      2. An environment switch: `std::getenv` raises MSVC's C4996 under `/WX`.
+      3. A `constexpr` switch: the guard was built empty, so the promotion region
+         still ran and the run measured only noise (42 s then 48 s for identical
+         output, which at least shows the wall-time spread on this machine).
+
+      The baseline does exist: `libcpp` at `-O1` is 42 s for 9846 instructions, 32 s
+      when the machine was quieter. The next attempt should wrap each *half* of the
+      pipeline in `#if` and halve the search, rather than instrumenting 71 call
+      sites at once.
+
+      Tree reverted; nothing committed from the attempt.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
