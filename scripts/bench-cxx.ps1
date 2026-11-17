@@ -52,3 +52,23 @@ foreach ($relative in $sources) {
     }
 }
 $rows | Format-Table -AutoSize
+# libcpp is a library, not a program, so it has no tick count; its size at each
+# level is the measurable thing. Counted from the emitted assembly.
+$library = Join-Path $root "examples/libcpp.cpp"
+if (Test-Path $library) {
+    $counts = @{}
+    foreach ($level in @("-O0", "-O1")) {
+        $assembly = Join-Path $root ("build/libcpp" + $level + ".s")
+        $null = & $Kr32 cxx $library -S $level -o $assembly 2>&1
+        $counts[$level] = (Select-String -Path $assembly -Pattern '^\s+[A-Z]' | Measure-Object).Count
+        Remove-Item $assembly -ErrorAction SilentlyContinue
+    }
+    if ($counts["-O0"] -gt 0) {
+        [pscustomobject]@{
+            Source   = "libcpp.cpp (instructions)"
+            TicksO0  = $counts["-O0"]
+            TicksO1  = $counts["-O1"]
+            Speedup  = [math]::Round($counts["-O0"] / [double]$counts["-O1"], 2)
+        } | Format-Table -AutoSize
+    }
+}

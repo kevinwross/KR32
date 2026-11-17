@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 23:26 -08:00
+> **Last updated:** 2026-11-17 00:07 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4564,6 +4564,32 @@ Newest entries at the bottom. Use the local time zone.
       The C++ examples sit 24 and 19 instructions above their pre-guard numbers;
       that is the price of not promoting across a shared continuation, and it is
       paid once per such slice. All eleven parts (96 tests) and 96/96 WSL pass.
+
+- **2026-11-17 00:07 -08:00** — The shared-slice guard is refactored for speed and
+      the benchmark now covers `libcpp`. The guard rebuilt two label sets and
+      rescanned every line for each function, which is O(functions x lines):
+      `libcpp` at `-O1` took **309 s**, then 236 s after moving the sets above the
+      loop, and **32 s** once the jump list was precomputed with the sets.
+      Instructions are unchanged by the refactor (1019, 884, 484, 9846), so it is
+      behaviour-preserving.
+
+      Two intermediate attempts were wrong in instructive ways: the replacement
+      first landed inside `compute_shared_control` and then left the jump list
+      behind a label-only `continue`, which emptied it and quietly re-enabled the
+      miscompile - caught only because the reproducers are part of the loop now.
+
+      `scripts/bench-cxx.ps1` reports `libcpp` separately as instructions, since a
+      library has no tick count:
+
+      | Source | `-O0` | `-O1` | ratio |
+      | --- | ---: | ---: | ---: |
+      | balanced-tree.cpp | 176760 ticks | 149632 | 1.18x |
+      | matrix.cpp | 7154 | 6877 | 1.04x |
+      | hello.cpp | 189 | 165 | 1.15x |
+      | binarytree.c | 143878 | 126903 | 1.13x |
+      | libcpp.cpp | 15336 instr | 9846 | 1.56x |
+
+      All eleven parts (96 tests) and 96/96 WSL pass.
 
 ## 10. Updating this file
 

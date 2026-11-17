@@ -1083,27 +1083,34 @@ struct PendingLocation {
           last(last_line) {}
 };
 
-// True when control enters or leaves this slice other than by falling in at its
-// first instruction or returning from its last. The unwinder is written as
-// entry-shared slices: `__kr32_throw` loads two values and jumps into
-// `__kr32_unwind_continue`, which consumes them from those registers. Optimising
-// either slice on its own is unsound - a promotion rewrites the loads on one side
-// and leaves the uses on the other reading registers nothing writes.
-bool function_shares_control(const std::vector<std::string>& lines,
-                             std::size_t begin, std::size_t end) {
-    // A jump to a declared global is a tail call: it enters a function at its
-    // prologue, where liveness is well defined. The unwinder's continuation is a
-    // plain label, which is what this guard is for.
-    // One pass for both sets. A label whose next real instruction is a frame
-    // prologue begins a function, with well-defined liveness; a label without one
-    // is a shared continuation, which is what this guard is for.
+// The sets a shared-control check needs, built once per pass. Building them per
+// function made the check O(functions x lines) and `libcpp` took 309 seconds to
+// compile at -O1.
+struct SharedControl {
     std::set<std::string> exports;
     std::set<std::string> prologue_labels;
+    // Every label jump in the file, with its line, collected once: rescanning the
+    // whole file per function made the check O(functions x lines) and `libcpp`
+    // took minutes to compile.
+    std::vector<std::pair<std::size_t, std::string>> jumps;
+};
+
+SharedControl compute_shared_control(const std::vector<std::string>& lines) {
+    SharedControl shared;
     for (std::size_t index = 0; index < lines.size(); ++index) {
         const std::string text = trim(lines[index]);
         if (text.rfind(".global ", 0) == 0 || text.rfind(".weak ", 0) == 0) {
-            exports.insert(trim(text.substr(8)));
+            shared.exports.insert(trim(text.substr(8)));
             continue;
+        }
+        Instruction instruction;
+        if (parse_instruction(lines[index], instruction) &&
+            instruction.mnemonic == "JMP" && instruction.operands.size() == 1) {
+            const std::string target = trim(instruction.operands[0]);
+            int ignored = 0;
+            if (!parse_register(target, ignored) && target.rfind('#', 0) != 0) {
+                shared.jumps.emplace_back(index, target);
+            }
         }
         if (text.empty() || text.back() != ':') {
             continue;
@@ -1116,11 +1123,25 @@ bool function_shares_control(const std::vector<std::string>& lines,
             }
             if (following == "PUSH R7" || following.rfind("ADJSP", 0) == 0 ||
                 following.rfind("LEA R7, [SP]", 0) == 0) {
-                prologue_labels.insert(text.substr(0, text.size() - 1));
+                shared.prologue_labels.insert(text.substr(0, text.size() - 1));
             }
             break;
         }
     }
+    return shared;
+}
+
+// True when control enters or leaves this slice other than by falling in at its
+// first instruction or returning from its last. The unwinder is written as
+// entry-shared slices: `__kr32_throw` loads two values and jumps into
+// `__kr32_unwind_continue`, which consumes them from those registers. Promoting
+// either slice alone rewrites the loads on one side and leaves the uses on the
+// other reading registers nothing writes. A jump to a declared global is a tail
+// call and a target whose next instruction is a frame prologue is a function
+// entry, so neither counts as a shared slice.
+bool function_shares_control(const std::vector<std::string>& lines,
+                             const SharedControl& shared, std::size_t begin,
+                             std::size_t end) {
     std::set<std::string> local;
     for (std::size_t index = begin; index < end; ++index) {
         const std::string text = trim(lines[index]);
@@ -1131,25 +1152,14 @@ bool function_shares_control(const std::vector<std::string>& lines,
     if (local.empty()) {
         return false;
     }
-    for (std::size_t index = 0; index < lines.size(); ++index) {
-        Instruction instruction;
-        if (!parse_instruction(lines[index], instruction)) {
+    for (const std::pair<std::size_t, std::string>& jump : shared.jumps) {
+        const std::string& target = jump.second;
+        if (shared.exports.count(target) > 0 ||
+            shared.prologue_labels.count(target) > 0) {
             continue;
         }
-        if (instruction.mnemonic != "JMP" || instruction.operands.size() != 1) {
-            continue;
-        }
-        const std::string target = trim(instruction.operands[0]);
-        int ignored = 0;
-        if (parse_register(target, ignored) || target.rfind('#', 0) == 0) {
-            continue;
-        }
-        if (exports.count(target) > 0 || prologue_labels.count(target) > 0) {
-            continue;
-        }
-        const bool inside = index >= begin && index < end;
+        const bool inside = jump.first >= begin && jump.first < end;
         const bool target_inside = local.count(target) > 0;
-        // Jumping out of the slice, or being jumped into from outside it.
         if (inside != target_inside) {
             return true;
         }
@@ -1216,8 +1226,9 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
         std::map<std::size_t, std::vector<std::string>> insert;
     };
     Edits edits;
+    const SharedControl shared = compute_shared_control(lines);
     for (const CfgFunction& function : build_cfgs(lines)) {
-        if (function_shares_control(lines, function.begin, function.end)) {
+        if (function_shares_control(lines, shared, function.begin, function.end)) {
             continue;
         }
         bool has_call = false;
@@ -1471,8 +1482,9 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, st
     // contains no call, so no throw can leave it half-way, and every landing pad
     // is outside every span. The call-surviving and leaf passes still skip these
     // functions because their values do cross a call.
+    const SharedControl shared = compute_shared_control(lines);
     for (const CfgFunction& function : build_cfgs(lines)) {
-        if (function_shares_control(lines, function.begin, function.end)) {
+        if (function_shares_control(lines, shared, function.begin, function.end)) {
             continue;
         }
         bool used[16] = {};
@@ -1802,8 +1814,9 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
     int removed = 0;
     // Same reasoning as the integer span pass above: no call inside the span
     // means no throw inside it, so the landing pads cannot observe the values.
+    const SharedControl shared = compute_shared_control(lines);
     for (const CfgFunction& function : build_cfgs(lines)) {
-        if (function_shares_control(lines, function.begin, function.end)) {
+        if (function_shares_control(lines, shared, function.begin, function.end)) {
             continue;
         }
         bool used_fp[16] = {};
@@ -2023,8 +2036,9 @@ int promote_leaf_scalars(std::vector<std::string>& lines,
     const LivenessInfo liveness = compute_register_liveness(lines);
     std::vector<PromotionInsertion> insertions;
     int removed = 0;
+    const SharedControl shared = compute_shared_control(lines);
     for (const CfgFunction& function : build_cfgs(lines)) {
-        if (function_shares_control(lines, function.begin, function.end)) {
+        if (function_shares_control(lines, shared, function.begin, function.end)) {
             continue;
         }
         bool has_call = false;
