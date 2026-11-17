@@ -13,6 +13,7 @@ The compiler emits NUL-terminated text records into `.debug_info`:
 | `L <label> <source> <line> <column>` | Source line starts at the address of `label` |
 | `F <name> <start> <end> <frame> <type>` | Function range, frame size, result type |
 | `V <function> <name> <offset> <type> <size>` | Local/parameter at `R7 + offset` |
+| `P <function> <name> <register> <start> <end>` | Same variable, held in `R<n>` or `F<n>` over `[start, end)` |
 | `G <name> <label> <type> <size>` | Global at the address of `label` |
 | `T <name> <size>` | Type table entry |
 | `C <class> <size> <base>` | C++ class layout |
@@ -38,6 +39,19 @@ source and libc locals instead of only assembly.
 Labels are resolved against the linked image's symbol table when the debug info
 is loaded. This keeps the format relocatable without changing the object model;
 the linker already preserves the local labels unless `--strip` is used.
+
+A `P` record means the optimizer moved a variable out of its frame slot: the
+promotion passes rewrite the stores, so the slot `V` points at is never written
+and reading it would report zero. A reader prefers the `P` record when the PC
+lies inside its range and falls back to `R7 + offset` otherwise. A whole-function
+promotion takes its range from the labels of the function's own `F` record, so
+the record also covers the stretch before the first assignment: a local that has
+not been assigned yet reads as the register's stale contents rather than as
+unavailable, the same way a frame slot reads before its first store. Starting the
+range at the first store would report "unavailable" instead; that is deferred,
+because it makes the record depend on a line position again. A span promotion
+instead names the labels that bracket its interval, so its range is a subset of
+the interval and may omit a few instructions at each end.
 
 The object assembler accepts `.debug_info` as a non-alloc debug section. The
 linker concatenates debug payloads at address zero; they are never loaded into

@@ -5494,6 +5494,11 @@ void append_location_records(std::string& assembly,
     for (const PendingLocation& location : pending) {
         std::string start_label = location.start_label;
         std::string end_label = location.end_label;
+        // A whole-function range also covers the stretch before the first store,
+        // so an unassigned local reads as the register's stale contents rather
+        // than as unavailable. Narrowing it to the first store is deferred: it
+        // would make the record depend on a line position again, and the position
+        // is what the insertions in this pipeline keep moving.
         if (location.whole) {
             const auto found = bounds.find(location.function);
             if (found == bounds.end()) {
