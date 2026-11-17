@@ -4839,6 +4839,29 @@ Newest entries at the bottom. Use the local time zone.
 
       Tree clean at `e6b7a4e` plus this entry.
 
+- **2026-11-17 11:30 -08:00** — Removed a debug print that shipped. Commit `3da2807`
+      left this in the parameter loop of the member-function builder:
+
+      ```cpp
+      std::fprintf(stderr, "M PARAM owner=%s raw=%s fixed=%s resolved=%s\n", ...)
+      ```
+
+      It fired for every parameter of any class whose name contains `M__`, so the
+      compiler wrote diagnostics to stderr on ordinary input. It is gone, and there
+      are no other debug prints in the front ends or the optimizer - the remaining
+      `fprintf(stderr, ...)` calls are error messages with a `kr32 cc:`-style
+      prefix.
+
+      Item 1 remains blocked: the destructor's `Function` is not built through the
+      class-descriptor path I patched (changing `qualified` there left the `F`
+      record unchanged), so its name still comes from the constructor. The next step
+      is to find where the virtual destructor's descriptor is created - it is not
+      `build_member`, not `emit_destructor_suffix`, and not the class descriptor.
+
+      Gates: 97 of 97 on Windows (243 s at 9 jobs) and 97 of 97 on WSL. One Windows
+      run exited `-1` after 130 s with no failing test, which was an interruption
+      rather than a failure; it was re-run rather than reported.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
