@@ -4938,6 +4938,18 @@ Newest entries at the bottom. Use the local time zone.
       summary; running `ctest` directly gave the result above, so the interruption is
       in the nested shell invocation rather than in a test.
 
+- **2026-11-17 12:00 -08:00** — The collapse shipped broken and is fixed. The flag
+      was set *after* `entries.push_back(entry)`, so every row reached the list
+      still saying `aggregate = false` / `expanded = true` - which is why the
+      operator saw no members and clicking did nothing: no row was ever recognised
+      as an aggregate, and the children were suppressed by a later `return` that
+      keyed on state the stored row did not carry.
+
+      `is_aggregate` and `aggregate_is_open` are now computed before the push, from
+      `class_members` on the pointee or the type, and the member loop runs only when
+      the row is open. Gates: 97 of 97 on Windows (280 s at 9 jobs) and 97 of 97 on
+      WSL.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

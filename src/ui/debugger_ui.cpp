@@ -2216,6 +2216,20 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             entry.page = std::clamp(entry.page, 0, std::max(0, entry.page_count - 1));
         }
 
+        // An aggregate row has to know that it is one before it is stored, because
+        // the row is copied into the list here. Collapsed unless the operator has
+        // opened it: a class with ten fields otherwise buries the rest of the frame.
+        const std::string member_type = debug::pointee_type(entry.type);
+        const bool is_aggregate =
+            !debug::class_members(session_.info(),
+                                  member_type.empty() ? entry.type : member_type)
+                 .empty();
+        const auto member_open = aggregate_expanded_.find(entry.key);
+        const bool aggregate_is_open =
+            member_open != aggregate_expanded_.end() && member_open->second;
+        entry.aggregate = is_aggregate;
+        entry.expanded = aggregate_is_open;
+
         entries.push_back(entry);
         // A register-held value has no address of its own, but a pointer still
         // has a target: expand through its value rather than its (absent) slot.
@@ -2271,14 +2285,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         const std::string structure = pointer ? pointee : type;
         // Inherited members live in the base class's record; a derived object with
         // no fields of its own shows nothing without them.
-        // An aggregate is a row the operator opens, not something that always
-        // expands: a class with ten fields buries the rest of the frame.
-        const std::map<std::string, bool>::const_iterator open =
-            aggregate_expanded_.find(entry.key);
-        const bool is_open = open != aggregate_expanded_.end() && open->second;
-        entry.aggregate = true;
-        entry.expanded = is_open;
-        if (!is_open) {
+        if (!is_aggregate || !aggregate_is_open) {
             return;
         }
         const std::uint32_t storage = pointer ? entry.value : entry.address;
