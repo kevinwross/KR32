@@ -69,12 +69,22 @@ count. Equivalent direct command:
 ctest --test-dir .\build\windows-msvc -C Debug -j24 --output-on-failure
 ```
 
-Every test preset runs four jobs, so `ctest --preset <preset>` is parallel
-without a `-j` argument. Four is what the CI runners and the Arm64 gate
-provide; the sanitizer gate needs it, because eight jobs oversubscribe a
-four-core machine and its CPU-heavy codegen buckets cross the 600 s watchdog.
-Local runs can pass a larger `-j` explicitly; the timings below were taken
-with `-j8` on a 24-core machine. Measured on an otherwise idle machine, all 96
+The gate scripts size the job count for the machine that runs it:
+
+```powershell
+pwsh -File scripts/run-gate.ps1            # build + tests, Windows
+bash scripts/run-gate.sh                   # build + tests, WSL / Linux
+```
+
+An Arm64 machine runs four jobs; any other machine runs 80% of its logical
+processors (12 cores -> 9, 6 cores -> 4). The sanitizer preset is capped at
+four regardless: it is CPU-bound, and more jobs oversubscribe a small machine so
+that its codegen buckets cross the 600 s per-test watchdog. Both scripts print
+the architecture, the core count and the job count they chose before they start,
+and say when the cap applied.
+
+Each preset keeps `execution.jobs: 4` as the fallback a bare `ctest --preset`
+uses, which is the value CI and Arm64 want; the scripts override it with `-j`. Measured on an otherwise idle machine, all 96
 tests:
 
 | Platform | build (incremental) | tests | total |
