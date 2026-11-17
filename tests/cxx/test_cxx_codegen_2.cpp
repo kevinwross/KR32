@@ -819,4 +819,23 @@ TEST_CASE("algorithm copies ranges with replacement") {
     CHECK(program.ok);
     CHECK(program.result == 0);
 }
-
+TEST_CASE("a catch reads the right value after a throw at O1") {
+    // Two optimizer faults met here. The overwrite fold treated `SETSP` as
+    // writing its operand, so it deleted the frame restore in front of the jump
+    // into the landing pad; and promotion rewrote the values that the entry-shared
+    // unwind slices pass in registers, so the consumer read stale ones. Both made
+    // the personality walk the wrong frame and fall through to the no-match path.
+    const std::string source =
+        "struct D { ~D() {} };\n"
+        "int keep(int seed) {\n"
+        "    int slot = seed * 3;\n"
+        "    try { D d; throw 7; } catch (int value) { return slot + value; }\n"
+        "}\n"
+        "int main() { return keep(5) == 22 ? 0 : 1; }\n";
+    for (const bool optimize : {false, true}) {
+        const ProgramResult result = compile_and_run(source, optimize);
+        CHECK_MESSAGE(result.ok, result.diagnostics.c_str());
+        CHECK_MESSAGE(result.result == 0,
+                      (optimize ? "optimized" : "unoptimized"));
+    }
+}

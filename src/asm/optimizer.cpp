@@ -196,6 +196,10 @@ bool writes_first_operand(const Instruction& instruction) {
         instruction.mnemonic == "STORE8" || instruction.mnemonic == "STORE16" ||
         instruction.mnemonic == "PUSH" || instruction.mnemonic == "FENCE" ||
         instruction.mnemonic == "NOP" ||
+        // SETSP reads its operand. Treating it as a write let the overwrite fold
+        // delete the frame restore in front of a landing-pad jump, leaving the
+        // unwinder to run with whatever R7 happened to hold.
+        instruction.mnemonic == "SETSP" ||
         is_return_mnemonic(instruction.mnemonic) ||
         instruction.mnemonic == "HALT" || is_call(instruction.mnemonic) ||
         is_branch(instruction.mnemonic)) {
@@ -1079,6 +1083,80 @@ struct PendingLocation {
           last(last_line) {}
 };
 
+// True when control enters or leaves this slice other than by falling in at its
+// first instruction or returning from its last. The unwinder is written as
+// entry-shared slices: `__kr32_throw` loads two values and jumps into
+// `__kr32_unwind_continue`, which consumes them from those registers. Optimising
+// either slice on its own is unsound - a promotion rewrites the loads on one side
+// and leaves the uses on the other reading registers nothing writes.
+bool function_shares_control(const std::vector<std::string>& lines,
+                             std::size_t begin, std::size_t end) {
+    // A jump to a declared global is a tail call: it enters a function at its
+    // prologue, where liveness is well defined. The unwinder's continuation is a
+    // plain label, which is what this guard is for.
+    // One pass for both sets. A label whose next real instruction is a frame
+    // prologue begins a function, with well-defined liveness; a label without one
+    // is a shared continuation, which is what this guard is for.
+    std::set<std::string> exports;
+    std::set<std::string> prologue_labels;
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        const std::string text = trim(lines[index]);
+        if (text.rfind(".global ", 0) == 0 || text.rfind(".weak ", 0) == 0) {
+            exports.insert(trim(text.substr(8)));
+            continue;
+        }
+        if (text.empty() || text.back() != ':') {
+            continue;
+        }
+        for (std::size_t next = index + 1;
+             next < lines.size() && next <= index + 4; ++next) {
+            const std::string following = trim(lines[next]);
+            if (following.empty() || following.back() == ':') {
+                continue;
+            }
+            if (following == "PUSH R7" || following.rfind("ADJSP", 0) == 0 ||
+                following.rfind("LEA R7, [SP]", 0) == 0) {
+                prologue_labels.insert(text.substr(0, text.size() - 1));
+            }
+            break;
+        }
+    }
+    std::set<std::string> local;
+    for (std::size_t index = begin; index < end; ++index) {
+        const std::string text = trim(lines[index]);
+        if (!text.empty() && text.back() == ':') {
+            local.insert(text.substr(0, text.size() - 1));
+        }
+    }
+    if (local.empty()) {
+        return false;
+    }
+    for (std::size_t index = 0; index < lines.size(); ++index) {
+        Instruction instruction;
+        if (!parse_instruction(lines[index], instruction)) {
+            continue;
+        }
+        if (instruction.mnemonic != "JMP" || instruction.operands.size() != 1) {
+            continue;
+        }
+        const std::string target = trim(instruction.operands[0]);
+        int ignored = 0;
+        if (parse_register(target, ignored) || target.rfind('#', 0) == 0) {
+            continue;
+        }
+        if (exports.count(target) > 0 || prologue_labels.count(target) > 0) {
+            continue;
+        }
+        const bool inside = index >= begin && index < end;
+        const bool target_inside = local.count(target) > 0;
+        // Jumping out of the slice, or being jumped into from outside it.
+        if (inside != target_inside) {
+            return true;
+        }
+    }
+    return false;
+}
+
 // The label names that bracket a line range: the first label at or after the
 // start and the last one at or before the end. Names survive the insertions a
 // pass makes, where indices do not.
@@ -1139,6 +1217,9 @@ int promote_call_surviving_scalars(std::vector<std::string>& lines,
     };
     Edits edits;
     for (const CfgFunction& function : build_cfgs(lines)) {
+        if (function_shares_control(lines, function.begin, function.end)) {
+            continue;
+        }
         bool has_call = false;
         bool has_exception_path = false;
         std::size_t prologue_after = 0;
@@ -1391,6 +1472,9 @@ int promote_call_free_ranges(std::vector<std::string>& lines, int& rewritten, st
     // is outside every span. The call-surviving and leaf passes still skip these
     // functions because their values do cross a call.
     for (const CfgFunction& function : build_cfgs(lines)) {
+        if (function_shares_control(lines, function.begin, function.end)) {
+            continue;
+        }
         bool used[16] = {};
         std::vector<std::size_t> call_sites;
         std::set<std::string> branch_targets;
@@ -1719,6 +1803,9 @@ int promote_call_free_fp_ranges(std::vector<std::string>& lines,
     // Same reasoning as the integer span pass above: no call inside the span
     // means no throw inside it, so the landing pads cannot observe the values.
     for (const CfgFunction& function : build_cfgs(lines)) {
+        if (function_shares_control(lines, function.begin, function.end)) {
+            continue;
+        }
         bool used_fp[16] = {};
         std::vector<std::size_t> call_sites;
         std::set<std::string> branch_targets;
@@ -1937,6 +2024,9 @@ int promote_leaf_scalars(std::vector<std::string>& lines,
     std::vector<PromotionInsertion> insertions;
     int removed = 0;
     for (const CfgFunction& function : build_cfgs(lines)) {
+        if (function_shares_control(lines, function.begin, function.end)) {
+            continue;
+        }
         bool has_call = false;
         bool has_exception_path = false;
         for (std::size_t index = function.begin; index < function.end;

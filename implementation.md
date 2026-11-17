@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 23:10 -08:00
+> **Last updated:** 2026-11-16 23:26 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4523,6 +4523,47 @@ Newest entries at the bottom. Use the local time zone.
       registers. A guard that skips slices entered or left by a `JMP` does stop
       that promotion, but the miscompile persists without it, so the guard is not
       the fix - and it was not gate-verified, so it is not committed.
+
+- **2026-11-16 23:26 -08:00** — The `catch` miscompile is **fixed**, by two faults
+      that had to be repaired together:
+
+      **`SETSP` was treated as writing its operand.** `writes_first_operand` lists
+      the instructions that only read their first operand; `SETSP` was missing, so
+      `remove_overwritten_moves` saw `MOV R7, R2` followed by `SETSP R7`, decided
+      the frame pointer was being overwritten, and deleted the restore. The
+      landing pad then ran with whatever `R7` held. Fixing this alone was not
+      enough - the program still failed - which is what pointed at the second
+      fault.
+
+      **The unwinder is entry-shared, and promotion crossed the share.** The
+      runtime is written as slices: `__kr32_throw` loads two values and jumps into
+      `__kr32_unwind_continue`, which consumes them from those registers. The
+      promotion passes rewrote the loads in the producer and left the consumer
+      reading registers nothing writes. All four promotion passes now skip a
+      slice that control enters or leaves by a `JMP`, with two exceptions that
+      keep the C path intact: a jump to a declared global is a tail call, and a
+      target whose next instruction is a frame prologue is a function entry, not a
+      continuation. A first attempt guarded every CFG loop and cost 597
+      instructions on `libc`; a second version rescanned the file per jump and made
+      the compiler quadratic (161 s to compile `libc` even after fixing it).
+
+      A running regression test compiles the reproducer and asserts the exit code
+      at both levels. It fails without the fix and passes with it - checked by
+      reverting the optimizer and re-running.
+
+      Measurements, `-O0` -> `-O1`:
+
+      | Source | instructions | ticks |
+      | --- | ---: | ---: |
+      | `balanced-tree.cpp` | 1290 -> 1019 | 1.18x |
+      | `matrix.cpp` | 1079 -> 884 | 1.04x |
+      | `hello.cpp` | 257 -> 234 | 1.15x |
+      | `binarytree.c` | 869 -> 484 | 1.13x |
+      | `libc.c` | 16334 -> 9905 | - |
+
+      The C++ examples sit 24 and 19 instructions above their pre-guard numbers;
+      that is the price of not promoting across a shared continuation, and it is
+      paid once per such slice. All eleven parts (96 tests) and 96/96 WSL pass.
 
 ## 10. Updating this file
 
