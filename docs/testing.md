@@ -69,8 +69,13 @@ count. Equivalent direct command:
 ctest --test-dir .\build\windows-msvc -C Debug -j24 --output-on-failure
 ```
 
-Every test preset runs eight jobs, so `ctest --preset <preset>` is parallel
-without a `-j` argument. Measured on an otherwise idle machine, all 96 tests:
+Every test preset runs four jobs, so `ctest --preset <preset>` is parallel
+without a `-j` argument. Four is what the CI runners and the Arm64 gate
+provide; the sanitizer gate needs it, because eight jobs oversubscribe a
+four-core machine and its CPU-heavy codegen buckets cross the 600 s watchdog.
+Local runs can pass a larger `-j` explicitly; the timings below were taken
+with `-j8` on a 24-core machine. Measured on an otherwise idle machine, all 96
+tests:
 
 | Platform | build (incremental) | tests | total |
 | --- | ---: | ---: | ---: |
