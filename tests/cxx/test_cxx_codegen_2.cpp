@@ -839,3 +839,32 @@ TEST_CASE("a catch reads the right value after a throw at O1") {
                       (optimize ? "optimized" : "unoptimized"));
     }
 }
+TEST_CASE("a derived class exposes the members it inherits") {
+    // The derived record carries no members of its own: everything lives at the
+    // base's offsets. A reader that looks only at the derived class shows an
+    // aggregate with no fields, which is what the locals panel did.
+    const std::string source =
+        "class Base { public: int root_; int count_; };\n"
+        "class Derived : public Base { public: int extra_; };\n"
+        "int main() { Derived d; d.root_ = 1; d.extra_ = 2; return d.root_; }\n";
+    const cxx::Result compiled = cxx::compile(source);
+    REQUIRE(compiled.ok);
+    container::Image object;
+    assembler::Error assembly_error;
+    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, object, assembly_error),
+                    assembly_error.message.c_str());
+    debug::Info info;
+    std::string error;
+    REQUIRE_MESSAGE(debug::parse_info(object, info, error), error.c_str());
+
+    const std::vector<debug::Member> members =
+        debug::class_members(info, "Derived");
+    REQUIRE_MESSAGE(members.size() == 3, std::to_string(members.size()).c_str());
+    CHECK(members[0].name == "root_");
+    CHECK(members[1].name == "count_");
+    CHECK(members[2].name == "extra_");
+    CHECK(members[0].offset == 0);
+    CHECK(members[1].offset == 4);
+    CHECK(members[2].offset == 8);
+    CHECK(debug::class_members(info, "Missing").empty());
+}

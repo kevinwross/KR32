@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17 00:07 -08:00
+> **Last updated:** 2026-11-17 04:15 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4590,6 +4590,24 @@ Newest entries at the bottom. Use the local time zone.
       | libcpp.cpp | 15336 instr | 9846 | 1.56x |
 
       All eleven parts (96 tests) and 96/96 WSL pass.
+
+- **2026-11-17 04:15 -08:00** — Class instances expand in the locals panel. The
+      debug records were complete and the panel was not: `C EngineerTree 12
+      BalancedTree` carries no members of its own, so a reader that looks only at
+      the variable's own class record shows `{...}` with nothing inside. The
+      members live in the base's record - `M BalancedTree root_ 4 TreeNode*` and
+      `M BalancedTree count_ 8 int` - at the offsets the derived object actually
+      uses.
+
+      `debug::class_members` walks the base chain, base first so the fields come
+      out in layout order, stopping after eight levels and skipping a class it has
+      already seen. The panel uses it, so a derived object with no fields of its
+      own now lists the ones it inherits. A test compiles a base and a derived
+      class, parses the object's debug info, and checks the names and offsets
+      (0, 4, 8 - the classes have no vtable, which my first expectations got
+      wrong).
+
+      All eleven parts (96 tests) and 96/96 WSL pass; Debug and Release built.
 
 ## 10. Updating this file
 

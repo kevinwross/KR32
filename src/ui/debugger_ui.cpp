@@ -2171,6 +2171,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         std::string key;
     };
     std::vector<Entry> entries;
+
     const auto class_for = [&](const std::string& type) -> const debug::ClassInfo* {
         for (const debug::ClassInfo& klass : session_.info().classes) {
             if (klass.name == type) {
@@ -2178,8 +2179,7 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             }
         }
         return nullptr;
-    };
-    std::function<void(Entry, int)> append_entry;
+    };    std::function<void(Entry, int)> append_entry;
     append_entry = [&](Entry entry, int depth) {
         if (entries.size() >= 256) {
             return;
@@ -2269,12 +2269,15 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
         }
 
         const std::string structure = pointer ? pointee : type;
-        const debug::ClassInfo* klass = class_for(structure);
-        if (klass == nullptr) {
+        // Inherited members live in the base class's record; a derived object with
+        // no fields of its own shows nothing without them.
+        const std::vector<debug::Member> members =
+            debug::class_members(session_.info(), structure);
+        if (members.empty()) {
             return;
         }
         const std::uint32_t base = pointer ? entry.value : entry.address;
-        for (const debug::Member& member : klass->members) {
+        for (const debug::Member& member : members) {
             if (entries.size() >= 256) break;
             Entry child;
             child.name = "." + member.name;

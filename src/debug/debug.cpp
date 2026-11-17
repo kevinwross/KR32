@@ -6,6 +6,8 @@
 #include <map>
 #include <sstream>
 #include <string>
+#include <functional>
+#include <set>
 #include <vector>
 
 #include "kr32/isa/encoding.h"
@@ -43,6 +45,37 @@ constexpr std::uint32_t kErrorIo = 0xFFFF'FFFFU;
 
 } // namespace
 
+std::vector<Member> class_members(const Info& info, const std::string& type) {
+    std::vector<Member> members;
+    std::set<std::string> seen;
+    std::function<void(const std::string&, int)> collect =
+        [&](const std::string& name, int depth) {
+            if (depth >= 8 || name.empty() || !seen.insert(name).second) {
+                return;
+            }
+            const ClassInfo* klass = nullptr;
+            for (const ClassInfo& candidate : info.classes) {
+                if (candidate.name == name) {
+                    klass = &candidate;
+                    break;
+                }
+            }
+            if (klass == nullptr) {
+                return;
+            }
+            // A base sits at offset zero, so its member offsets are already the
+            // derived object's offsets; visiting it first puts the fields in
+            // layout order.
+            if (!klass->base.empty() && klass->base != "-") {
+                collect(klass->base, depth + 1);
+            }
+            for (const Member& member : klass->members) {
+                members.push_back(member);
+            }
+        };
+    collect(type, 0);
+    return members;
+}
 bool parse_info(const container::Image& image, Info& info, std::string& error) {
     info = {};
     std::map<std::string, std::uint32_t> symbols;

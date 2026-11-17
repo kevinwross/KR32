@@ -109,6 +109,15 @@ struct ThreadInfo {
 
 [[nodiscard]] bool parse_info(const container::Image& image, Info& info, std::string& error);
 
+// The members of a class type, including the ones it inherits. A derived class
+// often has none of its own: `EngineerTree : BalancedTree` stores `root_` and
+// `count_` at the base's offsets, so a reader that looks only at the derived
+// record shows an aggregate with no fields. Bases are visited first, which is the
+// order they occupy in the object, and the walk stops after eight levels so a
+// malformed table cannot recurse for ever.
+[[nodiscard]] std::vector<Member> class_members(const Info& info,
+                                               const std::string& type);
+
 class Session {
 public:
     Session();
