@@ -5648,6 +5648,13 @@ void append_location_records(std::string& assembly,
     }
     assembly = std::move(joined);
 }
+bool instruction_writes_first_operand(const std::string& text) {
+    Instruction instruction;
+    if (!parse_instruction(text, instruction)) {
+        return false;
+    }
+    return writes_first_operand(instruction);
+}
 OptimizeStats optimize_assembly(std::string& assembly) {
     OptimizeStats stats;
     std::vector<std::string> lines = split_lines(assembly);

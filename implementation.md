@@ -4727,6 +4727,27 @@ Newest entries at the bottom. Use the local time zone.
 
       Tree is back at `824a8ea` with nothing changed.
 
+- **2026-11-17 10:40 -08:00** — Gap 2 closed: the operand-0 role table is now
+      pinned by a test. `writes_first_operand` decided whether the overwrite fold
+      could delete a `MOV`, and it classified `SETSP` as a write, which deleted the
+      frame restore before a landing-pad jump and made every `throw`/`catch` return
+      the wrong value. Nothing tested the table.
+
+      `assembler::instruction_writes_first_operand` exposes the predicate, and the
+      test transcribes `docs/isa-v1.md` §2 into 38 checks: the ALU and shift
+      families, `MOV`, `LOAD`/`LOAD8S`/`LOAD16S`, `LEA` and `POP` write operand 0;
+      `STORE`/`STORE8`/`STORE16`, `FSTORE`, `PUSH`, `CMP`, `SETSP`, `FENCE`, `NOP`,
+      `RET`, `HALT`, the branches and `SYSCALL` do not. A wrong entry is now a test
+      failure instead of a miscompile.
+
+      One boundary is deliberate and recorded in the test: `FLOAD` is not covered,
+      because the predicate does not classify it - the FP passes read the register
+      field themselves. Adding it to the table with either answer would have
+      enshrined a guess.
+
+      Both gates green: 97 of 97 on Windows (247.8 s at 9 jobs) and 97 of 97 on
+      WSL (124 s at 4 jobs).
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

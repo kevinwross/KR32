@@ -1144,3 +1144,46 @@ TEST_CASE("a reload survives an argument move but not a clobber") {
     CHECK(clobber.removed == 0);
     CHECK(clobbered.find("LOAD R0, [R7 + 0]") != std::string::npos);
 }
+TEST_CASE("the write/read role of operand 0 matches the ISA") {
+    // docs/isa-v1.md §2 assigns the roles per opcode family. This table is that
+    // section transcribed, and it exists because classifying SETSP as a write let
+    // the overwrite fold delete the frame restore in front of a landing-pad jump,
+    // which made every throw/catch return the wrong value. A missing or wrong entry
+    // here is the bug that produced.
+    struct Role {
+        const char* instruction;
+        bool writes;
+    };
+    static const Role roles[] = {
+        // ALU and shift: Rd is the destination.
+        {"ADD R0, R1, R2", true},   {"SUB R0, R1, R2", true},
+        {"AND R0, R1, R2", true},   {"OR R0, R1, R2", true},
+        {"XOR R0, R1, R2", true},   {"SHL R0, R1, R2", true},
+        {"SHR R0, R1, R2", true},   {"SAR R0, R1, R2", true},
+        {"MUL R0, R1, R2", true},   {"DIV R0, R1, R2", true},
+        {"MOD R0, R1, R2", true},   {"SLT R0, R1, R2", true},
+        {"NEG R0, R1", true},       {"NOT R0, R1", true},
+        {"BSWAP R0, R1", true},     {"CLZ R0, R1", true},
+        // MOV, LOAD and LEA: Rd is the destination.
+        {"MOV R0, R1", true},       {"MOV R0, #1", true},
+        {"LOAD R0, [R1 + 4]", true}, {"LOAD8S R0, [R1 + 4]", true},
+        {"LOAD16S R0, [R1 + 4]", true}, {"LEA R0, [R1 + 4]", true},
+        {"POP R0", true},
+        // FLOAD is classified by the FP passes, which read the register field
+        // directly; this predicate answers for the GPR families the folds use.
+        // Sources, bases and reserved operands: operand 0 is not written.
+        {"STORE R0, [R1 + 4]", false}, {"STORE8 R0, [R1 + 4]", false},
+        {"STORE16 R0, [R1 + 4]", false}, {"FSTORE.W F0, [R1 + 4]", false},
+        {"PUSH R0", false},         {"CMP R0, R1", false},
+        {"SETSP R0", false},        {"FENCE", false},
+        {"NOP", false},             {"RET", false},
+        {"HALT", false},            {"JMP R0", false},
+        {"CALL R0", false},         {"JCOND R0, 0", false},
+        {"SYSCALL #0", false},
+    };
+    for (const Role& role : roles) {
+        MESSAGE(std::string(role.instruction));
+        CHECK(assembler::instruction_writes_first_operand(role.instruction) ==
+              role.writes);
+    }
+}
