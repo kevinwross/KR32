@@ -5642,6 +5642,13 @@ OptimizeStats optimize_assembly(std::string& assembly) {
     stats.removed += fold_copy_consumers(lines);
     stats.removed += coalesce_moves(lines);
     stats.removed += fold_address_moves(lines);
+    // The promotion passes and the move coalescing create the shapes these three
+    // folds remove: coalescing reintroduces self-moves such as `MOV R3, R3`, and
+    // promotion leaves slot roundtrips around argument setup. Neither existed
+    // when the first round ran, so the clean-up is repeated on the final code.
+    stats.removed += remove_noop_moves(lines);
+    stats.removed += remove_adjacent_slot_roundtrips(lines);
+    stats.removed += remove_repeated_frame_loads(lines);
     stats.removed += remove_dead_moves(lines);
     stats.removed += use_absolute_symbol_addresses(lines);
     stats.removed += promote_symbol_bases(lines);

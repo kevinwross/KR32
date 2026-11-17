@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 21:40 -08:00
+> **Last updated:** 2026-11-16 22:13 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4429,6 +4429,40 @@ Newest entries at the bottom. Use the local time zone.
       a landing pad only when the frame can clean up", covering both directions,
       and it is not a weakened test: it now checks a stronger claim on both the
       noexcept and the cleanup-free case.
+
+      All eleven parts (96 tests) and 96/96 WSL pass.
+
+- **2026-11-16 22:13 -08:00** — Step 4 of the C++ plan: the final clean-up is
+      repeated on the code the promoting passes leave behind. `coalesce_moves`
+      reintroduces self-moves such as `MOV R3, R3`, and promotion leaves slot
+      roundtrips around argument setup, so `remove_noop_moves`,
+      `remove_adjacent_slot_roundtrips` and `remove_repeated_frame_loads` now run
+      again at the end of the pipeline. Measured: `binarytree.c` 514 -> **484**
+      instructions (44.3% over `-O0`, was 40.9%), `libc` 9936 -> **9909**, no
+      self-moves left in `balanced-tree.cpp`, and the C++ examples hold at 22.9%
+      and 19.8%.
+
+      Step 5 landed with it: `scripts/bench-cxx.ps1` builds each example at both
+      levels and reports the machine's own tick counter, because an instruction
+      count is a proxy that flatters. The first run shows why - C's 44%
+      instruction reduction is only a **1.13x** tick speedup:
+
+      | Source | ticks -O0 | ticks -O1 | speedup |
+      | --- | ---: | ---: | ---: |
+      | balanced-tree.cpp | 176760 | 149688 | 1.18x |
+      | matrix.cpp | 7154 | 6830 | 1.05x |
+      | hello.cpp | 189 | 165 | 1.15x |
+      | binarytree.c | 143878 | 126933 | 1.13x |
+
+      **A miscompile found while checking the catch path, pre-existing and not
+      caused by this batch.** A local read inside a `catch` computes the right
+      value at `-O0` and the wrong one at `-O1`: the catch's type dispatch falls
+      through to the no-match path, so the function returns 1 instead of 0. The
+      same source is wrong at `b542825` and at `07096e4`, so it predates the
+      landing-pad work; the promoted-local question is not involved (`P` records
+      are absent for that function and its `.Lcs_` barrier is intact). The
+      reproducer is in the report; the suite has no case for it, which is why it
+      went unnoticed.
 
       All eleven parts (96 tests) and 96/96 WSL pass.
 
