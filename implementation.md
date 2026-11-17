@@ -4815,6 +4815,30 @@ Newest entries at the bottom. Use the local time zone.
       today, and the shared-slice guard that keeps exceptions correct stays. The
       difference is recorded here rather than "fixed" by weakening the guard.
 
+- **2026-11-17 11:25 -08:00** — Item 1's blocker now has a cause, and it is a third bug.
+      The promotion passes look up `V` records by the code label (`_Z3addii`) while
+      the records carry the qualified name (`add`), so no C++ promoted local has ever
+      produced a `P` record. Mapping label to name through the `F` record fixes that
+      - except for destructors, which inherit the **constructor's** name:
+
+      ```text
+      F BalancedTree::BalancedTree _ZN12BalancedTreeD1Ev .Lfunc_end_16 24 void
+      ```
+
+      The symbol is the destructor's, the name is the constructor's, because the
+      destructor body is emitted as a suffix of the constructor's descriptor and so
+      shares its `qualified` string. That is why the first mapped `P` record read
+      `P _ZN12BalancedTreeD1Ev this F2 ...`: the destructor's promoted slot 0 was
+      named after the constructor's `this`, then read as an FP register.
+
+      So item 1 needs three changes in order: give the destructor its own descriptor
+      name, map code labels to names through `F` when recording promotion locations,
+      and only then emit the parameter `V` records. My attempt at the first - a
+      `::~` prefix where the class descriptor builds `qualified` - changed nothing,
+      because the destructor does not go through that path; it was reverted.
+
+      Tree clean at `e6b7a4e` plus this entry.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
