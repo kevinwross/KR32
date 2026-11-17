@@ -70,9 +70,22 @@ ctest --test-dir .\build\windows-msvc -C Debug -j24 --output-on-failure
 ```
 
 Every test preset runs eight jobs, so `ctest --preset <preset>` is parallel
-without a `-j` argument. Measured on this machine: the whole suite went from 388 s
-of test time to **155 s** on WSL, and the Windows preset runs all 96 tests in
-**383 s**.
+without a `-j` argument. Measured on an otherwise idle machine, all 96 tests:
+
+| Platform | build (incremental) | tests | total |
+| --- | ---: | ---: | ---: |
+| Windows | 2.3 s | 220.3 s | **222.6 s** |
+| WSL | 0.8 s | 86.5 s | **87.3 s** |
+
+Before the two changes below the same suite took 388 s of test time on WSL and
+383 s on Windows, so this is 4.5x and 1.7x.
+
+A clean build of the whole tree, measured in a separate directory so the working
+build was untouched, is **160 s** on Windows (4.4 s configure plus 159.9 s
+compile). A compiler cache would only pay off against that figure: nothing
+installed on this machine provides one (`ccache` and `sccache` are both absent
+from `PATH` on Windows and in WSL), and an incremental gate build is already
+2.3 s, so the cache would not touch the case this gate actually runs.
 
 The OS boot/user tests no longer build the images themselves. `kr32os_images` is a
 CTest `FIXTURES_SETUP` test that runs `kr32os/build.ps1` once, and every test that

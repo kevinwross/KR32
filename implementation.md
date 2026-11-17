@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17 07:10 -08:00
+> **Last updated:** 2026-11-17 07:12 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4650,6 +4650,23 @@ Newest entries at the bottom. Use the local time zone.
       Still open from the same goal: measuring a clean host build to say what a
       compiler cache would save. It needs the tree to itself and another session is
       building, so it is deferred rather than estimated.
+
+- **2026-11-17 07:12 -08:00** — Gate timings on an idle machine, all 96 tests:
+
+      | Platform | build | tests | total |
+      | --- | ---: | ---: | ---: |
+      | Windows | 2.3 s | 220.3 s | **222.6 s** |
+      | WSL | 0.8 s | 86.5 s | **87.3 s** |
+
+      Against 383 s and 388 s before the parallel presets and the OS fixture, so
+      1.7x and 4.5x. A clean build of the whole tree, in a separate directory so
+      the working build stayed intact, is 160 s on Windows. No compiler cache is
+      installed anywhere on this machine, and an incremental gate build is 2.3 s,
+      so a cache would not touch the case the gate actually runs - the entry point
+      is a cold CI build, not a developer loop.
+
+      Item 2 of the plan is closed by measurement rather than code: 335 cases,
+      335 compilations, so there is nothing to cache.
 
 ## 10. Updating this file
 
