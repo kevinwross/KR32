@@ -85,16 +85,20 @@ the architecture, the core count and the job count they chose before they start,
 and say when the cap applied.
 
 Each preset keeps `execution.jobs: 4` as the fallback a bare `ctest --preset`
-uses, which is the value CI and Arm64 want; the scripts override it with `-j`. Measured on an otherwise idle machine, all 96
-tests:
+uses, which is the value CI and Arm64 want; the scripts override it with `-j`.
 
-| Platform | build (incremental) | tests | total |
-| --- | ---: | ---: | ---: |
-| Windows | 2.3 s | 220.3 s | **222.6 s** |
-| WSL | 0.8 s | 86.5 s | **87.3 s** |
+Measured with all 97 tests, the count that includes the `kr32os_images` fixture:
 
-Before the two changes below the same suite took 388 s of test time on WSL and
-383 s on Windows, so this is 4.5x and 1.7x.
+| Platform | jobs | build | tests (wall) | tests (CPU) |
+| --- | ---: | ---: | ---: | ---: |
+| Windows, 12 processors | 9 | 2 s | **220 s** | 2928 sec*proc |
+| WSL, 6 processors | 4 | 1 s | **106 s** | 1616 sec*proc |
+
+Quote the wall figure with its conditions. Two runs of the same 97 tests at the
+same job count measured 220 s and 264 s because another build was running
+alongside the second; the CPU total moves far less, so it is the number to
+compare across machines. Before the parallel presets and the OS fixture the same
+suite took 388 s of test time on WSL and 383 s on Windows.
 
 A clean build of the whole tree, measured in a separate directory so the working
 build was untouched, is **160 s** on Windows (4.4 s configure plus 159.9 s
