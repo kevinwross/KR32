@@ -127,19 +127,29 @@ TEST_CASE("trivial functions inline at O1") {
     CHECK(result.assembly.find("CALL _ZN3Box3getEv") == std::string::npos);
 }
 
-TEST_CASE("noexcept calls skip unwind landing pads") {
+TEST_CASE("a call needs a landing pad only when the frame can clean up") {
+    // The pad exists to run destructors during unwinding. With nothing to clean
+    // up, the exception propagates through the frame unaided - the same way it
+    // crosses a C function, which carries no descriptor at all.
     const cxx::Result noexcept_result = cxx::compile(
         "struct S { int f() const noexcept { return 1; } };\n"
-        "int g(S* s) { return s->f(); }\n");
+        "struct D { ~D(); };\n"
+        "int g(S* s) { D d; return s->f(); }\n");
     CHECK(noexcept_result.ok);
-    CHECK(noexcept_result.assembly.find(".Lcs_landing") ==
-          std::string::npos);
+    CHECK(noexcept_result.assembly.find("_landing") == std::string::npos);
+
     const cxx::Result throwing_result = cxx::compile(
         "struct S { int f() const { return 1; } };\n"
-        "int g(S* s) { return s->f(); }\n");
+        "struct D { ~D(); };\n"
+        "int g(S* s) { D d; return s->f(); }\n");
     CHECK(throwing_result.ok);
-    CHECK(throwing_result.assembly.find(".Lcs_landing") !=
-          std::string::npos);
+    CHECK(throwing_result.assembly.find("_landing") != std::string::npos);
+
+    const cxx::Result clean_result = cxx::compile(
+        "struct S { int f() const { return 1; } };\n"
+        "int g(S* s) { return s->f(); }\n");
+    CHECK(clean_result.ok);
+    CHECK(clean_result.assembly.find("_landing") == std::string::npos);
 }
 
 TEST_CASE("multi-statement functions inline at O1") {

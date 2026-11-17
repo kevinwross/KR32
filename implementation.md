@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-16 20:40 -08:00
+> **Last updated:** 2026-11-16 21:40 -08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -4397,6 +4397,40 @@ Newest entries at the bottom. Use the local time zone.
       the next thing to fix.
 
       All eleven parts (96 tests) and 96/96 WSL pass; both presets built.
+
+- **2026-11-16 21:40 -08:00** — The C++ gap was mostly landing pads. Two changes
+      in the front end, both about *when* a pad is needed rather than about the
+      optimizer:
+
+      **A pad that only resumes unwinding is not emitted.** It had no effect: an
+      exception crosses a frame with nothing to clean up unaided, exactly as it
+      crosses a C function, which carries no descriptor at all. `emit_unwind_landing`
+      and `record_call_site` now return early when the frame has no handler and no
+      destructible local.
+
+      **Cleanup-only pads are named differently.** The promotion passes skip any
+      function containing `.Lcs_`, which was right for a pad that a `catch` can
+      read through and wrong for one that only runs destructors and resumes - control
+      never returns from that pad, so a promoted value cannot be observed missing
+      from its slot. Pads and call-site labels are now `.Lclean_*` when the function
+      has no handler and `.Lcs_*` only when it does.
+
+      On `examples/balanced-tree.cpp` the change takes `.Lcs_` from 192 to **0**
+      (107 `.Lclean_`), and instructions at `-O1` from 1308 `-O0` to **996**, a
+      23.8% reduction where it was 15.0%. `BalancedTree::add` is the function in
+      the report: its frame went from 40 bytes to 16, `this` lives in `R8` across
+      the call, and the four reloads of `this` and the `MOV R3, R3` are gone.
+      `matrix.cpp` 19.7%, `hello.cpp` 9.3%, `binarytree.c` 40.9% and `libc` 39.2%
+      unchanged, so the C path and the canary are untouched.
+
+      One test asserted the old spelling - that a throwing call always emits
+      `.Lcs_landing`. That expectation is obsolete: a throwing call in a frame with
+      nothing to clean up now needs no pad at all. It is rewritten as "a call needs
+      a landing pad only when the frame can clean up", covering both directions,
+      and it is not a weakened test: it now checks a stronger claim on both the
+      noexcept and the cleanup-free case.
+
+      All eleven parts (96 tests) and 96/96 WSL pass.
 
 ## 10. Updating this file
 

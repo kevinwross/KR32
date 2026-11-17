@@ -4678,7 +4678,7 @@ private:
         emit("    STORE R0, [__kr32_exception_pending]");
         const std::string throw_start = new_label("bad_alloc_throw");
         const std::string throw_end = new_label("bad_alloc_throw_end");
-        const std::string throw_landing = new_label("bad_alloc_landing");
+        const std::string throw_landing = new_landing_label("bad_alloc_landing");
         const std::string throw_continue = new_label("bad_alloc_continue");
         emit(throw_start + ":");
         emit("    CALL __kr32_throw");
@@ -4877,7 +4877,7 @@ private:
                     emit("    ADD R0, R0, R1");
                     const std::string ctor_start = new_label("array_ctor_start");
                     const std::string ctor_end = new_label("array_ctor_end");
-                    const std::string ctor_landing = new_label("array_ctor_landing");
+                    const std::string ctor_landing = new_landing_label("array_ctor_landing");
                     const std::string ctor_continue = new_label("array_ctor_continue");
                     emit(ctor_start + ":");
                     emit("    CALL " + constructor->symbol);
@@ -5196,7 +5196,7 @@ private:
         emit("    STORE R0, [__kr32_exception_pending]");
         const std::string throw_start = new_label("throw_start");
         const std::string throw_end = new_label("throw_end");
-        const std::string throw_landing = new_label("throw_landing");
+        const std::string throw_landing = new_landing_label("throw_landing");
         const std::string throw_continue = new_label("throw_continue");
         emit(throw_start + ":");
         emit("    CALL __kr32_throw");
@@ -5320,7 +5320,39 @@ private:
         emit(end_label + ":");
     }
 
+    // A landing pad that only resumes unwinding has nothing to do: a C function
+    // carries no descriptor at all and still lets an exception propagate, so the
+    // pad and its call-site record can be omitted. The optimizer skips any
+    // function carrying a `.Lcs_` label, so omitting a pad that only resumes also
+    // keeps the function eligible for register promotion.
+    [[nodiscard]] bool unwind_landing_needed() const {
+        if (!exception_handlers_.empty()) {
+            return true;
+        }
+        for (const std::vector<std::pair<int, Function*>>& scope : local_destructors_) {
+            if (!scope.empty()) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    // A pad that only runs destructors and resumes never returns to this
+    // function, so a promoted value cannot be observed missing from its slot and
+    // the optimizer may promote. A pad with a real handler can be read afterwards,
+    // so those keep the `.Lcs_` name the promotion passes treat as a barrier.
+    [[nodiscard]] bool unwind_landing_is_cleanup_only() const {
+        return exception_handlers_.empty();
+    }
+
+    [[nodiscard]] std::string new_landing_label(const std::string& purpose) {
+        return new_label(unwind_landing_is_cleanup_only() ? "clean_" + purpose
+                                                          : "cs_" + purpose);
+    }
     void emit_unwind_landing(const std::string& label) {
+        if (!unwind_landing_needed()) {
+            return;
+        }
         emit(label + ":");
         if (!exception_handlers_.empty()) {
             const ExceptionHandler handler = exception_handlers_.back();
@@ -5334,6 +5366,9 @@ private:
 
     void record_call_site(const std::string& start, const std::string& end,
                           const std::string& landing) {
+        if (!unwind_landing_needed()) {
+            return;
+        }
         current_call_sites_.push_back({start, end, landing});
     }
 
@@ -8277,10 +8312,10 @@ private:
                 emit("    CALL " + function->symbol);
                 return resolve_type(function->result);
             }
-            const std::string call_start = new_label("cs_start");
-            const std::string call_end = new_label("cs_end");
-            const std::string call_landing = new_label("cs_landing");
-            const std::string call_continue = new_label("cs_continue");
+            const std::string call_start = new_landing_label("call_start");
+            const std::string call_end = new_landing_label("call_end");
+            const std::string call_landing = new_landing_label("cs_landing");
+            const std::string call_continue = new_landing_label("call_continue");
             emit(call_start + ":");
             emit("    CALL " + function->symbol);
             emit(call_end + ":");
@@ -8482,10 +8517,10 @@ private:
                 emit("    CALL " + function->symbol);
                 return resolve_type(function->result);
             }
-            const std::string call_start = new_label("cs_start");
-            const std::string call_end = new_label("cs_end");
-            const std::string call_landing = new_label("cs_landing");
-            const std::string call_continue = new_label("cs_continue");
+            const std::string call_start = new_landing_label("call_start");
+            const std::string call_end = new_landing_label("call_end");
+            const std::string call_landing = new_landing_label("cs_landing");
+            const std::string call_continue = new_landing_label("call_continue");
             emit(call_start + ":");
             emit("    CALL " + function->symbol);
             emit(call_end + ":");
@@ -8506,10 +8541,10 @@ private:
                 emit("    CALL " + function->symbol);
                 return resolve_type(function->result);
             }
-            const std::string call_start = new_label("cs_start");
-            const std::string call_end = new_label("cs_end");
-            const std::string call_landing = new_label("cs_landing");
-            const std::string call_continue = new_label("cs_continue");
+            const std::string call_start = new_landing_label("call_start");
+            const std::string call_end = new_landing_label("call_end");
+            const std::string call_landing = new_landing_label("cs_landing");
+            const std::string call_continue = new_landing_label("call_continue");
             emit(call_start + ":");
             emit("    CALL " + function->symbol);
             emit(call_end + ":");
@@ -8845,7 +8880,7 @@ private:
         const bool skip_unwind =
             (function->is_noexcept || function->cannot_throw) &&
             !virtual_dispatch;
-        const std::string call_start = new_label("cs_start");
+        const std::string call_start = new_landing_label("call_start");
         if (!skip_unwind) {
             emit(call_start + ":");
         }
@@ -8863,9 +8898,9 @@ private:
         if (stack_bytes != 0) {
             emit("    ADJSP #" + std::to_string(stack_bytes));
         }
-        const std::string call_end = new_label("cs_end");
-        const std::string call_landing = new_label("cs_landing");
-        const std::string call_continue = new_label("cs_continue");
+        const std::string call_end = new_landing_label("call_end");
+        const std::string call_landing = new_landing_label("cs_landing");
+        const std::string call_continue = new_landing_label("call_continue");
         if (!skip_unwind) {
             emit(call_end + ":");
             emit("    JMP " + call_continue);

@@ -293,7 +293,14 @@ The pass is deliberately conservative:
   landing paths.
 - Call-free allocation only assigns a register the function never mentions,
   over a straight-line span that contains no call.
-- Unwind landing pads are omitted only for direct `noexcept` calls.
+- An unwind landing pad is emitted only when the frame has something to clean
+  up: destructors to run or a handler to jump to. A pad that would only resume
+  unwinding is omitted, because an exception crosses such a frame unaided - the
+  way it crosses a C function, which carries no descriptor at all.
+- A pad that only runs destructors is named `.Lclean_*`, and only a pad with a
+  real handler keeps the `.Lcs_*` name that the promotion passes treat as a
+  barrier. Control never returns from a cleanup-only pad, so a promoted value
+  cannot be observed missing from its slot.
 - Debug information describes the promoted registers, so stepping through
   optimized code still shows named locals.
 - Line markers are kept so source-level debugging continues to work.
