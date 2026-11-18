@@ -42,6 +42,7 @@ public:
     [[nodiscard]] bool context_menu(int x, int y, int width, int height);
     void hover(int x, int y, int width, int height);
     void mouse_up();
+    void draw_inspector(Canvas& canvas);
     [[nodiscard]] bool wheel(int x, int y, int width, int height, int delta);
     [[nodiscard]] bool key(int key, bool shift, bool control = false);
     [[nodiscard]] bool quit_requested() const { return quit_; }
@@ -331,6 +332,9 @@ private:
     std::map<std::string, bool> array_expanded_;
     // Which aggregates the operator has opened, keyed by the row's key path.
     std::map<std::string, bool> aggregate_expanded_;
+    // The variable row whose contents are shown in the inspector panel, or -1.
+    int inspect_var_ = -1;
+    Rect inspect_rect_{};
     std::map<std::string, int> array_pages_;
     int last_variable_click_ = -1;
     std::chrono::steady_clock::time_point last_variable_click_time_{};

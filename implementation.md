@@ -4950,6 +4950,30 @@ Newest entries at the bottom. Use the local time zone.
       the row is open. Gates: 97 of 97 on Windows (280 s at 9 jobs) and 97 of 97 on
       WSL.
 
+- **2026-11-18 11:30 -08:00** — Two panel fixes.
+
+      **Globals were listed once per translation unit.** The linker merges every
+      object's debug payload and each object that declares a global emits a `G`
+      record, so a program that links libc carried `stdin` **four times** at the same
+      address and type, and the panel drew one row per record. `parse_info` now keeps
+      the first and drops later records with the same name - C linkage gives a global
+      one definition, so they are the same object. A test assembles both duplicates
+      and checks one survives.
+
+      **Right-click inspects a variable.** The context menu already existed on
+      `event.button == 3`; a right click on a variable row now opens an inspector
+      instead, showing the value's members from `debug::member_entries` - values for
+      scalars, `{...}` for nested aggregates - with the panel placed above and to the
+      right of the row, pulled back inside the window when it would overflow. A left
+      click outside it closes it.
+
+      The inspector has **no test**, like the collapse before it: the drawing path is
+      not reachable without a window. Both gates are green, which says the build and
+      the model are sound, and nothing about whether the panel appears where it
+      should.
+
+      Gates: 97 of 97 on Windows and 97 of 97 on WSL.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

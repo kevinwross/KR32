@@ -1164,3 +1164,36 @@ TEST_CASE("the member expansion covers the three shapes the panel broke on") {
     CHECK(debug::member_entries(info, "char*", 0x2000, read).empty());
     CHECK(debug::member_entries(info, "int", 0x2000, read).empty());
 }
+TEST_CASE("a global declared in several objects is listed once") {
+    // The linker merges every object's debug payload, and each object that declares
+    // a global emits a G record for it, so `stdin` arrived four times in a program
+    // that links libc. The Variables panel listed one row per record.
+    const std::string assembly =
+        ".text\n"
+        ".global probe\n"
+        "probe:\n"
+        "    RET\n"
+        ".data\n"
+        ".global stdin_object\n"
+        "stdin_object:\n"
+        "    .word 0\n"
+        ".debug_info\n"
+        "    .asciz \"G stdin stdin_object struct:kr32_file_* 4\"\n"
+        "    .asciz \"G stdin stdin_object struct:kr32_file_* 4\"\n"
+        "    .asciz \"G stdout stdin_object struct:kr32_file_* 4\"\n";
+    container::Image image;
+    assembler::Error error;
+    REQUIRE_MESSAGE(assembler::assemble_object(assembly, image, error),
+                    error.message.c_str());
+    debug::Info info;
+    std::string parse_error;
+    REQUIRE_MESSAGE(debug::parse_info(image, info, parse_error), parse_error.c_str());
+    int stdin_count = 0;
+    int stdout_count = 0;
+    for (const debug::Global& global : info.globals) {
+        if (global.name == "stdin") ++stdin_count;
+        if (global.name == "stdout") ++stdout_count;
+    }
+    CHECK(stdin_count == 1);
+    CHECK(stdout_count == 1);
+}

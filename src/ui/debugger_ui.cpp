@@ -3441,6 +3441,16 @@ void DebuggerUI::open_context_menu(int x, int y, int width, int height) {
         return;
     }
     const Layout areas = layout(width, height);
+    // A right click on a variable row inspects it: the panel shows the object's
+    // members above and to the right of the row.
+    for (std::size_t index = 0; index < var_hover_rows_.size(); ++index) {
+        const VarHoverRow& row = var_hover_rows_[index];
+        if (row.header || row.pager || !row.row.contains(x, y)) {
+            continue;
+        }
+        inspect_var_ = static_cast<int>(index);
+        return;
+    }
     bool source = false;
     int line = 0;
     std::uint32_t address = 0;
@@ -3842,6 +3852,9 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_variables(canvas, areas.variables);
     draw_breakpoints(canvas, areas.breakpoints);
     draw_call_stack(canvas, areas.call_stack);
+    if (inspect_var_ >= 0) {
+        draw_inspector(canvas);
+    }
     if (os_mode_) {
         std::string output = devices_.serial().take_output();
         for (char character : output) {
@@ -3873,7 +3886,77 @@ void DebuggerUI::render(Canvas& canvas) {
     }
 }
 
+void DebuggerUI::draw_inspector(Canvas& canvas) {
+    if (inspect_var_ < 0 ||
+        inspect_var_ >= static_cast<int>(var_hover_rows_.size())) {
+        inspect_var_ = -1;
+        return;
+    }
+    const VarHoverRow& row = var_hover_rows_[static_cast<std::size_t>(inspect_var_)];
+    const std::string pointee = debug::pointee_type(row.type);
+    // A pointer is inspected through the value it holds; a direct object through
+    // its own address.
+    const std::uint32_t storage = pointee.empty() ? row.address : row.value;
+    const std::vector<debug::MemberEntry> members = debug::member_entries(
+        session_.info(), row.type, storage,
+        [&](std::uint32_t address, std::uint32_t size, std::uint32_t& value) {
+            return session_.read_memory(address, size, value);
+        });
+
+    struct Line {
+        std::string text;
+        Color colour;
+    };
+    std::vector<Line> lines;
+    lines.push_back(Line{row.name + " : " + row.type, kAccent});
+    if (members.empty()) {
+        lines.push_back(Line{"(no members)", kDim});
+    }
+    for (const debug::MemberEntry& member : members) {
+        if (lines.size() > 24) {
+            lines.push_back(Line{"...", kDim});
+            break;
+        }
+        const std::string prefix = "." + member.name + " = ";
+        if (debug::member_entries(session_.info(), member.type, member.address,
+                                  nullptr).empty()) {
+            lines.push_back(Line{prefix + (member.ok ? hex(member.value, 8) : "?"),
+                                 member.ok ? kText : kDim});
+            continue;
+        }
+        lines.push_back(Line{prefix + "{...}", kText});
+    }
+
+    const int width = 300;
+    const int height = 14 + static_cast<int>(lines.size()) * 16;
+    // Open upward and to the right of the row, then pull back inside the window.
+    int x = row.row.x + row.row.width + 8;
+    if (x + width > canvas.width() - 8) {
+        x = canvas.width() - width - 8;
+    }
+    if (x < 8) {
+        x = 8;
+    }
+    int y = row.row.y - height;
+    if (y < 8) {
+        y = row.row.y + row.row.height + 8;
+    }
+    if (y + height > canvas.height() - 8) {
+        y = canvas.height() - height - 8;
+    }
+    inspect_rect_ = Rect{x, y, width, height};
+    canvas.fill(inspect_rect_, Color{18, 26, 34, 255});
+    canvas.frame(inspect_rect_, kAccent, 2);
+    int line_y = y + 6;
+    for (const Line& line : lines) {
+        canvas.text(x + 8, line_y, line.text, line.colour, FontRole::MonoSmall);
+        line_y += 16;
+    }
+}
 bool DebuggerUI::click(int x, int y, int width, int height) {
+    if (inspect_var_ >= 0 && !inspect_rect_.contains(x, y)) {
+        inspect_var_ = -1;
+    }
     if (!settings_open_ && loaded_) {
         const Layout areas = layout(width, height);
         if (areas.tabs.contains(x, y)) {

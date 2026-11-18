@@ -206,7 +206,21 @@ bool parse_info(const container::Image& image, Info& info, std::string& error) {
                 error = "debug global references unknown symbol: " + label;
                 return false;
             }
-            info.globals.push_back(std::move(global));
+            // The linker merges the debug payload of every object, and each one that
+            // declares a global emits a G record for it, so the same name arrives
+            // once per translation unit. C linkage gives a global one definition, so
+            // the first record wins and the rest are the same object at the same
+            // address - the Variables panel listed `stdin` four times before this.
+            bool duplicate = false;
+            for (const Global& existing : info.globals) {
+                if (existing.name == global.name) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                info.globals.push_back(std::move(global));
+            }
         } else if (kind == 'T') {
             TypeInfo type;
             stream >> type.name >> type.size;
