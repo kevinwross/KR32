@@ -263,7 +263,10 @@ bool compile_c_source(const std::string& path, container::Image& image,
     }
     const std::string source((std::istreambuf_iterator<char>(input)),
                              std::istreambuf_iterator<char>());
-    const cc::Result compiled = cc::compile(source, path);
+    // The command line optimizes by default, and the window's BUILD should produce
+    // the same code as `kr32 build` on the same source: without this the panel
+    // showed unoptimized output and every local sat in a frame slot.
+    const cc::Result compiled = cc::compile(source, path, 0, true);
     if (!compiled.ok) {
         if (!compiled.diagnostics.empty()) {
             const cc::Diagnostic& diagnostic = compiled.diagnostics.front();
@@ -308,6 +311,8 @@ bool compile_cxx_source(const std::string& path, container::Image& image,
                              std::istreambuf_iterator<char>());
     cxx::Options options;
     options.source_name = path;
+    // Same reason as the C path: BUILD matches the command line's default.
+    options.optimize = true;
     const cxx::Result compiled = cxx::compile(source, options);
     if (!compiled.ok) {
         if (!compiled.diagnostics.empty()) {

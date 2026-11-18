@@ -4974,6 +4974,22 @@ Newest entries at the bottom. Use the local time zone.
 
       Gates: 97 of 97 on Windows and 97 of 97 on WSL.
 
+- **2026-11-18 12:05 -08:00** — The window's BUILD now optimizes. It called
+      `cc::compile(source, path)` and `cxx::compile` with default options, so the
+      GUI always produced `-O0` code however the command line defaulted: every local
+      sat in a frame slot, and a report of "there are other registers than R0" was
+      really a report that BUILD ignored the optimizer. Both paths now pass
+      optimization on, matching `kr32 build` on the same source.
+
+      A cleanup pass for `JMP` to the next instruction was written, tested, and
+      **reverted**: it reintroduced the `catch` miscompile. The test for it passed
+      and the exception regression test failed, which is the right way round for the
+      tests to catch it, but a cosmetic pass is not worth any risk in that path. The
+      `-O0` output keeps those jumps, and that is acceptable: they are what `-O0`
+      means, and the window no longer builds at `-O0`.
+
+      Gates: 97 of 97 on Windows and 97 of 97 on WSL, after the revert.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
