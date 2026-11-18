@@ -2414,7 +2414,14 @@ void DebuggerUI::draw_variables(Canvas& canvas, Rect rect) {
             if (entry.ok && class_for(entry.type) != nullptr) {
                 value_text = "{...}";
             }
-            text = indent_text + entry.name + " = " + value_text;
+            // A row that can be opened says so: `+` closed, `-` open, and a pointer
+            // keeps its arrow so it is clear the members come from the target.
+            const std::string marker =
+                entry.aggregate ? (entry.expanded ? "- " : "+ ") : std::string();
+            const bool arrow =
+                entry.aggregate && !debug::pointee_type(entry.type).empty();
+            text = indent_text + marker + entry.name + (arrow ? " -> " : " = ") +
+                   value_text;
         }
         canvas.text(rect.x + 6, y, trim_to(text, static_cast<std::size_t>((rect.width - 20) / 7)),
                     entry.header ? kAccent

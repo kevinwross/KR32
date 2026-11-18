@@ -4990,6 +4990,24 @@ Newest entries at the bottom. Use the local time zone.
 
       Gates: 97 of 97 on Windows and 97 of 97 on WSL, after the revert.
 
+- **2026-11-18 15:45 -08:00** — The Variables panel marks what can be opened. A row
+      that expands now carries `+` while closed and `-` while open, and a pointer
+      keeps an arrow so it is obvious the members come from its target:
+
+      ```text
+      + root -> 0x00024BDC
+      - stdin_object = {...}
+      ```
+
+      The arrow is only drawn for a pointer whose target is an aggregate - a `char*`
+      has no members, so marking it would promise an expansion that is not there. The
+      array rows already showed `[+]`/`[-]`; this brings the scalar, struct and class
+      rows into line with them.
+
+      Gates: 97 of 97 on Windows and 97 of 97 on WSL. The marker text is built inside
+      the draw path and has no test, which is the same gap as the collapse and the
+      inspector before it.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
