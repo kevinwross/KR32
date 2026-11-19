@@ -5008,6 +5008,27 @@ Newest entries at the bottom. Use the local time zone.
       the draw path and has no test, which is the same gap as the collapse and the
       inspector before it.
 
+- **2026-11-18 18:25 -08:00** — `docs/ui.md` brought up to date with the panel work.
+      What was stale:
+
+      - **Build** was documented as recompiling the loaded source; it now also says
+        the build optimizes, matching the command line.
+      - The Variables description said aggregate rows always show `{...}` with their
+        members expanded below. They start collapsed, carry `+`/`-`, and a pointer
+        prints `->` before its target.
+      - A register-held value's tooltip and its panel row show `register: R9` rather
+        than an address.
+      - Right-click on a variable row opens the inspector; the gutter-menu paragraph
+        now says so.
+      - OS boots were documented as loading `kernel.sym`/`bios.sym` sidecars. The
+        debugger reads the `.debug_info` section of the kernel and BIOS `.k32`
+        images and merges them; no `.sym` reference remains in the CLI or the UI.
+      - "A cooperative pause of a running guest is not implemented" contradicted
+        `F6 BREAK`, which stops a continuous run. Replaced with a real limit: the
+        window always builds optimized and has no `-O0` control.
+
+      Documentation only; no code changed.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

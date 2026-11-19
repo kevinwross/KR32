@@ -1,8 +1,8 @@
 # Windowed debugger (M6)
 
-`kr32 gui <image.k32|source.c>` opens the portable debugger at 1440x900. A C
-source is compiled, assembled, linked, and loaded in memory; `.k32`
-executables load directly.
+`kr32 gui <image.k32|source.c|source.cpp>` opens the portable debugger at
+1440x900. A C or C++ source is compiled, assembled, linked, and loaded in memory;
+`.k32` executables load directly.
 
 ![KR32 debugger](screenshots/m6-debugger.png)
 
@@ -47,7 +47,7 @@ executables load directly.
 | Disassembly | Address/breakpoint gutter, HEX word column, mnemonics, current-PC highlight, instruction-step Over/In/Out |
 | Cores | One row per core; expandable core state with GPRs, FPRs, TSP/T0, paging, and control registers |
 | Memory | Four-line address/hex/ASCII dump docked under the source pane |
-| Variables | Current function, locals, and globals, always visible |
+| Variables | Current function, locals, and globals, always visible; aggregate rows collapse until clicked |
 | Breakpoints | Address, source filename, and line for every breakpoint; red enabled / yellow disabled |
 | Call stack | Current frames, always visible |
 | Console | Guest console output, always visible |
@@ -55,7 +55,8 @@ executables load directly.
 **Load** opens the platform file picker (the native common dialog on Windows;
 `zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
 a selected `.c` or `.cpp` source. **Build** reloads/recompiles the currently
-loaded source.
+loaded source with the optimizer on, the same as `kr32 build` on that source, so
+the disassembly it produces matches the command line.
 
 The **SCREEN** tab shows the committed framebuffer frame. It is selected by
 default when an OS image is loaded. Clicking the pane gives the guest keyboard
@@ -72,9 +73,9 @@ Click the filename in the **SOURCE** title to open a list of every source file
 in the debug symbols. Selecting a file pins it in the source pane, where its
 gutter can set and clear breakpoints; a later step, run, or restart returns the
 pane to the file containing the new PC.
-For OS boots, `gui --os` loads `kernel.sym` and `bios.sym` beside the raw
-images; those CRC-checked sidecars provide C and assembly source lines, so the
-panel follows BIOS, boot entry, and kernel code as the PC moves.
+For OS boots, `gui --os` loads the kernel and BIOS `.k32` images and merges
+their `.debug_info` sections, so the panel follows BIOS, boot entry, and kernel
+code as the PC moves.
 
 The right-hand **CORES** panel lists one row per core and is expandable. The
 expanded row shows that core's PC/SP/FLAGS, GPRs, F0-F15, TSP and T0 tile,
@@ -143,8 +144,9 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 - The core flag row shows **Z N C V I K**. Click Z/N/C/V/I to toggle the bit;
   K is the current privilege mode and is read-only.
 - Hovering a variable row shows a tooltip with its local/global kind, type,
-  size, address, hex/decimal value, signed value, character interpretation,
-  pointer target/string preview, and array/aggregate details.
+  size, the address it lives at or the register that holds it, hex/decimal value,
+  signed value, character interpretation, pointer target/string preview, and
+  array/aggregate details.
 - Hovering a GPR, PC, or SP cell shows its name, hex value, unsigned/signed
   decimal value, and character value when printable.
 - Hovering a flag shows its full name, set/clear state, and meaning.
@@ -167,7 +169,8 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
   enabled/disabled state.
 - Right-click a source, disassembly, or breakpoints-panel row opens the
   KR16-style menu: **Set breakpoint** or **Remove breakpoint**, plus
-  **Run to line N** / **Run to 0xADDR**.
+  **Run to line N** / **Run to 0xADDR**. Right-click a variable row opens the
+  inspector instead.
 - Run-to uses a temporary breakpoint, runs the CPU, and removes the temporary
   breakpoint when it stops. Existing user breakpoints are preserved.
 - Run and Run-to honor the instruction limit configured in Settings. Execution
@@ -212,16 +215,21 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 - Click an FPR to open the decimal/scientific editor; hover an FPR for its
   signed decimal, scientific, and hex values. Use the FPR **DOUBLE / FLOAT**
   toggle to switch the active interpretation.
-- Hover a variable row for type/address/value details. The **VARIABLES** panel
-  separates **Locals** and **Globals**; click a section header to collapse it.
-  Floating-point values are shown as decimal text rather than raw bit patterns,
-  and aggregate rows show `{...}` while their members expand below. Pointers to
-  known structs and arrays expand into indented children. Array types include
-  their bounds (`float[16]`, `char[32]`). Arrays start collapsed; click an
-  array row to expand or collapse it. Large arrays show 16 elements per page
-  with a `< page N/M >` row.
+- Hover a variable row for type/address/value details. A value the optimizer holds
+  in a register shows `register: R9` or `register: F2` instead of an address, and
+  its members are read from the register. The **VARIABLES** panel separates
+  **Locals** and **Globals**; click a section header to collapse it.
+  Floating-point values are shown as decimal text rather than raw bit patterns.
+  A row that can be opened carries `+` while closed and `-` while open, and a
+  pointer to a struct or class shows `->` before the value it points at:
+  `+ root -> 0x00024BDC` opens into the list's fields. Aggregates start collapsed.
+  Array types include their bounds (`float[16]`, `char[32]`); arrays start
+  collapsed and large arrays show 16 elements per page with a `< page N/M >` row.
   Click the left arrow to step back; click the page text or right arrow to
   advance.
+- Right-click a variable row to open an inspector panel listing that value's
+  members above and to the right of the row, with its own value for scalars and
+  `{...}` for nested aggregates. A left click outside the panel closes it.
 - Double-click a variable row to inspect its address, or a pointer's target, in
   the memory panel. Double-click a GPR, PC, or SP cell to send its value to the
   memory panel; a single click still opens the register editor.
@@ -246,5 +254,6 @@ canvas, and GUI targets and keeps the headless test suite green.
 
 - File dialogs are modal host services. Headless runs and KR32OS guests report
   the dialog as unavailable.
-- "Break" is expressed through breakpoints; a cooperative pause of a running
-  guest is not implemented.
+- **Build** always optimizes, matching the command line's default. There is no
+  control in the window for building a source at `-O0`; use `kr32 build -O0` and
+  **Load** the result to step through unoptimized code.
