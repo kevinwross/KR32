@@ -5029,6 +5029,24 @@ Newest entries at the bottom. Use the local time zone.
 
       Documentation only; no code changed.
 
+- **2026-11-18 18:40 -08:00** — The debugger screenshots are current. Four were
+      supplied from a live session and replace the M6 set at the top of
+      `docs/ui.md`:
+
+      | File | Shows |
+      | --- | --- |
+      | `debugger-overview.png` | Locals with `+ engineers[30]`, `+ engineersTree = {...}` |
+      | `debugger-locals-expanded.png` | `- node -> 0x…` opened to `.left`/`.right`, two breakpoints |
+      | `debugger-inspector.png` | The right-click inspector on `stdin_object` |
+      | `debugger-settings.png` | The settings dialog |
+
+      `m6-debugger.png` is deleted as superseded. The six remaining images show
+      interaction states that have not changed - the FPR editor, both gutter menus,
+      mnemonic and operand hover, and run-to-line. Every reference resolves and no
+      image on disk is unreferenced.
+
+      Documentation and images only; no code changed.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

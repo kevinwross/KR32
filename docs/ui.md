@@ -4,7 +4,13 @@
 1440x900. A C or C++ source is compiled, assembled, linked, and loaded in memory;
 `.k32` executables load directly.
 
-![KR32 debugger](screenshots/m6-debugger.png)
+![KR32 debugger](screenshots/debugger-overview.png)
+
+![Local expanded, breakpoints set](screenshots/debugger-locals-expanded.png)
+
+![Right-click inspector](screenshots/debugger-inspector.png)
+
+![Settings](screenshots/debugger-settings.png)
 
 ![KR32 FPR editor](screenshots/m6-fpr-popup.png)
 
