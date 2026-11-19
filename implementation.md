@@ -5047,6 +5047,28 @@ Newest entries at the bottom. Use the local time zone.
 
       Documentation and images only; no code changed.
 
+- **2026-11-19 15:10 -08:00** — `handoff-2026-11-19.md` written for a machine move. It
+      records the repository state, the build and gate commands with the two traps
+      that cost time this week (a `pwsh -File` gate exiting `-1` with no summary, and
+      a stale WSL build tree running yesterday's binary), the verification habits
+      that paid off (CPU `sec*proc` over wall time, full logs over tails, behavioural
+      tests over assembly shapes, screenshots for the panel), one line per commit of
+      the last stretch, and the open threads with enough detail to resume: the panel
+      test gap, the linear-but-slow `libcpp` compile, the accepted C++/C size
+      difference, the reverted `JMP` cleanup, and the `M6` naming debt.
+
+      It also lists the files that exist **only** in this working tree -
+      `AGENTS.md`, `CLAUDE.md`, `.agents/`, `.dev-template.json`,
+      `config-plan.md`, `glossary.md`, `examples/fact.c`, `examples/libcpp.cpp` -
+      because they are untracked and a fresh clone would arrive without the
+      project's standing orders. That decision is the first thing the next session
+      should make.
+
+      Every factual claim in it was checked against the repository: HEAD, the
+      tracked status of `AGENTS.local.md`, the untracked status of `AGENTS.md` and
+      `examples/libcpp.cpp`, the existence of both gate scripts and the benchmark,
+      and all ten image references.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.
