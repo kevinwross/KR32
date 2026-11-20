@@ -28,3 +28,15 @@
   was built and tested.
 - Next: nothing pending
 
+## 2026-11-20T10:12:21-08:00 — adopt-krc @ 1a69a9f
+
+- Host: BitWhiz
+- Range: adaef4f..1a69a9f, 4 commits (guest headers shipped as files plus the
+  generator tool; two of the commits are documentation only)
+- Docs-only: no
+- Configure: linux-arm64-gcc — ok, 1 s
+- Build: linux-arm64-gcc — ok, 73 s (--parallel 3)
+- Test: linux-arm64-gcc — 98/98 passed, 110 s
+- Skipped: the `KR32_TOOLCHAIN=krc` configuration, which still needs the
+  external `krc-toolchain` package and a staged sysroot/runtime.
+- Next: nothing pending
