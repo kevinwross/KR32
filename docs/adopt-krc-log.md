@@ -156,3 +156,93 @@ stage-B gap.
 
 **Blocker:** none. 3.2 does not exercise any open krc gap; the documented subset
 is not also KR32's subset, because KR32's examples are inside the supported set.
+
+## 2026-11-20T09:48:20-08:00
+
+**Changed (3.3–3.6):** the window's BUILD has a krc path behind
+`KR32_TOOLCHAIN=krc`; the default stays `builtin`.
+
+- CMake: `KR32_TOOLCHAIN` is a cache string with values `builtin` and `krc`.
+  Only the krc branch calls `find_package(krc-toolchain CONFIG REQUIRED)`. It
+  also requires `KR32_KRC_SYSROOT` (the staged sysroot) and
+  `KR32_KRC_RUNTIME_DIR` (krc's `targets/kr32/runtime`), because the package
+  installs neither; both are checked at configure time with a message naming the
+  missing file.
+- `compile_c_source` and `compile_cxx_source` take the krc branch when
+  configured. It reads the source, sets `Target::Kr32`, `cxx`, `debug=true`,
+  `optimize=1`, `base=0x10000`, `entry=_start`, and include paths
+  `<sysroot>/include`, `<sysroot>/kr32/include`, and KR32's `include/` (for
+  `<kr32/matrix.hpp>`); compiles, assembles with the debug bridge, links with
+  krc's staged runtime (`libkrcrt.kro`, `fileio.s`, `eh.s`, `crt0.s`), and parses
+  the returned image through `container::read`. `source_root` stays empty,
+  matching the built-in path, which records the path it was given.
+- Diagnostics render as `file:line:column: message`, from the first facade
+  diagnostic; an empty diagnostic list falls back to the facade error.
+- The listing is rendered from the `assemble` rows in the shape of
+  `kr32 as --listing` (8-digit address, encoded words, statement); row offsets
+  are translated to linked addresses with `LinkResult::sections`.
+- Tests: `test_ui` gains a C source build/step/local assertion (the local only in
+  the krc branch, because the built-in optimizer folds it away), a C++ source
+  local, a rejected-source diagnostic-shape check, and a listing check; the
+  listing-column assertion is krc-only through `KR32_TOOLCHAIN_KRC`. `tests`
+  gains `ui_headless_os_files`, the explicit `--os <kernel> --bios <bios>` GUI
+  path, next to the existing embedded one.
+- Docs: `README.md` documents the option and its two inputs; `docs/ui.md` states
+  that the default is builtin and what the krc configuration needs.
+
+**Commands and real results:**
+
+- Windows, builtin:
+  `cmake --preset windows-ninja -DKR32_TOOLCHAIN=builtin`,
+  `cmake --build --preset windows-ninja` (clean, `/W4 /WX`),
+  `ctest --preset windows-ninja` → **100% tests passed, 0 tests failed out of
+  98**, `Total Test time (real) = 104.32 sec`.
+- Windows, krc: same three commands with
+  `-DKR32_TOOLCHAIN=krc`,
+  `-DCMAKE_PREFIX_PATH=C:/Users/kevin/source/repos/.krc-install-f936155`,
+  `-DKR32_KRC_SYSROOT=.../stage/sysroot` and
+  `-DKR32_KRC_RUNTIME_DIR=.../targets/kr32/runtime` → **100% tests passed, 0
+  failed out of 98**, `Total Test time (real) = 113.58 sec`.
+- WSL, builtin: `cmake --preset linux-gcc -DKR32_TOOLCHAIN=builtin` then
+  `bash scripts/run-gate.sh` → **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 21.06 sec`.
+- WSL, krc: `cmake --preset linux-gcc -DKR32_TOOLCHAIN=krc`
+  `-DCMAKE_PREFIX_PATH=$HOME/krc-install-f936155`
+  `-DKR32_KRC_SYSROOT=$HOME/krc-pin-f936155/build/linux-gcc-debug/stage/sysroot`
+  `-DKR32_KRC_RUNTIME_DIR=$HOME/krc-pin-f936155/targets/kr32/runtime`, then
+  `bash scripts/run-gate.sh` → **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 20.68 sec`.
+- The first WSL krc build failed under `-Werror`: `write_listing` was defined but
+  unused because both compile entry points take the krc branch. The fix wraps
+  the built-in writer in `#if !defined(KR32_TOOLCHAIN_KRC)`; MSVC had not
+  diagnosed it. Commit `3516460`; the four results above are from the tree
+  including that fix.
+- `kr32 gui examples/hello.c --headless --screenshot` and the same for
+  `examples/hello.cpp` → `ui-render width=1440 height=900`, so the krc branch
+  builds, loads and renders a C and a C++ source through the real `DebuggerUI`.
+- OS mode: `ui_headless_os` (`--os --embedded`) and the new
+  `ui_headless_os_files` (`--os kernel.bin --bios bios.bin`) both print
+  `ui-render`; the booting pair is covered by `run_os_embedded` and
+  `run_os_boot`. All four passed in both Windows suites and both WSL suites.
+- A source with the listing setting on writes, for `examples/hello.c` under krc:
+
+```text
+00010000:                    main:
+00010000: 0000e078           PUSH R7
+00010004: f00f007c           ADJSP #-16
+00010008: 0088e012           LEA R7, [SP]
+0001000c: 08680e12           LEA R0, [R7 + 8]
+```
+
+**Commit:** `aa110da` (`Add the krc toolchain behind KR32_TOOLCHAIN`) and
+`3516460` (`Keep the built-in listing writer out of krc builds`).
+
+**Next step:** pull with rebase and push `adopt-krc`; the ARM64 tester's entry for
+the tip is the remaining gate row, and it is non-blocking per the plan. Stage B
+still needs the programme owner's decision on the runtime deviation logged at
+`2026-11-20T09:35:32-08:00` and on the guest-header gap logged at
+`2026-11-20T09:35:50-08:00`.
+
+**Blocker:** none for stage A. The plan's "keep KR32's runtime" mitigation is
+not implementable (see the 09:35:32 entry); stage A links krc's staged runtime
+instead, and stage B cannot start until that is accepted or changed.
