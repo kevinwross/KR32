@@ -12,3 +12,19 @@
 - Test: linux-arm64-gcc — 97/97 passed, 155 s
 - Skipped: none
 - Next: nothing pending
+
+## 2026-11-20T09:51:07-08:00 — adopt-krc @ adaef4f
+
+- Host: BitWhiz
+- Range: 0e98ae6..adaef4f, 3 commits (krc toolchain behind `KR32_TOOLCHAIN`,
+  built-in listing writer guard, stage-A krc record)
+- Docs-only: no
+- Configure: linux-arm64-gcc — ok, 0 s
+- Build: linux-arm64-gcc — ok, 9 s (--parallel 3)
+- Test: linux-arm64-gcc — 98/98 passed, 94 s
+- Skipped: the `KR32_TOOLCHAIN=krc` configuration. It needs an external
+  `krc-toolchain` package plus a staged sysroot and runtime directory, none of
+  which are present on this host; the default `builtin` configuration is what
+  was built and tested.
+- Next: nothing pending
+
