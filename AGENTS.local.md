@@ -53,9 +53,8 @@ During an optimization inner loop, do not commit every change.
 <!-- project:targets:start — generated from .dev-template.json targets; edit the Notes column, not the rows -->
 | Target | Architecture | Verified by | Notes (yours — preserved on update) |
 |---|---|---|---|
-| Windows | x64 | <windows-latest in CI, or name the dev machines> | Hukilau (MSVC 14.51.36231); tested 2026-11-12 at 3353109 |
-| WSL Ubuntu | x64 | <ubuntu-latest in CI, or manual — keep the checkout under ~/, never /mnt/c> | Hukilau WSL2 (Ubuntu 26.04); recorded 2026-11-02 in implementation.md §1 |
-<!-- project:targets:end -->
+| Windows | x64 | <windows-latest in CI, or name the dev machines> | BIGBRAIN (MSVC 14.51.36231); 97/97 at 22eb0be, 2026-11-19 |
+| WSL Ubuntu | x64 | <ubuntu-latest in CI, or manual — keep the checkout under ~/, never /mnt/c> | Hukilau WSL2 (Ubuntu 26.04); recorded 2026-11-02 — not re-verified on BIGBRAIN |
 
 Target-specific notes:
 
@@ -66,6 +65,7 @@ Target-specific notes:
   - Install dependencies inside the environment that runs them. Never run a package manager from WSL against a `/mnt/c` checkout.
   - A `/mnt/c` checkout reports every file as `755`, so git records spurious mode changes. Keep repositories under `~/`, or set `core.fileMode false` for that repository.
   - Bind to `0.0.0.0` when testing across the Windows/WSL boundary; `127.0.0.1` does not reach in every networking mode.
+<!-- project:targets:end -->
 
 ## Architecture boundaries
 
@@ -76,11 +76,11 @@ Target-specific notes:
 
 **Build entry point.** No wrapper script: configure and build with the presets below. Windows: `cmake --preset windows-msvc` then `cmake --build --preset windows-msvc-debug`; WSL/Linux: `cmake --preset linux-gcc` then `cmake --build --preset linux-gcc`. CMake, Ninja, and ctest are not on `PATH` on Windows; use the full paths in `AGENTS.md`.
 
-**Doctor.** `.agents/templates/doctor.msvc.ps1` — the delivered starting point, not wired into a wrapper. Exits 0 on Hukilau and reports the MSVC, Windows SDK, and CMake it resolved; run it when a build cannot find its toolchain and quote its output.
+**Doctor.** `.agents/templates/doctor.msvc.ps1` — the delivered starting point, not wired into a wrapper. Exits 0 on BIGBRAIN and reports the MSVC, Windows SDK, and CMake it resolved; run it when a build cannot find its toolchain and quote its output.
 
-**Toolchain.** MSVC 14.51.36231 at `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64`; CMake 4.3.1-msvc1 and Ninja 1.13.2 bundled with Visual Studio 18 (not on `PATH`); Windows SDK 10 at `C:\Program Files (x86)\Windows Kits\10\Include`; all found with `vswhere` via the doctor. WSL2 Ubuntu 26.04: GCC 15.2.0, Clang 21.1.8, CMake 4.2.3, Ninja 1.13.2 (recorded 2026-11-02 in `implementation.md` §1).
+**Toolchain.** MSVC 14.51.36231 at `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64`; CMake 4.3.1-msvc1 and Ninja 1.13.2 bundled with Visual Studio 18 (not on `PATH`); Windows SDK 10 at `C:\Program Files (x86)\Windows Kits\10\Include`; all found with `vswhere` via the doctor. WSL2 Ubuntu 26.04 figures — GCC 15.2.0, Clang 21.1.8, CMake 4.2.3, Ninja 1.13.2 — are from Hukilau (recorded 2026-11-02 in `implementation.md` §1) and have not been re-verified on BIGBRAIN.
 
-**Verified on** Hukilau **at** `3353109`: `.agents/templates/doctor.msvc.ps1` → exit 0; `ctest --preset windows-msvc-debug` → 80/80 passed (2026-11-12).
+**Verified on** BIGBRAIN **at** `22eb0be`: `.agents/templates/doctor.msvc.ps1` → exit 0; `pwsh -File scripts/run-gate.ps1` → 97/97 passed (2026-11-19T16:44:33-08:00).
 
 **Install (requires approval).** SDL2 via `scripts/install-sdl2.ps1` (vendored under `third_party/SDL2`); on WSL, `sudo apt install build-essential cmake ninja-build pkg-config libsdl2-dev clang git`.
 
