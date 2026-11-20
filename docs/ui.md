@@ -273,6 +273,7 @@ canvas, and GUI targets and keeps the headless test suite green.
   `krc::toolchain` and loads the returned `.k32` through KR32's loader; the
   built-in path stays compiled, and the `.lst` the krc branch writes has the
   assembler listing shape (address, encoded words, statement) rendered from the
-  facade's rows. krc's target system headers and runtime are external inputs, so
-  that configuration also needs `KR32_KRC_SYSROOT` and `KR32_KRC_RUNTIME_DIR`
-  (see the README).
+  facade's rows. The krc package carries its target system headers and runtime
+  and exports `KRC_SYSROOT` and `KRC_KR32_RUNTIME_DIR`; configuring with
+  `-DCMAKE_PREFIX_PATH=<krc install>` is the only external input (see the
+  README).

@@ -298,7 +298,7 @@ bool krc_runtime_objects(std::vector<krc::toolchain::Object>& objects,
     options.target = krc::toolchain::Target::Kr32;
 
     std::vector<std::uint8_t> libc_bytes;
-    if (!read_binary(krc_join(KR32_KRC_SYSROOT, "/kr32/lib/libkrcrt.kro"),
+    if (!read_binary(krc_join(KR32_KRC_RUNTIME_PATH, "/libkrcrt.kro"),
                      libc_bytes, error)) {
         return false;
     }
@@ -306,7 +306,7 @@ bool krc_runtime_objects(std::vector<krc::toolchain::Object>& objects,
 
     for (const Entry& entry : assembly) {
         std::vector<std::uint8_t> bytes;
-        if (!read_binary(krc_join(KR32_KRC_RUNTIME_DIR, entry.file), bytes,
+        if (!read_binary(krc_join(KR32_KRC_RUNTIME_PATH, entry.file), bytes,
                          error)) {
             return false;
         }
@@ -315,7 +315,7 @@ bool krc_runtime_objects(std::vector<krc::toolchain::Object>& objects,
             krc::toolchain::assemble(text, options);
         if (!assembled.ok) {
             error = std::string("runtime ") + entry.name + ": " +
-                    krc_message(krc_join(KR32_KRC_RUNTIME_DIR, entry.file),
+                    krc_message(krc_join(KR32_KRC_RUNTIME_PATH, entry.file),
                                 assembled.diagnostics, assembled.error);
             return false;
         }
@@ -376,8 +376,8 @@ bool compile_with_krc(const std::string& path, container::Image& image,
         options.optimize = 1;
         options.base = 0x10000;
         options.entry = "_start";
-        options.include_paths = {krc_join(KR32_KRC_SYSROOT, "/include"),
-                                 krc_join(KR32_KRC_SYSROOT, "/kr32/include"),
+        options.include_paths = {krc_join(KR32_KRC_SYSROOT_PATH, "/include"),
+                                 krc_join(KR32_KRC_SYSROOT_PATH, "/kr32/include"),
                                  KR32_GENERATED_GUEST_INCLUDE_DIR,
                                  KR32_GUEST_INCLUDE_DIR};
 

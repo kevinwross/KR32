@@ -94,16 +94,18 @@ explicit `--os`/`--bios` paths.
 
 `KR32_TOOLCHAIN` selects the compiler the window's **Build** uses for a `.c` or
 `.cpp` source. It defaults to `builtin`, the in-tree front ends. Setting
-`KR32_TOOLCHAIN=krc` links the published `krc::toolchain` package instead and
-needs the package on `CMAKE_PREFIX_PATH` plus the target inputs the package does
-not install:
+`KR32_TOOLCHAIN=krc` links the published `krc::toolchain` package instead. The
+package carries its target sysroot and runtime and exports `KRC_SYSROOT` and
+`KRC_KR32_RUNTIME_DIR`, so the install prefix is the only external input:
 
 ```powershell
 & $cmake --preset windows-ninja -DKR32_TOOLCHAIN=krc `
-    -DCMAKE_PREFIX_PATH=<krc install> `
-    -DKR32_KRC_SYSROOT=<krc staged sysroot> `
-    -DKR32_KRC_RUNTIME_DIR=<krc targets/kr32/runtime>
+    -DCMAKE_PREFIX_PATH=<krc install>
 ```
+
+The configured values are printed by the configure step and checked: a package
+that does not export both variables, or that is missing a required sysroot or
+runtime file, fails at configure with the variable and path named.
 
 The built-in and krc paths are both available; neither is removed by the option.
 
