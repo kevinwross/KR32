@@ -537,3 +537,44 @@ window. The inventory item for KRCompiler is satisfied by `47fa4e5`; no further
 KR32 work is pending.
 
 **Blocker:** none.
+
+## 2026-11-20T11:16:58-08:00
+
+**Correction to the `11:11:36` entry:** the code commit for "Consume the
+installed krc sysroot and runtime" is `fee51ea`, not `0dad664`. `0dad664` was
+committed, then the pull-rebase onto the ARM64 tester's `b77018f` rewrote it;
+only `fee51ea` is in the published branch. The earlier entry stands; this one
+supersedes its SHA.
+
+**SHA audit.** Every KR32 commit SHA the log names was checked against the
+pushed tip (`aa120ad`) with `git merge-base --is-ancestor <sha> origin/adopt-krc`:
+
+```text
+aa110da -> ancestor
+3516460 -> ancestor
+adaef4f -> ancestor
+f2c19a4 -> ancestor
+0dad664 -> NOT an ancestor  (corrected above to fee51ea)
+fee51ea -> ancestor
+```
+
+The KRCompiler SHAs the log also names (`f936155`, `47fa4e5`, `b680815`) are
+dependency commits, not KR32 commits; they were verified in the KRCompiler
+repository and are not expected to be ancestors here.
+
+This is the **second rebase that has moved a recorded SHA**. The correction
+habit matters more than the individual fix: record a SHA only after confirming
+it is an ancestor of the pushed tip, and re-run this audit after every
+pull-rebase before pushing.
+
+**Stage B (3.10) readiness — for the approver, not a plan change.** Not started
+and not authorised. It needs (a) the second approval and (b) a release in which
+both toolchains have shipped. It then flips the default to `krc` and deletes
+`src/cc`, `src/cxx`, `src/asm`, `src/link`, KR32's runtime (`runtime_assembly`
+and its embedded libc), and the injected guest-header strings
+(`include/kr32/cc/guest_headers.h` and the injection branches). Its acceptance is
+a green suite on a clean checkout with no built-in toolchain present.
+
+**Commit:** the commit that carries this entry.
+
+**Blocker:** none; stage B waits for its approval and the release window.
