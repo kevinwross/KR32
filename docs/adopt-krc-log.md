@@ -447,3 +447,93 @@ its second approval and the one-release window.
 
 **Blocker:** none for KR32. The packaging gap is a KRCompiler item, not a
 KR32 failure.
+
+## 2026-11-20T11:11:36-08:00
+
+**Changed (3.9): the krc branch consumes the installed package's exported
+paths.** This entry also corrects the previous entry's "stage B (3.9)": stage B
+is now 3.10, and 3.9 is this installed-package item.
+
+- KRCompiler `47fa4e5` (install change `b680815`) is built and installed to a
+  temp prefix. Its `krc-toolchain-config.cmake` exports
+  `KRC_SYSROOT=<prefix>/share/krc/sysroot` and
+  `KRC_KR32_RUNTIME_DIR=<prefix>/share/krc/sysroot/kr32/lib`.
+- KR32's krc branch now uses those variables. `KR32_KRC_SYSROOT` and
+  `KR32_KRC_RUNTIME_DIR` are removed from CMake and the cache; the only external
+  input is `-DCMAKE_PREFIX_PATH=<krc install>`.
+- Configure fails naming the variable when the package does not export it, and
+  names the path when a required file is absent: `KRC_SYSROOT` needs
+  `include/stdio.h`, `include/stdint.h`, `kr32/include/bits/stdint.h` and
+  `kr32/include/bits/types.h`; `KRC_KR32_RUNTIME_DIR` needs `libkrcrt.kro`,
+  `crt0.s`, `fileio.s` and `eh.s`.
+- The code's compile definitions are `KR32_KRC_SYSROOT_PATH` and
+  `KR32_KRC_RUNTIME_PATH`, filled from the exported values; the runtime reader
+  takes `libkrcrt.kro` and the three `.s` files from the one runtime directory.
+- `README.md` and `docs/ui.md` drop the two `-D` inputs.
+
+**Installed-prefix acceptance:** KRCompiler's build tree was deleted on both
+hosts before KR32 was configured:
+
+```text
+C:\Users\kevin\source\repos\.krc-pin-47fa4e5\build        -> deleted
+/home/kevinro/krc-pin-47fa4e5/build                       -> deleted
+```
+
+The installed prefixes are
+`C:\Users\kevin\source\repos\.krc-install-47fa4e5` and
+`/home/kevinro/krc-install-47fa4e5`; each carries
+`share/krc/sysroot/{include,kr32/include,kr32/lib}` including
+`libkrcrt.kro`, `crt0.s`, `fileio.s` and `eh.s`.
+
+**Exported values configured with:**
+
+```text
+Windows:
+-- KR32: KRC_SYSROOT=C:/Users/kevin/source/repos/.krc-install-47fa4e5/share/krc/sysroot
+-- KR32: KRC_KR32_RUNTIME_DIR=C:/Users/kevin/source/repos/.krc-install-47fa4e5/share/krc/sysroot/kr32/lib
+WSL:
+-- KR32: KRC_SYSROOT=/home/kevinro/krc-install-47fa4e5/share/krc/sysroot
+-- KR32: KRC_KR32_RUNTIME_DIR=/home/kevinro/krc-install-47fa4e5/share/krc/sysroot/kr32/lib
+```
+
+`build/windows-ninja/CMakeCache.txt` contains no `KR32_KRC_*`, `f936155` or
+`krc-pin` entry. The krc compile command carries
+`-DKR32_KRC_SYSROOT_PATH=\".../.krc-install-47fa4e5/share/krc/sysroot\"`.
+
+**Missing-export errors, real output:**
+
+```text
+CMake Error at CMakeLists.txt:30 (message):
+  krc-toolchain did not export KRC_SYSROOT.  The package has no target
+  sysroot; install a KRCompiler built with KRC_BUILD_TOOLS=ON.
+
+CMake Error at CMakeLists.txt:35 (message):
+  krc-toolchain did not export KRC_KR32_RUNTIME_DIR.  The package has no KR32
+  runtime directory.
+```
+
+**Gate, fresh build trees on both hosts:**
+
+- Windows, builtin: configure, build, `ctest --preset windows-ninja` →
+  **100% tests passed, 0 tests failed out of 98**,
+  `Total Test time (real) = 110.01 sec`.
+- Windows, krc (`cmake --preset windows-ninja -DKR32_TOOLCHAIN=krc
+  -DCMAKE_PREFIX_PATH=C:/Users/kevin/source/repos/.krc-install-47fa4e5`) →
+  **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 122.44 sec`.
+- WSL, builtin (`cmake --preset linux-gcc -DKR32_TOOLCHAIN=builtin`,
+  `bash scripts/run-gate.sh`) → **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 21.28 sec`.
+- WSL, krc (`cmake --preset linux-gcc -DKR32_TOOLCHAIN=krc
+  -DCMAKE_PREFIX_PATH=$HOME/krc-install-47fa4e5`, `bash scripts/run-gate.sh`) →
+  **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 21.13 sec`.
+
+**Commit:** `0dad664` (`Consume the installed krc sysroot and runtime`); this
+entry follows in a documentation commit.
+
+**Next step:** stage B (3.10) still needs its second approval and the one-release
+window. The inventory item for KRCompiler is satisfied by `47fa4e5`; no further
+KR32 work is pending.
+
+**Blocker:** none.
