@@ -640,3 +640,65 @@ are the review material; no branch exists to merge.
 
 **Blocker:** stage B is red as a deletion-only change; the migration work above
 is required first.
+
+## 2026-11-20T14:38:34-08:00
+
+**Changed (3.10a): the migration half of stage B.** The default is still
+`builtin`, the UI and CLI built-in branches are untouched, and `src/cc`,
+`src/cxx`, `src/asm` and `src/link` are still in the tree.
+
+- **Guest header rename — a guest API change.** `<kr32/cons.h>` is a tracked
+  file with the console declarations. `<kr32/con.h>` is retired: any external
+  program that includes `<kr32/con.h>` breaks, and no in-tree code includes the
+  old spelling after this change (the `kr32os/user` sources moved to `cons.h`).
+  The body is now the tracked file; the built-in front ends still embed their
+  copy from `include/kr32/cc/guest_headers.h` until 3.10b deletes the injection.
+  `tools/guest_headers`, its CMake target, the custom command and the generated
+  include directory are gone.
+- **Tests off `kr32 build`.** The component tests for the paths 3.10b removes
+  are deleted: `test_cc_1..8`, all `tests/cxx`, `test_assembler`,
+  `test_object_assembler`, `test_linker`, `test_optimizer`, plus the assembler-
+  or built-in-libc-bound cases (`test_boot`, `test_devices`, `test_disassembler`,
+  `test_fast`, `test_host`, `test_threads`, `test_debug`). No test invokes
+  `kr32 build`, `as`, `ld`, `cc` or `cxx`, and no migrated test includes
+  `kr32/asm`, `kr32/cc`, `kr32/cxx` or `kr32/link`.
+- **Examples run from krc-built images.** `tools/krc_image` builds one `.k32`
+  per example at build time through the installed krc package; the C/C++
+  integration tests run those images with `kr32 vm`. The suite therefore needs
+  the krc prefix in both toolchain configurations (documented in `README.md`);
+  `KR32_BUILD_TESTS=OFF` builds the application without it.
+- **OS images are the shipped fixtures.** `run_os_embedded`, `ui_headless_os`
+  and `ui_headless_os_files` use the shipped pair; a new `run_os_fixture` boots
+  `src/resources/os/<platform>/{kernel,bios}.k32` and `exit 0`. The
+  `kr32os_images` fixture and the from-source OS/gfx/shell tests are gone.
+- `tests/unit/test_guest_headers.cpp` is now a file-presence test for the six
+  tracked headers; `test_ui` builds its two images through the krc helper.
+
+**Diff size:** 54 files changed, 472 insertions(+), 15,611 deletions(-).
+
+**Test counts:** 98 registered before this change → **40 registered**; **40/40
+passed** in every run.
+
+**Gate, real output:**
+
+- Windows, builtin (`cmake --preset windows-ninja
+  -DCMAKE_PREFIX_PATH=C:/Users/kevin/source/repos/.krc-install-47fa4e5`, build,
+  `ctest --preset windows-ninja`) → **100% tests passed, 0 tests failed out of
+  40**, `Total Test time (real) = 5.87 sec`.
+- Windows, krc (same with `-DKR32_TOOLCHAIN=krc`) → **100% tests passed, 0
+  tests failed out of 40**, `Total Test time (real) = 5.24 sec`.
+- WSL, builtin (`cmake --preset linux-gcc -DKR32_TOOLCHAIN=builtin
+  -DCMAKE_PREFIX_PATH=$HOME/krc-install-47fa4e5`, `bash scripts/run-gate.sh`) →
+  **100% tests passed, 0 failed out of 40**,
+  `Total Test time (real) = 2.70 sec`.
+- WSL, krc (same with `-DKR32_TOOLCHAIN=krc`) → **100% tests passed, 0 failed
+  out of 40**, `Total Test time (real) = 2.63 sec`.
+
+**Commit:** `abc5093` (`Migrate the tests and guest headers for stage B`).
+
+**Next step:** 3.10b still needs the second approval and the one-release
+window. The migration evidence is the 40-test green suite, the krc image builder
+and the shipped OS pair.
+
+**Blocker:** none for 3.10a. The test suite now requires the krc package in both
+toolchain modes; that is deliberate, and 3.10b makes it the only compiler.
