@@ -246,8 +246,8 @@ add_test(NAME run_os_user
         -P ${CMAKE_SOURCE_DIR}/cmake/RunOsUser.cmake)
 
 # These tests share the images the kr32os_images fixture builds and no longer
-# write into that tree, so they need no resource lock: the fixture's
-# FIXTURES_REQUIRED entry above covers the ordering.
+# write into that tree, so they need no resource lock: the FIXTURES_REQUIRED
+# entries below cover the ordering.
 
 add_test(NAME build_hello
     COMMAND $<TARGET_FILE:kr32> build
@@ -401,15 +401,6 @@ if(KR32_BUILD_UI)
     set_tests_properties(kr32os_images PROPERTIES
         LABELS "integration"
         FIXTURES_SETUP kr32os_images)
-    foreach(_os_test
-            run_os_gfx_dismiss run_os_shutdown run_os_user run_os_shell
-            run_os_fault_timer run_os_boot os_gfx_demo os_gfx_check
-            os_console_screen)
-        if(TEST ${_os_test})
-            set_tests_properties(${_os_test} PROPERTIES
-                FIXTURES_REQUIRED kr32os_images)
-        endif()
-    endforeach()
     add_test(NAME run_os_gfx_dismiss
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>
@@ -454,6 +445,19 @@ if(KR32_BUILD_UI)
             -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-console
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsConsole.cmake)
     set_tests_properties(os_console_screen PROPERTIES LABELS "integration")
+
+    # Must come after every add_test it names: set_tests_properties cannot mark
+    # a test that does not exist yet, and if(TEST ...) would silently skip it,
+    # leaving the test racing the fixture that builds the image it boots.
+    foreach(_os_test
+            run_os_gfx_dismiss run_os_shutdown run_os_user run_os_shell
+            run_os_fault_timer run_os_boot os_gfx_demo os_gfx_check
+            os_console_screen)
+        if(TEST ${_os_test})
+            set_tests_properties(${_os_test} PROPERTIES
+                FIXTURES_REQUIRED kr32os_images)
+        endif()
+    endforeach()
 endif()
 
 add_test(NAME boundary_clean
