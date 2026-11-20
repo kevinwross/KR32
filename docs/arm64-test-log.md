@@ -53,3 +53,16 @@
 - Skipped: the `KR32_TOOLCHAIN=krc` configuration, which still needs the
   external `krc-toolchain` package and a staged sysroot/runtime.
 - Next: nothing pending
+## 2026-11-20T11:16:22-08:00 — adopt-krc @ 1de7012
+
+- Host: BitWhiz
+- Range: 7a61479..1de7012, 3 commits (consume the installed krc sysroot and
+  runtime, with the matching UI changes; two are documentation/log commits)
+- Docs-only: no
+- Configure: linux-arm64-gcc — ok, 1 s
+- Build: linux-arm64-gcc — ok, 11 s (--parallel 3)
+- Test: linux-arm64-gcc — 98/98 passed, 118 s
+- Skipped: the `KR32_TOOLCHAIN=krc` configuration. It now expects an installed
+  krc package and sysroot, neither of which is present on this host; the
+  default `builtin` configuration is what was built and tested.
+- Next: nothing pending
