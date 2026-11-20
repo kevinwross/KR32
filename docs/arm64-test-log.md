@@ -40,3 +40,16 @@
 - Skipped: the `KR32_TOOLCHAIN=krc` configuration, which still needs the
   external `krc-toolchain` package and a staged sysroot/runtime.
 - Next: nothing pending
+## 2026-11-20T10:21:31-08:00 — adopt-krc @ 7a61479
+
+- Host: BitWhiz
+- Range: 1a69a9f..7a61479, 2 commits (krc external-input inventory in
+  `CMakeLists.txt`; documentation)
+- Docs-only: no — `CMakeLists.txt` changed, but only inside the
+  `KR32_TOOLCHAIN=krc` branch, so the compiled `builtin` tree is unchanged
+- Configure: linux-arm64-gcc — ok, 0 s
+- Build: linux-arm64-gcc — ok, 0 s (ninja: no work to do; CMake-only change)
+- Test: linux-arm64-gcc — 98/98 passed, 128 s
+- Skipped: the `KR32_TOOLCHAIN=krc` configuration, which still needs the
+  external `krc-toolchain` package and a staged sysroot/runtime.
+- Next: nothing pending
