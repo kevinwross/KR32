@@ -22,26 +22,56 @@ endif()
 
 if(KR32_TOOLCHAIN STREQUAL "krc")
     # The package does not install a sysroot, so the target headers, the prebuilt
-    # runtime (`libkrcrt.kro`, `crt0.s`) and the runtime assembly the linker
-    # recipe adds (`fileio.s`, `eh.s`) are explicit inputs.
+    # runtime (`libkrcrt.kro`) and the runtime assembly the linker recipe adds
+    # (`crt0.s`, `fileio.s`, `eh.s`) are explicit inputs. Each one is checked
+    # here: a missing file that only surfaces at link time (or at a later GUI
+    # BUILD) is the failure this list exists to prevent.
     set(KR32_KRC_SYSROOT "" CACHE PATH "Staged krc sysroot holding include/ and kr32/lib/")
     set(KR32_KRC_RUNTIME_DIR "" CACHE PATH "krc targets/kr32/runtime directory")
     find_package(krc-toolchain CONFIG REQUIRED)
-    if(NOT KR32_KRC_SYSROOT OR
-       NOT EXISTS "${KR32_KRC_SYSROOT}/kr32/lib/libkrcrt.kro" OR
-       NOT EXISTS "${KR32_KRC_SYSROOT}/include/stdio.h")
+    get_target_property(KR32_KRC_PACKAGE_INCLUDES krc::toolchain
+        INTERFACE_INCLUDE_DIRECTORIES)
+    set(_kr32_krc_header "")
+    foreach(_kr32_krc_directory IN LISTS KR32_KRC_PACKAGE_INCLUDES)
+        if(EXISTS "${_kr32_krc_directory}/krc/toolchain.h")
+            set(_kr32_krc_header "${_kr32_krc_directory}/krc/toolchain.h")
+        endif()
+    endforeach()
+    if(NOT _kr32_krc_header)
         message(FATAL_ERROR
-            "KR32_TOOLCHAIN=krc needs -DKR32_KRC_SYSROOT=<staged krc sysroot> "
-            "holding include/stdio.h and kr32/lib/libkrcrt.kro")
+            "krc-toolchain was found, but its public header is missing: "
+            "krc/toolchain.h was not under its INTERFACE_INCLUDE_DIRECTORIES "
+            "('${KR32_KRC_PACKAGE_INCLUDES}')")
     endif()
-    if(NOT KR32_KRC_RUNTIME_DIR OR
-       NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/crt0.s" OR
-       NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/fileio.s" OR
-       NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/eh.s")
+    if(NOT KR32_KRC_SYSROOT)
         message(FATAL_ERROR
-            "KR32_TOOLCHAIN=krc needs -DKR32_KRC_RUNTIME_DIR=<krc targets/kr32/runtime> "
-            "holding crt0.s, fileio.s and eh.s")
+            "KR32_TOOLCHAIN=krc needs -DKR32_KRC_SYSROOT=<staged krc sysroot>")
     endif()
+    foreach(_kr32_krc_sysroot_file IN ITEMS
+            include/stdio.h
+            include/stdint.h
+            kr32/include/bits/stdint.h
+            kr32/include/bits/types.h
+            kr32/lib/libkrcrt.kro)
+        if(NOT EXISTS "${KR32_KRC_SYSROOT}/${_kr32_krc_sysroot_file}")
+            message(FATAL_ERROR
+                "KR32_TOOLCHAIN=krc: KR32_KRC_SYSROOT ('${KR32_KRC_SYSROOT}') "
+                "is missing '${_kr32_krc_sysroot_file}'")
+        endif()
+    endforeach()
+    if(NOT KR32_KRC_RUNTIME_DIR)
+        message(FATAL_ERROR
+            "KR32_TOOLCHAIN=krc needs "
+            "-DKR32_KRC_RUNTIME_DIR=<krc targets/kr32/runtime>")
+    endif()
+    foreach(_kr32_krc_runtime_file IN ITEMS crt0.s fileio.s eh.s)
+        if(NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/${_kr32_krc_runtime_file}")
+            message(FATAL_ERROR
+                "KR32_TOOLCHAIN=krc: KR32_KRC_RUNTIME_DIR "
+                "('${KR32_KRC_RUNTIME_DIR}') is missing "
+                "'${_kr32_krc_runtime_file}'")
+        endif()
+    endforeach()
 endif()
 
 set(CMAKE_CXX_STANDARD 20)
