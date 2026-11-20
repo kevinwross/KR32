@@ -1,7 +1,7 @@
 /* Checks clipping, fills, and a line: a rectangle clipped to 100x100, a blue
    square outside it, and a green diagonal. */
 
-#include <kr32/con.h>
+#include <kr32/cons.h>
 #include <kr32/gfx.h>
 #include <kr32/sys.h>
 

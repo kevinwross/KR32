@@ -4,7 +4,7 @@
    and the program returns through the normal exit path, so the shell reports a
    status and keeps running instead of the machine halting. */
 
-#include <kr32/con.h>
+#include <kr32/cons.h>
 #include <kr32/gfx.h>
 #include <kr32/sys.h>
 

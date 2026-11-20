@@ -1,10 +1,10 @@
-if(NOT KR32 OR NOT BINARY_DIR)
-    message(FATAL_ERROR "kr32 and BINARY_DIR are required")
+if(NOT KR32 OR NOT IMAGE OR NOT BINARY_DIR)
+    message(FATAL_ERROR "kr32, IMAGE and BINARY_DIR are required")
 endif()
 
-set(image "${BINARY_DIR}/hello-c.k32")
+set(image "${IMAGE}")
 if(NOT EXISTS "${image}")
-    message(FATAL_ERROR "missing ${image}; run build_c_hello first")
+    message(FATAL_ERROR "missing ${image}")
 endif()
 
 # The launch stops on main's entry line, so the first continue reaches the

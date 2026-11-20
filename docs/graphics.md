@@ -282,7 +282,7 @@ int gfx_text_clipped(gfx_surface *s, int x, int y, int max_width,
   pixels can come later.
 - `gfx_text_clipped` stops at `max_width` and clips the last partial glyph.
 
-## 6. Console (`<kr32/con.h>`)
+## 6. Console (`<kr32/cons.h>`)
 
 The console is the **host terminal** ([terminal.md](terminal.md)); the grid,
 font, palette, scrollback, and rendering live in the host, and this API is the
@@ -365,14 +365,13 @@ endian, so the kernel can copy a word and cast.
 ## 8. Headers, packages, and the compiler hand-off
 
 The headers exist for a toolchain that reads include paths, such as `krc`:
-`fb.h`, `display.h`, `gfx.h`, `input.h` and `sys.h` are files under
-`include/kr32/`. `con.h` is a reserved DOS device name and cannot be tracked in a
-repository, so the build generates `kr32/con.h` into
-`<build>/generated/guest-include/` from the same declaration body. The built-in
-C and C++ front ends are filesystem-free and embed the bodies from
+`fb.h`, `display.h`, `gfx.h`, `cons.h`, `input.h` and `sys.h` are files under
+`include/kr32/`. `cons.h` replaces the former `con.h`, whose name Windows
+reserves and which could not be a tracked file. The built-in C and C++ front
+ends are filesystem-free and embed the bodies from
 `include/kr32/cc/guest_headers.h` instead (see the `#include` handling in
 `src/cc/cc.cpp` and `src/cxx/preprocessor.cpp`);
-`tests/unit/test_guest_headers.cpp` compares the carriers. An unknown
+`tests/unit/test_guest_headers.cpp` checks the tracked files. An unknown
 `#include` warns and is dropped under the built-in path, so a typo surfaces at
 compile time rather than at link time.
 
@@ -383,7 +382,7 @@ Header names and contents:
 | `<kr32/fb.h>` | `fb_info`, `fb_probe`, `fb_mode`, `fb_back`, `fb_front`, `fb_present*` |
 | `<kr32/display.h>` | `display_surface`, `sys_display_info`, `sys_display_present` |
 | `<kr32/gfx.h>` | `gfx_surface`, `GFX_RGB`, drawing and text functions |
-| `<kr32/con.h>` | `con_*` |
+| `<kr32/cons.h>` | `con_*` |
 | `<kr32/input.h>` | `kr32_event`, `input_*` |
 | `<kr32/sys.h>` | the syscall layer: `KR32_STDIN/STDOUT/STDERR`, `sys_write`, `sys_read`, `sys_exit`, `sys_getpid`, `sys_yield`, `sys_brk`, `sys_halt`, `sys_shutdown` |
 
@@ -428,7 +427,7 @@ Acceptance criteria: a console keystroke performs no guest pixel loop, and no
 Console hello (kernel or shell):
 
 ```c
-#include <kr32/con.h>
+#include <kr32/cons.h>
 
 void banner(void) {
     con_set_colors(7, 0);  /* palette indices; see display.md 7.2 */
@@ -442,7 +441,7 @@ void banner(void) {
 Drawing and presenting:
 
 ```c
-#include <kr32/con.h>
+#include <kr32/cons.h>
 #include <kr32/gfx.h>
 
 int main(void) {

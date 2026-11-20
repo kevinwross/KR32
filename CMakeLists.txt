@@ -20,7 +20,9 @@ if(NOT KR32_TOOLCHAIN STREQUAL "builtin" AND NOT KR32_TOOLCHAIN STREQUAL "krc")
         "KR32_TOOLCHAIN must be builtin or krc, not '${KR32_TOOLCHAIN}'")
 endif()
 
-if(KR32_TOOLCHAIN STREQUAL "krc")
+# The tests build their fixture images through the installed krc package in both
+# toolchain configurations, so the package is required whenever tests are built.
+if(KR32_TOOLCHAIN STREQUAL "krc" OR KR32_BUILD_TESTS)
     # The installed package owns the target sysroot and runtime and exports both
     # paths, so a prefix is the whole external input and no KRCompiler build tree
     # is needed. Each required file is checked here: an incompletely installed
@@ -217,26 +219,40 @@ add_custom_command(
     VERBATIM)
 kr32_add_library(kr32_os_images "${KR32_EMBEDDED_OS_SOURCE}")
 
-# `con.h` is a reserved DOS device name, so no repository can track it: Git
-# cannot create the path on Windows ("unable to create file con.h"). The body is
-# the same embedded declaration the built-in front ends inject, and this host
-# tool materialises it as a real header in the build tree, where krc's include
-# path can find it.
-set(KR32_GENERATED_GUEST_INCLUDE_DIR
-    "${CMAKE_CURRENT_BINARY_DIR}/generated/guest-include")
-file(MAKE_DIRECTORY "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32")
-add_executable(kr32_guest_headers tools/guest_headers/main.cpp)
-target_include_directories(kr32_guest_headers PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
-target_compile_features(kr32_guest_headers PRIVATE cxx_std_20)
-target_link_libraries(kr32_guest_headers PRIVATE kr32_warnings)
-add_custom_command(
-    OUTPUT "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32/con.h"
-    COMMAND kr32_guest_headers "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32/con.h"
-    DEPENDS kr32_guest_headers
-    COMMENT "Generating the guest con.h header"
-    VERBATIM)
-add_custom_target(kr32_guest_headers_generated
-    DEPENDS "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32/con.h")
+# The guest console header is tracked as include/kr32/cons.h. `con.h` was a
+# reserved DOS device name and needed a generator; `cons.h` does not.
+
+# Test images for the C/C++ examples are built through the installed krc
+# package, not through `kr32 build`, so the examples still have something to run
+# when 3.10b removes the built-in compiler commands.
+if(KR32_BUILD_TESTS)
+    add_executable(kr32_krc_image tools/krc_image/main.cpp)
+    target_link_libraries(kr32_krc_image PRIVATE krc::toolchain kr32_warnings)
+    target_compile_features(kr32_krc_image PRIVATE cxx_std_20)
+    target_compile_definitions(kr32_krc_image PRIVATE
+        KRC_SYSROOT="${KRC_SYSROOT}"
+        KRC_KR32_RUNTIME_DIR="${KRC_KR32_RUNTIME_DIR}"
+        KR32_GUEST_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/include")
+    set(KR32_TEST_IMAGE_DIR "${CMAKE_BINARY_DIR}/test-images")
+    file(MAKE_DIRECTORY "${KR32_TEST_IMAGE_DIR}")
+    add_custom_target(kr32_test_images ALL
+        COMMENT "Building the krc test images")
+    function(kr32_add_test_image name source cxx)
+        set(image "${KR32_TEST_IMAGE_DIR}/${name}.k32")
+        set(arguments --source "${source}" --output "${image}")
+        if(cxx)
+            list(APPEND arguments --cxx)
+        endif()
+        add_custom_command(
+            OUTPUT "${image}"
+            COMMAND kr32_krc_image ${arguments}
+            DEPENDS kr32_krc_image "${source}"
+            COMMENT "Building test image ${name}.k32"
+            VERBATIM)
+        add_custom_target("${name}_image" DEPENDS "${image}")
+        add_dependencies(kr32_test_images "${name}_image")
+    endfunction()
+endif()
 
 if(KR32_BUILD_UI)
     find_package(SDL2 CONFIG QUIET)
@@ -260,7 +276,6 @@ if(KR32_BUILD_UI)
 
     kr32_add_library(kr32_ui src/ui/app.cpp src/ui/canvas.cpp src/ui/debugger_ui.cpp
         src/ui/help.cpp src/resources/embedded_fonts.cpp)
-    add_dependencies(kr32_ui kr32_guest_headers_generated)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
         kr32_core kr32_cc kr32_cxx kr32_asm kr32_link kr32_os_images)
@@ -272,7 +287,6 @@ if(KR32_BUILD_UI)
             KR32_TOOLCHAIN_KRC=1
             KR32_KRC_SYSROOT_PATH="${KR32_KRC_SYSROOT_PATH}"
             KR32_KRC_RUNTIME_PATH="${KR32_KRC_RUNTIME_PATH}"
-            KR32_GENERATED_GUEST_INCLUDE_DIR="${KR32_GENERATED_GUEST_INCLUDE_DIR}"
             KR32_GUEST_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/include")
     endif()
 endif()

@@ -1,7 +1,7 @@
 /* Reads one line from the console and echoes it, so the read syscall has a task
    the serial-driven tests can exercise. */
 
-#include <kr32/con.h>
+#include <kr32/cons.h>
 #include <kr32/sys.h>
 
 int main(void) {

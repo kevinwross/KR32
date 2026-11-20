@@ -573,11 +573,11 @@ private:
                 }
                 return;
             }
-            if (header.find("kr32/con.h") != std::string::npos) {
-                if (!kr32_con_header_injected_) {
-                    kr32_con_header_injected_ = true;
+            if (header.find("kr32/cons.h") != std::string::npos) {
+                if (!kr32_cons_header_injected_) {
+                    kr32_cons_header_injected_ = true;
                     append_line("extern \"C\" {\n" +
-                                std::string(kr32::cc::kGuestConHeader) + "}\n");
+                                std::string(kr32::cc::kGuestConsHeader) + "}\n");
                 }
                 return;
             }
@@ -5540,7 +5540,7 @@ private:
     bool kr32_fb_header_injected_ = false;
     bool kr32_display_header_injected_ = false;
     bool kr32_gfx_header_injected_ = false;
-    bool kr32_con_header_injected_ = false;
+    bool kr32_cons_header_injected_ = false;
     bool kr32_input_header_injected_ = false;
     bool kr32_sys_header_injected_ = false;
     bool climits_header_injected_ = false;

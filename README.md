@@ -107,6 +107,12 @@ The configured values are printed by the configure step and checked: a package
 that does not export both variables, or that is missing a required sysroot or
 runtime file, fails at configure with the variable and path named.
 
+With `KR32_BUILD_TESTS=ON` (the default), the krc install prefix is required in
+both toolchain configurations: the test images are built through the installed
+package so no test invokes `kr32 build`. `-DKR32_BUILD_TESTS=OFF` builds the
+application without it. The guest console header is `<kr32/cons.h>`; the former
+`<kr32/con.h>` name is retired because Windows reserves it.
+
 The built-in and krc paths are both available; neither is removed by the option.
 
 ## Commands

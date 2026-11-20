@@ -514,9 +514,9 @@ std::string preprocess(std::string_view source, const std::string& source_name,
                     if (injected_guest_headers.insert(include_name).second) {
                         result += kr32::cc::kGuestGfxHeader;
                     }
-                } else if (include_name == "kr32/con.h") {
+                } else if (include_name == "kr32/cons.h") {
                     if (injected_guest_headers.insert(include_name).second) {
-                        result += kr32::cc::kGuestConHeader;
+                        result += kr32::cc::kGuestConsHeader;
                     }
                 } else if (include_name == "kr32/input.h") {
                     if (injected_guest_headers.insert(include_name).second) {

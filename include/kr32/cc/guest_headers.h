@@ -5,10 +5,9 @@
 // Guest-facing declarations for the <kr32/*.h> headers. The built-in C and C++
 // front ends are filesystem-free, so they inject these bodies when a program
 // includes the header; the C++ front end wraps each in an extern "C" block.
-// The same bodies are checked in as include/kr32/*.h for a toolchain that reads
-// include paths (krc). Keep the declarations here and there identical:
-// tests/unit/test_guest_headers.cpp compares the two. Keep them in step with
-// docs/graphics.md.
+// The tracked include/kr32/*.h files are the on-disk carriers for a toolchain
+// that reads include paths (krc). The built-in copies go away with these
+// directories in 3.10b. Keep the declarations in step with docs/graphics.md.
 
 namespace kr32::cc {
 
@@ -66,7 +65,7 @@ inline constexpr std::string_view kGuestGfxHeader =
     "int gfx_text_width(const char *text);\n"
     "int gfx_text(gfx_surface *surface, int x, int y, const char *text, unsigned int fg, unsigned int bg);\n";
 
-inline constexpr std::string_view kGuestConHeader =
+inline constexpr std::string_view kGuestConsHeader =
     "void con_putc(char character);\n"
     "void con_puts(const char *text);\n"
     "void con_write(const char *text, int count);\n"

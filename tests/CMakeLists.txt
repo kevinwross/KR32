@@ -11,45 +11,13 @@ set(KR32_TEST_SOURCES
     unit/test_version.cpp
     unit/test_machine.cpp
     unit/test_privilege.cpp
-    unit/test_boot.cpp
     unit/test_fp.cpp
     unit/test_matrix.cpp
-    unit/test_devices.cpp
     unit/test_container.cpp
-    unit/test_object_assembler.cpp
-    unit/test_linker.cpp
-    unit/test_cc_1.cpp
-    unit/test_cc_2.cpp
-    unit/test_cc_3.cpp
-    unit/test_cc_4.cpp
-    unit/test_cc_5.cpp
-    unit/test_cc_6.cpp
-    unit/test_cc_7.cpp
-    unit/test_cc_8.cpp
-    unit/test_debug.cpp
     unit/test_terminal.cpp
     unit/test_graphics.cpp
     unit/test_guest_headers.cpp
-    unit/test_fast.cpp
-    unit/test_embedded_os.cpp
-    unit/test_host.cpp
-    unit/test_threads.cpp
-    unit/test_assembler.cpp
-    unit/test_optimizer.cpp
-    unit/test_disassembler.cpp
-    cxx/test_cxx_abi.cpp
-    cxx/test_cxx_api.cpp
-    cxx/test_cxx_parser.cpp
-    cxx/test_cxx_codegen_1.cpp
-    cxx/test_cxx_codegen_2.cpp
-    cxx/test_cxx_codegen_2b.cpp
-    cxx/test_cxx_codegen_2c.cpp
-    cxx/test_cxx_codegen_3.cpp
-    cxx/test_cxx_codegen_4.cpp
-    cxx/test_cxx_codegen_5.cpp
-    cxx/test_cxx_codegen_6.cpp
-    cxx/test_cxx_codegen_7.cpp
-    cxx/test_cxx_codegen_8.cpp)
+    unit/test_embedded_os.cpp)
 
 add_executable(kr32_tests ${KR32_TEST_SOURCES})
 
@@ -64,12 +32,13 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_debug
     kr32_vm
     kr32_os_images
+    krc::toolchain
     kr32_warnings)
 target_compile_definitions(kr32_tests PRIVATE
     KR32_HAS_EMBEDDED_OS=$<BOOL:${KR32_EMBED_OS}>
     KR32_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    KR32_GENERATED_GUEST_INCLUDE_DIR="${KR32_GENERATED_GUEST_INCLUDE_DIR}")
-add_dependencies(kr32_tests kr32_guest_headers_generated)
+    KR32_TEST_KRC_SYSROOT="${KRC_SYSROOT}"
+    KR32_TEST_KRC_RUNTIME_DIR="${KRC_KR32_RUNTIME_DIR}")
 if(KR32_TOOLCHAIN STREQUAL "krc")
     # Lets test_ui assert the listing columns only the krc branch produces.
     target_compile_definitions(kr32_tests PRIVATE KR32_TOOLCHAIN_KRC=1)
@@ -121,22 +90,21 @@ foreach(test_source IN LISTS KR32_TEST_SOURCES)
 TIMEOUT 600)
 endforeach()
 
-if(TARGET kr32_cxx_tool)
-    add_test(NAME cxx_tool_help COMMAND kr32_cxx_tool --help)
-    set_tests_properties(cxx_tool_help PROPERTIES
-        PASS_REGULAR_EXPRESSION "kr32-cxx")
-
-    # Driver error paths are part of the harness contract: a bad invocation must
-    # exit non-zero and must not try to compile the input.
-    add_test(NAME cxx_tool_missing_input COMMAND kr32_cxx_tool)
-    set_tests_properties(cxx_tool_missing_input PROPERTIES WILL_FAIL TRUE)
-
-    add_test(NAME cxx_tool_bad_emit COMMAND kr32_cxx_tool --emit elf input.cpp)
-    set_tests_properties(cxx_tool_bad_emit PROPERTIES WILL_FAIL TRUE)
-
-    add_test(NAME cxx_tool_missing_output_path COMMAND kr32_cxx_tool -o)
-    set_tests_properties(cxx_tool_missing_output_path PROPERTIES WILL_FAIL TRUE)
-endif()
+# krc-built images for the examples. No test invokes `kr32 build`; the image is
+# produced once at build time by the installed krc package.
+kr32_add_test_image(hello_c ${CMAKE_SOURCE_DIR}/examples/hello.c FALSE)
+kr32_add_test_image(hello_cxx ${CMAKE_SOURCE_DIR}/examples/hello.cpp TRUE)
+kr32_add_test_image(cxx_libc ${CMAKE_SOURCE_DIR}/examples/cxx_libc.cpp TRUE)
+kr32_add_test_image(matrix_cxx ${CMAKE_SOURCE_DIR}/examples/matrix.cpp TRUE)
+kr32_add_test_image(balanced_tree_cxx ${CMAKE_SOURCE_DIR}/examples/balanced-tree.cpp TRUE)
+kr32_add_test_image(cxx_tls ${CMAKE_SOURCE_DIR}/examples/cxx_tls.cpp TRUE)
+kr32_add_test_image(types_c ${CMAKE_SOURCE_DIR}/examples/types.c FALSE)
+kr32_add_test_image(floats_c ${CMAKE_SOURCE_DIR}/examples/floats.c FALSE)
+kr32_add_test_image(varargs_c ${CMAKE_SOURCE_DIR}/examples/varargs.c FALSE)
+kr32_add_test_image(libc_c ${CMAKE_SOURCE_DIR}/examples/libc-test.c FALSE)
+kr32_add_test_image(strings_c ${CMAKE_SOURCE_DIR}/examples/strings.c FALSE)
+kr32_add_test_image(binarytree_c ${CMAKE_SOURCE_DIR}/examples/binarytree.c FALSE)
+kr32_add_test_image(fileio_c ${CMAKE_SOURCE_DIR}/examples/fileio.c FALSE)
 
 add_test(NAME cli_version COMMAND $<TARGET_FILE:kr32> version)
 set_tests_properties(cli_version PROPERTIES
@@ -146,74 +114,86 @@ add_test(NAME cli_help COMMAND $<TARGET_FILE:kr32> help)
 set_tests_properties(cli_help PROPERTIES
     PASS_REGULAR_EXPRESSION "Usage:")
 
-add_test(NAME cli_stub COMMAND $<TARGET_FILE:kr32> build)
-set_tests_properties(cli_stub PROPERTIES WILL_FAIL TRUE)
-
-add_test(NAME cli_cxx_help COMMAND $<TARGET_FILE:kr32> cxx --help)
-set_tests_properties(cli_cxx_help PROPERTIES PASS_REGULAR_EXPRESSION "kr32 cxx")
+add_test(NAME run_c_hello
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.k32)
+set_tests_properties(run_c_hello PROPERTIES
+    PASS_REGULAR_EXPRESSION "Hello, KR32!")
 
 add_test(NAME run_cxx_demo
-    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/hello.cpp --run
-            -o ${CMAKE_BINARY_DIR}/hello-cxx.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_cxx.k32)
 set_tests_properties(run_cxx_demo PROPERTIES PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
 add_test(NAME run_cxx_libc
-    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/cxx_libc.cpp --run
-            -o ${CMAKE_BINARY_DIR}/cxx-libc.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/cxx_libc.k32)
 set_tests_properties(run_cxx_libc PROPERTIES
     PASS_REGULAR_EXPRESSION "C\\+\\+ via C libc: shared libc")
 
 add_test(NAME run_cxx_matrix
-    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/matrix.cpp --run
-            -o ${CMAKE_BINARY_DIR}/matrix-cxx.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/matrix_cxx.k32)
 set_tests_properties(run_cxx_matrix PROPERTIES
     PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
 add_test(NAME run_cxx_balanced_tree
-    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/balanced-tree.cpp --run
-            -o ${CMAKE_BINARY_DIR}/balanced-tree.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/balanced_tree_cxx.k32)
 set_tests_properties(run_cxx_balanced_tree PROPERTIES
     PASS_REGULAR_EXPRESSION "Engineers in sorted order \\(30\\)")
 
 add_test(NAME run_cxx_tls
-    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/cxx_tls.cpp --run
-            -o ${CMAKE_BINARY_DIR}/cxx-tls.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/cxx_tls.k32)
 set_tests_properties(run_cxx_tls PROPERTIES
     PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
-add_test(NAME run_mainentry
-    COMMAND $<TARGET_FILE:kr32> build ${CMAKE_SOURCE_DIR}/examples/mainentry.c --run
-            --arg one --arg "two words"
-            -o ${CMAKE_BINARY_DIR}/mainentry.k32)
-set_tests_properties(run_mainentry PROPERTIES
-    PASS_REGULAR_EXPRESSION "argv\\[2\\] = two words")
+add_test(NAME build_c_hello
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.k32)
+set_tests_properties(build_c_hello PROPERTIES PASS_REGULAR_EXPRESSION "Hello, KR32!")
 
-add_test(NAME run_demo
-    COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/demo.asm)
-set_tests_properties(run_demo PROPERTIES
-    PASS_REGULAR_EXPRESSION "R1=12;R3=30")
+add_test(NAME build_c_types
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/types_c.k32)
+set_tests_properties(build_c_types PROPERTIES
+    PASS_REGULAR_EXPRESSION "unsigned int 10 squared = 100")
 
-add_test(NAME fp_demo
-    COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/fp-demo.asm)
-set_tests_properties(fp_demo PROPERTIES PASS_REGULAR_EXPRESSION "R1=3")
+add_test(NAME run_c_floats_variadic
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/floats_c.k32)
+set_tests_properties(run_c_floats_variadic PROPERTIES
+    PASS_REGULAR_EXPRESSION "fpCrazyTown result = -20.142857")
 
-add_test(NAME matrix_demo
-    COMMAND $<TARGET_FILE:kr32> run ${CMAKE_SOURCE_DIR}/examples/matrix-demo.asm)
-set_tests_properties(matrix_demo PROPERTIES PASS_REGULAR_EXPRESSION "R1=256")
+add_test(NAME build_c_varargs
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/varargs_c.k32)
+set_tests_properties(build_c_varargs PROPERTIES
+    PASS_REGULAR_EXPRESSION "mixed varargs 4 \\+ 2.5 \\+ 1.25 = 7")
 
-add_test(NAME bios_smoke
+add_test(NAME build_c_libc
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/libc_c.k32)
+set_tests_properties(build_c_libc PROPERTIES PASS_REGULAR_EXPRESSION "heap walk=0")
+
+add_test(NAME build_c_strings
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/strings_c.k32)
+set_tests_properties(build_c_strings PROPERTIES
+    PASS_REGULAR_EXPRESSION "memmove: ababcd")
+
+add_test(NAME build_c_binarytree
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/binarytree_c.k32)
+set_tests_properties(build_c_binarytree PROPERTIES
+    PASS_REGULAR_EXPRESSION "AVL tree of engineers \\(height 6, 30 names\\)")
+
+add_test(NAME debug_dump
+    COMMAND $<TARGET_FILE:kr32> debug ${KR32_TEST_IMAGE_DIR}/hello_c.k32)
+set_tests_properties(debug_dump PROPERTIES
+    PASS_REGULAR_EXPRESSION "function main")
+
+add_test(NAME host_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunBiosSmoke.cmake)
+        -DIMAGE=${KR32_TEST_IMAGE_DIR}/fileio_c.k32
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunHostSmoke.cmake)
 
-add_test(NAME run_os_smoke
+add_test(NAME dap_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsSmoke.cmake)
+        -DIMAGE=${KR32_TEST_IMAGE_DIR}/hello_c.k32
+        -DBINARY_DIR=${CMAKE_BINARY_DIR}
+        -P ${CMAKE_SOURCE_DIR}/cmake/RunDapSmoke.cmake)
 
 if(KR32_EMBED_OS)
     add_test(NAME run_os_embedded
@@ -223,265 +203,20 @@ if(KR32_EMBED_OS)
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsEmbedded.cmake)
 endif()
 
-add_test(NAME run_os_boot
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsBoot.cmake)
-
-add_test(NAME run_os_shell
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsShell.cmake)
-
-add_test(NAME run_os_fault_timer
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsFault.cmake)
-
-add_test(NAME run_os_user
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunOsUser.cmake)
-
-# These tests share the images the kr32os_images fixture builds and no longer
-# write into that tree, so they need no resource lock: the FIXTURES_REQUIRED
-# entries below cover the ordering.
-
-add_test(NAME build_hello
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/hello.s
-        -o ${CMAKE_BINARY_DIR}/hello.k32 --run)
-set_tests_properties(build_hello PROPERTIES PASS_REGULAR_EXPRESSION "HALTED")
-
-add_test(NAME link_smoke
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunLinkSmoke.cmake)
-
-add_test(NAME build_c_hello
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/hello.c
-        -o ${CMAKE_BINARY_DIR}/hello-c.k32 --run)
-set_tests_properties(build_c_hello PROPERTIES
-    PASS_REGULAR_EXPRESSION "Hello, KR32!")
-
-add_test(NAME build_c_types
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/types.c
-        -o ${CMAKE_BINARY_DIR}/types-c.k32 --run)
-set_tests_properties(build_c_types PROPERTIES
-    PASS_REGULAR_EXPRESSION "unsigned int 10 squared = 100")
-
-add_test(NAME build_c_floats
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/floats.c
-        -o ${CMAKE_BINARY_DIR}/floats-c.k32 --run)
-set_tests_properties(build_c_floats PROPERTIES
-    PASS_REGULAR_EXPRESSION "global 4.5 squared = 20")
-
-# A floating-point variadic argument must reach printf's va_arg on the stack.
-# An undeclared printf is compiled with the fixed-parameter convention and
-# prints 0.000000, so this asserts the value rather than the build.
-# Format coverage for the C library: flags, width, precision, and the rounding
-# of half-way values.
-add_test(NAME run_c_printf_format
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/printf-format.c
-        -o ${CMAKE_BINARY_DIR}/printf-format.k32 --run)
-set_tests_properties(run_c_printf_format PROPERTIES
-    PASS_REGULAR_EXPRESSION "printf format: [0-9]+ checks, 0 failures")
-
-add_test(NAME run_c_floats_variadic
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/floats.c
-        -o ${CMAKE_BINARY_DIR}/floats-variadic.k32 --run)
-set_tests_properties(run_c_floats_variadic PROPERTIES
-    PASS_REGULAR_EXPRESSION "fpCrazyTown result = -20.142857")
-
-add_test(NAME build_c_varargs
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/varargs.c
-        -o ${CMAKE_BINARY_DIR}/varargs-c.k32 --run)
-set_tests_properties(build_c_varargs PROPERTIES
-    PASS_REGULAR_EXPRESSION "mixed varargs 4 \\+ 2.5 \\+ 1.25 = 7")
-
-add_test(NAME build_c_libc
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/libc-test.c
-        -o ${CMAKE_BINARY_DIR}/libc-c.k32 --run)
-set_tests_properties(build_c_libc PROPERTIES
-    PASS_REGULAR_EXPRESSION "heap walk=0")
-
-add_test(NAME build_c_strings
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/strings.c
-        -o ${CMAKE_BINARY_DIR}/strings-c.k32 --run)
-set_tests_properties(build_c_strings PROPERTIES
-    PASS_REGULAR_EXPRESSION "memmove: ababcd")
-
-add_test(NAME build_c_binarytree
-    COMMAND $<TARGET_FILE:kr32> build
-        ${CMAKE_SOURCE_DIR}/examples/binarytree.c
-        -o ${CMAKE_BINARY_DIR}/binarytree-c.k32 --run)
-set_tests_properties(build_c_binarytree PROPERTIES
-    PASS_REGULAR_EXPRESSION "AVL tree of engineers \\(height 6, 30 names\\)")
-
-
-
-
-
-
-add_test(NAME debug_dump
-    COMMAND $<TARGET_FILE:kr32> debug ${CMAKE_BINARY_DIR}/hello-c.k32)
-set_tests_properties(debug_dump PROPERTIES
-    DEPENDS build_c_hello
-    PASS_REGULAR_EXPRESSION "function main")
-
-add_test(NAME host_smoke
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunHostSmoke.cmake)
-
-add_test(NAME dap_smoke
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunDapSmoke.cmake)
-set_tests_properties(dap_smoke PROPERTIES DEPENDS build_c_hello)
-
-add_test(NAME shell_smoke
-    COMMAND ${CMAKE_COMMAND}
-        -DKR32=$<TARGET_FILE:kr32>
-        -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-        -P ${CMAKE_SOURCE_DIR}/cmake/RunShellSmoke.cmake)
-
-if(KR32_BUILD_UI)
-    add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)
-    set_tests_properties(ui_smoke PROPERTIES
-        ENVIRONMENT "SDL_VIDEODRIVER=dummy")
-
-    add_test(NAME ui_headless
-        COMMAND $<TARGET_FILE:kr32> gui --headless
-            ${CMAKE_BINARY_DIR}/hello-c.k32
-            --screenshot ${CMAKE_BINARY_DIR}/hello-ui.ppm)
-    set_tests_properties(ui_headless PROPERTIES
-        DEPENDS build_c_hello
-        PASS_REGULAR_EXPRESSION "ui-render")
-
-    add_test(NAME ui_headless_cxx
-        COMMAND $<TARGET_FILE:kr32> gui --headless
-            ${CMAKE_SOURCE_DIR}/examples/hello.cpp
-            --screenshot ${CMAKE_BINARY_DIR}/hello-cxx-ui.ppm)
-    set_tests_properties(ui_headless_cxx PROPERTIES
-        PASS_REGULAR_EXPRESSION "ui-render")
-
-    # OS mode selects the SCREEN tab, so this covers the screen layout and the
-    # "no committed frame" path without booting the guest.
-    add_test(NAME ui_headless_os
-        COMMAND $<TARGET_FILE:kr32> gui --os --embedded --headless
-            --screenshot ${CMAKE_BINARY_DIR}/os-ui.ppm)
-    set_tests_properties(ui_headless_os PROPERTIES
-        PASS_REGULAR_EXPRESSION "ui-render")
-
-    # The KR32OS images are built once here; the tests that boot them skip their
-    # own build (they pass -DSKIP_BUILD=1) and depend on this fixture. Running the
-    # build in each test cost 65 s per test on Windows and forced them to
-    # serialise on a shared RESOURCE_LOCK.
-    add_test(NAME kr32os_images
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -P ${CMAKE_SOURCE_DIR}/cmake/BuildOsImages.cmake)
-    set_tests_properties(kr32os_images PROPERTIES
-        LABELS "integration"
-        FIXTURES_SETUP kr32os_images)
-
-    # The explicit `--os <kernel> --bios <bios>` pair, as opposed to the embedded
-    # one above; this is the command-line path the plan keeps unchanged.
-    if(WIN32)
-        set(_kr32_os_image_dir "${CMAKE_SOURCE_DIR}/kr32os/build/windows")
-    else()
-        set(_kr32_os_image_dir "${CMAKE_SOURCE_DIR}/kr32os/build/linux")
-    endif()
-    add_test(NAME ui_headless_os_files
-        COMMAND $<TARGET_FILE:kr32> gui --os
-            "${_kr32_os_image_dir}/kernel.bin"
-            --bios "${_kr32_os_image_dir}/bios.bin" --headless
-            --screenshot ${CMAKE_BINARY_DIR}/os-ui-files.ppm)
-    set_tests_properties(ui_headless_os_files PROPERTIES
-        FIXTURES_REQUIRED kr32os_images
-        PASS_REGULAR_EXPRESSION "ui-render")
-
-    add_test(NAME run_os_gfx_dismiss
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunOsGfxDismiss.cmake)
-    set_tests_properties(run_os_gfx_dismiss PROPERTIES LABELS "integration")
-
-    add_test(NAME run_os_shutdown
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunOsShutdown.cmake)
-    set_tests_properties(run_os_shutdown PROPERTIES LABELS "integration")
-
-    add_test(NAME os_gfx_demo
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx-demo
-            -DPROGRAM=gfxdemo
-            "-DCHECKS=10,10,101820;150,150,30A030;400,260,F06060"
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxProgram.cmake)
-    set_tests_properties(os_gfx_demo PROPERTIES LABELS "integration")
-
-    add_test(NAME os_gfx_check
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DSOURCE_DIR=${CMAKE_SOURCE_DIR}
-            -DBINARY_DIR=${CMAKE_BINARY_DIR} -DSKIP_BUILD=1
-            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-gfx-check
-            -DPROGRAM=gfxcheck
-            "-DCHECKS=10,10,000000;150,150,FF0000;425,425,0000FF;799,0,00FF00;0,599,00FF00"
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunGfxProgram.cmake)
-    set_tests_properties(os_gfx_check PROPERTIES LABELS "integration")
-
-    add_test(NAME os_console_screen
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/os-console
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunOsConsole.cmake)
-    set_tests_properties(os_console_screen PROPERTIES LABELS "integration")
-
-    # Must come after every add_test it names: set_tests_properties cannot mark
-    # a test that does not exist yet, and if(TEST ...) would silently skip it,
-    # leaving the test racing the fixture that builds the image it boots.
-    foreach(_os_test
-            run_os_gfx_dismiss run_os_shutdown run_os_user run_os_shell
-            run_os_fault_timer run_os_boot os_gfx_demo os_gfx_check
-            os_console_screen)
-        if(TEST ${_os_test})
-            set_tests_properties(${_os_test} PROPERTIES
-                FIXTURES_REQUIRED kr32os_images)
-        endif()
-    endforeach()
+# The OS images are the shipped prebuilt pair, not a build of kr32os.
+if(WIN32)
+    set(KR32_OS_FIXTURE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/windows")
+else()
+    set(KR32_OS_FIXTURE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/linux")
 endif()
+add_test(NAME run_os_fixture
+    COMMAND $<TARGET_FILE:kr32> os
+            "${KR32_OS_FIXTURE_DIR}/kernel.k32"
+            --bios "${KR32_OS_FIXTURE_DIR}/bios.k32"
+            --max-steps 12000000 --serial-input "exit 0\n")
+set_tests_properties(run_os_fixture PROPERTIES
+    LABELS "integration"
+    PASS_REGULAR_EXPRESSION "HALTED exit=0")
 
 add_test(NAME boundary_clean
     COMMAND ${CMAKE_COMMAND}
@@ -494,16 +229,39 @@ add_test(NAME boundary_bad
         -P ${CMAKE_SOURCE_DIR}/cmake/CheckPlatformBoundary.cmake)
 set_tests_properties(boundary_bad PROPERTIES WILL_FAIL TRUE)
 
-if(TARGET kr32_ui)
-    add_test(NAME display_screen_shot
-        COMMAND ${CMAKE_COMMAND}
-            -DKR32=$<TARGET_FILE:kr32>
-            -DEXAMPLES=${CMAKE_SOURCE_DIR}/examples
-            -DWORK=${CMAKE_CURRENT_BINARY_DIR}/display-shot
-            -P ${CMAKE_SOURCE_DIR}/cmake/RunDisplayShot.cmake)
-    set_tests_properties(display_screen_shot PROPERTIES LABELS "integration")
-endif()
+if(KR32_BUILD_UI)
+    add_test(NAME ui_smoke COMMAND $<TARGET_FILE:kr32> --smoke-ui)
+    set_tests_properties(ui_smoke PROPERTIES
+        ENVIRONMENT "SDL_VIDEODRIVER=dummy")
 
+    add_test(NAME ui_headless
+        COMMAND $<TARGET_FILE:kr32> gui --headless
+            ${KR32_TEST_IMAGE_DIR}/hello_c.k32
+            --screenshot ${CMAKE_BINARY_DIR}/hello-ui.ppm)
+    set_tests_properties(ui_headless PROPERTIES
+        PASS_REGULAR_EXPRESSION "ui-render")
+
+    add_test(NAME ui_headless_cxx
+        COMMAND $<TARGET_FILE:kr32> gui --headless
+            ${CMAKE_SOURCE_DIR}/examples/hello.cpp
+            --screenshot ${CMAKE_BINARY_DIR}/hello-cxx-ui.ppm)
+    set_tests_properties(ui_headless_cxx PROPERTIES
+        PASS_REGULAR_EXPRESSION "ui-render")
+
+    add_test(NAME ui_headless_os
+        COMMAND $<TARGET_FILE:kr32> gui --os --embedded --headless
+            --screenshot ${CMAKE_BINARY_DIR}/os-ui.ppm)
+    set_tests_properties(ui_headless_os PROPERTIES
+        PASS_REGULAR_EXPRESSION "ui-render")
+
+    add_test(NAME ui_headless_os_files
+        COMMAND $<TARGET_FILE:kr32> gui --os
+            "${KR32_OS_FIXTURE_DIR}/kernel.k32"
+            --bios "${KR32_OS_FIXTURE_DIR}/bios.k32" --headless
+            --screenshot ${CMAKE_BINARY_DIR}/os-ui-files.ppm)
+    set_tests_properties(ui_headless_os_files PROPERTIES
+        PASS_REGULAR_EXPRESSION "ui-render")
+endif()
 # Convenience targets:
 #   check-unit : only the doctest suites, parallel
 #   check      : the whole CTest suite, parallel
@@ -515,35 +273,3 @@ add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j${KR32_TEST_JOBS}
     DEPENDS kr32 kr32_tests
     USES_TERMINAL)
-
-# Parts group the suites so that one invocation finishes in under three
-# minutes. See docs/testing.md; each row is "label|test|test|...".
-set(KR32_TEST_PART_ROWS    "part01|unit_test_cxx_codegen_2b|unit_test_optimizer"
-    "part02|unit_test_cxx_codegen_2c|unit_test_encoding|unit_test_golden_vectors|unit_test_version|unit_test_matrix|unit_test_boot|unit_test_fp"
-    "part03|unit_test_cxx_codegen_2|unit_test_cc_1"
-    "part04|unit_test_cxx_codegen_4|unit_test_debug|unit_test_disassembler"
-    "part05|unit_test_cxx_codegen_3|unit_test_cxx_codegen_1|unit_test_host"
-    "part06|unit_test_cxx_codegen_5|unit_test_cxx_codegen_8|unit_test_cxx_codegen_7|unit_test_cc_8"
-    "part07|unit_test_cxx_codegen_6|unit_test_cc_2|unit_test_cc_6|unit_test_cc_3|unit_test_threads"
-    "part08|unit_test_cc_5|unit_test_cc_4|unit_test_cc_7|unit_test_ui|unit_test_fast|unit_test_assembler|unit_test_container|unit_test_devices|unit_test_graphics|unit_test_guest_headers|unit_test_linker|unit_test_machine|unit_test_object_assembler|unit_test_privilege|unit_test_terminal|unit_test_embedded_os|unit_test_cxx_abi|unit_test_cxx_api|unit_test_cxx_parser"
-    "part09|bios_smoke|boundary_bad|boundary_clean|build_c_binarytree|build_c_floats|run_c_floats_variadic|run_c_printf_format|build_c_hello|build_c_libc|build_c_strings|build_c_types|build_c_varargs|build_hello|cli_cxx_help|cli_help|cli_stub|cli_version|cxx_tool_bad_emit|cxx_tool_help|cxx_tool_missing_input|cxx_tool_missing_output_path|dap_smoke|debug_dump|display_screen_shot|fp_demo|host_smoke|link_smoke|matrix_demo|run_cxx_balanced_tree|run_cxx_demo|run_cxx_libc|run_cxx_matrix|run_cxx_tls|run_demo|run_mainentry|run_os_smoke|shell_smoke|ui_headless|ui_headless_cxx|ui_headless_os|ui_smoke"
-    "part10|os_console_screen|run_os_boot|run_os_embedded|os_gfx_check"
-    "part11|run_os_user|run_os_fault_timer|run_os_shell|run_os_shutdown|run_os_gfx_dismiss|os_gfx_demo"
-    )
-foreach(part_row IN LISTS KR32_TEST_PART_ROWS)
-    string(REPLACE "|" ";" part_fields "${part_row}")
-    list(GET part_fields 0 part_label)
-    list(REMOVE_AT part_fields 0)
-    # Tests behind the UI/platform options are absent when those options are
-    # off, but the part rows above stay the same for every configuration.
-    foreach(part_test IN LISTS part_fields)
-        if(TEST ${part_test})
-            set_property(TEST ${part_test} APPEND PROPERTY LABELS "${part_label}")
-        else()
-            # A row may name a test this configuration does not build, such as
-            # the UI suites when KR32_BUILD_UI is off. Report it so a renamed
-            # test cannot silently drop out of every part.
-            message(STATUS "part ${part_label}: '${part_test}' is not defined in this configuration")
-        endif()
-    endforeach()
-endforeach()

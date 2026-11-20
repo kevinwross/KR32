@@ -1,18 +1,13 @@
-if(NOT KR32 OR NOT SOURCE_DIR OR NOT BINARY_DIR)
-    message(FATAL_ERROR "kr32, SOURCE_DIR, and BINARY_DIR are required")
+if(NOT KR32 OR NOT IMAGE OR NOT BINARY_DIR)
+    message(FATAL_ERROR "kr32, IMAGE and BINARY_DIR are required")
 endif()
 
-set(image "${BINARY_DIR}/fileio.k32")
+set(image "${IMAGE}")
 set(sandbox "${BINARY_DIR}/host-sandbox")
 file(REMOVE_RECURSE "${sandbox}")
 
-execute_process(
-    COMMAND "${KR32}" build "${SOURCE_DIR}/examples/fileio.c" -o "${image}"
-    RESULT_VARIABLE build_result
-    OUTPUT_VARIABLE build_output
-    ERROR_VARIABLE build_error)
-if(NOT build_result EQUAL 0)
-    message(FATAL_ERROR "fileio build failed: ${build_output}${build_error}")
+if(NOT EXISTS "${image}")
+    message(FATAL_ERROR "missing ${image}")
 endif()
 
 execute_process(

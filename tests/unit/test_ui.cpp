@@ -1,9 +1,8 @@
 #include "doctest.h"
 
-#include "kr32/asm/object_assembler.h"
-#include "kr32/cc/cc.h"
+#include "krc_test_support.h"
+
 #include "kr32/container/container.h"
-#include "kr32/link/linker.h"
 #include "kr32/os/embedded_os.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/canvas.h"
@@ -21,32 +20,23 @@ using namespace kr32;
 
 namespace {
 
-std::string build_ui_test_image() {
-    const cc::Result compiled = cc::compile("int main(void) { return 0; }\n");
-    REQUIRE(compiled.ok);
-    container::Image user;
-    assembler::Error assembly_error;
-    REQUIRE_MESSAGE(assembler::assemble_object(compiled.assembly, user, assembly_error),
-                    assembly_error.message);
-    container::Image runtime;
-    REQUIRE_MESSAGE(assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error),
-                    assembly_error.message);
-    container::Image image;
-    linker::Map map;
-    linker::Error link_error;
-    linker::Options options;
-    options.stack_top = 0x0011'0000;
-    options.stack_limit = 0x0001'0000;
-    REQUIRE_MESSAGE(linker::link({user, runtime}, options, image, map, link_error),
-                    link_error.message);
+std::string write_image(const std::string& path,
+                        const test::BuiltImage& built) {
+    REQUIRE_MESSAGE(built.ok, built.error);
     std::vector<std::uint8_t> bytes;
     container::Error container_error;
-    REQUIRE_MESSAGE(container::write(image, bytes, container_error), container_error.message);
-    const std::string path = "kr32-ui-run.k32";
+    REQUIRE_MESSAGE(container::write(built.image, bytes, container_error),
+                    container_error.message);
     std::ofstream output(path, std::ios::binary);
     output.write(reinterpret_cast<const char*>(bytes.data()),
                  static_cast<std::streamsize>(bytes.size()));
     return path;
+}
+
+std::string build_ui_test_image() {
+    return write_image("kr32-ui-run.k32",
+                       test::build_krc_image("int main(void) { return 0; }\n",
+                                             "ui-test.c"));
 }
 
 std::string build_ui_two_source_image() {
@@ -61,44 +51,10 @@ std::string build_ui_two_source_image() {
         std::ofstream helper_file("ui-helper.c", std::ios::binary);
         helper_file << helper_source;
     }
-    const cc::Result main_compiled =
-        cc::compile(main_source, "ui-main.c");
-    const cc::Result helper_compiled =
-        cc::compile(helper_source, "ui-helper.c");
-    REQUIRE(main_compiled.ok);
-    REQUIRE(helper_compiled.ok);
-    container::Image main_image;
-    container::Image helper_image;
-    assembler::Error assembly_error;
-    REQUIRE_MESSAGE(assembler::assemble_object(main_compiled.assembly,
-                                               main_image, assembly_error),
-                    assembly_error.message);
-    REQUIRE_MESSAGE(assembler::assemble_object(helper_compiled.assembly,
-                                               helper_image, assembly_error),
-                    assembly_error.message);
-    container::Image runtime;
-    REQUIRE_MESSAGE(
-        assembler::assemble_object(cc::runtime_assembly(), runtime,
-                                   assembly_error),
-        assembly_error.message);
-    container::Image image;
-    linker::Map map;
-    linker::Error link_error;
-    linker::Options options;
-    options.stack_top = 0x0011'0000;
-    options.stack_limit = 0x0001'0000;
-    REQUIRE_MESSAGE(linker::link({main_image, helper_image, runtime},
-                                 options, image, map, link_error),
-                    link_error.message);
-    std::vector<std::uint8_t> bytes;
-    container::Error container_error;
-    REQUIRE_MESSAGE(container::write(image, bytes, container_error),
-                    container_error.message);
-    const std::string path = "kr32-ui-two-sources.k32";
-    std::ofstream output(path, std::ios::binary);
-    output.write(reinterpret_cast<const char*>(bytes.data()),
-                 static_cast<std::streamsize>(bytes.size()));
-    return path;
+    std::vector<krc::toolchain::Source> units{
+        {"ui-main.c", main_source}, {"ui-helper.c", helper_source}};
+    return write_image("kr32-ui-two-sources.k32",
+                       test::build_krc_image(units));
 }
 
 } // namespace
@@ -285,7 +241,7 @@ TEST_CASE("all five guest headers compile through the window") {
                   "#include <kr32/display.h>\n"
                   "#include <kr32/gfx.h>\n"
                   "#include <kr32/gfx.h>\n"
-                  "#include <kr32/con.h>\n"
+                  "#include <kr32/cons.h>\n"
                   "#include <kr32/input.h>\n"
                   "#include <kr32/sys.h>\n"
                   "int main(void) {\n"
