@@ -268,3 +268,72 @@ The krc rows in that entry stand: they were measured on `3516460`, and
 decision.
 
 **Blocker:** none for stage A.
+
+## 2026-11-20T10:06:39-08:00
+
+**Changed (3.8): the guest headers are on disk for both toolchains.**
+
+- `include/kr32/fb.h`, `display.h`, `gfx.h`, `input.h` and `sys.h` are checked in
+  with the declaration bodies the built-in front ends inject. `display.h` is
+  included because it has the same injection-only defect and is in
+  `docs/graphics.md`'s table; the item names the other five.
+- `include/kr32/con.h` is **not** tracked, and cannot be. `CON` is a reserved DOS
+  device name. The real behaviour on Windows:
+
+```text
+$ git add include/kr32/con.h                     # this repository, default config
+error: open("include/kr32/con.h"): No such file or directory
+error: unable to index file 'include/kr32/con.h'
+fatal: adding files failed
+$ git -c core.protectNTFS=false add include/kr32/con.h   # succeeds
+$ git checkout -- con.h                          # scratch repository, default config
+error: unable to create file con.h: Invalid argument
+```
+
+  CMake's `file(WRITE .../con.h)` also left no file behind, so a tracked file
+  would break every Windows checkout.
+- `tools/guest_headers` writes
+  `<build>/generated/guest-include/kr32/con.h` from `kGuestConHeader` through the
+  extended-length prefix (`\\?\`), the one spelling Windows accepts. The krc path
+  puts that directory on `options.include_paths`.
+- The built-in front ends stay filesystem-free and keep injecting the embedded
+  bodies; the injection is not removed, because removing it would require giving
+  `cc::compile` filesystem access.
+- `tests/unit/test_guest_headers.cpp` now compares every carrier with the
+  embedded declaration (con.h from the generated directory), so the two copies
+  cannot drift. `tests/unit/test_ui.cpp` adds the acceptance source: it includes
+  all five headers plus `display.h`, includes `gfx.h` twice, declares a value of
+  each type, and goes through the real `DebuggerUI::load`.
+- `docs/graphics.md` now describes the file and generated carriers.
+
+**Commands and real results:**
+
+- Focused, builtin and krc:
+  `kr32_tests.exe --source-file=*test_guest_headers.cpp` →
+  `test cases: 6 | 6 passed | 0 failed`, `assertions: 22 | 22 passed`.
+  `kr32_tests.exe --source-file=*test_ui.cpp` →
+  `test cases: 21 | 21 passed | 0 failed`, `assertions: 120 | 120 passed`
+  (builtin) and `123 | 123 passed` (krc); the three extra krc assertions are the
+  krc-only ones. The case `all five guest headers compile through the window`
+  passed in both.
+- Windows, builtin (`cmake --preset windows-ninja -DKR32_TOOLCHAIN=builtin`,
+  build, `ctest --preset windows-ninja`) → **100% tests passed, 0 tests failed
+  out of 98**, `Total Test time (real) = 118.77 sec`.
+- Windows, krc (same preset with the krc package/sysroot/runtime arguments) →
+  **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 110.96 sec`.
+- WSL, builtin (`cmake --preset linux-gcc -DKR32_TOOLCHAIN=builtin`,
+  `bash scripts/run-gate.sh`) → **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 22.75 sec`.
+- WSL, krc (same with the package/sysroot/runtime arguments) → **100% tests
+  passed, 0 failed out of 98**, `Total Test time (real) = 21.75 sec`.
+
+**Commit:** `f2c19a4` (`Ship the guest headers as files`).
+
+**Next step:** the ARM64 tester's entry for the tip; stage B (3.9) waits for its
+second approval and the one-release window.
+
+**Blocker:** none. The only deviation from a literal "five tracked files" is
+`con.h`, which Windows cannot check out; it is generated from the same body at
+build time. Renaming the public header would avoid the generator but is not
+authorised by the plan.
