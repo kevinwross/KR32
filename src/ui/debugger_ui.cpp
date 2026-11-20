@@ -378,6 +378,7 @@ bool compile_with_krc(const std::string& path, container::Image& image,
         options.entry = "_start";
         options.include_paths = {krc_join(KR32_KRC_SYSROOT, "/include"),
                                  krc_join(KR32_KRC_SYSROOT, "/kr32/include"),
+                                 KR32_GENERATED_GUEST_INCLUDE_DIR,
                                  KR32_GUEST_INCLUDE_DIR};
 
         const krc::toolchain::Source unit{path, source};

@@ -2,10 +2,13 @@
 
 #include <string_view>
 
-// Guest-facing declarations for the five <kr32/*.h> headers. Both the C and
-// the C++ front ends inject these bodies when a program includes the header;
-// the C++ front end wraps each in an extern "C" block. Keep the declarations
-// in step with docs/graphics.md.
+// Guest-facing declarations for the <kr32/*.h> headers. The built-in C and C++
+// front ends are filesystem-free, so they inject these bodies when a program
+// includes the header; the C++ front end wraps each in an extern "C" block.
+// The same bodies are checked in as include/kr32/*.h for a toolchain that reads
+// include paths (krc). Keep the declarations here and there identical:
+// tests/unit/test_guest_headers.cpp compares the two. Keep them in step with
+// docs/graphics.md.
 
 namespace kr32::cc {
 

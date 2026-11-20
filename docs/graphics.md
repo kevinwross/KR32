@@ -364,13 +364,19 @@ endian, so the kernel can copy a word and cast.
 
 ## 8. Headers, packages, and the compiler hand-off
 
-Guest headers are synthesized by the C and C++ front ends; there are no `.h`
-files on disk (see the `#include` handling in `src/cc/cc.cpp` and
-`src/cxx/preprocessor.cpp`). The compiler stream implements the five headers
-below in M11 from this list. An unknown `#include` warns and is dropped, so a
-typo surfaces at compile time rather than at link time.
+The headers exist for a toolchain that reads include paths, such as `krc`:
+`fb.h`, `display.h`, `gfx.h`, `input.h` and `sys.h` are files under
+`include/kr32/`. `con.h` is a reserved DOS device name and cannot be tracked in a
+repository, so the build generates `kr32/con.h` into
+`<build>/generated/guest-include/` from the same declaration body. The built-in
+C and C++ front ends are filesystem-free and embed the bodies from
+`include/kr32/cc/guest_headers.h` instead (see the `#include` handling in
+`src/cc/cc.cpp` and `src/cxx/preprocessor.cpp`);
+`tests/unit/test_guest_headers.cpp` compares the carriers. An unknown
+`#include` warns and is dropped under the built-in path, so a typo surfaces at
+compile time rather than at link time.
 
-Proposed header names and contents:
+Header names and contents:
 
 | Header | Declares |
 | --- | --- |

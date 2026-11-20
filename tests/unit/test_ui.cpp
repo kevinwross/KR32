@@ -277,6 +277,32 @@ TEST_CASE("a C++ source compiles through the window and keeps a local") {
     std::filesystem::remove(source_path);
 }
 
+TEST_CASE("all five guest headers compile through the window") {
+    const std::string source_path = "kr32-ui-guest-headers.c";
+    {
+        std::ofstream source(source_path, std::ios::binary);
+        source << "#include <kr32/fb.h>\n"
+                  "#include <kr32/display.h>\n"
+                  "#include <kr32/gfx.h>\n"
+                  "#include <kr32/gfx.h>\n"
+                  "#include <kr32/con.h>\n"
+                  "#include <kr32/input.h>\n"
+                  "#include <kr32/sys.h>\n"
+                  "int main(void) {\n"
+                  "    fb_info info = {0};\n"
+                  "    display_surface display = {0};\n"
+                  "    gfx_surface surface = {0};\n"
+                  "    kr32_event event = {0};\n"
+                  "    return (int)(info.width + display.offset + surface.offset +\n"
+                  "                 event.ascii + KR32_STDOUT);\n"
+                  "}\n";
+    }
+    ui::DebuggerUI debugger;
+    std::string error;
+    CHECK_MESSAGE(debugger.load(source_path, error), error);
+    std::filesystem::remove(source_path);
+}
+
 TEST_CASE("a rejected source reports its file, line and column") {
     const std::string source_path = "kr32-ui-rejected.c";
     {

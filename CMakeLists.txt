@@ -188,6 +188,27 @@ add_custom_command(
     VERBATIM)
 kr32_add_library(kr32_os_images "${KR32_EMBEDDED_OS_SOURCE}")
 
+# `con.h` is a reserved DOS device name, so no repository can track it: Git
+# cannot create the path on Windows ("unable to create file con.h"). The body is
+# the same embedded declaration the built-in front ends inject, and this host
+# tool materialises it as a real header in the build tree, where krc's include
+# path can find it.
+set(KR32_GENERATED_GUEST_INCLUDE_DIR
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/guest-include")
+file(MAKE_DIRECTORY "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32")
+add_executable(kr32_guest_headers tools/guest_headers/main.cpp)
+target_include_directories(kr32_guest_headers PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/include")
+target_compile_features(kr32_guest_headers PRIVATE cxx_std_20)
+target_link_libraries(kr32_guest_headers PRIVATE kr32_warnings)
+add_custom_command(
+    OUTPUT "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32/con.h"
+    COMMAND kr32_guest_headers "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32/con.h"
+    DEPENDS kr32_guest_headers
+    COMMENT "Generating the guest con.h header"
+    VERBATIM)
+add_custom_target(kr32_guest_headers_generated
+    DEPENDS "${KR32_GENERATED_GUEST_INCLUDE_DIR}/kr32/con.h")
+
 if(KR32_BUILD_UI)
     find_package(SDL2 CONFIG QUIET)
     if(SDL2_FOUND AND TARGET SDL2::SDL2)
@@ -210,6 +231,7 @@ if(KR32_BUILD_UI)
 
     kr32_add_library(kr32_ui src/ui/app.cpp src/ui/canvas.cpp src/ui/debugger_ui.cpp
         src/ui/help.cpp src/resources/embedded_fonts.cpp)
+    add_dependencies(kr32_ui kr32_guest_headers_generated)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
         kr32_core kr32_cc kr32_cxx kr32_asm kr32_link kr32_os_images)
@@ -221,6 +243,7 @@ if(KR32_BUILD_UI)
             KR32_TOOLCHAIN_KRC=1
             KR32_KRC_SYSROOT="${KR32_KRC_SYSROOT_DEFINE}"
             KR32_KRC_RUNTIME_DIR="${KR32_KRC_RUNTIME_DIR_DEFINE}"
+            KR32_GENERATED_GUEST_INCLUDE_DIR="${KR32_GENERATED_GUEST_INCLUDE_DIR}"
             KR32_GUEST_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/include")
     endif()
 endif()

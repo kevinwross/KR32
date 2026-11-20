@@ -1,11 +1,48 @@
 #include "doctest.h"
 
 #include "kr32/cc/cc.h"
+#include "kr32/cc/guest_headers.h"
 #include "kr32/cxx/cxx.h"
 
+#include <fstream>
+#include <iterator>
 #include <string>
+#include <string_view>
 
 using namespace kr32;
+
+TEST_CASE("the guest header files carry the injected declarations") {
+    // The built-in front ends are filesystem-free and inject these bodies; krc
+    // reads include/kr32/*.h. `con.h` is generated into the build tree because
+    // its name is a reserved DOS device, so the repository cannot track it. One
+    // body, two carriers: this test is what stops them drifting apart.
+    struct Entry {
+        const char* file;
+        std::string_view text;
+        bool generated;
+    };
+    const Entry entries[] = {
+        {"fb.h", cc::kGuestFbHeader, false},
+        {"display.h", cc::kGuestDisplayHeader, false},
+        {"gfx.h", cc::kGuestGfxHeader, false},
+        {"con.h", cc::kGuestConHeader, true},
+        {"input.h", cc::kGuestInputHeader, false},
+        {"sys.h", cc::kGuestSysHeader, false},
+    };
+    for (const Entry& entry : entries) {
+        const std::string directory =
+            entry.generated
+                ? std::string(KR32_GENERATED_GUEST_INCLUDE_DIR) + "/kr32"
+                : std::string(KR32_SOURCE_DIR) + "/include/kr32";
+        const std::string path = directory + "/" + entry.file;
+        std::ifstream input(path, std::ios::binary);
+        INFO(entry.file);
+        REQUIRE_MESSAGE(input, "cannot open " << path);
+        const std::string contents((std::istreambuf_iterator<char>(input)),
+                                   std::istreambuf_iterator<char>());
+        CHECK(contents.find(entry.text) != std::string::npos);
+    }
+}
 
 TEST_CASE("the c front end declares the guest headers") {
     const cc::Result result = cc::compile(
@@ -14,6 +51,7 @@ TEST_CASE("the c front end declares the guest headers") {
         "#include <kr32/gfx.h>\n"
         "#include <kr32/con.h>\n"
         "#include <kr32/input.h>\n"
+        "#include <kr32/sys.h>\n"
         "int main(void) {\n"
         "    fb_info info;\n"
         "    info.width = 800;\n"
@@ -28,7 +66,8 @@ TEST_CASE("the c front end declares the guest headers") {
         "    kr32_event event;\n"
         "    (void)input_poll(&event);\n"
         "    (void)fb_info_get(&info);\n"
-        "    return (int)created;\n"
+        "    (void)sys_getpid();\n"
+        "    return (int)created + KR32_STDOUT;\n"
         "}\n");
     std::string detail = "compile failed";
     if (!result.diagnostics.empty()) {

@@ -67,7 +67,9 @@ target_link_libraries(kr32_tests PRIVATE
     kr32_warnings)
 target_compile_definitions(kr32_tests PRIVATE
     KR32_HAS_EMBEDDED_OS=$<BOOL:${KR32_EMBED_OS}>
-    KR32_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+    KR32_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
+    KR32_GENERATED_GUEST_INCLUDE_DIR="${KR32_GENERATED_GUEST_INCLUDE_DIR}")
+add_dependencies(kr32_tests kr32_guest_headers_generated)
 if(KR32_TOOLCHAIN STREQUAL "krc")
     # Lets test_ui assert the listing columns only the krc branch produces.
     target_compile_definitions(kr32_tests PRIVATE KR32_TOOLCHAIN_KRC=1)
