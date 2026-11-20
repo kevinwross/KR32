@@ -290,6 +290,10 @@ private:
     core::DeviceBus devices_;
     std::string serial_text_;
     bool console_hover_ = false;
+    // True while the pointer is over the SCREEN pane. The screen is where the
+    // operator watches the guest run, so a pointer there types at the guest
+    // console instead of reaching the debugger's letter shortcuts.
+    bool screen_pane_hover_ = false;
 
     bool screen_tab_active_ = false;
     bool screen_focus_ = false;

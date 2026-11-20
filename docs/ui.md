@@ -67,10 +67,13 @@ the disassembly it produces matches the command line.
 The **SCREEN** tab shows the committed framebuffer frame. It is selected by
 default when an OS image is loaded. Clicking the pane gives the guest keyboard
 focus (a green dot marks it); `Esc` releases focus before it quits, and
-`F5`/`F6`/`F9`-`F11` always reach the debugger. Hovering a pixel shows its
-coordinates, guest address, and colour; clicking it points the memory panel at
-that address. The title carries the frame geometry and counter, or says
-"no committed frame" before the guest's first flip.
+`F5`/`F6`/`F9`-`F11` always reach the debugger. Hovering the pane without
+clicking also types at the guest console: printable keys, Enter, and Backspace
+go to the guest while the pointer is over it, so the shell can be driven while
+watching the screen. Hovering a pixel shows its coordinates, guest address, and
+colour; clicking it points the memory panel at that address. The title carries
+the frame geometry and counter, or says "no committed frame" before the guest's
+first flip.
 
 The **SOURCE** panel follows the current PC across debug source files. Stepping
 into libc functions such as `printf` or `malloc` switches the title and text to
@@ -101,8 +104,10 @@ address/hex/ASCII lines. **VARIABLES**, **BREAKPOINTS**, **CALL STACK**, and
 When the pointer is over the **CONSOLE** panel, printable keys, Enter,
 Backspace, and Ctrl-V are routed to the guest serial tty. Enter sends LF,
 Backspace sends DEL (`0x7F`), and Ctrl-V pastes clipboard text normalized to LF.
-Function keys remain debugger shortcuts. The serial RX queue is 4 KiB with an
-overrun status bit.
+Function keys remain debugger shortcuts. The **SCREEN** pane is the other
+typing surface and behaves the same way while the pointer is over it, so a
+letter typed while watching the guest cannot trigger a debugger shortcut. The
+serial RX queue is 4 KiB with an overrun status bit.
 
 The memory starting address is editable: click anywhere on the **ADDR** field or
 label, type up to eight hex digits, then press Enter; Escape cancels. **PTR**

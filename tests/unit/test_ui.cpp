@@ -4,6 +4,7 @@
 #include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/link/linker.h"
+#include "kr32/os/embedded_os.h"
 #include "kr32/platform/window.h"
 #include "kr32/ui/canvas.h"
 #include "kr32/ui/debugger_ui.h"
@@ -336,6 +337,55 @@ TEST_CASE("running uses the responsive sliced path and clears the RUN highlight"
     CHECK(stopped.pixel_at(84, 6) != green);
     std::filesystem::remove(path);
 }
+
+#if defined(KR32_HAS_EMBEDDED_OS) && KR32_HAS_EMBEDDED_OS
+namespace {
+
+// Loads the embedded OS so the debugger is in OS mode with the SCREEN tab
+// showing; the 1440x900 layout puts that pane in x 0..604, y 52..579.
+void load_embedded_os(ui::DebuggerUI& debugger) {
+    const os::EmbeddedOs& images = os::embedded_os();
+    std::vector<std::uint8_t> kernel(images.kernel.begin(), images.kernel.end());
+    std::vector<std::uint8_t> bios(images.bios.begin(), images.bios.end());
+    std::string error;
+    REQUIRE_MESSAGE(debugger.load_os_memory(kernel, bios, "<embedded>", "<embedded>",
+                                            error),
+                    error.c_str());
+}
+
+} // namespace
+
+TEST_CASE("typing over the screen sends characters to the guest console") {
+    ui::DebuggerUI debugger;
+    load_embedded_os(debugger);
+
+    debugger.hover(100, 200, 1440, 900);
+    CHECK(debugger.key('r', false, false));
+    CHECK(debugger.session().machine().devices()->serial().available() == 1);
+    CHECK(debugger.status().rfind("restarted", 0) != 0);
+}
+
+TEST_CASE("function keys still reach the debugger while the pointer is over the screen") {
+    ui::DebuggerUI debugger;
+    load_embedded_os(debugger);
+
+    debugger.hover(100, 200, 1440, 900);
+    CHECK(debugger.key(kr32::platform::key::F5, false, false));
+    CHECK(debugger.status().find("running") != std::string::npos);
+    CHECK(debugger.session().machine().devices()->serial().available() == 0);
+}
+
+TEST_CASE("typing away from the screen keeps the debugger shortcuts") {
+    ui::DebuggerUI debugger;
+    load_embedded_os(debugger);
+
+    // x 604 and beyond is the disassembly pane, which is not a typing surface.
+    debugger.hover(700, 200, 1440, 900);
+    CHECK(debugger.key('r', false, false));
+    CHECK(debugger.status().rfind("restarted at", 0) == 0);
+    CHECK(debugger.session().machine().devices()->serial().available() == 0);
+}
+#endif
 
 TEST_CASE("platform key events pack into the keyboard word") {
     kr32::platform::Event event;

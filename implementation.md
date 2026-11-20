@@ -3,7 +3,7 @@
 > **Status:** active. This file is the working checklist, milestone gate, dependency
 > record, and running log for KR32.
 >
-> **Last updated:** 2026-11-17T09:12:21-08:00
+> **Last updated:** 2026-11-20T01:18:14-08:00
 >
 > **Related:** [KR32-plan.md](KR32-plan.md) (architecture and decisions),
 > [docs/isa-v1.md](docs/isa-v1.md) (encoding), [kr16-final-plan.md](kr16-final-plan.md)
@@ -5068,6 +5068,34 @@ Newest entries at the bottom. Use the local time zone.
       tracked status of `AGENTS.local.md`, the untracked status of `AGENTS.md` and
       `examples/libcpp.cpp`, the existence of both gate scripts and the benchmark,
       and all ten image references.
+
+- **2026-11-20 01:18 -08:00** — Debugger keyboard routing: with the pointer over
+      the SCREEN pane, printable keys, Enter, Backspace, and Ctrl-V now go to the
+      guest console instead of reaching the debugger's letter shortcuts, so `r`
+      (Restart) no longer fires mid-word when the operator types at the shell while
+      watching the guest. The console block in `DebuggerUI::key` accepts
+      `console_hover_ || screen_pane_hover_`; `hover` computes both flags from the
+      layout, which also fixes the CONSOLE panel being untypeable while the SCREEN
+      tab was active — its hover flag was never recomputed on that branch and could
+      hold a stale value. Function keys (F5/F6/F9-F11) still reach the debugger and
+      Esc still quits. Three tests in `test_ui.cpp` cover it: a character reaches
+      the serial queue and does not restart, F5 still starts a run, and `r` still
+      restarts over a debugger pane. `docs/ui.md` now names the screen a typing
+      surface.
+
+      Also fixed a cold-tree gate failure: the `FIXTURES_REQUIRED` loop in
+      `tests/CMakeLists.txt` ran before the `add_test` calls it names, so
+      `run_os_gfx_dismiss`, `run_os_shutdown`, `os_gfx_demo`, `os_gfx_check`, and
+      `os_console_screen` never received the property and raced the
+      `kr32os_images` fixture. A clean tree failed 4/97 with "OS image not found";
+      a warm tree hid it. The loop now sits after every test it names.
+
+      Gates from this working tree: Windows 97/97 (build 53 s cold, tests 58 s) and
+      WSL Ubuntu-26.04 97/97 (build 49 s cold, tests 18 s). The WSL run used a fresh
+      `build/linux-gcc`; configuring that tree before `g++` was installed had cached
+      `CMAKE_EXECUTABLE_FORMAT=Unknown` and failed generation with an RPATH error
+      until the tree was deleted. Windows toolchain on this host resolved to MSVC
+      14.52.37025 with Windows SDK 10.0.26100.0.
 
 ## 10. Updating this file
 

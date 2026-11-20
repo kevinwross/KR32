@@ -3639,6 +3639,14 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     mouse_x_ = x;
     mouse_y_ = y;
     if (screen_tab_active_ && !scroll_dragging_) {
+        // Both the SCREEN pane and the CONSOLE panel are typing surfaces for the
+        // guest: the operator watches the screen while typing at the shell, so a
+        // pointer over either routes characters to the console. The layout is
+        // cheap and the alternative, letting these two flags go stale, is what
+        // made 'r' restart the machine mid-word.
+        const Layout areas = layout(width, height);
+        screen_pane_hover_ = areas.screen.contains(x, y);
+        console_hover_ = areas.console.contains(x, y);
         screen_hover_x_ = -1;
         screen_hover_y_ = -1;
         if (screen_view_.contains(x, y) && screen_has_frame_ &&
@@ -3736,6 +3744,7 @@ void DebuggerUI::hover(int x, int y, int width, int height) {
     }
     const Layout areas = layout(width, height);
     hover_settings_control_ = -1;
+    screen_pane_hover_ = false;
     console_hover_ = areas.console.contains(x, y);
     if (settings_rect_.contains(x, y)) {
         hover_settings_control_ = 100;
@@ -4518,8 +4527,9 @@ bool DebuggerUI::key(int key_value, bool shift, bool control) {
         source_menu_open_ = false;
         return true;
     }
-    if (console_hover_ && os_mode_ && !menu_.open && editing_tile_ < 0 &&
-        editing_fpr_ < 0 && editing_register_ < 0 && !memory_address_editing_) {
+    if ((console_hover_ || screen_pane_hover_) && os_mode_ && !menu_.open &&
+        editing_tile_ < 0 && editing_fpr_ < 0 && editing_register_ < 0 &&
+        !memory_address_editing_) {
         bool pushed = false;
         if (control && (key_value == 'v' || key_value == 'V')) {
             std::string text = kr32::platform::clipboard_text();
