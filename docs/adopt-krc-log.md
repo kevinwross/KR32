@@ -578,3 +578,65 @@ a green suite on a clean checkout with no built-in toolchain present.
 **Commit:** the commit that carries this entry.
 
 **Blocker:** none; stage B waits for its approval and the release window.
+
+## 2026-11-20T14:17:47-08:00
+
+**Stage-B trial — evidence only, nothing merged or pushed.** A local scratch
+branch `stage-b-evidence` was cut from `4063a86` and deleted after the run. The
+default was flipped to `krc`; `src/cc` (3 files), `src/cxx` (13), `src/asm` (3),
+`src/link` (1) and `include/kr32/cc/guest_headers.h` (1) were deleted, and the
+four library targets plus the `kr32-cxx` tool were removed from CMake so
+configuration could start. **23 files changed, 2 insertions, 42,562
+deletions.**
+
+**Result: RED.**
+
+- Windows: `cmake --preset windows-ninja -DCMAKE_PREFIX_PATH=<installed 47fa4e5>`
+  configured (94 tests registered). Build stopped at the first error:
+
+```text
+tools/guest_headers/main.cpp(15): fatal error C1083:
+Cannot open include file: 'kr32/cc/guest_headers.h': No such file or directory
+```
+
+  `ctest --preset windows-ninja` → **2% tests passed, 92 tests failed out of 94**
+  (only `boundary_bad` and `boundary_clean` passed; everything else was
+  `Not Run` because no test executable was produced), 0.31 s.
+- WSL: the same configure succeeded (94 tests), the same build error
+  (`tools/guest_headers/main.cpp:15:10: fatal error: kr32/cc/guest_headers.h:
+  No such file or directory`), and the same **2% / 92 of 94** result in 0.04 s.
+
+**Why it is red — what a green stage B still needs.** The four-directory
+deletion is not self-contained:
+
+1. `tools/guest_headers` (the `con.h` generator) reads `kGuestConHeader` from the
+   deleted `include/kr32/cc/guest_headers.h`. Stage B needs a new home for that
+   body, or the generator must be removed and `con.h` obtained another way.
+2. `src/ui/debugger_ui.cpp` (4 includes), `src/cli/cli.cpp` (5) and at least 12
+   test sources include `kr32/asm`, `kr32/cc`, `kr32/cxx` or `kr32/link` headers.
+   The CLI's `as`, `ld`, `build`, `cc` and `cxx` commands and the UI's built-in
+   branches must be removed or reworked before the tree compiles.
+3. The `kr32os_images` fixture and the assembler/C/C++ integration tests invoke
+   `kr32 build`, so the OS image build and most integration tests disappear with
+   the assembler and linker.
+4. Unit coverage for the deleted components (`test_cc_*`, `test_cxx_*`,
+   `test_assembler`, `test_object_assembler`, `test_linker`, `test_optimizer`)
+   and tests that build images through them (`test_ui`, `test_debug`,
+   `test_host`, `test_threads`, `test_fast`, `test_boot`, `test_devices`,
+   `test_disassembler`, `test_guest_headers`) need replacement or deletion.
+
+For the approver: 3.10 as written is a red deletion-only change. Either its scope
+must include the UI/CLI/test/OS migration and a new carrier for the `con.h`
+body, or it stays unauthorised. This trial did not implement or merge that
+migration; the scratch branch is gone and the default is still `builtin`.
+
+**Diff size:** 23 files changed, 2 insertions(+), 42,562 deletions(-); 21 files
+deleted, plus `CMakeLists.txt` and `tests/CMakeLists.txt`.
+
+**Test count:** 94 registered, 2 passed, 92 failed (Windows and WSL).
+
+**Next step:** the second approval decision. The deletion list and the red gate
+are the review material; no branch exists to merge.
+
+**Blocker:** stage B is red as a deletion-only change; the migration work above
+is required first.
