@@ -66,3 +66,19 @@
   krc package and sysroot, neither of which is present on this host; the
   default `builtin` configuration is what was built and tested.
 - Next: nothing pending
+## 2026-11-20T14:39:22-08:00 — adopt-krc @ abc5093
+
+- Host: BitWhiz
+- Range: 1de7012..abc5093, 5 commits (stage-B migration of the tests and
+  guest headers; two of them are documentation)
+- Docs-only: no
+- Configure: linux-arm64-gcc — **FAILED**, 0 s:
+  `CMake Error at CMakeLists.txt:30 (find_package): Could not find a package
+  configuration file provided by "krc-toolchain"`
+- Build: not run
+- Test: not run
+- Skipped: the krc-toolchain install. Stage B now requires the package whenever
+  `KR32_BUILD_TESTS` is ON (`CMakeLists.txt:23-27`), and this host does not have
+  it. The tester role does not install tools.
+- Next: BLOCKED until krc-toolchain is installed on the Pi or the tests stop
+  requiring it
