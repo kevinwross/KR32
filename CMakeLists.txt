@@ -9,6 +9,41 @@ option(KR32_EMBED_OS "Embed the default KR32OS BIOS and kernel" ON)
 option(KR32_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 option(KR32_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
+# Which compiler the window's BUILD uses for a .c or .cpp source. `builtin` is
+# the in-tree C and C++ front end that ships in this repository; `krc` links the
+# published krc::toolchain package instead. Only the krc branch calls
+# find_package, so a default build needs nothing outside the tree.
+set(KR32_TOOLCHAIN "builtin" CACHE STRING "Toolchain for the window's BUILD: builtin or krc")
+set_property(CACHE KR32_TOOLCHAIN PROPERTY STRINGS builtin krc)
+if(NOT KR32_TOOLCHAIN STREQUAL "builtin" AND NOT KR32_TOOLCHAIN STREQUAL "krc")
+    message(FATAL_ERROR
+        "KR32_TOOLCHAIN must be builtin or krc, not '${KR32_TOOLCHAIN}'")
+endif()
+
+if(KR32_TOOLCHAIN STREQUAL "krc")
+    # The package does not install a sysroot, so the target headers, the prebuilt
+    # runtime (`libkrcrt.kro`, `crt0.s`) and the runtime assembly the linker
+    # recipe adds (`fileio.s`, `eh.s`) are explicit inputs.
+    set(KR32_KRC_SYSROOT "" CACHE PATH "Staged krc sysroot holding include/ and kr32/lib/")
+    set(KR32_KRC_RUNTIME_DIR "" CACHE PATH "krc targets/kr32/runtime directory")
+    find_package(krc-toolchain CONFIG REQUIRED)
+    if(NOT KR32_KRC_SYSROOT OR
+       NOT EXISTS "${KR32_KRC_SYSROOT}/kr32/lib/libkrcrt.kro" OR
+       NOT EXISTS "${KR32_KRC_SYSROOT}/include/stdio.h")
+        message(FATAL_ERROR
+            "KR32_TOOLCHAIN=krc needs -DKR32_KRC_SYSROOT=<staged krc sysroot> "
+            "holding include/stdio.h and kr32/lib/libkrcrt.kro")
+    endif()
+    if(NOT KR32_KRC_RUNTIME_DIR OR
+       NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/crt0.s" OR
+       NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/fileio.s" OR
+       NOT EXISTS "${KR32_KRC_RUNTIME_DIR}/eh.s")
+        message(FATAL_ERROR
+            "KR32_TOOLCHAIN=krc needs -DKR32_KRC_RUNTIME_DIR=<krc targets/kr32/runtime> "
+            "holding crt0.s, fileio.s and eh.s")
+    endif()
+endif()
+
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
@@ -178,6 +213,16 @@ if(KR32_BUILD_UI)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
         kr32_core kr32_cc kr32_cxx kr32_asm kr32_link kr32_os_images)
+    if(KR32_TOOLCHAIN STREQUAL "krc")
+        file(TO_CMAKE_PATH "${KR32_KRC_SYSROOT}" KR32_KRC_SYSROOT_DEFINE)
+        file(TO_CMAKE_PATH "${KR32_KRC_RUNTIME_DIR}" KR32_KRC_RUNTIME_DIR_DEFINE)
+        target_link_libraries(kr32_ui PRIVATE krc::toolchain)
+        target_compile_definitions(kr32_ui PRIVATE
+            KR32_TOOLCHAIN_KRC=1
+            KR32_KRC_SYSROOT="${KR32_KRC_SYSROOT_DEFINE}"
+            KR32_KRC_RUNTIME_DIR="${KR32_KRC_RUNTIME_DIR_DEFINE}"
+            KR32_GUEST_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/include")
+    endif()
 endif()
 
 kr32_add_library(kr32_cli src/cli/cli.cpp)

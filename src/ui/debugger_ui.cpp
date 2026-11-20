@@ -4,9 +4,11 @@
 #include <bit>
 #include <cctype>
 #include <cmath>
+#include <cstdint>
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
+#include <exception>
 #include <filesystem>
 #include <fstream>
 #include <functional>
@@ -17,6 +19,10 @@
 #include <string>
 #include <string_view>
 #include <vector>
+
+#if defined(KR32_TOOLCHAIN_KRC)
+#include "krc/toolchain.h"
+#endif
 
 #include "kr32/asm/object_assembler.h"
 #include "kr32/cc/cc.h"
@@ -254,8 +260,185 @@ bool read_binary(const std::string& path, std::vector<std::uint8_t>& bytes,
     return true;
 }
 
+#if defined(KR32_TOOLCHAIN_KRC)
+// The krc path leaves the image opaque: the facade returns a .k32 the real
+// loader parses, and the runtime is the target's own staged pair rather than
+// src/cc's assembly (which needs directives and instructions krc's assembler
+// does not implement).
+std::string krc_join(const char* root, const char* leaf) {
+    return std::string(root) + leaf;
+}
+
+std::string krc_message(const std::string& path,
+                        const std::vector<krc::toolchain::Diagnostic>& diagnostics,
+                        const std::string& fallback) {
+    if (diagnostics.empty()) {
+        return path + ": " + (fallback.empty() ? "krc failed" : fallback);
+    }
+    const krc::toolchain::Diagnostic& diagnostic = diagnostics.front();
+    const std::string file = diagnostic.file.empty() ? path : diagnostic.file;
+    return file + ":" + std::to_string(diagnostic.line) + ":" +
+           std::to_string(diagnostic.column) + ": " + diagnostic.message;
+}
+
+// Assembles the staged runtime pieces and reads the prebuilt libc. The order is
+// krc's own link recipe: user object, libc, fileio, exception runtime, crt0.
+bool krc_runtime_objects(std::vector<krc::toolchain::Object>& objects,
+                         std::string& error) {
+    struct Entry {
+        const char* name;
+        const char* file;
+    };
+    const Entry assembly[] = {{"fileio", "/fileio.s"},
+                              {"eh", "/eh.s"},
+                              {"crt0", "/crt0.s"}};
+    krc::toolchain::Options options;
+    options.target = krc::toolchain::Target::Kr32;
+
+    std::vector<std::uint8_t> libc_bytes;
+    if (!read_binary(krc_join(KR32_KRC_SYSROOT, "/kr32/lib/libkrcrt.kro"),
+                     libc_bytes, error)) {
+        return false;
+    }
+    objects.push_back(krc::toolchain::Object{"libkrcrt", std::move(libc_bytes)});
+
+    for (const Entry& entry : assembly) {
+        std::vector<std::uint8_t> bytes;
+        if (!read_binary(krc_join(KR32_KRC_RUNTIME_DIR, entry.file), bytes,
+                         error)) {
+            return false;
+        }
+        const std::string text(bytes.begin(), bytes.end());
+        const krc::toolchain::AssembleResult assembled =
+            krc::toolchain::assemble(text, options);
+        if (!assembled.ok) {
+            error = std::string("runtime ") + entry.name + ": " +
+                    krc_message(krc_join(KR32_KRC_RUNTIME_DIR, entry.file),
+                                assembled.diagnostics, assembled.error);
+            return false;
+        }
+        objects.push_back(krc::toolchain::Object{entry.name, assembled.object});
+    }
+    return true;
+}
+
+// Renders KR32's assembler listing shape (address, encoded words, statement)
+// from the rows the facade returned for the user object.
+bool write_krc_listing(const std::string& path,
+                       const std::vector<krc::toolchain::ListingRow>& rows,
+                       std::string& error) {
+    const std::string listing_path = path + ".lst";
+    std::ofstream output(listing_path, std::ios::binary);
+    if (!output) {
+        error = "cannot write listing " + listing_path;
+        return false;
+    }
+    for (const krc::toolchain::ListingRow& row : rows) {
+        std::ostringstream bytes;
+        bytes << std::hex << std::nouppercase << std::setfill('0');
+        for (std::size_t index = 0; index < row.bytes.size(); index += 4) {
+            if (index != 0) {
+                bytes << ' ';
+            }
+            for (std::size_t byte = index;
+                 byte < index + 4 && byte < row.bytes.size(); ++byte) {
+                bytes << std::setw(2) << static_cast<unsigned>(row.bytes[byte]);
+            }
+        }
+        output << std::hex << std::nouppercase << std::setfill('0') << std::setw(8)
+               << row.address << ": " << std::setfill(' ') << std::left
+               << std::setw(19) << bytes.str() << std::right << row.text << '\n';
+    }
+    if (!output) {
+        error = "cannot write listing " + listing_path;
+        return false;
+    }
+    return true;
+}
+
+bool compile_with_krc(const std::string& path, container::Image& image,
+                      std::string& error, bool listing, bool cxx) {
+    try {
+        std::ifstream input(path, std::ios::binary);
+        if (!input) {
+            error = "cannot open " + path;
+            return false;
+        }
+        const std::string source((std::istreambuf_iterator<char>(input)),
+                                 std::istreambuf_iterator<char>());
+        krc::toolchain::Options options;
+        options.target = krc::toolchain::Target::Kr32;
+        options.cxx = cxx;
+        options.debug = true;
+        // The window's BUILD matches `kr32 build`'s default, which optimizes.
+        options.optimize = 1;
+        options.base = 0x10000;
+        options.entry = "_start";
+        options.include_paths = {krc_join(KR32_KRC_SYSROOT, "/include"),
+                                 krc_join(KR32_KRC_SYSROOT, "/kr32/include"),
+                                 KR32_GUEST_INCLUDE_DIR};
+
+        const krc::toolchain::Source unit{path, source};
+        const krc::toolchain::CompileResult compiled =
+            krc::toolchain::compile(unit, options);
+        if (!compiled.ok) {
+            error = krc_message(path, compiled.diagnostics, compiled.error);
+            return false;
+        }
+        const krc::toolchain::AssembleResult user =
+            krc::toolchain::assemble(compiled.assembly, compiled.debug_info,
+                                     options);
+        if (!user.ok) {
+            error = krc_message(path, user.diagnostics, user.error);
+            return false;
+        }
+
+        std::vector<krc::toolchain::Object> objects;
+        objects.push_back(krc::toolchain::Object{"user", user.object});
+        if (!krc_runtime_objects(objects, error)) {
+            return false;
+        }
+        const krc::toolchain::LinkResult linked =
+            krc::toolchain::link(objects, options);
+        if (!linked.ok) {
+            error = krc_message(path, linked.diagnostics, linked.error);
+            return false;
+        }
+
+        container::Error container_error;
+        if (!container::read(linked.image, image, container_error)) {
+            error = path + ": " + container_error.message;
+            return false;
+        }
+        if (listing) {
+            // `assemble` reports a row's offset within its section; the listing
+            // KR32's own assembler writes carries the linked address.
+            std::vector<krc::toolchain::ListingRow> rows = user.listing;
+            for (krc::toolchain::ListingRow& row : rows) {
+                for (const krc::toolchain::SectionInfo& section : linked.sections) {
+                    if (section.name == row.section) {
+                        row.address += section.address;
+                        break;
+                    }
+                }
+            }
+            if (!write_krc_listing(path, rows, error)) {
+                return false;
+            }
+        }
+        return true;
+    } catch (const std::exception& exception) {
+        error = path + ": krc: " + exception.what();
+        return false;
+    }
+}
+#endif
+
 bool compile_c_source(const std::string& path, container::Image& image,
                       std::string& error, bool listing) {
+#if defined(KR32_TOOLCHAIN_KRC)
+    return compile_with_krc(path, image, error, listing, false);
+#else
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         error = "cannot open " + path;
@@ -298,10 +481,14 @@ bool compile_c_source(const std::string& path, container::Image& image,
         return false;
     }
     return true;
+#endif
 }
 
 bool compile_cxx_source(const std::string& path, container::Image& image,
                         std::string& error, bool listing) {
+#if defined(KR32_TOOLCHAIN_KRC)
+    return compile_with_krc(path, image, error, listing, true);
+#else
     std::ifstream input(path, std::ios::binary);
     if (!input) {
         error = "cannot open " + path;
@@ -345,6 +532,7 @@ bool compile_cxx_source(const std::string& path, container::Image& image,
         return false;
     }
     return true;
+#endif
 }
 
 bool has_c_extension(const std::string& path) {

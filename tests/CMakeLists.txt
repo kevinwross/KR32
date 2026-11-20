@@ -68,6 +68,10 @@ target_link_libraries(kr32_tests PRIVATE
 target_compile_definitions(kr32_tests PRIVATE
     KR32_HAS_EMBEDDED_OS=$<BOOL:${KR32_EMBED_OS}>
     KR32_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
+if(KR32_TOOLCHAIN STREQUAL "krc")
+    # Lets test_ui assert the listing columns only the krc branch produces.
+    target_compile_definitions(kr32_tests PRIVATE KR32_TOOLCHAIN_KRC=1)
+endif()
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_include_directories(kr32_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)
@@ -401,6 +405,23 @@ if(KR32_BUILD_UI)
     set_tests_properties(kr32os_images PROPERTIES
         LABELS "integration"
         FIXTURES_SETUP kr32os_images)
+
+    # The explicit `--os <kernel> --bios <bios>` pair, as opposed to the embedded
+    # one above; this is the command-line path the plan keeps unchanged.
+    if(WIN32)
+        set(_kr32_os_image_dir "${CMAKE_SOURCE_DIR}/kr32os/build/windows")
+    else()
+        set(_kr32_os_image_dir "${CMAKE_SOURCE_DIR}/kr32os/build/linux")
+    endif()
+    add_test(NAME ui_headless_os_files
+        COMMAND $<TARGET_FILE:kr32> gui --os
+            "${_kr32_os_image_dir}/kernel.bin"
+            --bios "${_kr32_os_image_dir}/bios.bin" --headless
+            --screenshot ${CMAKE_BINARY_DIR}/os-ui-files.ppm)
+    set_tests_properties(ui_headless_os_files PROPERTIES
+        FIXTURES_REQUIRED kr32os_images
+        PASS_REGULAR_EXPRESSION "ui-render")
+
     add_test(NAME run_os_gfx_dismiss
         COMMAND ${CMAKE_COMMAND}
             -DKR32=$<TARGET_FILE:kr32>

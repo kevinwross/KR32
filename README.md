@@ -92,6 +92,21 @@ ctest --preset linux-asan
 `KR32_EMBED_OS=OFF` builds without the embedded KR32OS images and requires
 explicit `--os`/`--bios` paths.
 
+`KR32_TOOLCHAIN` selects the compiler the window's **Build** uses for a `.c` or
+`.cpp` source. It defaults to `builtin`, the in-tree front ends. Setting
+`KR32_TOOLCHAIN=krc` links the published `krc::toolchain` package instead and
+needs the package on `CMAKE_PREFIX_PATH` plus the target inputs the package does
+not install:
+
+```powershell
+& $cmake --preset windows-ninja -DKR32_TOOLCHAIN=krc `
+    -DCMAKE_PREFIX_PATH=<krc install> `
+    -DKR32_KRC_SYSROOT=<krc staged sysroot> `
+    -DKR32_KRC_RUNTIME_DIR=<krc targets/kr32/runtime>
+```
+
+The built-in and krc paths are both available; neither is removed by the option.
+
 ## Commands
 
 ```text

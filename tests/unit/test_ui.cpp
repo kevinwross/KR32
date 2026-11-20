@@ -10,8 +10,10 @@
 #include "kr32/ui/debugger_ui.h"
 #include "kr32/ui/help.h"
 
+#include <cstdlib>
 #include <filesystem>
 #include <fstream>
+#include <iterator>
 #include <string>
 #include <vector>
 
@@ -207,6 +209,150 @@ TEST_CASE("breakpoint panel disables and survives reset") {
     debugger.render(reenabled);
     CHECK(reenabled.pixel_at(350, 520) == 0xFFFF6868U);
     std::filesystem::remove(path);
+}
+
+TEST_CASE("a C source compiles through the window and steps") {
+    const std::string source_path = "kr32-ui-compiled.c";
+    {
+        std::ofstream source(source_path, std::ios::binary);
+        source << "int main(void) {\n"
+                  "    volatile int total = 42;\n"
+                  "    return total;\n"
+                  "}\n";
+    }
+    ui::DebuggerUI debugger;
+    std::string error;
+    REQUIRE_MESSAGE(debugger.load(source_path, error), error.c_str());
+    const debug::Session& session = debugger.session();
+    const debug::Line* line = session.line_at(session.machine().pc());
+    REQUIRE(line != nullptr);
+    CHECK(session.call_stack().size() >= 1);
+#if defined(KR32_TOOLCHAIN_KRC)
+    // 3.3's acceptance: the krc-built image stops at main's first statement and
+    // the local it computes reads back. The built-in optimizer has its own
+    // register model and folds this slot away, so only the krc branch asserts it.
+    CHECK(line->line == 2);
+    debugger.step_line_over();
+    std::uint32_t total = 0;
+    REQUIRE_MESSAGE(session.read_variable("total", total, error), error.c_str());
+    CHECK(total == 42);
+#else
+    const std::uint32_t before = session.machine().pc();
+    debugger.step_line_over();
+    CHECK(session.machine().pc() != before);
+#endif
+    std::filesystem::remove(source_path);
+}
+
+TEST_CASE("a C++ source compiles through the window and keeps a local") {
+    const std::string source_path = "kr32-ui-compiled.cpp";
+    {
+        std::ofstream source(source_path, std::ios::binary);
+        source << "class Point {\n"
+                  "public:\n"
+                  "    int x;\n"
+                  "    int y;\n"
+                  "    int sum() { return x + y; }\n"
+                  "};\n"
+                  "\n"
+                  "int main() {\n"
+                  "    Point point;\n"
+                  "    point.x = 20;\n"
+                  "    point.y = 22;\n"
+                  "    int total = point.sum();\n"
+                  "    return total;\n"
+                  "}\n";
+    }
+    ui::DebuggerUI debugger;
+    std::string error;
+    REQUIRE_MESSAGE(debugger.load(source_path, error), error.c_str());
+    const debug::Session& session = debugger.session();
+    std::uint32_t total = 0;
+    bool reached = false;
+    for (int step = 0; step < 20 && !reached; ++step) {
+        debugger.step_line_over();
+        reached = session.read_variable("total", total, error) && total == 42;
+    }
+    CHECK_MESSAGE(reached, "total never read 42; error: " << error);
+    std::filesystem::remove(source_path);
+}
+
+TEST_CASE("a rejected source reports its file, line and column") {
+    const std::string source_path = "kr32-ui-rejected.c";
+    {
+        std::ofstream source(source_path, std::ios::binary);
+        source << "int main(void) {\n"
+                  "    return missing;\n"
+                  "}\n";
+    }
+    ui::DebuggerUI debugger;
+    std::string error;
+    CHECK_FALSE(debugger.load(source_path, error));
+    CHECK(error.rfind(source_path + ":", 0) == 0);
+    CHECK(error.find(":2:") != std::string::npos);
+    std::filesystem::remove(source_path);
+}
+
+TEST_CASE("the window writes an assembler listing when the setting asks") {
+    const std::filesystem::path config =
+        std::filesystem::absolute("kr32-ui-config");
+    std::filesystem::create_directories(config / "KR32");
+    {
+        std::ofstream settings(config / "KR32" / "settings.ini", std::ios::binary);
+        settings << "listing=1\n";
+    }
+    const std::string previous_value = [] {
+#if defined(_WIN32)
+        char* value = nullptr;
+        std::size_t size = 0;
+        if (_dupenv_s(&value, &size, "APPDATA") != 0 || value == nullptr) {
+            return std::string();
+        }
+        std::string result(value);
+        std::free(value);
+        return result;
+#else
+        const char* value = std::getenv("APPDATA");
+        return value != nullptr ? std::string(value) : std::string();
+#endif
+    }();
+#if defined(_WIN32)
+    REQUIRE(_putenv_s("APPDATA", config.string().c_str()) == 0);
+#else
+    REQUIRE(setenv("APPDATA", config.string().c_str(), 1) == 0);
+#endif
+    const std::string source_path = "kr32-ui-listing.c";
+    {
+        std::ofstream source(source_path, std::ios::binary);
+        source << "int main(void) { return 42; }\n";
+    }
+    ui::DebuggerUI debugger;
+    std::string error;
+    const bool loaded = debugger.load(source_path, error);
+#if defined(_WIN32)
+    _putenv_s("APPDATA", previous_value.c_str());
+#else
+    if (previous_value.empty()) {
+        unsetenv("APPDATA");
+    } else {
+        setenv("APPDATA", previous_value.c_str(), 1);
+    }
+#endif
+    REQUIRE_MESSAGE(loaded, error.c_str());
+    const std::string listing_path = source_path + ".lst";
+    REQUIRE(std::filesystem::exists(listing_path));
+    std::ifstream listing(listing_path, std::ios::binary);
+    const std::string contents((std::istreambuf_iterator<char>(listing)),
+                               std::istreambuf_iterator<char>());
+    CHECK(contents.find("main:") != std::string::npos);
+#if defined(KR32_TOOLCHAIN_KRC)
+    // The krc branch renders the assembler-listing columns from the facade rows.
+    CHECK(contents.find(": ") != std::string::npos);
+#endif
+    listing.close();
+    std::filesystem::remove(listing_path);
+    std::filesystem::remove(source_path);
+    std::filesystem::remove_all(config);
 }
 
 TEST_CASE("source filename opens a source picker and selection follows steps") {
