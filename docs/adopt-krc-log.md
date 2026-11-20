@@ -246,3 +246,25 @@ still needs the programme owner's decision on the runtime deviation logged at
 **Blocker:** none for stage A. The plan's "keep KR32's runtime" mitigation is
 not implementable (see the 09:35:32 entry); stage A links krc's staged runtime
 instead, and stage B cannot start until that is accepted or changed.
+
+## 2026-11-20T09:51:16-08:00
+
+**Correction to the 09:48:20 entry:** its builtin rows were measured on
+`aa110da`, before the krc-only `write_listing` guard in `3516460`. Re-ran both
+builtin gates on the pushed tip `adaef4f`:
+
+- Windows: `cmake --preset windows-ninja -DKR32_TOOLCHAIN=builtin`,
+  `cmake --build --preset windows-ninja`, `ctest --preset windows-ninja` →
+  **100% tests passed, 0 tests failed out of 98**,
+  `Total Test time (real) = 117.97 sec`.
+- WSL: `cmake --preset linux-gcc -DKR32_TOOLCHAIN=builtin` then
+  `bash scripts/run-gate.sh` → **100% tests passed, 0 failed out of 98**,
+  `Total Test time (real) = 21.34 sec`.
+
+The krc rows in that entry stand: they were measured on `3516460`, and
+`adaef4f` adds only this log file.
+
+**Next step:** the ARM64 tester's entry for `adaef4f`; stage B awaits the runtime
+decision.
+
+**Blocker:** none for stage A.
