@@ -232,6 +232,7 @@ std::filesystem::path settings_path() {
     return std::filesystem::current_path() / "kr32-settings.ini";
 }
 
+#if !defined(KR32_TOOLCHAIN_KRC)
 bool write_listing(const std::string& path, const std::string& assembly,
                    std::string& error) {
     const std::string listing_path = path + ".lst";
@@ -247,6 +248,7 @@ bool write_listing(const std::string& path, const std::string& assembly,
     }
     return true;
 }
+#endif
 
 bool read_binary(const std::string& path, std::vector<std::uint8_t>& bytes,
                  std::string& error) {
