@@ -98,3 +98,21 @@
   and this host does not have it. The tester role does not install tools.
 - Next: BLOCKED. ARM64 cannot verify the 0.2.0 release until krc-toolchain is
   installed on the Pi or the tests stop requiring it.
+## 2026-11-20T22:44:29-08:00 — adopt-krc @ 3a406b9 (stage B)
+
+- Host: BitWhiz
+- Range: ecba6ec..3a406b9, 2 commits (stage B landed: the built-in C/C++
+  front end, assembler, linker and libc are removed, about 44k lines)
+- Docs-only: no
+- Configure: linux-arm64-gcc — **FAILED**, 0 s:
+  `CMake Error at CMakeLists.txt:13 (find_package): Could not find a package
+  configuration file provided by "krc-toolchain"`
+- Build: not run
+- Test: not run
+- Skipped: the krc-toolchain install. `find_package(krc-toolchain CONFIG
+  REQUIRED)` is unconditional now and the repository has no in-tree fallback,
+  so nothing builds here without the package. The tester role does not install
+  tools.
+- Next: BLOCKED. ARM64 cannot build at all until krc-toolchain (KRCompiler
+  4.12+, KRC_BUILD_TOOLS=ON, exporting KRC_SYSROOT and KRC_KR32_RUNTIME_DIR) is
+  provisioned on the Pi and CMAKE_PREFIX_PATH points at it.
