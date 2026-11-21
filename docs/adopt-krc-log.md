@@ -750,3 +750,47 @@ external to this repository session.
 
 **Blocker:** none for the preparation. 3.10b is not authorised yet; the default
 on `adopt-krc` is still `builtin` and nothing there was deleted.
+
+## 2026-11-20T22:28:16-08:00
+
+**KR32 0.2.0 is released.** Decision 10's sign-off is recorded, the licensing
+artifacts are in place, and `v0.2.0` is an annotated tag on `adopt-krc` whose
+body is `docs/release-note-both-toolchains.md`.
+
+- `docs/cxx-gap-signoff.md` is marked **accepted**, signed by kevinwross at
+  `2026-11-20T22:18:58-08:00` (plan decision 10); the six gaps and the
+  debug-information differences are permanent, not pending. The entries
+  themselves are unchanged.
+- Root `LICENSE` is the MIT text from kr16 (`Copyright (c) 2026 Kevin Ross`),
+  byte-identical (SHA256 `E388F238157D84C25BDB7D89637A6B286915AB7737F420DD994BC9A257A3C77F`).
+  The release note has a licenses section: krc-debug's MIT notice is the same
+  text as the root license; the shipped OS images carry OFL font data
+  (JetBrains Mono console font, Inter UI font), and the two OFL texts ship in
+  each artifact.
+- Version bumped to `0.2.0` in CMake and `kr32/version.h`, with the version
+  tests updated.
+- Release artifacts were built from clean checkouts with both toolchains
+  configured and tested (40/40 each): a clean Windows worktree and a fresh WSL
+  clone of `ff57942`. A Release-CRT krc package was installed for the Windows
+  Release build; the Debug package produced a link error (`__imp__CrtDbgReport`)
+  because it was the wrong CRT.
+- **Tag:** `v0.2.0` (annotated, tag object
+  `07518596a33f3f9f339b9e0cc2ef51887184adb7`) on
+  `ff57942af1cccca3d12f597ac1c2c5a17c4fa2db`; pushed with the branch.
+- **Artifacts:**
+  - `KR32-0.2.0-Windows.zip` — 1,862,851 bytes, SHA256
+    `A0F1D19118FD41D3AA7ACECEA264CB8959AA355CE896FCBEF531E83D0FE40062`.
+  - `KR32-0.2.0-Linux.zip` — 2,678,574 bytes, SHA256
+    `67092AC53B1C6C23EB624C4F9167F4C80A650A52C0D2A85A66516B9FC757E78A`.
+
+**Decision 9 status:** condition 1 (release shipped with both toolchains and
+`KR32_TOOLCHAIN=krc` documented) now holds; condition 2 (written C++ sign-off)
+now holds; condition 3 (clean-checkout gate with the four directories, runtime
+and injection gone) does not: the deletion trial was green, but from a build
+tree rather than a fresh clone, and 3.10b is not landed.
+
+**Next step:** 3.10b needs only decision 9's condition 3 now and the second
+approval for the release it will follow.
+
+**Blocker:** none for 0.2.0. The default on `adopt-krc` is still `builtin`; no
+four-directory deletion happened.
