@@ -116,3 +116,19 @@
 - Next: BLOCKED. ARM64 cannot build at all until krc-toolchain (KRCompiler
   4.12+, KRC_BUILD_TOOLS=ON, exporting KRC_SYSROOT and KRC_KR32_RUNTIME_DIR) is
   provisioned on the Pi and CMAKE_PREFIX_PATH points at it.
+## 2026-11-20T22:59:18-08:00 — adopt-krc @ 4433936 (release 0.3.0)
+
+- Host: BitWhiz
+- Range: 3a406b9..4433936, 3 commits (0.3.0 krc-only release prep: version
+  bump, release note; one log commit)
+- Docs-only: no
+- Configure: linux-arm64-gcc — **FAILED**, 0 s:
+  `CMake Error at CMakeLists.txt:13 (find_package): Could not find a package
+  configuration file provided by "krc-toolchain"`
+- Build: not run
+- Test: not run
+- Skipped: the krc-toolchain install. The release is krc-only and the package
+  requirement is unchanged, so nothing builds here. The tester role does not
+  install tools.
+- Next: BLOCKED. ARM64 cannot verify the 0.3.0 release until krc-toolchain is
+  provisioned on the Pi and CMAKE_PREFIX_PATH points at it.
