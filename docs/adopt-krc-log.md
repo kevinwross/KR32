@@ -794,3 +794,41 @@ approval for the release it will follow.
 
 **Blocker:** none for 0.2.0. The default on `adopt-krc` is still `builtin`; no
 four-directory deletion happened.
+
+## 2026-11-20T22:40:11-08:00
+
+**Stage B is complete; decision 9's third condition is satisfied.** 0.2.0
+supplied conditions 1 and 2, and the deletion landed at
+`91165aeaf6a82de2b6ea068aaf61a908da41f859` with `krc` as the only toolchain.
+
+- **Clean checkout:** a fresh clone at
+  `C:\Users\kevin\source\repos\KR32-clean-310b` (Windows) and a second fresh clone
+  at `/home/kevinro/kr32-clean-310b` (WSL), both from `ecba6ec`. The deletion
+  commit was applied there, not in the main working tree, and the clone had no
+  `src/cc`, `src/cxx`, `src/asm` or `src/link`.
+- **Deletion diff:** **33 files changed, 56 insertions(+), 44,003 deletions(-)**.
+  The `KR32_TOOLCHAIN` option and the `builtin` path are gone; the UI and CLI
+  built-in branches and `as`/`ld`/`build`/`cc`/`cxx` are removed; the four
+  directories, KR32's runtime/libc and the injected guest-header strings are
+  deleted.
+- **Clean-clone gates:**
+  - Windows (`cmake --preset windows-ninja
+    -DCMAKE_PREFIX_PATH=C:/Users/kevin/source/repos/.krc-install-47fa4e5`, build,
+    `ctest --preset windows-ninja`) → **100% tests passed, 0 failed out of 40**,
+    `Total Test time (real) = 4.88 sec`.
+  - WSL (`cmake --preset linux-gcc
+    -DCMAKE_PREFIX_PATH=$HOME/krc-install-47fa4e5`, `bash scripts/run-gate.sh`) →
+    **100% tests passed, 0 failed out of 40**,
+    `Total Test time (real) = 2.52 sec`.
+- **Landed:** `91165ae` on `adopt-krc`, a fast-forward from `ecba6ec`. The
+  close-out commit updates `README.md`, `AGENTS.md`, `AGENTS.local.md`, the
+  0.2.0 release note and this log.
+- **Plan updated:** `krdbg/docs/requests/kr32-adopt-krc-toolchain.md` now records
+  stage B complete at `91165ae`, decision 9 satisfied, and item 3.10b complete.
+- No release tag was created after 0.2.0.
+
+**Next step:** choose the version for the release that follows this gate; the
+tree is krc-only and no built-in compiler, assembler, linker or runtime
+remains.
+
+**Blocker:** none.

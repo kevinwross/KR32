@@ -73,29 +73,29 @@ or runtime file.
   license; it is installed separately per `README.md` and is not part of the
   repository's MIT grant.
 
-## What stage B will remove
+## What stage B removed
 
-Stage B (3.10b) is conditionally approved but not authorised to land yet. When
-its conditions hold it will:
+Stage B (3.10b) landed after 0.2.0. It:
 
-- flip the default to `krc` and remove the `KR32_TOOLCHAIN` choice;
-- remove the window's built-in compile branches and the CLI's `as`, `ld`,
+- made `krc` the only toolchain and removed the `KR32_TOOLCHAIN` choice;
+- removed the window's built-in compile branches and the CLI's `as`, `ld`,
   `build`, `cc` and `cxx` commands;
-- delete `src/cc`, `src/cxx`, `src/asm` and `src/link`, together with KR32's
+- deleted `src/cc`, `src/cxx`, `src/asm` and `src/link`, together with KR32's
   runtime/libc and the injected guest-header strings.
 
-After stage B, `krc` is the only compiler, the CLI can run, disassemble, debug
-and boot prebuilt `.k32` images but cannot assemble, link or compile them, and
-`<kr32/cons.h>` remains the guest console header. Scripts and users of
-`kr32 as`, `kr32 ld`, `kr32 build`, `kr32 cc` or `kr32 cxx` must move to the krc
-toolchain or the window's Build before that release.
+`krc` is the only compiler. The CLI runs, disassembles, debugs and boots
+prebuilt `.k32` images but cannot assemble, link or compile them, and
+`<kr32/cons.h>` remains the guest console header. Scripts and users of `kr32 as`,
+`kr32 ld`, `kr32 build`, `kr32 cc` or `kr32 cxx` must move to the krc toolchain
+or the window's Build.
 
-## What must be true before stage B lands
+## Stage B closure
 
-1. A release has shipped with both toolchains available and
-   `KR32_TOOLCHAIN=krc` documented. **This 0.2.0 release is that release.**
+1. A release shipped with both toolchains available and `KR32_TOOLCHAIN=krc`
+   documented. **0.2.0, tagged `v0.2.0`.**
 2. A written sign-off names the C++ corpus differences accepted as permanent
    (`docs/cxx-gap-signoff.md`). **Signed by kevinwross on
    2026-11-20T22:18:58-08:00 (plan decision 10).**
 3. The clean-checkout gate is green with the four directories, the runtime and
-   the injection gone.
+   the injection gone. **Clean Windows and WSL clones of `91165ae`: 40/40 tests
+   passed in each.**

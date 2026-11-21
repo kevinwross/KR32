@@ -8,12 +8,12 @@
 -->
 # AGENTS.md — kr32
 
-kr32 is a 32-bit teaching computer: its ISA, emulator, assembler, linker, C and C++ toolchains, debugger, and freestanding libc/runtime, built by one CMake project into a single `kr32` executable. It is read by someone learning how a machine works end to end, so a subtly wrong result is worse than a missing feature. Scope is milestone-driven — read `implementation.md` §0 and the current milestone before implementing — and every change is gated on Windows and WSL, not on a single-host `ctest`.
+kr32 is a 32-bit teaching computer: its ISA, emulator, `.k32` container, debugger and the tooling that runs guest images, built by one CMake project into a single `kr32` executable. Guest C and C++ is compiled by the installed krc toolchain, not by code in this repository. It is read by someone learning how a machine works end to end, so a subtly wrong result is worse than a missing feature. Scope is milestone-driven — read `implementation.md` §0 and the current milestone before implementing — and every change is gated on Windows and WSL, not on a single-host `ctest`.
 <!-- project:summary -->
 
 ```sh
 # WSL / Linux: configure once, then the gate (build + ctest) after every change
-cmake --preset linux-gcc
+cmake --preset linux-gcc -DCMAKE_PREFIX_PATH=<krc install>
 cmake --build --preset linux-gcc      # always rebuild before ctest: a failed -Werror
                                       # build leaves yesterday's binary, which still "passes"
 bash scripts/run-gate.sh              # full gate; job count sized to the machine
@@ -22,11 +22,11 @@ bash scripts/run-gate.sh              # full gate; job count sized to the machin
 ```powershell
 # Windows: CMake and ctest ship with Visual Studio 18 and are not on PATH
 $cmake = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
-& $cmake --preset windows-msvc        # configure, once per machine
+& $cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=<krc install>   # configure, once per machine
 pwsh -File scripts/run-gate.ps1       # full gate: build + ctest
 ```
 
-While iterating, run only the focused tests for the code touched — `kr32_tests.exe --source-file="*test_<area>.cpp"`, or a single `ctest` entry — and run the full gate before the commit. The sanitizer gate is `cmake --preset linux-asan` then build and `ctest` on the same preset.
+While iterating, run only the focused tests for the code touched — `kr32_tests.exe --source-file="*test_<area>.cpp"`, or a single `ctest` entry — and run the full gate before the commit. The sanitizer gate is `cmake --preset linux-asan -DCMAKE_PREFIX_PATH=<krc install>` then build and `ctest` on the same preset.
 <!-- project:commands -->
 
 The three surfaces below are all loaded; this file is the only place standing orders live.

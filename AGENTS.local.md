@@ -10,7 +10,7 @@ Add entries here rather than editing the managed blocks in `AGENTS.md`; an edit 
 
 ## Plan
 
-**Status.** approved — implementation is active; M9 is complete (2026-11-02).
+**Status.** approved — implementation is active; M9 is complete (2026-11-02); stage B is complete (2026-11-20) and krc is the only toolchain.
 
 **Authoritative for.** `implementation.md` — milestone scope, checklist, dependency record, test gate, and running log. Read §0 and the current milestone before implementing; the rest is background. `KR32-plan.md` holds the architecture and decision record, and `docs/` the subsystem detail.
 
@@ -53,8 +53,8 @@ During an optimization inner loop, do not commit every change.
 <!-- project:targets:start — generated from .dev-template.json targets; edit the Notes column, not the rows -->
 | Target | Architecture | Verified by | Notes (yours — preserved on update) |
 |---|---|---|---|
-| Windows | x64 | <windows-latest in CI, or name the dev machines> | BIGBRAIN (MSVC 14.51.36231); 97/97 at 22eb0be, 2026-11-19 |
-| WSL Ubuntu | x64 | <ubuntu-latest in CI, or manual — keep the checkout under ~/, never /mnt/c> | Hukilau WSL2 (Ubuntu 26.04); recorded 2026-11-02 — not re-verified on BIGBRAIN |
+| Windows | x64 | <windows-latest in CI, or name the dev machines> | BIGBRAIN (MSVC 14.51.36231); 40/40 at 91165ae, 2026-11-20 |
+| WSL Ubuntu | x64 | <ubuntu-latest in CI, or manual — keep the checkout under ~/, never /mnt/c> | Hukilau WSL2 (Ubuntu 26.04); 40/40 at 91165ae, 2026-11-20 |
 
 Target-specific notes:
 
@@ -69,21 +69,22 @@ Target-specific notes:
 
 ## Architecture boundaries
 
-- `src/platform` is the only OS/SDL boundary. `src/ui` and the compiler front ends must not include OS or SDL headers; `tests/boundary` enforces this.
-- The C and C++ front ends share one `kr32` executable and one freestanding libc/runtime; programs compiled for KR32 run against that runtime, not the host's.
+- `src/platform` is the only OS/SDL boundary. `src/ui` must not include OS or SDL headers; `tests/boundary` enforces this.
+- The installed krc toolchain compiles guest C/C++, and the `kr32` executable loads, runs, disassembles and debugs the resulting `.k32` images. There is no in-tree compiler, assembler, linker or runtime to keep in step.
 
 ## Environment
 
-**Build entry point.** No wrapper script: configure and build with the presets below. Windows: `cmake --preset windows-msvc` then `cmake --build --preset windows-msvc-debug`; WSL/Linux: `cmake --preset linux-gcc` then `cmake --build --preset linux-gcc`. CMake, Ninja, and ctest are not on `PATH` on Windows; use the full paths in `AGENTS.md`.
+**Build entry point.** No wrapper script: configure and build with the presets below, passing the installed krc package prefix. Windows: `cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=<krc install>` then `cmake --build --preset windows-msvc-debug`; WSL/Linux: `cmake --preset linux-gcc -DCMAKE_PREFIX_PATH=<krc install>` then `cmake --build --preset linux-gcc`. CMake, Ninja, and ctest are not on `PATH` on Windows; use the full paths in `AGENTS.md`.
 
 **Doctor.** `.agents/templates/doctor.msvc.ps1` — the delivered starting point, not wired into a wrapper. Exits 0 on BIGBRAIN and reports the MSVC, Windows SDK, and CMake it resolved; run it when a build cannot find its toolchain and quote its output.
 
-**Toolchain.** MSVC 14.51.36231 at `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64`; CMake 4.3.1-msvc1 and Ninja 1.13.2 bundled with Visual Studio 18 (not on `PATH`); Windows SDK 10 at `C:\Program Files (x86)\Windows Kits\10\Include`; all found with `vswhere` via the doctor. WSL2 Ubuntu 26.04 figures — GCC 15.2.0, Clang 21.1.8, CMake 4.2.3, Ninja 1.13.2 — are from Hukilau (recorded 2026-11-02 in `implementation.md` §1) and have not been re-verified on BIGBRAIN.
+**Toolchain.** MSVC 14.51.36231 at `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64`; CMake 4.3.1-msvc1 and Ninja 1.13.2 bundled with Visual Studio 18 (not on `PATH`); Windows SDK 10 at `C:\Program Files (x86)\Windows Kits\10\Include`; all found with `vswhere` via the doctor. WSL2 Ubuntu 26.04 figures — GCC 15.2.0, Clang 21.1.8, CMake 4.2.3, Ninja 1.13.2 — are from Hukilau (recorded 2026-11-02 in `implementation.md` §1) and have not been re-verified on BIGBRAIN. Guest C/C++ needs an installed `krc-toolchain` package (KRCompiler 4.12+, `KRC_BUILD_TOOLS=ON`) exporting `KRC_SYSROOT` and `KRC_KR32_RUNTIME_DIR`; there is no in-tree fallback.
 
-**Verified on** BIGBRAIN **at** `22eb0be`: `.agents/templates/doctor.msvc.ps1` → exit 0; `pwsh -File scripts/run-gate.ps1` → 97/97 passed (2026-11-19T16:44:33-08:00).
+**Verified on** BIGBRAIN **at** `91165ae`: clean-clone Windows gate → 40/40 passed, and clean-clone WSL gate → 40/40 passed (`2026-11-20T22:39:04-08:00`).
 
-**Install (requires approval).** SDL2 via `scripts/install-sdl2.ps1` (vendored under `third_party/SDL2`); on WSL, `sudo apt install build-essential cmake ninja-build pkg-config libsdl2-dev clang git`.
+**Install (requires approval).** SDL2 via `scripts/install-sdl2.ps1` (vendored under `third_party/SDL2`); the krc package from its installer; on WSL, `sudo apt install build-essential cmake ninja-build pkg-config libsdl2-dev clang git`.
 
 ## Known traps
 
 - CMake, Ninja, and `ctest` are not on `PATH` in a plain PowerShell; use the Visual Studio developer environment or the full paths in `AGENTS.md`. A failing `where cmake` is not a missing toolchain.
+- The krc package's CRT configuration must match the KR32 build: a Debug `krc-toolchain.lib` links into a Release build and fails with unresolved `__imp__CrtDbgReport`. Use the Release-CRT krc install for a Release configure.

@@ -50,6 +50,12 @@ tracked in [cpp-impl.md](cpp-impl.md) and
 
 ## Build
 
+KR32 compiles guest C and C++ with the installed **krc** toolchain; there is no
+in-tree compiler, assembler or linker. Configure with the `krc-toolchain` package
+prefix (KRCompiler 4.12 or later, built with `KRC_BUILD_TOOLS=ON`). The package
+exports `KRC_SYSROOT` and `KRC_KR32_RUNTIME_DIR`; configure prints both and fails
+naming any missing sysroot or runtime file.
+
 ### Windows
 
 CMake and Ninja are bundled with Visual Studio 2026 but are not on `PATH` in a
@@ -59,7 +65,7 @@ plain shell. Use a Developer PowerShell or the full paths:
 $cmake = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe"
 $ctest = "C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\ctest.exe"
 
-& $cmake --preset windows-msvc
+& $cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=<krc install>
 & $cmake --build --preset windows-msvc-debug
 & $ctest --preset windows-msvc-debug
 ```
@@ -72,7 +78,7 @@ SDL2 is installed locally by `scripts/install-sdl2.ps1`; see
 ```bash
 sudo apt update
 sudo apt install -y build-essential cmake ninja-build pkg-config libsdl2-dev clang git
-cmake --preset linux-gcc
+cmake --preset linux-gcc -DCMAKE_PREFIX_PATH=<krc install>
 cmake --build --preset linux-gcc
 ctest --preset linux-gcc
 ```
@@ -83,121 +89,63 @@ For Clang, use `linux-clang`. For a native ARM64 Linux machine, use
 ### Headless
 
 ```bash
-cmake --preset linux-asan      # UI off, ASan + UBSan
+cmake --preset linux-asan -DCMAKE_PREFIX_PATH=<krc install>   # UI off, ASan + UBSan
 cmake --build --preset linux-asan
 ctest --preset linux-asan
 ```
 
 `KR32_BUILD_UI=OFF` removes SDL2 from the build; the CLI and tests still run.
 `KR32_EMBED_OS=OFF` builds without the embedded KR32OS images and requires
-explicit `--os`/`--bios` paths.
+explicit `--os`/`--bios` paths. `KR32_BUILD_TESTS=ON` (the default) builds the
+test images through the same krc package.
 
-`KR32_TOOLCHAIN` selects the compiler the window's **Build** uses for a `.c` or
-`.cpp` source. It defaults to `builtin`, the in-tree front ends. Setting
-`KR32_TOOLCHAIN=krc` links the published `krc::toolchain` package instead. The
-package carries its target sysroot and runtime and exports `KRC_SYSROOT` and
-`KRC_KR32_RUNTIME_DIR`, so the install prefix is the only external input:
-
-```powershell
-& $cmake --preset windows-ninja -DKR32_TOOLCHAIN=krc `
-    -DCMAKE_PREFIX_PATH=<krc install>
-```
-
-The configured values are printed by the configure step and checked: a package
-that does not export both variables, or that is missing a required sysroot or
-runtime file, fails at configure with the variable and path named.
-
-With `KR32_BUILD_TESTS=ON` (the default), the krc install prefix is required in
-both toolchain configurations: the test images are built through the installed
-package so no test invokes `kr32 build`. `-DKR32_BUILD_TESTS=OFF` builds the
-application without it. The guest console header is `<kr32/cons.h>`; the former
-`<kr32/con.h>` name is retired because Windows reserves it.
-
-The built-in and krc paths are both available; neither is removed by the option.
+The guest console header is `<kr32/cons.h>`; the former `<kr32/con.h>` name is
+retired because Windows reserves it.
 
 ## Commands
 
+The `kr32` executable is a runner and debugger. It loads `.k32` images; it does
+not assemble, link or compile them. The window's **Build** compiles a `.c` or
+`.cpp` source with krc, and the same toolchain builds guest programs outside the
+window.
+
 ```text
-kr32 as examples/demo.asm -o demo.bin --listing demo.lst
-kr32 as examples/hello.s --object -o hello.o
-kr32 ld hello.o -o hello.k32 --map hello.map
-kr32 ld kernel.o --flat --base 0x20000 -o kernel.bin
-kr32 size hello.k32
-kr32 build examples/hello.s -o hello.k32 --run
-kr32 cc examples/hello.c -S -o hello.s
-kr32 build examples/hello.c -o hello-c.k32 --run
-kr32 build examples/mainentry.c --run --arg one --arg "two words"
-kr32 build examples/types.c -o types-c.k32 --run
-kr32 build examples/floats.c -o floats-c.k32 --run
-kr32 build examples/varargs.c -o varargs-c.k32 --run
-kr32 build examples/libc-test.c -o libc-c.k32 --run
-kr32 build examples/strings.c -o strings-c.k32 --run
-kr32 build examples/binarytree.c -o binarytree-c.k32 --run
-kr32 cxx examples/hello.cpp -S -o hello-cxx.s
-kr32 build examples/hello.cpp -o hello-cxx.k32 --run
-kr32 build examples/cxx_libc.cpp -o cxx-libc.k32 --run
-kr32 build examples/matrix.cpp -o build/matrix-cxx.k32 --run
-kr32 build examples/balanced-tree.cpp -o build/balanced-tree.k32 --run
-kr32 build examples/FileOpen.cpp -o build/FileOpen.k32 --run
-kr32 gui examples/libc-test.c
-kr32 os
-kr32 os kr32os/build/windows/kernel.bin --bios kr32os/build/windows/bios.bin
-kr32 gui --os
-kr32 dis demo.bin
-kr32 run examples/demo.asm
-kr32 run examples/fp-demo.asm
-kr32 run examples/matrix-demo.asm
-kr32 run examples/demo.asm --trace --stats
-kr32 as examples/boot-halt.asm -o boot-halt.bin --base 0xFFFF0000
-kr32 vm examples/demo.asm --bios boot-halt.bin
+kr32 dis <image> [--base <addr>] [--start <addr>] [--max-words <n>]
+kr32 vm <file.k32> [--max-steps <n>] [--trace] [--stats] [--arg <value>] [--input <text>]
+kr32 run <file.k32>
+kr32 size <file.k32>
+kr32 debug <file.k32>
+kr32 gui <source-or-image> [--headless] [--screenshot <path>]
+kr32 gui --os --embedded --headless --screenshot os-ui.ppm
+kr32 os [kernel.k32] --bios <bios.k32> [--serial-input <text>]
+kr32 os --embedded
+kr32 shell
+kr32 dap --stdio <image.k32>
 kr32 version
 kr32 help
-kr32 --smoke-ui     # initialize and tear down the SDL2 platform
-kr32 gui examples/hello.c
-kr32 gui build/hello.k32 --headless --screenshot hello-ui.ppm
-kr32 shell
-kr32 dap --stdio build/hello-c.k32
-kr32 vm build/fileio.k32 --fs-root sandbox --read-only
+kr32 --smoke-ui
 ```
 
-`as` writes a raw image or, with `--object`, a relocatable `.k32` object. `ld`
-merges objects, resolves symbols and relocations, and writes an executable
-`.k32`; `--flat` writes a headerless image beginning at `--base`, with gaps and
-BSS zero-filled; `--map` writes the section/symbol map. `cc` compiles C to
-assembly or an object. `build` runs compile/assemble, link, and optional
-`--run` in one command. `size` reports `.k32` sections and `debug` dumps the
-`.debug_info` records. `gui` opens the source/disassembly debugger or renders
-headless PPM
-screenshots. `os` boots a flat KR32OS kernel at `0x00020000` with a BIOS and
-resolves the default artifacts from `KR32OS_BIN`, `KR32OS_BIOS`, the
-platform-specific `kr32os/build/<platform>` directory, or the embedded
-BIOS/kernel pair. Windows and Linux builds keep separate OS outputs so their
-debug source paths do not overwrite each other. After changing KR32OS, run
-`scripts/update-os.ps1` (Windows) or `scripts/update-os.sh` (Linux) to rebuild
-the OS, refresh the checked-in `.k32` pair under `src/resources/os/<platform>`,
-and incrementally relink `kr32`. `shell` runs tool commands interactively or
-from
-piped input, and
-`dap` exposes the debugger to DAP clients. `cxx` compiles a C++ source to
-assembly or an object, and `build file.cpp` compiles, links the shared
-C/C++ libc, and optionally runs the result.
+`vm` runs a `.k32`; `run` is its alias. `size` reports sections and `debug`
+dumps the `.debug_info` records. `gui` opens the source/disassembly debugger or
+renders a headless PPM screenshot. `os` boots a KR32OS kernel with a BIOS and
+resolves the default artifacts from `KR32OS_BIN`, `KR32OS_BIOS`, or the embedded
+BIOS/kernel pair. The shipped images under `src/resources/os/<platform>` are the
+fixtures the tests use.
 
 ## Layout
 
 ```text
 include/kr32/      public headers
 src/core/          ISA encoding and CPU/machine
-src/asm/           assembler
 src/container/     .k32 object/image format
-src/link/          linker
-src/cc/ src/cxx/   C and C++ compilers
 src/dis/           disassembler
 src/debug/         debug information and DebugSession
 src/vm/            runner and host services
 src/dap/           Debug Adapter Protocol
 src/ui/            portable windowed debugger (no OS/SDL headers)
 src/platform/      SDL2 window and OS boundary
-src/cli/           dispatcher and build pipeline
+src/cli/           command dispatcher and runner
 tests/             unit, integration, boundary
 cmake/             build helpers and the platform-boundary check
 third_party/       vendored headers and local SDK notes
