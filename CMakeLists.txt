@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(KR32 VERSION 0.1.0 LANGUAGES CXX)
+project(KR32 VERSION 0.2.0 LANGUAGES CXX)
 
 option(KR32_BUILD_UI "Build the SDL2 windowed debugger" ON)
 option(KR32_BUILD_TESTS "Build tests" ON)
@@ -337,6 +337,13 @@ if(KR32_BUILD_TESTS)
 endif()
 
 install(TARGETS kr32 RUNTIME DESTINATION bin)
+install(FILES
+    LICENSE
+    docs/release-note-both-toolchains.md
+    docs/cxx-gap-signoff.md
+    third_party/fonts/OFL-Inter.txt
+    third_party/fonts/OFL-JetBrainsMono.txt
+    DESTINATION .)
 if(KR32_BUILD_CXX_TOOL)
     install(TARGETS kr32_cxx_tool RUNTIME DESTINATION bin)
 endif()
@@ -344,5 +351,6 @@ endif()
 set(CPACK_PACKAGE_NAME "KR32")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
 set(CPACK_PACKAGE_VENDOR "KR32")
+set(CPACK_PACKAGE_FILE_NAME "KR32-${PROJECT_VERSION}-${CMAKE_SYSTEM_NAME}")
 set(CPACK_GENERATOR "ZIP")
 include(CPack)

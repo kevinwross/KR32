@@ -10,7 +10,7 @@ draft in [isa-v1.md](isa-v1.md) and the implementation disagree, this document
 describes the implementation and the disagreement is called out.
 
 **Tool version:** the `kr32` executable reports
-`kr32 0.1.0 (ISA 0.2-draft, container 1, M7 host services)`.
+`kr32 0.2.0 (ISA 0.2-draft, container 1, M7 host services)`.
 
 Related documents, each the owner of its subject:
 

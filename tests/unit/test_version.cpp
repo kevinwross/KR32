@@ -48,7 +48,7 @@ std::string documented_isa_version() {
 } // namespace
 
 TEST_CASE("version tuple") {
-    CHECK(std::strcmp(kr32::kVersion, "0.1.0") == 0);
+    CHECK(std::strcmp(kr32::kVersion, "0.2.0") == 0);
     CHECK(std::strcmp(kr32::kIsaVersion, "1") == 0);
     CHECK(std::strcmp(kr32::kContainerVersion, "1") == 0);
 }

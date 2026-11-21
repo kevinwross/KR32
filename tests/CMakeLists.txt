@@ -108,7 +108,7 @@ kr32_add_test_image(fileio_c ${CMAKE_SOURCE_DIR}/examples/fileio.c FALSE)
 
 add_test(NAME cli_version COMMAND $<TARGET_FILE:kr32> version)
 set_tests_properties(cli_version PROPERTIES
-    PASS_REGULAR_EXPRESSION "kr32 0\\.1\\.0")
+    PASS_REGULAR_EXPRESSION "kr32 0\\.2\\.0")
 
 add_test(NAME cli_help COMMAND $<TARGET_FILE:kr32> help)
 set_tests_properties(cli_help PROPERTIES

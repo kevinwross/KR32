@@ -1,8 +1,8 @@
 # Release note — the both-toolchain release
 
-**Status:** draft for the release that precedes stage B. It is not a claim that
-this release has shipped.
-**Applies to:** KR32 0.1.0 with `KR32_TOOLCHAIN` (default `builtin`) and the
+**Status:** release 0.2.0, tagged `v0.2.0` on `adopt-krc`. Stage B is not part
+of this release.
+**Applies to:** KR32 0.2.0 with `KR32_TOOLCHAIN` (default `builtin`) and the
 published `krc::toolchain` package (KRCompiler `47fa4e5`, 4.12).
 
 ## What ships
@@ -54,6 +54,25 @@ The install prefix must be a KRCompiler 4.12 or later built with
 `KRC_KR32_RUNTIME_DIR` and fails naming either variable or any missing sysroot
 or runtime file.
 
+## Licenses
+
+- **KR32** is MIT. The root `LICENSE` carries `MIT License`, `Copyright (c)
+  2026 Kevin Ross`, and ships in the release archive.
+- **krc-debug** is MIT with the same copyright line. It is the KDBG reader/writer
+  package that `krc::toolchain` links, and it is statically linked only into a
+  binary built with `KR32_TOOLCHAIN=krc`. Its MIT notice is the same text as the
+  root `LICENSE`; the krc package itself is MIT (KRCompiler's root `LICENSE`).
+- **The shipped OS images carry third-party code**: the kernel's 8x16 console
+  font is rasterized from JetBrains Mono Regular, and the debugger's UI font is
+  Inter, both under the SIL Open Font License 1.1. The kernel/BIOS `.k32` images
+  embed the rasterized glyph table, so the OFL notice must travel with them.
+  `third_party/fonts/OFL-JetBrainsMono.txt` and
+  `third_party/fonts/OFL-Inter.txt` ship in the release archive. MIT applies to
+  the repository code, not to these font assets.
+- SDL2 is a host dependency for the windowed debugger and keeps its own zlib
+  license; it is installed separately per `README.md` and is not part of the
+  repository's MIT grant.
+
 ## What stage B will remove
 
 Stage B (3.10b) is conditionally approved but not authorised to land yet. When
@@ -74,8 +93,9 @@ toolchain or the window's Build before that release.
 ## What must be true before stage B lands
 
 1. A release has shipped with both toolchains available and
-   `KR32_TOOLCHAIN=krc` documented.
+   `KR32_TOOLCHAIN=krc` documented. **This 0.2.0 release is that release.**
 2. A written sign-off names the C++ corpus differences accepted as permanent
-   (`docs/cxx-gap-signoff.md`).
+   (`docs/cxx-gap-signoff.md`). **Signed by kevinwross on
+   2026-11-20T22:18:58-08:00 (plan decision 10).**
 3. The clean-checkout gate is green with the four directories, the runtime and
    the injection gone.

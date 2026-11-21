@@ -1,8 +1,10 @@
 # C++ corpus sign-off — differences accepted as permanent
 
-**Status:** draft awaiting the owner's signature. This is the written sign-off
-that stage B's decision 1 requires; it does not itself authorise the deletion.
+**Status:** **accepted** — signed by kevinwross on
+2026-11-20T22:18:58-08:00 (plan decision 10). This is the written sign-off that
+stage B's decision 1 requires; it does not itself authorise the deletion.
 **Toolchain:** KRCompiler `47fa4e5` (4.12), `krc::toolchain` on KR32.
+**List:** every entry below is accepted as permanent; none is pending.
 **Corpus:** KR32's six guest C++ examples. All six compile and link with krc;
 five run to completion, and `FileOpen.cpp` is interactive (it opens a host file
 dialog). No example is rejected, so the gaps below are outside KR32's current
@@ -146,6 +148,8 @@ By signing, the owner accepts the six C++ differences above (and the
 debug-information display differences) as permanent for the krc toolchain, and
 confirms stage B's decision 1 is satisfied.
 
-- Name: kevinwross
-- Date:
-- Decision: 3.10b decision 1 / plan §8 decision 9
+- **Accepted by:** kevinwross
+- **Signed:** 2026-11-20T22:18:58-08:00
+- **Decision:** plan §8 decision 10 (satisfies decision 9's second condition)
+- **List status:** accepted; the six gaps and the debug-information differences
+  are permanent, not pending.

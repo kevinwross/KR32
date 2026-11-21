@@ -4,7 +4,7 @@
 > D51, and D52 are applied; the golden vectors in §12 are verified by an encoder
 > that does not call the implementation, and every item in §13 is closed. What
 > may change from here is defined in §15. Freezing the instruction set does not
-> version the toolchain: `kr32` itself is `0.1.0`, and this document says nothing
+> version the toolchain: `kr32` itself is `0.2.0`, and this document says nothing
 > about its maturity.
 >
 > **Sources:** `KR32-plan.md` §5.3 (format), §5.8–§5.10 (FP, M, transform
