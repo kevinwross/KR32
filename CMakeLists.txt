@@ -1,6 +1,6 @@
 cmake_minimum_required(VERSION 3.25)
 
-project(KR32 VERSION 0.2.0 LANGUAGES CXX)
+project(KR32 VERSION 0.3.0 LANGUAGES CXX)
 
 option(KR32_BUILD_UI "Build the SDL2 windowed debugger" ON)
 option(KR32_BUILD_TESTS "Build tests" ON)
@@ -278,6 +278,7 @@ endif()
 install(TARGETS kr32 RUNTIME DESTINATION bin)
 install(FILES
     LICENSE
+    docs/release-note-0.3.0.md
     docs/release-note-both-toolchains.md
     docs/cxx-gap-signoff.md
     third_party/fonts/OFL-Inter.txt
