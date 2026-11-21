@@ -132,3 +132,24 @@
   install tools.
 - Next: BLOCKED. ARM64 cannot verify the 0.3.0 release until krc-toolchain is
   provisioned on the Pi and CMAKE_PREFIX_PATH points at it.
+## 2026-11-21T15:53:32-08:00 — main @ 14aa1f8
+
+- Host: BitWhiz
+- Range: 9705ef6..14aa1f8, the merge of adopt-krc into main plus the
+  tester-instruction switch. `main` is the landing branch from here on;
+  `adopt-krc` is no longer polled.
+- Docs-only: no
+- Configure: linux-arm64-gcc — **FAILED**, 0 s:
+  `CMake Error at CMakeLists.txt:13 (find_package): Could not find a package
+  configuration file provided by "krc-toolchain"`
+- Build: not run
+- Test: not run
+- Skipped: the krc-toolchain install. Stage B is now on main and the package is
+  still required unconditionally; this host does not have it. The tester role
+  does not install tools.
+- Log history: every entry previously appended to adopt-krc, through
+  `adopt-krc @ 4433936`, is preserved in main by the merge. No entry was
+  appended to adopt-krc after the merge — its tip (`e146759`) is an ancestor of
+  `main`.
+- Next: BLOCKED until krc-toolchain is provisioned on the Pi and
+  CMAKE_PREFIX_PATH points at it.
