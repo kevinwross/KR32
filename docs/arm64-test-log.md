@@ -82,3 +82,19 @@
   it. The tester role does not install tools.
 - Next: BLOCKED until krc-toolchain is installed on the Pi or the tests stop
   requiring it
+## 2026-11-20T22:29:19-08:00 — adopt-krc @ ecba6ec (release 0.2.0)
+
+- Host: BitWhiz
+- Range: abc5093..ecba6ec, 5 commits (0.2.0 release prep, LICENSE, version
+  bump to 0.2.0, install/packaging rules; the rest are documentation)
+- Docs-only: no
+- Configure: linux-arm64-gcc — **FAILED**, 0 s:
+  `CMake Error at CMakeLists.txt (find_package): Could not find a package
+  configuration file provided by "krc-toolchain"`
+- Build: not run
+- Test: not run
+- Skipped: the krc-toolchain install. The release did not change the
+  requirement: the package is still required whenever `KR32_BUILD_TESTS` is ON,
+  and this host does not have it. The tester role does not install tools.
+- Next: BLOCKED. ARM64 cannot verify the 0.2.0 release until krc-toolchain is
+  installed on the Pi or the tests stop requiring it.
