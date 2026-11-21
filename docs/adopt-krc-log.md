@@ -832,3 +832,36 @@ tree is krc-only and no built-in compiler, assembler, linker or runtime
 remains.
 
 **Blocker:** none.
+
+## 2026-11-20T22:54:57-08:00
+
+**KR32 0.3.0 is released — krc-only.** This is the breaking release after stage
+B: the built-in compiler, assembler, linker and runtime are gone, so the version
+is minor rather than a patch.
+
+- Version `0.3.0` in CMake and `kr32/version.h`; version tests updated.
+- New note `docs/release-note-0.3.0.md`: krc-only, what disappeared, the
+  `<kr32/cons.h>` rename that already shipped in 0.2.0, and the migration steps
+  for an existing user. It is the tag body and ships in both archives.
+- Built from a clean checkout at `f00518dee55452a8bca8fab4354102bd67a57662`:
+  a Windows worktree and a fresh WSL clone, Release krc builds, 40/40 tests each
+  (Windows 1.71 s, WSL 1.62 s).
+- **Tag:** `v0.3.0`, annotated, tag object
+  `f8dcc922b06ad74eb4872273c5bd7b03a2e02f1e`, on
+  `f00518dee55452a8bca8fab4354102bd67a57662`; pushed with the branch.
+- **Artifacts:**
+  - `KR32-0.3.0-Windows.zip` — 1,077,160 bytes, SHA256
+    `19D2AA324992BD7EEAAFFD11A4220C595A162BF940429F23D64CDAED08436252`.
+  - `KR32-0.3.0-Linux.zip` — 8,908,771 bytes, SHA256
+    `1CB5A572F32C77F19834F12A79CA6B2840E265E522F2661DA87EBC5F5B326778`.
+    The Linux binary is unstripped and statically links the krc facade, hence
+    the larger archive.
+- **Not merged:** `adopt-krc` remains the landing branch. Merging to `master`
+  is a programme decision, and the ARM64 tester still polls `adopt-krc`.
+- Plan `krdbg/docs/requests/kr32-adopt-krc-toolchain.md` records the 0.3.0
+  release and its tag.
+
+**Next step:** decide whether and when to merge `adopt-krc` to `master`; no
+further release tag is planned here.
+
+**Blocker:** none.
