@@ -1,16 +1,11 @@
 #include "kr32/cli/cli.h"
 
-#include "kr32/asm/assembler.h"
-#include "kr32/asm/object_assembler.h"
-#include "kr32/cc/cc.h"
 #include "kr32/container/container.h"
 #include "kr32/core/devices.h"
 #include "kr32/core/machine.h"
-#include "kr32/cxx/cxx.h"
 #include "kr32/dap/dap.h"
 #include "kr32/debug/debug.h"
 #include "kr32/dis/disassembler.h"
-#include "kr32/link/linker.h"
 #include "kr32/os/bootinfo.h"
 #include "kr32/os/kernel_meta.h"
 #include "kr32/os/defaults.h"
@@ -75,35 +70,6 @@ bool read_file(const std::string& path, std::vector<std::uint8_t>& bytes, std::s
     return true;
 }
 
-bool write_file(const std::string& path, const std::vector<std::uint8_t>& bytes, std::string& error) {
-    std::ofstream output(path, std::ios::binary);
-    if (!output) {
-        error = "cannot write " + path;
-        return false;
-    }
-    output.write(reinterpret_cast<const char*>(bytes.data()),
-                 static_cast<std::streamsize>(bytes.size()));
-    if (!output) {
-        error = "write failed: " + path;
-        return false;
-    }
-    return true;
-}
-
-bool write_text(const std::string& path, const std::string& text, std::string& error) {
-    std::ofstream output(path, std::ios::binary);
-    if (!output) {
-        error = "cannot write " + path;
-        return false;
-    }
-    output.write(text.data(), static_cast<std::streamsize>(text.size()));
-    if (!output) {
-        error = "write failed: " + path;
-        return false;
-    }
-    return true;
-}
-
 bool parse_u32(std::string_view text, std::uint32_t& value) {
     const std::string copy(text);
     char* end = nullptr;
@@ -115,35 +81,11 @@ bool parse_u32(std::string_view text, std::uint32_t& value) {
     return true;
 }
 
-bool is_assembly(const std::string& path) {
-    const std::size_t dot = path.find_last_of('.');
-    if (dot == std::string::npos) {
-        return false;
-    }
-    const std::string extension = lower(path.substr(dot + 1));
-    return extension == "asm" || extension == "s";
-}
-
 bool load_program(const std::string& path,
                   std::uint32_t base,
                   std::vector<std::uint8_t>& bytes,
                   std::string& error) {
-    if (is_assembly(path)) {
-        std::vector<std::uint8_t> source_bytes;
-        if (!read_file(path, source_bytes, error)) {
-            return false;
-        }
-        const std::string source(source_bytes.begin(), source_bytes.end());
-        assembler::Result assembled;
-        assembler::Error assembly_error;
-        if (!assembler::assemble(source, assembler::Options{base}, assembled, assembly_error)) {
-            error = path + ":" + std::to_string(assembly_error.line) + ": " +
-                    assembly_error.message;
-            return false;
-        }
-        bytes = std::move(assembled.bytes);
-        return true;
-    }
+    (void)base;
     return read_file(path, bytes, error);
 }
 
@@ -152,19 +94,6 @@ bool is_container(const std::string& path) {
     return dot != std::string::npos && lower(path.substr(dot + 1)) == "k32";
 }
 
-bool is_c_source(const std::string& path) {
-    const std::size_t dot = path.find_last_of('.');
-    return dot != std::string::npos && lower(path.substr(dot + 1)) == "c";
-}
-
-bool is_cxx_source(const std::string& path) {
-    const std::size_t dot = path.find_last_of('.');
-    if (dot == std::string::npos) {
-        return false;
-    }
-    const std::string extension = lower(path.substr(dot + 1));
-    return extension == "cpp" || extension == "cc" || extension == "cxx";
-}
 
 std::string fault_name(core::FaultKind kind);
 void print_machine(const core::Machine& machine);
@@ -207,27 +136,6 @@ bool load_executable(core::Machine& machine,
         machine.set_reg(11, tcb);
     }
     return true;
-}
-
-void write_map(const linker::Map& map, std::string& text) {
-    text.clear();
-    text += "SECTIONS\n";
-    for (const linker::Map::Section& section : map.sections) {
-        char buffer[128];
-        std::snprintf(buffer, sizeof(buffer), "  %-16s 0x%08X 0x%08X\n",
-                      section.name.c_str(), section.address, section.size);
-        text += buffer;
-    }
-    text += "SYMBOLS\n";
-    for (const linker::Map::Symbol& symbol : map.symbols) {
-        char buffer[160];
-        std::snprintf(buffer, sizeof(buffer), "  %-24s 0x%08X %s\n",
-                      symbol.name.c_str(), symbol.address,
-                      symbol.bind == container::SymbolBind::Global ? "GLOBAL"
-                      : symbol.bind == container::SymbolBind::Weak ? "WEAK"
-                                                                   : "LOCAL");
-        text += buffer;
-    }
 }
 
 int run_machine(core::Machine& machine,
@@ -337,15 +245,10 @@ void print_help() {
         "Commands:\n"
         "  version              print the version tuple\n"
         "  help                 print this help\n"
-        "  as <file.asm>        assemble a raw image or .k32 object\n"
         "  dis <image>          disassemble a raw image\n"
-        "  vm <file>            assemble/load and run an image\n"
+        "  vm <file>            load and run a .k32 image\n"
         "  run <file>           alias for vm\n"
-        "  os [kernel.bin]      boot KR32OS with the default BIOS\n"
-        "  ld <files>           link .k32 objects into an executable\n"
-        "  build <file>         assemble, link, and optionally run\n"
-        "  cc <file>            compile C (M4)\n"
-        "  cxx <file>           compile C++ (M9)\n"
+        "  os [kernel.k32]      boot KR32OS with the default BIOS\n"
         "  size <file>          print .k32 section sizes\n"
         "  debug <file>         dump debug information (M5)\n"
         "  dap <file>           Debug Adapter Protocol server (stdio or --port)\n"
@@ -358,19 +261,11 @@ void print_help() {
         "  --smoke-ui           not built (KR32_BUILD_UI=OFF)\n"
 #endif
         "\n"
-        "Options for as:  -o <path> --object --base <addr> --listing <path>\n"
-        "Options for ld:  -o <image.k32> --map <path> --sym <path> --base <addr> --flat --strip\n"
-        "Options for build: -o <image.k32> --map <path> --base <addr> --run --strip -O0|-O1 (default -O1) "
-        "--fs-root <dir> --read-only --quota <bytes> --arg <value>\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
         "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n"
         "Options for os:  --embedded --bios <rom> --max-steps <n> --ram-size <n> --trace --stats "
         "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n");
-}
-
-void print_as_usage() {
-    std::printf("Usage: kr32 as <file.asm> [--object] [-o <path>] [--base <addr>] [--listing <path>]\n");
 }
 
 void print_dis_usage() {
@@ -382,124 +277,6 @@ void print_vm_usage() {
                 "[--max-steps <n>] [--ram-size <n>] [--trace] [--stats] "
                 "[--fs-root <dir>] [--read-only] [--quota <bytes>] [--arg <value>] "
                 "[--input <text>]\n");
-}
-
-int command_as(int argc, char** argv) {
-    std::string source;
-    std::string output = "a.bin";
-    std::string listing;
-    std::uint32_t base = kDefaultBase;
-    bool object = false;
-
-    for (int index = 2; index < argc; ++index) {
-        const std::string_view argument(argv[index]);
-        if (argument == "--help" || argument == "-h") {
-            print_as_usage();
-            return 0;
-        }
-        if (argument == "--object") {
-            object = true;
-            continue;
-        }
-        if (argument == "-o") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 as: -o needs a path\n");
-                return 2;
-            }
-            output = argv[++index];
-            continue;
-        }
-        if (argument == "--listing") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 as: --listing needs a path\n");
-                return 2;
-            }
-            listing = argv[++index];
-            continue;
-        }
-        if (argument == "--base") {
-            if (index + 1 >= argc || !parse_u32(argv[++index], base)) {
-                std::fprintf(stderr, "kr32 as: invalid --base\n");
-                return 2;
-            }
-            continue;
-        }
-        if (argument.rfind("--base=", 0) == 0) {
-            if (!parse_u32(argument.substr(7), base)) {
-                std::fprintf(stderr, "kr32 as: invalid --base\n");
-                return 2;
-            }
-            continue;
-        }
-        if (!source.empty()) {
-            std::fprintf(stderr, "kr32 as: unexpected argument '%.*s'\n",
-                         static_cast<int>(argument.size()), argument.data());
-            return 2;
-        }
-        source = std::string(argument);
-    }
-
-    if (source.empty()) {
-        print_as_usage();
-        return 2;
-    }
-
-    std::vector<std::uint8_t> bytes;
-    std::string error;
-    if (!read_file(source, bytes, error)) {
-        std::fprintf(stderr, "kr32 as: %s\n", error.c_str());
-        return 1;
-    }
-    const std::string text(bytes.begin(), bytes.end());
-    if (object) {
-        if (output == "a.bin") {
-            output = "a.k32";
-        }
-        container::Image object_image;
-        assembler::Error object_error;
-        if (!assembler::assemble_object(text, object_image, object_error)) {
-            std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), object_error.line,
-                         object_error.message.c_str());
-            return 1;
-        }
-        std::vector<std::uint8_t> container_bytes;
-        container::Error container_error;
-        if (!container::write(object_image, container_bytes, container_error)) {
-            std::fprintf(stderr, "kr32 as: %s\n", container_error.message.c_str());
-            return 1;
-        }
-        if (!write_file(output, container_bytes, error)) {
-            std::fprintf(stderr, "kr32 as: %s\n", error.c_str());
-            return 1;
-        }
-        std::printf("wrote %zu-byte object to %s\n", container_bytes.size(), output.c_str());
-        return 0;
-    }
-    assembler::Result result;
-    assembler::Error assembly_error;
-    if (!assembler::assemble(text, assembler::Options{base}, result, assembly_error)) {
-        std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), assembly_error.line,
-                     assembly_error.message.c_str());
-        return 1;
-    }
-    if (!write_file(output, result.bytes, error)) {
-        std::fprintf(stderr, "kr32 as: %s\n", error.c_str());
-        return 1;
-    }
-    if (!listing.empty()) {
-        disassembler::Options options;
-        options.base = result.base;
-        for (const assembler::Result::Symbol& symbol : result.symbols) {
-            options.symbols.emplace_back(symbol.name, symbol.address);
-        }
-        if (!write_text(listing, disassembler::disassemble(result.bytes, options), error)) {
-            std::fprintf(stderr, "kr32 as: %s\n", error.c_str());
-            return 1;
-        }
-    }
-    std::printf("wrote %zu bytes at 0x%08X to %s\n", result.bytes.size(), base,
-                output.c_str());
-    return 0;
 }
 
 int command_dis(int argc, char** argv) {
@@ -559,183 +336,6 @@ int command_dis(int argc, char** argv) {
     return 0;
 }
 
-void print_ld_usage() {
-    std::printf("Usage: kr32 ld <objects...> [-o <image.k32>] [--map <path>] "
-                "[--sym <path>] [--base <addr>] [--flat] [--strip]\n");
-}
-
-void print_build_usage() {
-    std::printf("Usage: kr32 build <file.s> [-o <image.k32>] [--map <path>] [--base <addr>] "
-                "[--run] [--strip] [--fs-root <dir>] [--read-only] [--quota <bytes>] "
-                "[--arg <value>] [--input <text>]\n");
-}
-
-int command_ld(int argc, char** argv) {
-    std::string output = "a.k32";
-    std::string map_path;
-    std::string sym_path;
-    linker::Options options;
-    bool strip = false;
-    bool flat = false;
-    bool output_set = false;
-    std::vector<std::string> inputs;
-
-    for (int index = 2; index < argc; ++index) {
-        const std::string_view argument(argv[index]);
-        if (argument == "--help" || argument == "-h") {
-            print_ld_usage();
-            return 0;
-        }
-        if (argument == "-o") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 ld: -o needs a path\n");
-                return 2;
-            }
-            output = argv[++index];
-            output_set = true;
-            continue;
-        }
-        if (argument == "--map") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 ld: --map needs a path\n");
-                return 2;
-            }
-            map_path = argv[++index];
-            continue;
-        }
-        if (argument == "--sym") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 ld: --sym needs a path\n");
-                return 2;
-            }
-            sym_path = argv[++index];
-            continue;
-        }
-        if (argument == "--strip") {
-            strip = true;
-            continue;
-        }
-        if (argument == "--flat") {
-            flat = true;
-            continue;
-        }
-        if (argument == "--base" || argument == "--stack-top" || argument == "--stack-limit") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 ld: %.*s needs a value\n",
-                             static_cast<int>(argument.size()), argument.data());
-                return 2;
-            }
-            std::uint32_t value = 0;
-            if (!parse_u32(argv[++index], value)) {
-                std::fprintf(stderr, "kr32 ld: invalid value\n");
-                return 2;
-            }
-            if (argument == "--base") options.base = value;
-            if (argument == "--stack-top") options.stack_top = value;
-            if (argument == "--stack-limit") options.stack_limit = value;
-            continue;
-        }
-        inputs.emplace_back(argument);
-    }
-
-    if (inputs.empty()) {
-        print_ld_usage();
-        return 2;
-    }
-    if (flat && !output_set) {
-        output = "a.bin";
-    }
-    options.strip = strip;
-
-    std::vector<container::Image> objects;
-    std::string error;
-    for (const std::string& input : inputs) {
-        container::Image object;
-        if (!read_container_file(input, object, error)) {
-            std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
-            return 1;
-        }
-        if (object.type != container::ImageType::Object) {
-            std::fprintf(stderr, "kr32 ld: %s is not an object\n", input.c_str());
-            return 1;
-        }
-        objects.push_back(std::move(object));
-    }
-
-    container::Image image;
-    linker::Map map;
-    linker::Error link_error;
-    if (!linker::link(objects, options, image, map, link_error)) {
-        std::fprintf(stderr, "kr32 ld: %s\n", link_error.message.c_str());
-        return 1;
-    }
-
-    std::vector<std::uint8_t> bytes;
-    if (flat) {
-        linker::Error flat_error;
-        if (!linker::flatten(image, options.base, bytes, flat_error)) {
-            std::fprintf(stderr, "kr32 ld: %s\n", flat_error.message.c_str());
-            return 1;
-        }
-    } else {
-        container::Error container_error;
-        if (!container::write(image, bytes, container_error)) {
-            std::fprintf(stderr, "kr32 ld: %s\n", container_error.message.c_str());
-            return 1;
-        }
-    }
-    if (!sym_path.empty()) {
-        if (!flat) {
-            std::fprintf(stderr, "kr32 ld: --sym requires --flat\n");
-            return 2;
-        }
-        container::Image debug_image;
-        debug_image.type = container::ImageType::Executable;
-        debug_image.entry = image.entry;
-        debug_image.base = image.base;
-        debug_image.symbols = image.symbols;
-        for (const container::Section& section : image.sections) {
-            debug_image.sections.push_back(section);
-        }
-        container::Section checksum;
-        checksum.name = "__sym_crc";
-        checksum.type = container::SectionType::Other;
-        const std::uint32_t crc = container::crc32(bytes.data(), bytes.size());
-        checksum.data = {
-            static_cast<std::uint8_t>(crc),
-            static_cast<std::uint8_t>(crc >> 8U),
-            static_cast<std::uint8_t>(crc >> 16U),
-            static_cast<std::uint8_t>(crc >> 24U)};
-        checksum.size = 4;
-        debug_image.sections.push_back(std::move(checksum));
-        std::vector<std::uint8_t> sym_bytes;
-        container::Error sym_error;
-        if (!container::write(debug_image, sym_bytes, sym_error)) {
-            std::fprintf(stderr, "kr32 ld: %s\n", sym_error.message.c_str());
-            return 1;
-        }
-        if (!write_file(sym_path, sym_bytes, error)) {
-            std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
-            return 1;
-        }
-    }
-    if (!write_file(output, bytes, error)) {
-        std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
-        return 1;
-    }
-    if (!map_path.empty()) {
-        std::string text;
-        write_map(map, text);
-        if (!write_text(map_path, text, error)) {
-            std::fprintf(stderr, "kr32 ld: %s\n", error.c_str());
-            return 1;
-        }
-    }
-    std::printf("linked %zu objects to %s (entry 0x%08X%s)\n", objects.size(),
-                output.c_str(), image.entry, flat ? ", flat" : "");
-    return 0;
-}
-
 int command_size(int argc, char** argv) {
     if (argc != 3) {
         std::printf("Usage: kr32 size <image.k32>\n");
@@ -754,393 +354,6 @@ int command_size(int argc, char** argv) {
     }
     std::printf("entry=0x%08X base=0x%08X type=%s\n", image.entry, image.base,
                 image.type == container::ImageType::Executable ? "executable" : "object");
-    return 0;
-}
-
-int command_build(int argc, char** argv) {
-    std::string source;
-    std::string output = "a.k32";
-    std::string map_path;
-    linker::Options options;
-    bool run = false;
-    bool strip = false;
-    bool optimize = true;
-    vm::HostOptions host_options;
-#ifdef KR32_HAS_UI
-    host_options.file_dialog = platform_file_dialog();
-#endif
-
-    for (int index = 2; index < argc; ++index) {
-        const std::string_view argument(argv[index]);
-        if (argument == "--help" || argument == "-h") {
-            print_build_usage();
-            return 0;
-        }
-        if (argument == "--run") {
-            run = true;
-            continue;
-        }
-        if (argument == "--strip") {
-            strip = true;
-            continue;
-        }
-        if (argument == "-O0" || argument == "-O1" || argument == "-O") {
-            optimize = argument != "-O0";
-            continue;
-        }
-        if (argument == "--read-only") {
-            host_options.read_only = true;
-            continue;
-        }
-        if (argument == "--fs-root" || argument == "--quota" || argument == "--arg" ||
-            argument == "--input") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 build: %.*s needs a value\n",
-                             static_cast<int>(argument.size()), argument.data());
-                return 2;
-            }
-            const std::string value = argv[++index];
-            if (argument == "--fs-root") host_options.fs_root = value;
-            if (argument == "--input") host_options.input = value;
-            if (argument == "--arg") host_options.args.push_back(value);
-            if (argument == "--quota") {
-                std::uint32_t quota = 0;
-                if (!parse_u32(value, quota)) {
-                    std::fprintf(stderr, "kr32 build: invalid --quota\n");
-                    return 2;
-                }
-                host_options.quota = quota;
-            }
-            continue;
-        }
-        if (argument == "-o" || argument == "--map") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 build: %.*s needs a path\n",
-                             static_cast<int>(argument.size()), argument.data());
-                return 2;
-            }
-            if (argument == "-o") output = argv[++index];
-            if (argument == "--map") map_path = argv[++index];
-            continue;
-        }
-        if (argument == "--base") {
-            if (index + 1 >= argc || !parse_u32(argv[++index], options.base)) {
-                std::fprintf(stderr, "kr32 build: invalid --base\n");
-                return 2;
-            }
-            continue;
-        }
-        if (!source.empty()) {
-            std::fprintf(stderr, "kr32 build: unexpected argument\n");
-            return 2;
-        }
-        source = std::string(argument);
-    }
-
-    if (source.empty()) {
-        print_build_usage();
-        return 2;
-    }
-    options.strip = strip;
-
-    std::vector<std::uint8_t> source_bytes;
-    std::string error;
-    if (!read_file(source, source_bytes, error)) {
-        std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
-        return 1;
-    }
-    const std::string text(source_bytes.begin(), source_bytes.end());
-    std::vector<container::Image> objects;
-    assembler::Error assembly_error;
-    if (is_c_source(source)) {
-        const cc::Result compiled = cc::compile(text, source, 0, optimize);
-        for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
-            std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
-                         diagnostic.column, diagnostic.message.c_str());
-        }
-        if (!compiled.ok) {
-            return 1;
-        }
-        container::Image user;
-        if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
-            std::fprintf(stderr, "kr32 build: %s:%d: %s\n", source.c_str(),
-                         assembly_error.line, assembly_error.message.c_str());
-            return 1;
-        }
-        objects.push_back(std::move(user));
-        container::Image runtime;
-        if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
-            std::fprintf(stderr, "kr32 build: runtime: %s\n",
-                         assembly_error.message.c_str());
-            return 1;
-        }
-        objects.push_back(std::move(runtime));
-    } else if (is_cxx_source(source)) {
-        cxx::Options cxx_options;
-        cxx_options.source_name = source;
-        cxx_options.optimize = optimize;
-        const cxx::Result compiled = cxx::compile(text, cxx_options);
-        if (!compiled.ok) {
-            for (const cxx::Diagnostic& diagnostic : compiled.diagnostics) {
-                std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
-                             diagnostic.column, diagnostic.message.c_str());
-            }
-            return 1;
-        }
-        container::Image user;
-        if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
-            std::fprintf(stderr, "kr32 build: %s:%d: %s\n", source.c_str(),
-                         assembly_error.line, assembly_error.message.c_str());
-            return 1;
-        }
-        objects.push_back(std::move(user));
-        container::Image runtime;
-        if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
-            std::fprintf(stderr, "kr32 build: runtime: %s\n",
-                         assembly_error.message.c_str());
-            return 1;
-        }
-        objects.push_back(std::move(runtime));
-    } else {
-        container::Image object;
-        if (!assembler::assemble_object(text, object, assembly_error)) {
-            std::fprintf(stderr, "%s:%d: %s\n", source.c_str(), assembly_error.line,
-                         assembly_error.message.c_str());
-            return 1;
-        }
-        objects.push_back(std::move(object));
-    }
-
-    container::Image image;
-    linker::Map map;
-    linker::Error link_error;
-    if (!linker::link(objects, options, image, map, link_error)) {
-        std::fprintf(stderr, "kr32 build: %s\n", link_error.message.c_str());
-        return 1;
-    }
-
-    std::vector<std::uint8_t> bytes;
-    container::Error container_error;
-    if (!container::write(image, bytes, container_error)) {
-        std::fprintf(stderr, "kr32 build: %s\n", container_error.message.c_str());
-        return 1;
-    }
-    if (!write_file(output, bytes, error)) {
-        std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
-        return 1;
-    }
-    if (!map_path.empty()) {
-        std::string map_text;
-        write_map(map, map_text);
-        if (!write_text(map_path, map_text, error)) {
-            std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
-            return 1;
-        }
-    }
-    std::printf("built %s (entry 0x%08X)\n", output.c_str(), image.entry);
-
-    if (!run) {
-        return 0;
-    }
-
-    core::Machine machine(core::Machine::Options{core::kDefaultRamSize});
-    if (!load_executable(machine, image, error)) {
-        std::fprintf(stderr, "kr32 build: %s\n", error.c_str());
-        return 1;
-    }
-    return run_machine(machine, kDefaultMaxSteps, false, false, host_options);
-}
-
-void print_cc_usage() {
-    std::printf("Usage: kr32 cc <file.c> [-S] [-O0|-O1] [-o <path>] [--source-id <n>]\n       Optimization defaults to -O1; pass -O0 to compile without it.\n");
-}
-
-int command_cc(int argc, char** argv) {
-    std::string source;
-    std::string output;
-    bool assembly_only = false;
-    bool optimize = true;
-    int source_id = 0;
-
-    for (int index = 2; index < argc; ++index) {
-        const std::string_view argument(argv[index]);
-        if (argument == "--help" || argument == "-h") {
-            print_cc_usage();
-            return 0;
-        }
-        if (argument == "-S") {
-            assembly_only = true;
-            continue;
-        }
-        if (argument == "-O0" || argument == "-O1" || argument == "-O") {
-            optimize = argument != "-O0";
-            continue;
-        }
-        if (argument == "--source-id") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 cc: --source-id needs a number\n");
-                return 2;
-            }
-            source_id = std::atoi(argv[++index]);
-            continue;
-        }
-        if (argument == "-o") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 cc: -o needs a path\n");
-                return 2;
-            }
-            output = argv[++index];
-            continue;
-        }
-        if (!source.empty()) {
-            std::fprintf(stderr, "kr32 cc: unexpected argument\n");
-            return 2;
-        }
-        source = std::string(argument);
-    }
-
-    if (source.empty()) {
-        print_cc_usage();
-        return 2;
-    }
-    if (output.empty()) {
-        output = assembly_only ? "a.s" : "a.o";
-    }
-
-    std::vector<std::uint8_t> bytes;
-    std::string error;
-    if (!read_file(source, bytes, error)) {
-        std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
-        return 1;
-    }
-    const std::string text(bytes.begin(), bytes.end());
-    const cc::Result compiled = cc::compile(text, source, source_id, optimize);
-    for (const cc::Diagnostic& diagnostic : compiled.diagnostics) {
-        std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
-                     diagnostic.column, diagnostic.message.c_str());
-    }
-    if (!compiled.ok) {
-        return 1;
-    }
-
-    if (assembly_only) {
-        if (!write_text(output, compiled.assembly, error)) {
-            std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
-            return 1;
-        }
-        std::printf("wrote assembly to %s\n", output.c_str());
-        return 0;
-    }
-
-    container::Image object;
-    assembler::Error assembly_error;
-    if (!assembler::assemble_object(compiled.assembly, object, assembly_error)) {
-        std::fprintf(stderr, "kr32 cc: %s:%d: %s\n", source.c_str(), assembly_error.line,
-                     assembly_error.message.c_str());
-        return 1;
-    }
-    std::vector<std::uint8_t> object_bytes;
-    container::Error container_error;
-    if (!container::write(object, object_bytes, container_error)) {
-        std::fprintf(stderr, "kr32 cc: %s\n", container_error.message.c_str());
-        return 1;
-    }
-    if (!write_file(output, object_bytes, error)) {
-        std::fprintf(stderr, "kr32 cc: %s\n", error.c_str());
-        return 1;
-    }
-    std::printf("wrote object to %s\n", output.c_str());
-    return 0;
-}
-
-void print_cxx_usage() {
-    std::printf("Usage: kr32 cxx <file.cpp> [-S] [-O0|-O1] [-o <path>]\n       Optimization defaults to -O1; pass -O0 to compile without it.\n");
-}
-
-int command_cxx(int argc, char** argv) {
-    std::string source;
-    std::string output;
-    bool assembly_only = false;
-    bool optimize = true;
-    for (int index = 2; index < argc; ++index) {
-        const std::string_view argument(argv[index]);
-        if (argument == "--help" || argument == "-h") {
-            print_cxx_usage();
-            return 0;
-        }
-        if (argument == "-S") {
-            assembly_only = true;
-            continue;
-        }
-        if (argument == "-O0" || argument == "-O1" || argument == "-O") {
-            optimize = argument != "-O0";
-            continue;
-        }
-        if (argument == "-o") {
-            if (index + 1 >= argc) {
-                std::fprintf(stderr, "kr32 cxx: -o needs a path\n");
-                return 2;
-            }
-            output = argv[++index];
-            continue;
-        }
-        if (!source.empty()) {
-            std::fprintf(stderr, "kr32 cxx: unexpected argument\n");
-            return 2;
-        }
-        source = std::string(argument);
-    }
-    if (source.empty()) {
-        print_cxx_usage();
-        return 2;
-    }
-    if (output.empty()) {
-        output = assembly_only ? "a.s" : "a.o";
-    }
-    std::vector<std::uint8_t> bytes;
-    std::string error;
-    if (!read_file(source, bytes, error)) {
-        std::fprintf(stderr, "kr32 cxx: %s\n", error.c_str());
-        return 1;
-    }
-    const std::string text(bytes.begin(), bytes.end());
-    cxx::Options options;
-    options.source_name = source;
-    options.optimize = optimize;
-    const cxx::Result compiled = cxx::compile(text, options);
-    if (!compiled.ok) {
-        for (const cxx::Diagnostic& diagnostic : compiled.diagnostics) {
-            std::fprintf(stderr, "%s:%d:%d: %s\n", source.c_str(), diagnostic.line,
-                         diagnostic.column, diagnostic.message.c_str());
-        }
-        return 1;
-    }
-    if (assembly_only) {
-        if (!write_text(output, compiled.assembly, error)) {
-            std::fprintf(stderr, "kr32 cxx: %s\n", error.c_str());
-            return 1;
-        }
-        std::printf("wrote assembly to %s\n", output.c_str());
-        return 0;
-    }
-    container::Image object;
-    assembler::Error assembly_error;
-    if (!assembler::assemble_object(compiled.assembly, object, assembly_error)) {
-        std::fprintf(stderr, "kr32 cxx: %s:%d: %s\n", source.c_str(), assembly_error.line,
-                     assembly_error.message.c_str());
-        return 1;
-    }
-    std::vector<std::uint8_t> object_bytes;
-    container::Error container_error;
-    if (!container::write(object, object_bytes, container_error)) {
-        std::fprintf(stderr, "kr32 cxx: %s\n", container_error.message.c_str());
-        return 1;
-    }
-    if (!write_file(output, object_bytes, error)) {
-        std::fprintf(stderr, "kr32 cxx: %s\n", error.c_str());
-        return 1;
-    }
-    std::printf("wrote object to %s\n", output.c_str());
     return 0;
 }
 
@@ -1585,8 +798,8 @@ int command_shell(int argc, char** argv) {
         }
         if (command == "help") {
             std::printf(
-                "commands: as, build, cc, debug, dis, ld, run, size, vm, version, "
-                "history, clear, exit\n");
+                "commands: debug, dis, run, size, vm, version, history, clear, "
+                "exit\n");
             continue;
         }
         if (command == "history") {
@@ -1619,12 +832,8 @@ int command_shell(int argc, char** argv) {
         }
         int result = 2;
         const std::string& mode = arguments[1];
-        if (mode == "as") result = command_as(static_cast<int>(raw.size()), raw.data());
         if (mode == "dis") result = command_dis(static_cast<int>(raw.size()), raw.data());
-        if (mode == "ld") result = command_ld(static_cast<int>(raw.size()), raw.data());
         if (mode == "size") result = command_size(static_cast<int>(raw.size()), raw.data());
-        if (mode == "build") result = command_build(static_cast<int>(raw.size()), raw.data());
-        if (mode == "cc") result = command_cc(static_cast<int>(raw.size()), raw.data());
         if (mode == "debug") result = command_debug(static_cast<int>(raw.size()), raw.data());
         if (mode == "vm") result = command_vm(static_cast<int>(raw.size()), raw.data());
         if (result != 0) {
@@ -1676,9 +885,6 @@ int run(int argc, char** argv) {
     }
 #endif
 
-    if (command == "as") {
-        return command_as(argc, argv);
-    }
     if (command == "dis") {
         return command_dis(argc, argv);
     }
@@ -1688,20 +894,8 @@ int run(int argc, char** argv) {
     if (command == "os") {
         return command_os(argc, argv);
     }
-    if (command == "ld") {
-        return command_ld(argc, argv);
-    }
-    if (command == "build") {
-        return command_build(argc, argv);
-    }
     if (command == "size") {
         return command_size(argc, argv);
-    }
-    if (command == "cc") {
-        return command_cc(argc, argv);
-    }
-    if (command == "cxx") {
-        return command_cxx(argc, argv);
     }
     if (command == "debug") {
         return command_debug(argc, argv);

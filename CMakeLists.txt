@@ -4,76 +4,57 @@ project(KR32 VERSION 0.2.0 LANGUAGES CXX)
 
 option(KR32_BUILD_UI "Build the SDL2 windowed debugger" ON)
 option(KR32_BUILD_TESTS "Build tests" ON)
-option(KR32_BUILD_CXX_TOOL "Build the standalone kr32-cxx C++ driver" ON)
 option(KR32_EMBED_OS "Embed the default KR32OS BIOS and kernel" ON)
 option(KR32_WARNINGS_AS_ERRORS "Treat warnings as errors" ON)
 option(KR32_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OFF)
 
-# Which compiler the window's BUILD uses for a .c or .cpp source. `builtin` is
-# the in-tree C and C++ front end that ships in this repository; `krc` links the
-# published krc::toolchain package instead. Only the krc branch calls
-# find_package, so a default build needs nothing outside the tree.
-set(KR32_TOOLCHAIN "builtin" CACHE STRING "Toolchain for the window's BUILD: builtin or krc")
-set_property(CACHE KR32_TOOLCHAIN PROPERTY STRINGS builtin krc)
-if(NOT KR32_TOOLCHAIN STREQUAL "builtin" AND NOT KR32_TOOLCHAIN STREQUAL "krc")
+# The installed krc package is the compiler: the window's BUILD and the test
+# images both use it, and the package owns the target sysroot and runtime.
+find_package(krc-toolchain CONFIG REQUIRED)
+if(NOT KRC_SYSROOT)
     message(FATAL_ERROR
-        "KR32_TOOLCHAIN must be builtin or krc, not '${KR32_TOOLCHAIN}'")
+        "krc-toolchain did not export KRC_SYSROOT. The package has no target "
+        "sysroot; install a KRCompiler built with KRC_BUILD_TOOLS=ON.")
 endif()
-
-# The tests build their fixture images through the installed krc package in both
-# toolchain configurations, so the package is required whenever tests are built.
-if(KR32_TOOLCHAIN STREQUAL "krc" OR KR32_BUILD_TESTS)
-    # The installed package owns the target sysroot and runtime and exports both
-    # paths, so a prefix is the whole external input and no KRCompiler build tree
-    # is needed. Each required file is checked here: an incompletely installed
-    # package fails at configure, not at link time or at a later GUI BUILD.
-    find_package(krc-toolchain CONFIG REQUIRED)
-    if(NOT KRC_SYSROOT)
-        message(FATAL_ERROR
-            "krc-toolchain did not export KRC_SYSROOT. The package has no target "
-            "sysroot; install a KRCompiler built with KRC_BUILD_TOOLS=ON.")
-    endif()
-    if(NOT KRC_KR32_RUNTIME_DIR)
-        message(FATAL_ERROR
-            "krc-toolchain did not export KRC_KR32_RUNTIME_DIR. The package has "
-            "no KR32 runtime directory.")
-    endif()
-    get_target_property(KR32_KRC_PACKAGE_INCLUDES krc::toolchain
-        INTERFACE_INCLUDE_DIRECTORIES)
-    set(_kr32_krc_header "")
-    foreach(_kr32_krc_directory IN LISTS KR32_KRC_PACKAGE_INCLUDES)
-        if(EXISTS "${_kr32_krc_directory}/krc/toolchain.h")
-            set(_kr32_krc_header "${_kr32_krc_directory}/krc/toolchain.h")
-        endif()
-    endforeach()
-    if(NOT _kr32_krc_header)
-        message(FATAL_ERROR
-            "krc-toolchain was found, but its public header is missing: "
-            "krc/toolchain.h was not under its INTERFACE_INCLUDE_DIRECTORIES "
-            "('${KR32_KRC_PACKAGE_INCLUDES}')")
-    endif()
-    foreach(_kr32_krc_sysroot_file IN ITEMS
-            include/stdio.h
-            include/stdint.h
-            kr32/include/bits/stdint.h
-            kr32/include/bits/types.h)
-        if(NOT EXISTS "${KRC_SYSROOT}/${_kr32_krc_sysroot_file}")
-            message(FATAL_ERROR
-                "KR32_TOOLCHAIN=krc: KRC_SYSROOT ('${KRC_SYSROOT}') is missing "
-                "'${_kr32_krc_sysroot_file}'")
-        endif()
-    endforeach()
-    foreach(_kr32_krc_runtime_file IN ITEMS libkrcrt.kro crt0.s fileio.s eh.s)
-        if(NOT EXISTS "${KRC_KR32_RUNTIME_DIR}/${_kr32_krc_runtime_file}")
-            message(FATAL_ERROR
-                "KR32_TOOLCHAIN=krc: KRC_KR32_RUNTIME_DIR "
-                "('${KRC_KR32_RUNTIME_DIR}') is missing "
-                "'${_kr32_krc_runtime_file}'")
-        endif()
-    endforeach()
-    message(STATUS "KR32: KRC_SYSROOT=${KRC_SYSROOT}")
-    message(STATUS "KR32: KRC_KR32_RUNTIME_DIR=${KRC_KR32_RUNTIME_DIR}")
+if(NOT KRC_KR32_RUNTIME_DIR)
+    message(FATAL_ERROR
+        "krc-toolchain did not export KRC_KR32_RUNTIME_DIR. The package has "
+        "no KR32 runtime directory.")
 endif()
+get_target_property(KR32_KRC_PACKAGE_INCLUDES krc::toolchain
+    INTERFACE_INCLUDE_DIRECTORIES)
+set(_kr32_krc_header "")
+foreach(_kr32_krc_directory IN LISTS KR32_KRC_PACKAGE_INCLUDES)
+    if(EXISTS "${_kr32_krc_directory}/krc/toolchain.h")
+        set(_kr32_krc_header "${_kr32_krc_directory}/krc/toolchain.h")
+    endif()
+endforeach()
+if(NOT _kr32_krc_header)
+    message(FATAL_ERROR
+        "krc-toolchain was found, but its public header is missing: "
+        "krc/toolchain.h was not under its INTERFACE_INCLUDE_DIRECTORIES "
+        "('${KR32_KRC_PACKAGE_INCLUDES}')")
+endif()
+foreach(_kr32_krc_sysroot_file IN ITEMS
+        include/stdio.h
+        include/stdint.h
+        kr32/include/bits/stdint.h
+        kr32/include/bits/types.h)
+    if(NOT EXISTS "${KRC_SYSROOT}/${_kr32_krc_sysroot_file}")
+        message(FATAL_ERROR
+            "KRC_SYSROOT ('${KRC_SYSROOT}') is missing "
+            "'${_kr32_krc_sysroot_file}'")
+    endif()
+endforeach()
+foreach(_kr32_krc_runtime_file IN ITEMS libkrcrt.kro crt0.s fileio.s eh.s)
+    if(NOT EXISTS "${KRC_KR32_RUNTIME_DIR}/${_kr32_krc_runtime_file}")
+        message(FATAL_ERROR
+            "KRC_KR32_RUNTIME_DIR ('${KRC_KR32_RUNTIME_DIR}') is missing "
+            "'${_kr32_krc_runtime_file}'")
+    endif()
+endforeach()
+message(STATUS "KR32: KRC_SYSROOT=${KRC_SYSROOT}")
+message(STATUS "KR32: KRC_KR32_RUNTIME_DIR=${KRC_KR32_RUNTIME_DIR}")
 
 set(CMAKE_CXX_STANDARD 20)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
@@ -114,43 +95,8 @@ endfunction()
 
 kr32_add_library(kr32_core src/core/encoding.cpp src/core/machine.cpp src/core/devices.cpp)
 
-kr32_add_library(kr32_asm src/asm/assembler.cpp src/asm/object_assembler.cpp
-                         src/asm/optimizer.cpp)
-target_link_libraries(kr32_asm PUBLIC kr32_core kr32_container)
-
 kr32_add_library(kr32_container src/container/container.cpp)
 target_link_libraries(kr32_container PUBLIC kr32_core)
-
-kr32_add_library(kr32_link src/link/linker.cpp)
-target_link_libraries(kr32_link PUBLIC kr32_core kr32_container)
-
-kr32_add_library(kr32_cc src/cc/cc.cpp)
-target_link_libraries(kr32_cc PUBLIC kr32_asm kr32_container)
-file(READ "${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc.c" KR32_LIBC_SOURCE)
-set(KR32_LIBC_GENERATED_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated")
-file(MAKE_DIRECTORY "${KR32_LIBC_GENERATED_DIR}")
-configure_file("${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc_runtime.h.in"
-               "${KR32_LIBC_GENERATED_DIR}/libc_runtime.h" @ONLY)
-target_include_directories(kr32_cc PRIVATE "${KR32_LIBC_GENERATED_DIR}")
-set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS
-             "${CMAKE_CURRENT_SOURCE_DIR}/src/cc/libc.c")
-
-kr32_add_library(kr32_cxx
-    src/cxx/cxx.cpp
-    src/cxx/ast.cpp
-    src/cxx/lexer.cpp
-    src/cxx/preprocessor.cpp
-    src/cxx/parser.cpp
-    src/cxx/codegen.cpp)
-target_link_libraries(kr32_cxx PUBLIC kr32_asm kr32_container)
-target_include_directories(kr32_cxx PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/src")
-
-if(KR32_BUILD_CXX_TOOL)
-    add_executable(kr32_cxx_tool src/cxx/tool/main.cpp)
-    target_link_libraries(kr32_cxx_tool PRIVATE kr32_cxx kr32_warnings)
-    target_compile_features(kr32_cxx_tool PRIVATE cxx_std_20)
-    set_target_properties(kr32_cxx_tool PROPERTIES OUTPUT_NAME kr32-cxx)
-endif()
 
 kr32_add_library(kr32_dis src/dis/disassembler.cpp)
 target_link_libraries(kr32_dis PUBLIC kr32_core kr32_container)
@@ -278,27 +224,20 @@ if(KR32_BUILD_UI)
         src/ui/help.cpp src/resources/embedded_fonts.cpp)
     target_include_directories(kr32_ui PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/third_party")
     target_link_libraries(kr32_ui PUBLIC kr32_platform kr32_debug kr32_dis kr32_container
-        kr32_core kr32_cc kr32_cxx kr32_asm kr32_link kr32_os_images)
-    if(KR32_TOOLCHAIN STREQUAL "krc")
-        file(TO_CMAKE_PATH "${KRC_SYSROOT}" KR32_KRC_SYSROOT_PATH)
-        file(TO_CMAKE_PATH "${KRC_KR32_RUNTIME_DIR}" KR32_KRC_RUNTIME_PATH)
-        target_link_libraries(kr32_ui PRIVATE krc::toolchain)
-        target_compile_definitions(kr32_ui PRIVATE
-            KR32_TOOLCHAIN_KRC=1
-            KR32_KRC_SYSROOT_PATH="${KR32_KRC_SYSROOT_PATH}"
-            KR32_KRC_RUNTIME_PATH="${KR32_KRC_RUNTIME_PATH}"
-            KR32_GUEST_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/include")
-    endif()
+        kr32_core kr32_os_images)
+    file(TO_CMAKE_PATH "${KRC_SYSROOT}" KR32_KRC_SYSROOT_PATH)
+    file(TO_CMAKE_PATH "${KRC_KR32_RUNTIME_DIR}" KR32_KRC_RUNTIME_PATH)
+    target_link_libraries(kr32_ui PRIVATE krc::toolchain)
+    target_compile_definitions(kr32_ui PRIVATE
+        KR32_KRC_SYSROOT_PATH="${KR32_KRC_SYSROOT_PATH}"
+        KR32_KRC_RUNTIME_PATH="${KR32_KRC_RUNTIME_PATH}"
+        KR32_GUEST_INCLUDE_DIR="${CMAKE_CURRENT_SOURCE_DIR}/include")
 endif()
 
 kr32_add_library(kr32_cli src/cli/cli.cpp)
 target_link_libraries(kr32_cli PUBLIC
     kr32_core
-    kr32_asm
-    kr32_link
     kr32_container
-    kr32_cc
-    kr32_cxx
     kr32_dis
     kr32_debug
     kr32_vm
@@ -344,9 +283,6 @@ install(FILES
     third_party/fonts/OFL-Inter.txt
     third_party/fonts/OFL-JetBrainsMono.txt
     DESTINATION .)
-if(KR32_BUILD_CXX_TOOL)
-    install(TARGETS kr32_cxx_tool RUNTIME DESTINATION bin)
-endif()
 
 set(CPACK_PACKAGE_NAME "KR32")
 set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")

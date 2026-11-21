@@ -20,17 +20,11 @@
 #include <string_view>
 #include <vector>
 
-#if defined(KR32_TOOLCHAIN_KRC)
 #include "krc/toolchain.h"
-#endif
 
-#include "kr32/asm/object_assembler.h"
-#include "kr32/cc/cc.h"
 #include "kr32/core/devices.h"
-#include "kr32/cxx/cxx.h"
 #include "kr32/dis/disassembler.h"
 #include "kr32/isa/encoding.h"
-#include "kr32/link/linker.h"
 #include "kr32/os/bootinfo.h"
 #include "kr32/os/embedded_os.h"
 #include "kr32/os/kernel_meta.h"
@@ -232,24 +226,6 @@ std::filesystem::path settings_path() {
     return std::filesystem::current_path() / "kr32-settings.ini";
 }
 
-#if !defined(KR32_TOOLCHAIN_KRC)
-bool write_listing(const std::string& path, const std::string& assembly,
-                   std::string& error) {
-    const std::string listing_path = path + ".lst";
-    std::ofstream output(listing_path, std::ios::binary);
-    if (!output) {
-        error = "cannot write listing " + listing_path;
-        return false;
-    }
-    output << assembly;
-    if (!output) {
-        error = "cannot write listing " + listing_path;
-        return false;
-    }
-    return true;
-}
-#endif
-
 bool read_binary(const std::string& path, std::vector<std::uint8_t>& bytes,
                  std::string& error) {
     std::ifstream input(path, std::ios::binary);
@@ -262,7 +238,6 @@ bool read_binary(const std::string& path, std::vector<std::uint8_t>& bytes,
     return true;
 }
 
-#if defined(KR32_TOOLCHAIN_KRC)
 // The krc path leaves the image opaque: the facade returns a .k32 the real
 // loader parses, and the runtime is the target's own staged pair rather than
 // src/cc's assembly (which needs directives and instructions krc's assembler
@@ -434,107 +409,15 @@ bool compile_with_krc(const std::string& path, container::Image& image,
         return false;
     }
 }
-#endif
 
 bool compile_c_source(const std::string& path, container::Image& image,
                       std::string& error, bool listing) {
-#if defined(KR32_TOOLCHAIN_KRC)
     return compile_with_krc(path, image, error, listing, false);
-#else
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        error = "cannot open " + path;
-        return false;
-    }
-    const std::string source((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
-    // The command line optimizes by default, and the window's BUILD should produce
-    // the same code as `kr32 build` on the same source: without this the panel
-    // showed unoptimized output and every local sat in a frame slot.
-    const cc::Result compiled = cc::compile(source, path, 0, true);
-    if (!compiled.ok) {
-        if (!compiled.diagnostics.empty()) {
-            const cc::Diagnostic& diagnostic = compiled.diagnostics.front();
-            error = path + ":" + std::to_string(diagnostic.line) + ":" +
-                    std::to_string(diagnostic.column) + ": " + diagnostic.message;
-        } else {
-            error = path + ": compile failed";
-        }
-        return false;
-    }
-    container::Image user;
-    assembler::Error assembly_error;
-    if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
-        error = path + ": " + assembly_error.message;
-        return false;
-    }
-    container::Image runtime;
-    if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
-        error = "runtime: " + assembly_error.message;
-        return false;
-    }
-    linker::Map map;
-    linker::Error link_error;
-    if (!linker::link({user, runtime}, linker::Options{}, image, map, link_error)) {
-        error = path + ": " + link_error.message;
-        return false;
-    }
-    if (listing && !write_listing(path, compiled.assembly, error)) {
-        return false;
-    }
-    return true;
-#endif
 }
 
 bool compile_cxx_source(const std::string& path, container::Image& image,
                         std::string& error, bool listing) {
-#if defined(KR32_TOOLCHAIN_KRC)
     return compile_with_krc(path, image, error, listing, true);
-#else
-    std::ifstream input(path, std::ios::binary);
-    if (!input) {
-        error = "cannot open " + path;
-        return false;
-    }
-    const std::string source((std::istreambuf_iterator<char>(input)),
-                             std::istreambuf_iterator<char>());
-    cxx::Options options;
-    options.source_name = path;
-    // Same reason as the C path: BUILD matches the command line's default.
-    options.optimize = true;
-    const cxx::Result compiled = cxx::compile(source, options);
-    if (!compiled.ok) {
-        if (!compiled.diagnostics.empty()) {
-            const cxx::Diagnostic& diagnostic = compiled.diagnostics.front();
-            error = path + ":" + std::to_string(diagnostic.line) + ":" +
-                    std::to_string(diagnostic.column) + ": " + diagnostic.message;
-        } else {
-            error = path + ": compile failed";
-        }
-        return false;
-    }
-    container::Image user;
-    assembler::Error assembly_error;
-    if (!assembler::assemble_object(compiled.assembly, user, assembly_error)) {
-        error = path + ": " + assembly_error.message;
-        return false;
-    }
-    container::Image runtime;
-    if (!assembler::assemble_object(cc::runtime_assembly(), runtime, assembly_error)) {
-        error = "runtime: " + assembly_error.message;
-        return false;
-    }
-    linker::Map map;
-    linker::Error link_error;
-    if (!linker::link({user, runtime}, linker::Options{}, image, map, link_error)) {
-        error = path + ": " + link_error.message;
-        return false;
-    }
-    if (listing && !write_listing(path, compiled.assembly, error)) {
-        return false;
-    }
-    return true;
-#endif
 }
 
 bool has_c_extension(const std::string& path) {

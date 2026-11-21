@@ -23,12 +23,8 @@ add_executable(kr32_tests ${KR32_TEST_SOURCES})
 
 target_link_libraries(kr32_tests PRIVATE
     kr32_core
-    kr32_asm
     kr32_dis
     kr32_container
-    kr32_link
-    kr32_cc
-    kr32_cxx
     kr32_debug
     kr32_vm
     kr32_os_images
@@ -39,10 +35,6 @@ target_compile_definitions(kr32_tests PRIVATE
     KR32_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     KR32_TEST_KRC_SYSROOT="${KRC_SYSROOT}"
     KR32_TEST_KRC_RUNTIME_DIR="${KRC_KR32_RUNTIME_DIR}")
-if(KR32_TOOLCHAIN STREQUAL "krc")
-    # Lets test_ui assert the listing columns only the krc branch produces.
-    target_compile_definitions(kr32_tests PRIVATE KR32_TOOLCHAIN_KRC=1)
-endif()
 target_include_directories(kr32_tests SYSTEM PRIVATE "${CMAKE_SOURCE_DIR}/third_party")
 target_include_directories(kr32_tests PRIVATE "${CMAKE_SOURCE_DIR}/src")
 target_compile_features(kr32_tests PRIVATE cxx_std_20)

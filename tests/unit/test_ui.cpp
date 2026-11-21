@@ -183,20 +183,13 @@ TEST_CASE("a C source compiles through the window and steps") {
     const debug::Line* line = session.line_at(session.machine().pc());
     REQUIRE(line != nullptr);
     CHECK(session.call_stack().size() >= 1);
-#if defined(KR32_TOOLCHAIN_KRC)
-    // 3.3's acceptance: the krc-built image stops at main's first statement and
-    // the local it computes reads back. The built-in optimizer has its own
-    // register model and folds this slot away, so only the krc branch asserts it.
+    // The krc-built image stops at main's first statement and the local it
+    // computes reads back.
     CHECK(line->line == 2);
     debugger.step_line_over();
     std::uint32_t total = 0;
     REQUIRE_MESSAGE(session.read_variable("total", total, error), error.c_str());
     CHECK(total == 42);
-#else
-    const std::uint32_t before = session.machine().pc();
-    debugger.step_line_over();
-    CHECK(session.machine().pc() != before);
-#endif
     std::filesystem::remove(source_path);
 }
 
@@ -327,10 +320,8 @@ TEST_CASE("the window writes an assembler listing when the setting asks") {
     const std::string contents((std::istreambuf_iterator<char>(listing)),
                                std::istreambuf_iterator<char>());
     CHECK(contents.find("main:") != std::string::npos);
-#if defined(KR32_TOOLCHAIN_KRC)
-    // The krc branch renders the assembler-listing columns from the facade rows.
+    // The listing is rendered from the facade rows.
     CHECK(contents.find(": ") != std::string::npos);
-#endif
     listing.close();
     std::filesystem::remove(listing_path);
     std::filesystem::remove(source_path);
