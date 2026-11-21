@@ -14,7 +14,7 @@ Add entries here rather than editing the managed blocks in `AGENTS.md`; an edit 
 
 **Authoritative for.** `implementation.md` — milestone scope, checklist, dependency record, test gate, and running log. Read §0 and the current milestone before implementing; the rest is background. `KR32-plan.md` holds the architecture and decision record, and `docs/` the subsystem detail.
 
-**Standing constraints.** The test gate must pass on Windows and WSL (ARM64 when available). Build natively for ARM64; do not cross-compile. `src/platform` is the only OS/SDL boundary; `src/ui` must not include OS or SDL headers.
+**Standing constraints.** The test gate must pass on Windows and WSL (ARM64 when available). Build natively for ARM64; do not cross-compile. `src/platform` is the only OS/SDL boundary; `src/ui` must not include OS or SDL headers. `main` is the landing branch and the ARM64 tester polls `main`; `adopt-krc` is kept for history and is not polled.
 
 ## Definition of done
 
@@ -53,8 +53,8 @@ During an optimization inner loop, do not commit every change.
 <!-- project:targets:start — generated from .dev-template.json targets; edit the Notes column, not the rows -->
 | Target | Architecture | Verified by | Notes (yours — preserved on update) |
 |---|---|---|---|
-| Windows | x64 | <windows-latest in CI, or name the dev machines> | BIGBRAIN (MSVC 14.51.36231); 40/40 at 91165ae, 2026-11-20 |
-| WSL Ubuntu | x64 | <ubuntu-latest in CI, or manual — keep the checkout under ~/, never /mnt/c> | Hukilau WSL2 (Ubuntu 26.04); 40/40 at 91165ae, 2026-11-20 |
+| Windows | x64 | <windows-latest in CI, or name the dev machines> | BIGBRAIN (MSVC 14.51.36231); 40/40 at e146759 (main), 2026-11-21 |
+| WSL Ubuntu | x64 | <ubuntu-latest in CI, or manual — keep the checkout under ~/, never /mnt/c> | Hukilau WSL2 (Ubuntu 26.04); 40/40 at e146759 (main), 2026-11-21 |
 
 Target-specific notes:
 
@@ -80,7 +80,7 @@ Target-specific notes:
 
 **Toolchain.** MSVC 14.51.36231 at `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64`; CMake 4.3.1-msvc1 and Ninja 1.13.2 bundled with Visual Studio 18 (not on `PATH`); Windows SDK 10 at `C:\Program Files (x86)\Windows Kits\10\Include`; all found with `vswhere` via the doctor. WSL2 Ubuntu 26.04 figures — GCC 15.2.0, Clang 21.1.8, CMake 4.2.3, Ninja 1.13.2 — are from Hukilau (recorded 2026-11-02 in `implementation.md` §1) and have not been re-verified on BIGBRAIN. Guest C/C++ needs an installed `krc-toolchain` package (KRCompiler 4.12+, `KRC_BUILD_TOOLS=ON`) exporting `KRC_SYSROOT` and `KRC_KR32_RUNTIME_DIR`; there is no in-tree fallback.
 
-**Verified on** BIGBRAIN **at** `91165ae`: clean-clone Windows gate → 40/40 passed, and clean-clone WSL gate → 40/40 passed (`2026-11-20T22:39:04-08:00`).
+**Verified on** BIGBRAIN **at** `e146759` (`main`): Windows gate → 40/40 passed, WSL gate → 40/40 passed (`2026-11-21T06:37:48-08:00`).
 
 **Install (requires approval).** SDL2 via `scripts/install-sdl2.ps1` (vendored under `third_party/SDL2`); the krc package from its installer; on WSL, `sudo apt install build-essential cmake ninja-build pkg-config libsdl2-dev clang git`.
 

@@ -865,3 +865,21 @@ is minor rather than a patch.
 further release tag is planned here.
 
 **Blocker:** none.
+
+## 2026-11-21T06:37:57-08:00
+
+**`adopt-krc` merged into `main` as a fast-forward.** `main` was confirmed an
+ancestor of `origin/adopt-krc` and advanced `9705ef6` → `e146759` (30 commits),
+then pushed. `adopt-krc` is kept and was not force-pushed.
+
+- **Gate on `main`:** Windows → **40/40 passed**, 5.97 s; WSL → **40/40 passed**,
+  2.65 s. The tree is krc-only.
+- **Tester switched:** `README.md`, `AGENTS.local.md` and
+  `docs/arm64-tester.md` now say the ARM64 tester polls `main`; `adopt-krc` is
+  kept for history and is no longer polled.
+- If the tester appends an entry to `adopt-krc` before it picks up the new
+  instructions, that entry is merged into `main` again.
+
+**Next step:** the ARM64 tester's first `main` entry.
+
+**Blocker:** none.

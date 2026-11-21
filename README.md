@@ -102,6 +102,10 @@ test images through the same krc package.
 The guest console header is `<kr32/cons.h>`; the former `<kr32/con.h>` name is
 retired because Windows reserves it.
 
+`main` is the integration branch. The ARM64 tester polls `main` and records its
+runs in `docs/arm64-test-log.md`; `adopt-krc` is kept as the completed krc
+adoption branch and is no longer polled.
+
 ## Commands
 
 The `kr32` executable is a runner and debugger. It loads `.k32` images; it does
