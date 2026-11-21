@@ -702,3 +702,51 @@ and the shipped OS pair.
 
 **Blocker:** none for 3.10a. The test suite now requires the krc package in both
 toolchain modes; that is deliberate, and 3.10b makes it the only compiler.
+
+## 2026-11-20T22:10:23-08:00
+
+**Stage-B deletion trial — evidence only, nothing merged or pushed.** A local
+scratch branch `stage-b-deletion` was cut from `a6be220` and deleted after the
+run. It removed the `KR32_TOOLCHAIN` choice and made krc unconditional, removed
+the UI's built-in compile branches and the CLI's `as`, `ld`, `build`, `cc` and
+`cxx` commands, deleted `src/cc`, `src/cxx`, `src/asm`, `src/link` and their
+public headers, deleted KR32's runtime/libc and the injected guest-header
+strings, and updated CMake and the tests. **33 files changed, 56 insertions,
+44,003 deletions.**
+
+**Gate, real output (fresh build trees):**
+
+- Windows (`cmake --preset windows-ninja
+  -DCMAKE_PREFIX_PATH=C:/Users/kevin/source/repos/.krc-install-47fa4e5`, build,
+  `ctest --preset windows-ninja`) → **100% tests passed, 0 tests failed out of
+  40**, `Total Test time (real) = 5.08 sec`.
+- WSL (`cmake --preset linux-gcc
+  -DCMAKE_PREFIX_PATH=$HOME/krc-install-47fa4e5`, `bash scripts/run-gate.sh`) →
+  **100% tests passed, 0 failed out of 40**,
+  `Total Test time (real) = 2.67 sec`.
+- Test count unchanged from 3.10a: 40 registered, 40 passed. The first WSL
+  build failed under `-Werror` because two CLI write helpers became unused after
+  the commands were removed; deleting them fixed it, and the result above is
+  from the fixed tree.
+
+The trial was a fresh **build** tree, not a fresh **clone**; the clean-checkout
+row remains part of the 3.10b gate, not of this evidence.
+
+**Prepared artifacts (on `adopt-krc`, not the scratch branch):**
+
+- `docs/release-note-both-toolchains.md` — what the both-toolchain release
+  ships, the `KR32_TOOLCHAIN=krc` opt-in and its configure commands, the
+  `cons.h` API change, and the exact list stage B will remove.
+- `docs/cxx-gap-signoff.md` — the written sign-off list: `throw <scalar>` first,
+  then runtime-bound `new[]`, `T()`, the plain-aggregate `S()` correction,
+  `std::thread::id`, `<fstream>`, plus the debug-information display differences
+  and the C/runtime differences left outside the sign-off. It is unsigned.
+
+**Next step:** 3.10b may land only when the release has shipped with
+`KR32_TOOLCHAIN=krc` documented, the sign-off is signed, and the clean-checkout
+gate is green with the four directories, the runtime and the injection gone.
+The trial is the deletion half of that evidence; the other two conditions are
+external to this repository session.
+
+**Blocker:** none for the preparation. 3.10b is not authorised yet; the default
+on `adopt-krc` is still `builtin` and nothing there was deleted.
