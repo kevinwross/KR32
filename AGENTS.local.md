@@ -76,6 +76,8 @@ Target-specific notes:
 
 **Build entry point.** No wrapper script: configure and build with the presets below, passing the installed krc package prefix. Windows: `cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=<krc install>` then `cmake --build --preset windows-msvc-debug`; WSL/Linux: `cmake --preset linux-gcc -DCMAKE_PREFIX_PATH=<krc install>` then `cmake --build --preset linux-gcc`. CMake, Ninja, and ctest are not on `PATH` on Windows; use the full paths in `AGENTS.md`.
 
+**The package and the build must share a configuration**; [toolchain-embedding.md](../krcompiler/docs/toolchain-embedding.md) states why. Locally that means `build/windows-msvc` (Debug) configured with `-DCMAKE_PREFIX_PATH=C:/Users/kevin/krc-debug`, and `build/windows-msvc-release` (Release) with `-DCMAKE_PREFIX_PATH=C:/Users/kevin/krc`.
+
 **Doctor.** `.agents/templates/doctor.msvc.ps1` — the delivered starting point, not wired into a wrapper. Exits 0 on BIGBRAIN and reports the MSVC, Windows SDK, and CMake it resolved; run it when a build cannot find its toolchain and quote its output.
 
 **Toolchain.** MSVC 14.51.36231 at `C:\Program Files\Microsoft Visual Studio\18\Community\VC\Tools\MSVC\14.51.36231\bin\Hostx64\x64`; CMake 4.3.1-msvc1 and Ninja 1.13.2 bundled with Visual Studio 18 (not on `PATH`); Windows SDK 10 at `C:\Program Files (x86)\Windows Kits\10\Include`; all found with `vswhere` via the doctor. WSL2 Ubuntu 26.04 figures — GCC 15.2.0, Clang 21.1.8, CMake 4.2.3, Ninja 1.13.2 — are from Hukilau (recorded 2026-11-02 in `implementation.md` §1) and have not been re-verified on BIGBRAIN. Guest C/C++ needs an installed `krc-toolchain` package (KRCompiler 4.12+, `KRC_BUILD_TOOLS=ON`) exporting `KRC_SYSROOT` and `KRC_KR32_RUNTIME_DIR`; there is no in-tree fallback.
