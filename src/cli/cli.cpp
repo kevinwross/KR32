@@ -138,6 +138,26 @@ bool load_executable(core::Machine& machine,
     return true;
 }
 
+// The four debugging instruments described in debug-instruments.md: --watch,
+// --break, --watch-page and --watch-fp. They are parsed by the vm and os
+// subcommands and read by run_machine, so they live at file scope rather than in
+// its argument list, which every caller would otherwise thread four unused fields
+// through.
+struct DebugInstruments {
+    bool watch = false;
+    std::uint32_t watch_address = 0;
+    bool breakpoint = false;
+    std::uint32_t break_address = 0;
+    unsigned break_limit = 1;
+    unsigned break_hits = 0;
+    bool page = false;
+    std::uint32_t page_base = 0;
+    std::vector<std::uint32_t> page_before;
+    bool frame_pointer = false;
+};
+
+DebugInstruments g_debug;
+
 int run_machine(core::Machine& machine,
                 std::uint64_t max_steps,
                 bool trace,
@@ -163,7 +183,60 @@ int run_machine(core::Machine& machine,
                 std::printf("0x%08X: 0x%08X\n", machine.pc(), word);
             }
         }
+        if (g_debug.breakpoint && machine.pc() == g_debug.break_address) {
+            std::printf("break at 0x%08X: r2=0x%08X r3=0x%08X r4=0x%08X r5=0x%08X "
+                        "sp=0x%08X\n",
+                        machine.pc(), machine.reg(2), machine.reg(3), machine.reg(4),
+                        machine.reg(5), machine.reg(15));
+            for (int word = 1; word <= 8; ++word) {
+                std::uint32_t value = 0;
+                (void)machine.read32(machine.reg(15) + static_cast<std::uint32_t>(4 * word),
+                                     value);
+                std::printf("  [sp+%2d] = 0x%08X\n", 4 * word, value);
+            }
+            if (++g_debug.break_hits >= g_debug.break_limit) {
+                return 0;
+            }
+        }
+        const std::uint32_t debug_pc = machine.pc();
+        const std::uint32_t debug_fp_before = machine.reg(13);
+        std::uint32_t debug_watched_before = 0;
+        if (g_debug.watch) {
+            (void)machine.read32(g_debug.watch_address, debug_watched_before);
+        }
+        if (g_debug.page && g_debug.page_before.empty()) {
+            g_debug.page_before.assign(1024, 0);
+            for (std::uint32_t word = 0; word < 1024; ++word) {
+                (void)machine.read32(g_debug.page_base + 4 * word,
+                                     g_debug.page_before[word]);
+            }
+        }
         const core::StepResult result = machine.step();
+        if (g_debug.watch) {
+            std::uint32_t debug_watched_after = 0;
+            (void)machine.read32(g_debug.watch_address, debug_watched_after);
+            if (debug_watched_after != debug_watched_before) {
+                std::printf("watch 0x%08X at pc=0x%08X: 0x%08X -> 0x%08X\n",
+                            g_debug.watch_address, debug_pc, debug_watched_before,
+                            debug_watched_after);
+            }
+        }
+        if (g_debug.page) {
+            for (std::uint32_t word = 0; word < 1024; ++word) {
+                std::uint32_t value = 0;
+                (void)machine.read32(g_debug.page_base + 4 * word, value);
+                if (value != g_debug.page_before[word]) {
+                    std::printf("page 0x%08X at pc=0x%08X: 0x%08X -> 0x%08X\n",
+                                g_debug.page_base + 4 * word, debug_pc,
+                                g_debug.page_before[word], value);
+                    g_debug.page_before[word] = value;
+                }
+            }
+        }
+        if (g_debug.frame_pointer && machine.reg(13) != debug_fp_before) {
+            std::printf("fp 0x%08X -> 0x%08X at pc=0x%08X\n", debug_fp_before,
+                        machine.reg(13), debug_pc);
+        }
         if (devices != nullptr) {
             const std::string serial_output = devices->serial().take_output();
             if (!serial_output.empty()) {
@@ -449,6 +522,35 @@ int command_vm(int argc, char** argv) {
         }
         if (argument == "--trace") {
             trace = true;
+            continue;
+        }
+        // The debugging instruments, described in debug-instruments.md.
+        if (argument == "--watch" && index + 1 < argc) {
+            g_debug.watch_address =
+                static_cast<std::uint32_t>(std::strtoul(argv[++index], nullptr, 0));
+            g_debug.watch = true;
+            continue;
+        }
+        if (argument == "--break" && index + 1 < argc) {
+            g_debug.break_address =
+                static_cast<std::uint32_t>(std::strtoul(argv[++index], nullptr, 0));
+            g_debug.breakpoint = true;
+            continue;
+        }
+        if (argument == "--break-max" && index + 1 < argc) {
+            g_debug.break_limit =
+                static_cast<unsigned>(std::strtoul(argv[++index], nullptr, 0));
+            continue;
+        }
+        if (argument == "--watch-page" && index + 1 < argc) {
+            g_debug.page_base = static_cast<std::uint32_t>(
+                                    std::strtoul(argv[++index], nullptr, 0)) &
+                                ~0xFFFu;
+            g_debug.page = true;
+            continue;
+        }
+        if (argument == "--watch-fp") {
+            g_debug.frame_pointer = true;
             continue;
         }
         if (argument == "--stats") {
