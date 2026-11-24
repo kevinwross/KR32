@@ -52,13 +52,6 @@ vm::FileDialogCallback platform_file_dialog() {
 constexpr std::uint32_t kDefaultBase = 0x0001'0000;
 constexpr std::uint64_t kDefaultMaxSteps = 1'000'000;
 
-std::string lower(std::string_view text) {
-    std::string result(text);
-    for (char& c : result) {
-        c = static_cast<char>(std::tolower(static_cast<unsigned char>(c)));
-    }
-    return result;
-}
 
 bool read_file(const std::string& path, std::vector<std::uint8_t>& bytes, std::string& error) {
     std::ifstream input(path, std::ios::binary);
