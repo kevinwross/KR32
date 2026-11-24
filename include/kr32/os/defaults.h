@@ -4,6 +4,7 @@
 
 #include <cstdlib>
 #include <filesystem>
+#include <fstream>
 #include <string>
 #include <string_view>
 #include <system_error>
@@ -156,7 +157,22 @@ inline bool resolve(std::string_view argv0,
     std::vector<std::filesystem::path> bios_candidates;
     detail::add_candidate(bios_candidates, detail::environment("KR32OS_BIOS"));
     const std::filesystem::path kernel_path(paths.kernel);
-    const bool kernel_is_container = kernel_path.extension() == ".k32";
+    // The format is a property of the file, not of its name: a container starts
+    // with the KRO magic, a flat image does not. Reading four bytes decides it
+    // the same way for any name, including one this code has never seen.
+    const auto starts_with_kro_magic = [](const std::filesystem::path& path) {
+        std::ifstream stream(path, std::ios::binary);
+        if (!stream) return false;
+        char magic[4] = {0, 0, 0, 0};
+        stream.read(magic, sizeof(magic));
+        return stream.gcount() == static_cast<std::streamsize>(sizeof(magic)) &&
+               magic[0] == 'K' && magic[1] == 'R' && magic[2] == 'O' && magic[3] == '\0';
+    };
+    // With no kernel file to read -- the embedded OS -- there is no header to
+    // decide from, and the name is the only information there is.
+    const bool kernel_is_container =
+        detail::is_file(kernel_path) ? starts_with_kro_magic(kernel_path)
+                                     : kernel_path.extension() == ".k32";
     detail::add_candidate(
         bios_candidates,
         kernel_path.parent_path() /
