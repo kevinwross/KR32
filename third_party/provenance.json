@@ -1,0 +1,43 @@
+{
+  "directory": "third_party",
+  "directories": [
+    "third_party"
+  ],
+  "entries": [
+    {
+      "path": "third_party/doctest.h",
+      "sha256": "44faa038e9c3f9728efbda143748d01124ea0a27f4bf78f35a15d8fab2e039fb",
+      "source": "doctest v2.4.11, https://github.com/doctest/doctest (MIT)"
+    },
+    {
+      "path": "third_party/doctest.LICENSE.txt",
+      "sha256": "0fe0b331fa1513dcce8604ff1fa925f32d1cea17d8aeb1c2471fad40d291adc5",
+      "source": "doctest v2.4.11, LICENSE (MIT)"
+    },
+    {
+      "path": "third_party/fonts/OFL-Inter.txt",
+      "sha256": "262481e844521b326f5ecd053e59b98c8b2da78c8ee1bdbb6e8174305e54935a",
+      "source": "Inter, SIL Open Font License 1.1"
+    },
+    {
+      "path": "third_party/fonts/OFL-JetBrainsMono.txt",
+      "sha256": "a76abf002c49097d146e86740a3105a5d00450b1592e820a1109a8c5680cd697",
+      "source": "JetBrains Mono, SIL Open Font License 1.1"
+    },
+    {
+      "path": "third_party/fonts/README.md",
+      "sha256": "ee1ff0905cd5ccd11f8df4f10e07e64a92375c9797cb39380bed4339d8d65a9b",
+      "source": "recorded in this repository; origin not written down"
+    },
+    {
+      "path": "third_party/README.md",
+      "sha256": "92c1de9821aaedf49703ccf73c7ae5bcc2ef799d909a5f0d19e3e91c12da0dd5",
+      "source": "recorded in this repository; origin not written down"
+    },
+    {
+      "path": "third_party/stb/stb_truetype.h",
+      "sha256": "ecd30b05e0dd4fea3a13c26810dd9e1992dc379049482c393d5a19e6b5090aab",
+      "source": "stb_truetype v1.26, https://github.com/nothings/stb (public domain)"
+    }
+  ]
+}

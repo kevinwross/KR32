@@ -329,6 +329,17 @@ endif()
 if(KR32_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
+
+    # J7: a checked-in artefact whose origin nobody recorded cannot be trusted to
+    # stay what it was. The manifest names each file, its hash and where it came
+    # from; this row fails when one is edited, replaced, removed or added without
+    # regenerating it.
+    add_test(NAME provenance_matches_manifest
+        COMMAND ${CMAKE_COMMAND}
+            "-DROOT=${CMAKE_CURRENT_SOURCE_DIR}"
+            "-DMANIFEST=${CMAKE_CURRENT_SOURCE_DIR}/third_party/provenance.json"
+            -P "${CMAKE_CURRENT_SOURCE_DIR}/cmake/CheckProvenance.cmake")
+    set_tests_properties(provenance_matches_manifest PROPERTIES LABELS "hygiene")
 endif()
 
 install(TARGETS kr32 RUNTIME DESTINATION bin)
