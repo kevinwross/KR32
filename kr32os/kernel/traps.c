@@ -10,14 +10,11 @@ void kernel_leave_user(void);
 unsigned int kernel_read_far(void);
 
 void trap_dispatch(int vector, unsigned int *frame) {
-    // A fault taken in user mode is the process's problem, not the kernel's: the
-    // syscall result is set and the kernel leaves user mode, which is how a wild
-    // pointer in a program becomes a failed syscall. The condition was inverted --
-    // it abandoned to the kernel on a *kernel* fault and panicked on a user one --
-    // so the first bad pointer in any program halted the machine, and the panic
-    // line that followed named the user's instruction as though the kernel had
-    // executed it.
-    if ((frame[TRAP_FRAME_FLAGS] & TRAP_USER_MODE_BIT) != 0) {
+    // Bit 0x20 is kFlagK: set means the trap was taken in *kernel* mode, so the
+    // test is "K clear" -- user mode -- and the earlier "!=" I wrote here was
+    // backwards. The comment in trap.h names the bit TRAP_USER_MODE_BIT, which is
+    // what misled me; the hardware calls it the kernel bit.
+    if ((frame[TRAP_FRAME_FLAGS] & TRAP_USER_MODE_BIT) == 0) {
         volatile struct syscall_scratch *scratch =
             (volatile struct syscall_scratch *)SYSCALL_SCRATCH_PHYS;
         scratch->result = USER_FAULT_STATUS;
