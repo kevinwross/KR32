@@ -13,7 +13,14 @@ void trap_dispatch(int vector, unsigned int *frame) {
     }
     console_write("panic vector=");
     console_write_uint((unsigned int)vector);
-    console_write(" pc=0x");
-    console_write_uint(frame[TRAP_FRAME_PC]);
+    // Every frame word, not just the one the header names: a diagnostic that reads
+    // the wrong slot is worse than none, because it names an address that never
+    // executed.
+    console_write(" frame=");
+    for (int word = 0; word < 4; ++word) {
+        console_write("0x");
+        console_write_uint(frame[word]);
+        console_write(" ");
+    }
     console_write("\n");
 }

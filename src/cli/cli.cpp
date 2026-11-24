@@ -158,6 +158,10 @@ struct DebugInstruments {
     // the fault handler panics the machine has already left them.
     bool trace_tail = false;
     std::vector<std::uint32_t> recent_pc;
+    // Print the transition when the machine leaves the loaded image: that is what
+    // a corrupt return address looks like from outside, and it names the value
+    // that was popped and the frame it came from.
+    bool trace_leave = false;
     std::vector<std::uint32_t> page_before;
     bool frame_pointer = false;
 };
@@ -230,7 +234,31 @@ int run_machine(core::Machine& machine,
                                      g_debug.page_before[word]);
             }
         }
+        const std::uint32_t debug_sp_before = machine.sp();
         const core::StepResult result = machine.step();
+        // A RET whose popped word is outside the loaded image is the defect this
+        // instrument exists for: the fault is raised inside the return's own step,
+        // with the target as the victim PC, so comparing the machine's pc after the
+        // step only ever sees the handler.
+        std::uint32_t instruction_word = 0;
+        bool bad_return = false;
+        if (g_debug.trace_leave) {
+            (void)machine.read32(debug_pc, instruction_word);
+            if ((instruction_word >> 24) == 0x76U) {
+                std::uint32_t popped = 0;
+                (void)machine.read32(debug_sp_before, popped);
+                bad_return = popped < 0x00020000 || popped >= 0x00040000;
+            }
+        }
+        if (g_debug.trace_leave && bad_return) {
+            std::printf("leave at pc=0x%08X -> pc=0x%08X sp=0x%08X\n", debug_pc,
+                        machine.pc(), debug_sp_before);
+            for (int word = 0; word <= 6; ++word) {
+                std::uint32_t value = 0;
+                (void)machine.read32(debug_sp_before + static_cast<std::uint32_t>(4 * word), value);
+                std::printf("  [sp+%2d] = 0x%08X\n", 4 * word, value);
+            }
+        }
         if (g_debug.watch) {
             std::uint32_t debug_watched_after = 0;
             (void)machine.read32(g_debug.watch_address, debug_watched_after);
@@ -576,6 +604,10 @@ int command_vm(int argc, char** argv) {
         }
         if (argument == "--trace-tail") {
             g_debug.trace_tail = true;
+            continue;
+        }
+        if (argument == "--trace-leave") {
+            g_debug.trace_leave = true;
             continue;
         }
         if (argument == "--watch-fp") {
