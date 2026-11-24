@@ -91,6 +91,7 @@ if(NOT CMAKE_BUILD_TYPE AND NOT CMAKE_CONFIGURATION_TYPES)
     set(CMAKE_BUILD_TYPE Debug CACHE STRING "Build type" FORCE)
 endif()
 
+include(GNUInstallDirs)
 add_library(kr32_warnings INTERFACE)
 if(MSVC)
     target_compile_options(kr32_warnings INTERFACE /W4 /permissive- /Zc:__cplusplus /utf-8)
@@ -114,12 +115,41 @@ endif()
 
 function(kr32_add_library name)
     add_library(${name} STATIC ${ARGN})
-    target_include_directories(${name} PUBLIC "${CMAKE_CURRENT_SOURCE_DIR}/include")
+    target_include_directories(${name} PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:${CMAKE_INSTALL_INCLUDEDIR}>)
     target_link_libraries(${name} PRIVATE kr32_warnings)
     target_compile_features(${name} PUBLIC cxx_std_20)
 endfunction()
 
 kr32_add_library(kr32_core src/core/encoding.cpp src/core/machine.cpp src/core/devices.cpp)
+# Exporting the core lets another tree link this machine instead of compiling
+# its sources; see D4 of the build cleanup plan and the same export in kr232 and
+# kr216. The INTERFACE_INCLUDE_DIRECTORIES split in kr32_add_library above is a
+# precondition: an absolute source path cannot be exported.
+add_library(kr32::core ALIAS kr32_core)
+set_target_properties(kr32_core PROPERTIES EXPORT_NAME core)
+target_compile_features(kr32_core PUBLIC cxx_std_20)
+option(KR32_INSTALL "Install kr32::core and its headers for other trees" OFF)
+if(KR32_INSTALL)
+    install(TARGETS kr32_core kr32_warnings EXPORT kr32Targets
+        ARCHIVE DESTINATION "${CMAKE_INSTALL_LIBDIR}"
+        RUNTIME DESTINATION "${CMAKE_INSTALL_BINDIR}")
+    install(DIRECTORY include/ DESTINATION "${CMAKE_INSTALL_INCLUDEDIR}")
+    install(EXPORT kr32Targets
+        FILE kr32Targets.cmake
+        NAMESPACE kr32::
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/kr32-core")
+    include(CMakePackageConfigHelpers)
+    file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/kr32-core-config.cmake.in"
+        "@PACKAGE_INIT@\ninclude(\"\${CMAKE_CURRENT_LIST_DIR}/kr32Targets.cmake\")\n")
+    configure_package_config_file(
+        "${CMAKE_CURRENT_BINARY_DIR}/kr32-core-config.cmake.in"
+        "${CMAKE_CURRENT_BINARY_DIR}/kr32-core-config.cmake"
+        INSTALL_DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/kr32-core")
+    install(FILES "${CMAKE_CURRENT_BINARY_DIR}/kr32-core-config.cmake"
+        DESTINATION "${CMAKE_INSTALL_LIBDIR}/cmake/kr32-core")
+endif()
 
 kr32_add_library(kr32_container src/container/container.cpp)
 target_link_libraries(kr32_container PUBLIC kr32_core)
