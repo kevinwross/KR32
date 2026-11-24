@@ -1,4 +1,5 @@
 .file "kr32os/kernel/user-asm.S"
+.extern sys_dispatch
 .extern sys_write
 .extern __initrd_start
 
