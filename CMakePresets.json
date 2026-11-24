@@ -15,7 +15,6 @@
       "cacheVariables": {
         "KR32_BUILD_UI": "ON",
         "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON",
         "SDL2_DIR": "${sourceDir}/third_party/SDL2/cmake"
       }
     },
@@ -28,7 +27,6 @@
       "cacheVariables": {
         "KR32_BUILD_UI": "ON",
         "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON",
         "SDL2_DIR": "${sourceDir}/third_party/SDL2/cmake"
       }
     },
@@ -41,8 +39,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++",
         "KR32_BUILD_UI": "ON",
-        "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON"
+        "KR32_BUILD_TESTS": "ON"
       }
     },
     {
@@ -54,8 +51,7 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "g++",
         "KR32_BUILD_UI": "ON",
-        "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON"
+        "KR32_BUILD_TESTS": "ON"
       }
     },
     {
@@ -67,8 +63,7 @@
         "CMAKE_BUILD_TYPE": "Release",
         "CMAKE_CXX_COMPILER": "g++",
         "KR32_BUILD_UI": "ON",
-        "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON"
+        "KR32_BUILD_TESTS": "ON"
       }
     },
     {
@@ -80,8 +75,7 @@
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++",
         "KR32_BUILD_UI": "ON",
-        "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON"
+        "KR32_BUILD_TESTS": "ON"
       }
     },
     {
@@ -94,7 +88,6 @@
         "CMAKE_CXX_COMPILER": "clang++",
         "KR32_BUILD_UI": "OFF",
         "KR32_BUILD_TESTS": "ON",
-        "KR32_BUILD_OS_IMAGES": "ON",
         "KR32_SANITIZE": "ON"
       }
     }
