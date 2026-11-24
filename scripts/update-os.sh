@@ -1,44 +1,49 @@
 #!/usr/bin/env bash
-# Rebuild KR32OS with the current kr32 executable, copy the .k32 images into the
-# host resources, and relink kr32 with the new embedded images.
+# Rebuilds KR32OS with the KRCompiler toolchain, copies the two container images
+# into the host resources, and relinks kr32 with them embedded.
 #
 # This is the explicit "update the BIOS/kernel" step. Normal kr32 builds only
-# consume the checked-in .k32 files under src/resources/os.
+# consume the checked-in .k32 files under src/resources/os, and the ctest row
+# kr32_os_images_match_source fails when they no longer match a rebuild.
+#
+#   KRC=/path/to/krc bash scripts/update-os.sh [preset]
+#
+# The old version of this script drove `kr32 cc`, `kr32 as` and `kr32 ld` through
+# kr32os/build.sh; those verbs no longer exist, so the compiler is the input now.
 set -euo pipefail
 
+preset="${1:-linux-gcc}"
 here="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-root="$(cd "$here/.." && pwd)"
-preset="${PRESET:-linux-gcc}"
-kr32="${KR32:-$root/build/linux-gcc/kr32}"
-cmake_bin="${CMAKE:-cmake}"
+root="$(dirname "$here")"
 
-skip_build=0
-skip_relink=0
-for argument in "$@"; do
-    case "$argument" in
-        --skip-build) skip_build=1 ;;
-        --skip-relink) skip_relink=1 ;;
-        *) echo "update-os.sh: unknown argument $argument" >&2; exit 2 ;;
-    esac
-done
-
-if [ "$skip_build" -eq 0 ]; then
-    "$cmake_bin" --build "$root/build/$preset" --target kr32
+if [[ -z "${KRC:-}" ]]; then
+    for candidate in \
+        "$root/../krcompiler/build/linux-gcc-debug/host/bin/Debug/krc" \
+        "$HOME/krc/bin/krc"; do
+        if [[ -x "$candidate" ]]; then
+            KRC="$candidate"
+            break
+        fi
+    done
+fi
+if [[ -z "${KRC:-}" ]] && command -v krc >/dev/null 2>&1; then
+    KRC="$(command -v krc)"
+fi
+if [[ -z "${KRC:-}" || ! -x "$KRC" ]]; then
+    echo "krc was not found; set KRC" >&2
+    exit 2
 fi
 
-if [ ! -x "$kr32" ]; then
-    echo "update-os.sh: kr32 not found at $kr32 (set KR32 or build first)" >&2
-    exit 1
-fi
+cmake --build --preset "$preset" --target kr32 >/dev/null
 
-KR32="$kr32" bash "$root/kr32os/build.sh"
+KRC="$KRC" bash "$root/kr32os/build.sh"
 
-mkdir -p "$root/src/resources/os/linux"
-cp "$root/kr32os/build/linux/bios.k32" "$root/src/resources/os/linux/bios.k32"
-cp "$root/kr32os/build/linux/kernel.k32" "$root/src/resources/os/linux/kernel.k32"
+source="$root/kr32os/build/linux"
+destination="$root/src/resources/os/linux"
+mkdir -p "$destination"
+cp "$source/bios.k32" "$destination/bios.k32"
+cp "$source/kernel.k32" "$destination/kernel.k32"
 
-if [ "$skip_relink" -eq 0 ]; then
-    "$cmake_bin" --build "$root/build/$preset" --target kr32
-fi
+cmake --build --preset "$preset" --target kr32 >/dev/null
 
-echo "updated $root/src/resources/os/linux from $root/kr32os/build/linux"
+echo "updated $destination from $source"
