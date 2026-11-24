@@ -7,6 +7,33 @@
 # machine 80% of its logical processors.
 set -e
 preset="${1:-linux-gcc-debug}"
+
+# I2: build in the native mirror, never on the mount. A /mnt source carries mount
+# paths in its debug data and its timestamps are too coarse for incremental
+# builds. The re-executed gate runs on a native path, so it cannot loop.
+in_place=0
+for argument in "$@"; do
+    if [ "$argument" = "--in-place" ]; then in_place=1; fi
+done
+root="$(cd "$(dirname "$0")/.." && pwd)"
+case "$root" in
+    /mnt/*)
+        if [ "$in_place" = "1" ]; then
+            echo "gate: building on $root (--in-place): debug paths will carry the mount" >&2
+        else
+            repo="$(basename "$root")"
+            mirror_tool="${KRC_MIRROR_TOOL:-$root/../krcompiler/scripts/kr-mirror.sh}"
+            if [ ! -f "$mirror_tool" ]; then
+                echo "gate: $root is a /mnt path and no mirror tool was found at '$mirror_tool'; set KRC_MIRROR_TOOL or pass --in-place" >&2
+                exit 2
+            fi
+            bash "$mirror_tool" "$repo" --wait 600 >&2
+            mirror="$HOME/mirrors/$repo"
+            echo "gate: source was $root; building from the mirror at $mirror" >&2
+            exec bash "$mirror/scripts/run-gate.sh" "$@"
+        fi
+        ;;
+esac
 # NUMBER_OF_PROCESSORS is set by Windows and by CI runners; nproc is the fallback.
 cores="${NUMBER_OF_PROCESSORS:-$(nproc)}"
 case "$(uname -m)" in
