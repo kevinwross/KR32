@@ -269,10 +269,10 @@ add_custom_target(check
 # compiler and compares, so a hand edit or an address-moving change fails here.
 # Registered only when the gate names a compiler, because a row that silently
 # vanishes is worse than one that says it was not asked for.
-if(KR32OS_KRC)
+if(KR32_BUILD_OS_IMAGES)
     add_test(NAME kr32_os_images_match_source
         COMMAND ${CMAKE_COMMAND}
-            -DKRC=${KR32OS_KRC}
+            -DKRC=${KRG_KRC}
             -DROOT=${CMAKE_SOURCE_DIR}
             -DSCRATCH=${CMAKE_BINARY_DIR}/os-images
             -P ${CMAKE_SOURCE_DIR}/cmake/CheckOsImages.cmake)

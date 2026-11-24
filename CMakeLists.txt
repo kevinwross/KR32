@@ -11,6 +11,20 @@ option(KR32_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OF
 # The installed krc package is the compiler: the window's BUILD and the test
 # images both use it, and the package owns the target sysroot and runtime.
 find_package(krc-toolchain CONFIG REQUIRED)
+# The OS images under src/resources/os are built by the compiler, so the row
+# that rebuilds them needs krc. Asking for that is explicit: with the option ON
+# the compiler is required and its absence stops the configure, and with it OFF
+# no row is registered and the configure says so. kr32 itself links the package
+# above; this is only about the executable the OS build drives.
+option(KR32_BUILD_OS_IMAGES "Rebuild the embedded OS images with krc (needs krc)" OFF)
+set(KRG_KRC "" CACHE FILEPATH "krc executable used to rebuild the OS images")
+set(KRG_KRLD "" CACHE FILEPATH "krld executable (resolved with krc)")
+include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/KrGuest.cmake")
+if(KR32_BUILD_OS_IMAGES)
+    krguest_find_toolchain()
+else()
+    message(STATUS "OS image rebuild is off: pass -DKR32_BUILD_OS_IMAGES=ON to check src/resources/os")
+endif()
 if(NOT KRC_SYSROOT)
     message(FATAL_ERROR
         "krc-toolchain did not export KRC_SYSROOT. The package has no target "
