@@ -153,6 +153,11 @@ struct DebugInstruments {
     unsigned break_hits = 0;
     bool page = false;
     std::uint32_t page_base = 0;
+    // A ring of the most recent program counters, printed when the run stops. A
+    // wild jump is only visible in the few instructions before it, and by the time
+    // the fault handler panics the machine has already left them.
+    bool trace_tail = false;
+    std::vector<std::uint32_t> recent_pc;
     std::vector<std::uint32_t> page_before;
     bool frame_pointer = false;
 };
@@ -185,13 +190,15 @@ int run_machine(core::Machine& machine,
             }
         }
         if (g_debug.breakpoint && machine.pc() == g_debug.break_address) {
-            std::printf("break at 0x%08X: r2=0x%08X r3=0x%08X r4=0x%08X r5=0x%08X "
-                        "sp=0x%08X\n",
-                        machine.pc(), machine.reg(2), machine.reg(3), machine.reg(4),
-                        machine.reg(5), machine.reg(15));
-            for (int word = 1; word <= 8; ++word) {
+            std::printf("break at 0x%08X: r0=0x%08X r2=0x%08X r3=0x%08X r4=0x%08X "
+                        "r5=0x%08X r6=0x%08X r7=0x%08X sp=0x%08X\n",
+                        machine.pc(), machine.reg(0), machine.reg(2), machine.reg(3),
+                        machine.reg(4), machine.reg(5), machine.reg(6), machine.reg(7),
+                        machine.sp());
+            // [sp] is the word a return will pop, so it belongs in the dump.
+            for (int word = 0; word <= 8; ++word) {
                 std::uint32_t value = 0;
-                (void)machine.read32(machine.reg(15) + static_cast<std::uint32_t>(4 * word),
+                (void)machine.read32(machine.sp() + static_cast<std::uint32_t>(4 * word),
                                      value);
                 std::printf("  [sp+%2d] = 0x%08X\n", 4 * word, value);
             }
@@ -200,6 +207,13 @@ int run_machine(core::Machine& machine,
             }
         }
         const std::uint32_t debug_pc = machine.pc();
+        if (g_debug.trace_tail) {
+            const std::size_t limit = 4096;
+            if (g_debug.recent_pc.size() == limit) {
+                g_debug.recent_pc.erase(g_debug.recent_pc.begin());
+            }
+            g_debug.recent_pc.push_back(debug_pc);
+        }
         // kr32's frame pointer is R7 (docs/abi.md:105: "R7 | Frame pointer
         // (callee-saved)"), not R13. Watching R13 here printed a counter climbing
         // one per call and looked like a drifting frame, which is the kind of
@@ -275,6 +289,12 @@ int run_machine(core::Machine& machine,
     const int exit_code = machine.exit_code_set()
                               ? static_cast<int>(machine.exit_code() & 0xFFU)
                               : static_cast<int>(machine.reg(0) & 0xFFU);
+    if (g_debug.trace_tail) {
+        std::printf("tail: last %zu instruction addresses, oldest first\n", g_debug.recent_pc.size());
+        for (const std::uint32_t address : g_debug.recent_pc) {
+            std::printf("  pc=0x%08X\n", address);
+        }
+    }
     std::printf("HALTED exit=%d\n", exit_code);
     if (stats) {
         std::printf("ticks=%llu\n", static_cast<unsigned long long>(machine.ticks()));
@@ -552,6 +572,10 @@ int command_vm(int argc, char** argv) {
                                     std::strtoul(argv[++index], nullptr, 0)) &
                                 ~0xFFFu;
             g_debug.page = true;
+            continue;
+        }
+        if (argument == "--trace-tail") {
+            g_debug.trace_tail = true;
             continue;
         }
         if (argument == "--watch-fp") {
