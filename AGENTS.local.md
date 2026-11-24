@@ -28,6 +28,15 @@ Add entries here rather than editing the managed blocks in `AGENTS.md`; an edit 
 
 `KR32_WARNINGS_AS_ERRORS` is ON, so `/W4 /WX` on MSVC and `-Wall -Wextra -Wpedantic -Werror` elsewhere make a green build the warning gate; there is no separate linter.
 
+## The OS images
+
+`src/resources/os/<host>/{bios,kernel}.kr32` are the compiler's own output, not a fixture. `kr32_os_images_match_source` rebuilds them with `krc` and compares hashes, so editing one by hand fails that row; the presets set `KR32_BUILD_OS_IMAGES=ON`, which is what registers it. To regenerate them after a compiler change:
+
+    pwsh -File kr32os/build.ps1 -Krc <krc.exe>
+    copy kr32os/build/windows/{bios,kernel}.kr32 src/resources/os/windows/
+
+The build is incremental and caches `user_*.kro` in the output directory, so delete that directory when the compiler changes or stale objects will be packed into the image.
+
 ## Commit and test cadence
 
 During an optimization inner loop, do not commit every change.
