@@ -1,2 +1,5 @@
-# SDL2 is fetched into third_party and is large; the mirror does not carry it.
-third_party/
+# Nothing here needs an exception today. third_party/ was excluded when SDL2 was
+# fetched into it; it is no longer, and the exclusion did more harm than good: an
+# excluded path is never updated, so the mirror's third_party drifted (a new
+# provenance manifest never arrived and the check failed for a file that is
+# committed) while the build kept using the copy it already had.

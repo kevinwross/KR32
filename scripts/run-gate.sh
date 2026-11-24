@@ -45,6 +45,11 @@ case "$root" in
 esac
 # NUMBER_OF_PROCESSORS is set by Windows and by CI runners; nproc is the fallback.
 cores="${NUMBER_OF_PROCESSORS:-$(nproc)}"
+# A share handed down by the family gate wins over this script's own sizing.
+if [ -n "${FAMILY_JOBS:-}" ]; then
+    echo "gate: ${FAMILY_JOBS} jobs from the family gate"
+    exec_jobs="${FAMILY_JOBS}"
+fi
 case "$(uname -m)" in
     aarch64|arm64) jobs=4 ;;
     *) jobs=$(( cores * 8 / 10 )); [ "$jobs" -lt 1 ] && jobs=1 ;;
@@ -59,6 +64,7 @@ case "${preset}" in
         fi
         ;;
 esac
+if [ -n "${exec_jobs:-}" ]; then jobs="${exec_jobs}"; fi
 echo "gate: ${preset} on $(uname -m), $(nproc) logical processors -> ${jobs} jobs"
 # A fresh mirror has no build directory, and the gate used to fail with "not a
 # directory" rather than configuring one. Configure only when it is missing, so an
