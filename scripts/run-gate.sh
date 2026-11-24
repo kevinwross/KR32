@@ -8,6 +8,15 @@
 set -e
 preset="${1:-linux-gcc-debug}"
 
+# J5: ask the doctor first, so a missing tool fails before the first compile with
+# a sentence naming the tool and the repository.
+doctor_tool="${KRC_DOCTOR_TOOL:-$(cd "$(dirname "$0")/.." && pwd)/../krcompiler/scripts/doctor.sh}"
+if [ -f "$doctor_tool" ]; then
+    sh "$doctor_tool" kr32 --need=krc,krld
+else
+    echo "gate: no doctor at '$doctor_tool' (set KRC_DOCTOR_TOOL); continuing without one" >&2
+fi
+
 # I2: build in the native mirror, never on the mount. A /mnt source carries mount
 # paths in its debug data and its timestamps are too coarse for incremental
 # builds. The re-executed gate runs on a native path, so it cannot loop.
