@@ -270,10 +270,18 @@ add_custom_target(check
 # Registered only when the gate names a compiler, because a row that silently
 # vanishes is worse than one that says it was not asked for.
 if(KR32_BUILD_OS_IMAGES)
+    # The two hosts carry their own images: the compiler embeds source paths in the
+    # debug sections, so a Windows build and a WSL build of the same source differ.
+    if(WIN32)
+        set(KR32_OS_IMAGE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/windows")
+    else()
+        set(KR32_OS_IMAGE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/linux")
+    endif()
     add_test(NAME kr32_os_images_match_source
         COMMAND ${CMAKE_COMMAND}
             -DKRC=${KRG_KRC}
             -DROOT=${CMAKE_SOURCE_DIR}
             -DSCRATCH=${CMAKE_BINARY_DIR}/os-images
+            -DOS_DIR=${KR32_OS_IMAGE_DIR}
             -P ${CMAKE_SOURCE_DIR}/cmake/CheckOsImages.cmake)
 endif()

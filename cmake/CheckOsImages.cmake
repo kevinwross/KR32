@@ -5,7 +5,9 @@
 #
 # The images are built twice as well: a build that is not reproducible cannot be
 # compared with a committed copy in a way a reader can trust, so the row says which
-# of the two properties failed.
+# of the two properties failed. Windows drives kr32os/build.ps1, other hosts drive
+# kr32os/build.sh, because the two hosts carry their own images -- the compiler
+# embeds source paths in the debug sections.
 if(NOT DEFINED KRC OR NOT DEFINED ROOT OR NOT DEFINED SCRATCH)
     message(FATAL_ERROR "KRC, ROOT and SCRATCH are required")
 endif()
@@ -13,17 +15,36 @@ if(NOT EXISTS "${KRC}")
     message(FATAL_ERROR "krc was not found at ${KRC}")
 endif()
 if(NOT DEFINED OS_DIR)
-    set(OS_DIR "${ROOT}/src/resources/os/windows")
+    if(WIN32)
+        set(OS_DIR "${ROOT}/src/resources/os/windows")
+    else()
+        set(OS_DIR "${ROOT}/src/resources/os/linux")
+    endif()
 endif()
 
 function(build_os output)
     file(REMOVE_RECURSE "${output}")
-    execute_process(
-        COMMAND pwsh -NoProfile -File "${ROOT}/kr32os/build.ps1" -Krc "${KRC}" -Out "${output}"
-        WORKING_DIRECTORY "${ROOT}"
-        RESULT_VARIABLE result
-        OUTPUT_VARIABLE out
-        ERROR_VARIABLE err)
+    if(WIN32)
+        find_program(SHELL_EXE NAMES pwsh powershell)
+        if(NOT SHELL_EXE)
+            message(FATAL_ERROR "no PowerShell found to run kr32os/build.ps1")
+        endif()
+        execute_process(
+            COMMAND "${SHELL_EXE}" -NoProfile -File "${ROOT}/kr32os/build.ps1"
+                    -Krc "${KRC}" -Out "${output}"
+            WORKING_DIRECTORY "${ROOT}"
+            RESULT_VARIABLE result
+            OUTPUT_VARIABLE out
+            ERROR_VARIABLE err)
+    else()
+        execute_process(
+            COMMAND "${CMAKE_COMMAND}" -E env "KRC=${KRC}" "KR32OS_BUILD_DIR=${output}"
+                    bash "${ROOT}/kr32os/build.sh"
+            WORKING_DIRECTORY "${ROOT}"
+            RESULT_VARIABLE result
+            OUTPUT_VARIABLE out
+            ERROR_VARIABLE err)
+    endif()
     if(NOT result EQUAL 0)
         message(FATAL_ERROR "the OS build failed (${result}):\n${out}${err}")
     endif()
