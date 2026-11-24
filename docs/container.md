@@ -1,6 +1,6 @@
-# KR32 `.k32` container
+# KR32 `.kr32` container
 
-The `.k32` file is used for relocatable objects and linked executables. It is a
+The `.kr32` file is used for relocatable objects and linked executables. It is a
 little-endian binary container: a fixed 64-byte header, section/symbol/relocation
 tables, a string table, and section payloads.
 

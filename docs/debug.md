@@ -1,6 +1,6 @@
 # Debug information and `DebugSession`
 
-M5 adds a debug section to the `.k32` container and a shared debug model used by
+M5 adds a debug section to the `.kr32` container and a shared debug model used by
 the CLI today and by the GUI/DAP in later milestones.
 
 ## `.debug_info`
@@ -79,7 +79,7 @@ instruction after `CALL`, without advancing an additional source line.
 ## CLI
 
 ```text
-kr32 debug app.k32
+kr32 debug app.kr32
 ```
 
 prints the source, functions, globals, variables, types, and line map. The

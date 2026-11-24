@@ -271,7 +271,7 @@ equality comparison.
 New command:
 
 ```text
-kr32 display [image.k32]           # guest program, no debugger
+kr32 display [image.kr32]           # guest program, no debugger
 kr32 display --os                  # boot KR32OS
 ```
 

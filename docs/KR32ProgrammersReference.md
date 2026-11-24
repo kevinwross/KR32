@@ -18,7 +18,7 @@ Related documents, each the owner of its subject:
 | --- | --- |
 | Instruction encodings and the machine memory map, as designed | [isa-v1.md](isa-v1.md) |
 | Guest calling convention, structures, threads | [abi.md](abi.md) |
-| `.k32` object and executable format | [container.md](container.md) |
+| `.kr32` object and executable format | [container.md](container.md) |
 | Devices, timer, block, console, framebuffer, keyboard, terminal, graphics, IRQs | [devices.md](devices.md) |
 | Host syscalls, file sandbox, shell, DAP | [host.md](host.md) |
 | Debug records and the debugger | [debug.md](debug.md), [ui.md](ui.md) |
@@ -77,16 +77,16 @@ except `gui` and `display` still works.
 | --- | --- |
 | `version` | print the version tuple |
 | `help` | print the command list |
-| `as <file.asm>` | assemble a flat image, or a `.k32` object with `--object` |
-| `ld <objects...>` | link `.k32` objects into an executable, or a flat image with `--flat` |
+| `as <file.asm>` | assemble a flat image, or a `.kr32` object with `--object` |
+| `ld <objects...>` | link `.kr32` objects into an executable, or a flat image with `--flat` |
 | `build <file>` | compile/assemble, link, and optionally run in one command |
 | `cc <file.c>` | compile C to assembly (`-S`) or an object |
 | `cxx <file.cpp>` | compile C++ to assembly (`-S`) or an object |
 | `vm <file>` / `run <file>` | assemble-or-load and execute an image |
 | `os [kernel]` | boot KR32OS with the default BIOS |
 | `dis <image>` | disassemble a flat image |
-| `size <image.k32>` | print section sizes, entry, and base |
-| `debug <image.k32>` | dump debug records |
+| `size <image.kr32>` | print section sizes, entry, and base |
+| `debug <image.kr32>` | dump debug records |
 | `gui [file]` | windowed source/disassembly debugger (UI build only) |
 | `display` | framebuffer window (UI build only) |
 | `dap [file]` | Debug Adapter Protocol server |
@@ -104,19 +104,19 @@ indistinguishable from a failed run by exit code alone.
 ```text
 source              tool          output
 .s / .asm           as            flat .bin
-.s / .asm           as --object   .k32 object
+.s / .asm           as --object   .kr32 object
 .c                  cc -S         .s
-.c                  cc            .k32 object
+.c                  cc            .kr32 object
 .cpp                cxx -S        .s
-.cpp                cxx           .k32 object
-.k32 objects        ld            .k32 executable, or a flat .bin with --flat
-.s / .c / .cpp      build         .k32 executable, and runs it with --run
+.cpp                cxx           .kr32 object
+.kr32 objects        ld            .kr32 executable, or a flat .bin with --flat
+.s / .c / .cpp      build         .kr32 executable, and runs it with --run
 ```
 
 `as` without `--object` writes a headerless image: byte zero is the first byte
 loaded, and every address in the source is absolute. `as --object`, `cc`, and
-`cxx` write relocatable `.k32` objects; `ld` places sections at `--base` and
-resolves symbols. `vm` accepts either a raw image or a `.k32` executable.
+`cxx` write relocatable `.kr32` objects; `ld` places sections at `--base` and
+resolves symbols. `vm` accepts either a raw image or a `.kr32` executable.
 
 ---
 
@@ -128,7 +128,7 @@ resolves symbols. `vm` accepts either a raw image or a `.k32` executable.
 $KR32 = "C:\Users\kevin\repos\kr32\build\windows-msvc\Debug\kr32.exe"
 & $KR32 version
 & $KR32 run examples\demo.asm
-& $KR32 build examples\hello.s -o hello.k32 --run
+& $KR32 build examples\hello.s -o hello.kr32 --run
 ```
 
 ```sh
@@ -139,20 +139,20 @@ Programs are run by extension:
 
 - `.asm` and `.s` are assembled in memory (raw path) and then executed. This is
   the raw assembler, not the object assembler; see §3.6.
-- `.k32` is read as a container. An executable is loaded into RAM at its linked
+- `.kr32` is read as a container. An executable is loaded into RAM at its linked
   addresses, `PC` is set to its entry point, and `.bss` is zeroed. A relocatable
   object is rejected: `input is a relocatable object, not an executable`.
 - Anything else is loaded as a flat image at `--base` (default `0x0001_0000`)
-  and `PC` is set to `--base`. The file must not be named `.k32`.
+  and `PC` is set to `--base`. The file must not be named `.kr32`.
 
 ### 2.2 Startup state
 
 Before the first instruction the runner establishes the following, for flat
-images and `.k32` executables alike:
+images and `.kr32` executables alike:
 
 | Item | Value |
 | --- | --- |
-| `PC` | `--base` for a flat image, the container entry for a `.k32` |
+| `PC` | `--base` for a flat image, the container entry for a `.kr32` |
 | `SP` | top of RAM, 16-byte aligned, minus the `argc`/`argv` block |
 | `R0` | `argc`, including the implicit `"program"` name |
 | `R1` | `argv`, an array of `argc` pointers followed by a null pointer |
@@ -227,22 +227,22 @@ the image well below `RAM base + RAM size`.
 ```powershell
 & $KR32 os                        # embedded BIOS and kernel
 & $KR32 os --embedded             # same, stated explicitly
-& $KR32 os kr32os\build\windows\kernel.k32 --bios kr32os\build\windows\bios.k32
+& $KR32 os kr32os\build\windows\kernel.kr32 --bios kr32os\build\windows\bios.kr32
 & $KR32 gui --os
 ```
 
 `os` loads the kernel at `0x0002_0000` and the BIOS into ROM at `0xFFFF_0000`,
 resets the core, writes the boot-info block at `0x0003_F000`, and starts the
 BIOS with `R2` holding the block address. Kernel and BIOS must both be raw
-`.bin` or both be `.k32`. Default images are resolved from `KR32OS_BIN` /
+`.bin` or both be `.kr32`. Default images are resolved from `KR32OS_BIN` /
 `KR32OS_BIOS`, then `kr32os/build/<platform>/`, then the embedded pair.
 
 ### 2.6 Debugging front ends
 
-`kr32 gui <file.k32>` opens the windowed debugger; `kr32 gui --headless
---screenshot out.ppm <file.k32>` renders one frame without a window.
-`kr32 dap --stdio <file.k32>` or `kr32 dap --port 4711 <file.k32>` serves the
-Debug Adapter Protocol. Both require a `.k32` executable: a raw image has no
+`kr32 gui <file.kr32>` opens the windowed debugger; `kr32 gui --headless
+--screenshot out.ppm <file.kr32>` renders one frame without a window.
+`kr32 dap --stdio <file.kr32>` or `kr32 dap --port 4711 <file.kr32>` serves the
+Debug Adapter Protocol. Both require a `.kr32` executable: a raw image has no
 section or debug records to load. See [HowToDebugUsingKR32.md](../HowToDebugUsingKR32.md)
 and [ui.md](ui.md).
 
@@ -494,19 +494,19 @@ takes a power of two — it aligns to `2^N` — so a source that uses it is raw-
 
 ```powershell
 & $KR32 as hello.s --object -o hello.o
-& $KR32 ld hello.o -o hello.k32 --map hello.map
-& $KR32 size hello.k32
-& $KR32 vm hello.k32
+& $KR32 ld hello.o -o hello.kr32 --map hello.map
+& $KR32 size hello.kr32
+& $KR32 vm hello.kr32
 ```
 
 | `ld` option | Meaning |
 | --- | --- |
-| `-o <path>` | output path; default `a.k32`, or `a.bin` with `--flat` |
+| `-o <path>` | output path; default `a.kr32`, or `a.bin` with `--flat` |
 | `--map <path>` | write the section and symbol map |
 | `--sym <path>` | write a symbol record alongside a `--flat` image; requires `--flat` |
 | `--base <addr>` | link base, default `0x0001_0000` |
 | `--stack-top`, `--stack-limit` | values published as `__stack_top` / `__stack_limit` |
-| `--flat` | write a headerless image instead of a `.k32` |
+| `--flat` | write a headerless image instead of a `.kr32` |
 | `--strip` | drop local symbols and relocations |
 
 The entry point is the global symbol `_start` if one is defined, otherwise the
@@ -524,13 +524,13 @@ gaps and `.bss` zero-filled; that image is what `vm --base <base>` expects.
 & $KR32 cc examples\hello.c -S -o hello.s        # assembly
 & $KR32 cc examples\hello.c -o hello.o           # object
 & $KR32 cxx examples\hello.cpp -S -o hello-cxx.s
-& $KR32 build examples\hello.c -o hello.k32 --run --arg alpha
-& $KR32 build examples\hello.cpp -o hello-cxx.k32 --run
+& $KR32 build examples\hello.c -o hello.kr32 --run --arg alpha
+& $KR32 build examples\hello.cpp -o hello-cxx.kr32 --run
 ```
 
 `build` detects the language from the extension, compiles C or C++, assembles
 the result with the object assembler, links the shared C/C++ libc runtime
-object, writes a `.k32`, and runs it with `--run`. `-O1` enables the peephole
+object, writes a `.kr32`, and runs it with `--run`. `-O1` enables the peephole
 passes in [optimizations.md](optimizations.md); it is the default, and `-O0`
 disables them.
 

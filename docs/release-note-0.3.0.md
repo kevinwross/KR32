@@ -10,7 +10,7 @@ compiler, assembler, linker and runtime.
 0.3.0 removes the built-in toolchain. Guest C and C++ is compiled by the
 installed **krc** toolchain (KRCompiler 4.12 or later, built with
 `KRC_BUILD_TOOLS=ON`), and the `kr32` executable runs, disassembles, debugs and
-boots prebuilt `.k32` images. The built-in compiler path, its commands and its
+boots prebuilt `.kr32` images. The built-in compiler path, its commands and its
 runtime are gone.
 
 This is a breaking release, which is why the version is 0.3.0 rather than a patch.
@@ -40,10 +40,10 @@ moved to `cons.h` need no change for this release.
    `cmake --preset windows-msvc -DCMAKE_PREFIX_PATH=<krc install>` (Windows) or
    `cmake --preset linux-gcc -DCMAKE_PREFIX_PATH=<krc install>` (WSL/Linux).
 3. **Build guest programs with krc, not `kr32`.** Replace `kr32 build x.c` with
-   the krc toolchain and run the resulting `.k32` with `kr32 vm <image>`; the
+   the krc toolchain and run the resulting `.kr32` with `kr32 vm <image>`; the
    window's **Build** already does this.
 4. **Update scripts.** Any script calling `kr32 as`, `kr32 ld`, `kr32 build`,
-   `kr32 cc` or `kr32 cxx` must call the krc toolchain instead. Prebuilt `.k32`
+   `kr32 cc` or `kr32 cxx` must call the krc toolchain instead. Prebuilt `.kr32`
    images continue to run unchanged through `kr32 vm`, `kr32 debug`, `kr32 dap`
    and the window.
 5. **Check the C++ corpus gaps.** The differences accepted as permanent are in
@@ -54,10 +54,10 @@ moved to `cons.h` need no change for this release.
 The command surface that remains:
 
 ```text
-kr32 vm <file.k32>          run an image
+kr32 vm <file.kr32>          run an image
 kr32 dis <image>            disassemble a raw image
-kr32 size <file.k32>        section sizes
-kr32 debug <file.k32>       dump debug information
+kr32 size <file.kr32>        section sizes
+kr32 debug <file.kr32>       dump debug information
 kr32 gui ...                windowed debugger
 kr32 os ...                 boot KR32OS with a kernel and BIOS
 kr32 dap ...                Debug Adapter Protocol server
@@ -66,7 +66,7 @@ kr32 shell                  interactive shell
 
 ## What did not change
 
-The ISA, the `.k32` container, the emulator, the debugger model, DAP, the
+The ISA, the `.kr32` container, the emulator, the debugger model, DAP, the
 windowed debugger and the shipped kernel/BIOS images are unchanged. OS mode
 still boots the shipped pair or an explicit `--os <kernel> --bios <bios>`.
 

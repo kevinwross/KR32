@@ -78,7 +78,7 @@ The C bootstrap rules above remain the base. C++ extends them as follows:
 
 The C and C++ layouts agree for every type the C compiler can currently express
 (it has no `float`/`double`). Any future C extension that adds `double` must use
-the same alignment rule rather than changing `.k32` silently.
+the same alignment rule rather than changing `.kr32` silently.
 
 ### Public call alignment
 
@@ -440,7 +440,7 @@ Exceptions are table-driven and unwind through every live destructor.
   runtime in phase M9.9.
 - Every function that needs cleanup or handlers contributes a language-specific
   data area (LSDA) to an allocated read-only `.cpp_except` section. The section
-  is ordinary rodata in the `.k32` container: it is not a debug section and is
+  is ordinary rodata in the `.kr32` container: it is not a debug section and is
   present in the run image.
 - An LSDA contains a call-site table, an action table, and a type table:
   - call-site entries map `[start_pc, end_pc)` ranges to a landing pad and an
@@ -580,7 +580,7 @@ Per-thread context:
 
 ### Weak and COMDAT symbols
 
-The `.k32` object model already has weak symbol binding and a reserved COMDAT
+The `.kr32` object model already has weak symbol binding and a reserved COMDAT
 section flag. Revision 1 uses them as follows:
 
 | Definition | Linkage |
@@ -677,7 +677,7 @@ the matrix/FP library. These are documented with their phases in
 
 ## C++ readiness
 
-The `.k32` container and linker are language-neutral: sections, symbols,
+The `.kr32` container and linker are language-neutral: sections, symbols,
 relocations, weak bindings, and the reserved COMDAT section flag are already
 available. The M4 compiler emits the same assembly/object path that a C++ front
 end reuses. C++ adds the layout, mangling, call, exception, TLS, and COMDAT rules

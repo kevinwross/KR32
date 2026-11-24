@@ -64,7 +64,7 @@ or runtime file.
   root `LICENSE`; the krc package itself is MIT (KRCompiler's root `LICENSE`).
 - **The shipped OS images carry third-party code**: the kernel's 8x16 console
   font is rasterized from JetBrains Mono Regular, and the debugger's UI font is
-  Inter, both under the SIL Open Font License 1.1. The kernel/BIOS `.k32` images
+  Inter, both under the SIL Open Font License 1.1. The kernel/BIOS `.kr32` images
   embed the rasterized glyph table, so the OFL notice must travel with them.
   `third_party/fonts/OFL-JetBrainsMono.txt` and
   `third_party/fonts/OFL-Inter.txt` ship in the release archive. MIT applies to
@@ -84,7 +84,7 @@ Stage B (3.10b) landed after 0.2.0. It:
   runtime/libc and the injected guest-header strings.
 
 `krc` is the only compiler. The CLI runs, disassembles, debugs and boots
-prebuilt `.k32` images but cannot assemble, link or compile them, and
+prebuilt `.kr32` images but cannot assemble, link or compile them, and
 `<kr32/cons.h>` remains the guest console header. Scripts and users of `kr32 as`,
 `kr32 ld`, `kr32 build`, `kr32 cc` or `kr32 cxx` must move to the krc toolchain
 or the window's Build.

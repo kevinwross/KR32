@@ -1,8 +1,8 @@
 # Windowed debugger (M6)
 
-`kr32 gui <image.k32|source.c|source.cpp>` opens the portable debugger at
+`kr32 gui <image.kr32|source.c|source.cpp>` opens the portable debugger at
 1440x900. A C or C++ source is compiled, assembled, linked, and loaded in memory;
-`.k32` executables load directly.
+`.kr32` executables load directly.
 
 ![KR32 debugger](screenshots/debugger-overview.png)
 
@@ -59,7 +59,7 @@
 | Console | Guest console output, always visible |
 
 **Load** opens the platform file picker (the native common dialog on Windows;
-`zenity`/`kdialog` when available on Linux) and loads a `.k32` image or compiles
+`zenity`/`kdialog` when available on Linux) and loads a `.kr32` image or compiles
 a selected `.c` or `.cpp` source. **Build** reloads/recompiles the currently
 loaded source with the optimizer on, the same as `kr32 build` on that source, so
 the disassembly it produces matches the command line.
@@ -82,7 +82,7 @@ Click the filename in the **SOURCE** title to open a list of every source file
 in the debug symbols. Selecting a file pins it in the source pane, where its
 gutter can set and clear breakpoints; a later step, run, or restart returns the
 pane to the file containing the new PC.
-For OS boots, `gui --os` loads the kernel and BIOS `.k32` images and merges
+For OS boots, `gui --os` loads the kernel and BIOS `.kr32` images and merges
 their `.debug_info` sections, so the panel follows BIOS, boot entry, and kernel
 code as the PC moves.
 
@@ -253,7 +253,7 @@ Windows, `XDG_CONFIG_HOME/kr32/settings.ini` when available, or
 ## Headless checks
 
 ```text
-kr32 gui --headless build/hello-c.k32 --screenshot build/hello-ui.ppm
+kr32 gui --headless build/hello-c.kr32 --screenshot build/hello-ui.ppm
 ```
 
 renders the complete 1440x900 debugger surface, writes a PPM screenshot, and
@@ -270,7 +270,7 @@ canvas, and GUI targets and keeps the headless test suite green.
   **Load** the result to step through unoptimized code.
 - **Build** uses the in-tree C and C++ front ends unless CMake was configured
   with `-DKR32_TOOLCHAIN=krc`. The krc branch compiles and links through
-  `krc::toolchain` and loads the returned `.k32` through KR32's loader; the
+  `krc::toolchain` and loads the returned `.kr32` through KR32's loader; the
   built-in path stays compiled, and the `.lst` the krc branch writes has the
   assembler listing shape (address, encoded words, statement) rendered from the
   facade's rows. The krc package carries its target system headers and runtime

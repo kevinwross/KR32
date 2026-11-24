@@ -111,7 +111,7 @@ canonical root. The host checks this on every open.
 CLI:
 
 ```text
-kr32 vm app.k32 --fs-root sandbox --read-only --quota 4096 --arg hello
+kr32 vm app.kr32 --fs-root sandbox --read-only --quota 4096 --arg hello
 kr32 build examples/fileio.c --run --fs-root sandbox
 ```
 
@@ -123,8 +123,8 @@ piped input for scripted tests.
 
 ## DAP
 
-`kr32 dap --stdio <image.k32>` speaks DAP over stdio; `kr32 dap --port 4711
-<image.k32>` listens on loopback TCP. Implemented requests are `initialize`,
+`kr32 dap --stdio <image.kr32>` speaks DAP over stdio; `kr32 dap --port 4711
+<image.kr32>` listens on loopback TCP. Implemented requests are `initialize`,
 `launch`, `setBreakpoints`, `configurationDone`, `threads`, `stackTrace`,
 `scopes`, `variables`, `continue`, `next`, `stepIn`, `stepOut`, `evaluate`,
 `readMemory`, `disconnect`, and `terminate`. Events include `initialized`,

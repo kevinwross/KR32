@@ -13,14 +13,14 @@ Start here, then follow the topic.
 | [abi.md](abi.md) | Guest ABI: calling convention, thread control block, structures. |
 | [ui.md](ui.md) | Windowed debugger layout, panels, controls, and headless rendering. |
 | [host.md](host.md) | Host syscalls, file sandbox, shell, and DAP. |
-| [container.md](container.md) | `.k32` object/executable format. |
+| [container.md](container.md) | `.kr32` object/executable format. |
 | [libc.md](libc.md) | Freestanding C libc and runtime. |
 | [templates.md](templates.md) | C++ template support and limits. |
 | [optimizations.md](optimizations.md) | `-O1` peephole passes, safety model, and optimized test runs. |
 | [roadmap.md](roadmap.md) | Compiler roadmap status. |
 | [testing.md](testing.md) | Test layout, fast edit loop, and full-suite cadence. |
 | [debug.md](debug.md) | Debug information format. |
-| [HowToDebugUsingKR32.md](../HowToDebugUsingKR32.md) | Running/debugging externally compiled flat `.bin` and `.k32` test programs with the CLI, DAP, and GUI. |
+| [HowToDebugUsingKR32.md](../HowToDebugUsingKR32.md) | Running/debugging externally compiled flat `.bin` and `.kr32` test programs with the CLI, DAP, and GUI. |
 
 ## Active work streams
 
