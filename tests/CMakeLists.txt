@@ -265,3 +265,15 @@ add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j${KR32_TEST_JOBS}
     DEPENDS kr32 kr32_tests
     USES_TERMINAL)
+# The embedded OS images are build output: this row rebuilds them with the
+# compiler and compares, so a hand edit or an address-moving change fails here.
+# Registered only when the gate names a compiler, because a row that silently
+# vanishes is worse than one that says it was not asked for.
+if(KR32OS_KRC)
+    add_test(NAME kr32_os_images_match_source
+        COMMAND ${CMAKE_COMMAND}
+            -DKRC=${KR32OS_KRC}
+            -DROOT=${CMAKE_SOURCE_DIR}
+            -DSCRATCH=${CMAKE_BINARY_DIR}/os-images
+            -P ${CMAKE_SOURCE_DIR}/cmake/CheckOsImages.cmake)
+endif()

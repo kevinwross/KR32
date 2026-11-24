@@ -1,14 +1,18 @@
 #Requires -Version 5.1
 <#
-Rebuild KR32OS with the current kr32 executable, copy the .k32 images into the
-host resources, and relink kr32 with the new embedded images.
+Rebuilds KR32OS with the KRCompiler toolchain, copies the two container images
+into the host resources, and relinks kr32 with them embedded.
 
 This is the explicit "update the BIOS/kernel" step. Normal kr32 builds only
-consume the checked-in .k32 files under src/resources/os.
+consume the checked-in .k32 files under src/resources/os, and the ctest row
+kr32_os_images_match_source fails when they no longer match a rebuild.
+
+The old version of this script drove `kr32 cc`, `kr32 as` and `kr32 ld` through
+kr32os/build.ps1; those verbs no longer exist, so the compiler is the input now.
 #>
 param(
     [string]$Preset = "windows-msvc-debug",
-    [string]$Kr32 = "",
+    [string]$Krc = "",
     [string]$CMake = "",
     [switch]$SkipBuild,
     [switch]$SkipRelink
@@ -23,6 +27,10 @@ if (-not $CMake) {
     if ($command -ne $null) {
         $CMake = $command.Source
     }
+    if (-not $CMake) {
+        $candidate = 'C:\Program Files\Microsoft Visual Studio\18\Community\Common7\IDE\CommonExtensions\Microsoft\CMake\CMake\bin\cmake.exe'
+        if (Test-Path -LiteralPath $candidate) { $CMake = $candidate }
+    }
 }
 
 if (-not $SkipBuild) {
@@ -35,28 +43,23 @@ if (-not $SkipBuild) {
     }
 }
 
-if (-not $Kr32) {
-    $Kr32 = $env:KR32
-}
-if (-not $Kr32) {
+if (-not $Krc) { $Krc = $env:KRC }
+if (-not $Krc) {
     $candidates = @(
-        (Join-Path $root 'build\windows-msvc\Debug\kr32.exe'),
-        (Join-Path $root 'build\windows-msvc\Release\kr32.exe'),
-        (Join-Path $root 'build\windows-ninja\kr32.exe')
+        (Join-Path $root '..\krcompiler\build\windows-msvc-debug\host\bin\Debug\krc.exe'),
+        'C:\Users\kevin\krc-debug\bin\krc.exe',
+        'C:\Users\kevin\krc\bin\krc.exe'
     )
     foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            $Kr32 = $candidate
-            break
-        }
+        if (Test-Path -LiteralPath $candidate) { $Krc = $candidate; break }
     }
 }
-if (-not $Kr32 -or -not (Test-Path -LiteralPath $Kr32)) {
-    throw 'kr32 was not found; pass -Kr32 <path> or set KR32.'
+if (-not $Krc -or -not (Test-Path -LiteralPath $Krc)) {
+    throw 'krc was not found; pass -Krc <path> or set KRC.'
 }
-$Kr32 = (Resolve-Path -LiteralPath $Kr32).Path
+$Krc = (Resolve-Path -LiteralPath $Krc).Path
 
-& (Join-Path $root 'kr32os\build.ps1') -Kr32 $Kr32
+& (Join-Path $root 'kr32os\build.ps1') -Krc $Krc
 if ($LASTEXITCODE -ne 0) {
     throw "kr32os/build.ps1 failed with exit code $LASTEXITCODE"
 }
