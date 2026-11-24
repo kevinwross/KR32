@@ -1,4 +1,5 @@
 .file "kr32os/bios/entry.S"
+.global bios_entry
 
 ; BootInfo contract.
 .equ BOOTINFO_OFFSET_MAGIC, 0

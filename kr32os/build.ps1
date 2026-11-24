@@ -1,203 +1,127 @@
-#Requires -Version 5.1
-<#
-Build KR32OS. The default tool path is the debug host build; pass -Kr32 to
-select another kr32 executable.
-#>
+# Builds KR32OS with the KRCompiler toolchain: no kr32 executable is involved.
+#
+#   powershell -ExecutionPolicy Bypass -File kr32os/build.ps1 [-Krc <krc.exe>] [-Out <dir>] [-Opt -O1]
+#
+# The guest C is compiled by `krc -c`, every image is linked and flattened by
+# `krc image`, and the guest assembly is handed to the same command, which
+# assembles a non-object input. The old script drove `kr32 cc`, `kr32 as` and
+# `kr32 ld`; those verbs no longer exist, which is why this file exists.
+#
+# Windows writes to kr32os/build/windows; scripts/update-os.ps1 copies the two
+# container images into src/resources/os/windows and relinks kr32.
 param(
-    [string]$Kr32 = "",
+    [string]$Krc = "",
     [string]$Out = "",
     [string]$Opt = ""
 )
 
 $ErrorActionPreference = 'Stop'
 $here = Split-Path -Parent $MyInvocation.MyCommand.Path
-$root = Split-Path -Parent $here
 
-if (-not $Kr32) {
-    $Kr32 = $env:KR32
-}
-if (-not $Kr32) {
-    $candidates = @(
-        (Join-Path $root 'build\windows-msvc\Debug\kr32.exe'),
-        (Join-Path $root 'build\windows-msvc\Release\kr32.exe'),
-        (Join-Path $root 'build\windows-ninja\kr32.exe')
-    )
-    foreach ($candidate in $candidates) {
-        if (Test-Path -LiteralPath $candidate) {
-            $Kr32 = $candidate
-            break
-        }
-    }
-}
-if (-not $Kr32) {
-    $command = Get-Command kr32 -ErrorAction SilentlyContinue
-    if ($command -ne $null) {
-        $Kr32 = $command.Source
-    }
-}
-if (-not $Kr32 -or -not (Test-Path -LiteralPath $Kr32)) {
-    throw 'kr32 was not found; pass -Kr32 <path> or set KR32.'
-}
-$Kr32 = (Resolve-Path -LiteralPath $Kr32).Path
-if (-not $Out) { $Out = $env:KR32OS_BUILD_DIR }
 if (-not $Out) { $Out = Join-Path $here 'build\windows' }
+$build = $Out
+New-Item -ItemType Directory -Force -Path $build | Out-Null
+
 if (-not $Opt) { $Opt = $env:KR32OS_OPT }
 if (-not $Opt) { $Opt = '-O1' }
-$build = $Out
+
+if (-not $Krc) { $Krc = $env:KRC }
+if (-not $Krc) {
+    $candidates = @(
+        (Join-Path $here '..\build\windows-msvc\Debug\krc.exe'),
+        'C:\Users\kevin\krc-debug\bin\krc.exe',
+        'C:\Users\kevin\krc\bin\krc.exe'
+    )
+    foreach ($candidate in $candidates) {
+        if (Test-Path -LiteralPath $candidate) { $Krc = $candidate; break }
+    }
+}
+if (-not $Krc) {
+    $command = Get-Command krc -ErrorAction SilentlyContinue
+    if ($command) { $Krc = $command.Source }
+}
+if (-not $Krc -or -not (Test-Path -LiteralPath $Krc)) {
+    throw 'krc was not found; pass -Krc <path> or set KRC'
+}
+$Krc = (Resolve-Path -LiteralPath $Krc).Path
+
 $biosBase = '0xFFFF0000'
 $kernelBase = '0x00020000'
 $userBase = '0x00400000'
-New-Item -ItemType Directory -Force -Path $build | Out-Null
+$includes = @(
+    # The guest headers live in the repository's include tree, which is where
+    # <kr32/sys.h> and the rest of the OS ABI are declared.
+    (Join-Path $here '..\include'),
+    (Join-Path $here 'include'),
+    (Join-Path $here 'kernel'),
+    (Join-Path $here 'libc'),
+    (Join-Path $here 'user')
+)
 
-function Invoke-Kr32 {
+function Invoke-Krc {
     param([string[]]$Arguments)
-    & $Kr32 @Arguments
+    & $Krc @Arguments
     if ($LASTEXITCODE -ne 0) {
-        throw "kr32 $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
+        throw "krc $($Arguments -join ' ') failed with exit code $LASTEXITCODE"
     }
 }
 
-$bios = Join-Path $build 'bios.bin'
-$biosObject = Join-Path $build 'bios.o'
-$biosK32 = Join-Path $build 'bios.k32'
-$biosSym = Join-Path $build 'bios.sym'
-$kernelAssembly = Join-Path $build 'kernel.s'
-$kernelObject = Join-Path $build 'kernel.o'
-$consoleAssembly = Join-Path $build 'console.s'
-$consoleObject = Join-Path $build 'console.o'
-$fbAssembly = Join-Path $build 'fb.s'
-$fbObject = Join-Path $build 'fb.o'
-$shellAssembly = Join-Path $build 'shell.s'
-$shellObject = Join-Path $build 'shell.o'
-$timerAssembly = Join-Path $build 'timer.s'
-$timerObject = Join-Path $build 'timer.o'
-$trapsAssembly = Join-Path $build 'traps.s'
-$trapsObject = Join-Path $build 'traps.o'
-$trapStubsObject = Join-Path $build 'trap_stubs.o'
-$fastObject = Join-Path $build 'fast.o'
-$userAssembly = Join-Path $build 'user.s'
-$userObject = Join-Path $build 'user.o'
-$memoryAssembly = Join-Path $build 'memory.s'
-$memoryObject = Join-Path $build 'memory.o'
-$processAssembly = Join-Path $build 'process.s'
-$processObject = Join-Path $build 'process.o'
-$syscallAssembly = Join-Path $build 'syscall.s'
-$syscallObject = Join-Path $build 'syscall.o'
-$gfxAssembly = Join-Path $build 'gfx.s'
-$gfxObject = Join-Path $build 'gfx.o'
-$inputAssembly = Join-Path $build 'input.s'
-$inputObject = Join-Path $build 'input.o'
-$userBridgeObject = Join-Path $build 'user_bridge.o'
-$userCrtObject = Join-Path $build 'crt0.o'
-$userSyscallObject = Join-Path $build 'user_syscall.o'
-$userInitAssembly = Join-Path $build 'user_init.s'
-$userInitObject = Join-Path $build 'user_init.o'
-$userImage = Join-Path $build 'init.bin'
+function Compile-Guest([string]$Source, [string]$Output) {
+    $arguments = @('-c', '--target=kr32', $Opt)
+    foreach ($include in $includes) { $arguments += @('-I', $include) }
+    $arguments += @($Source, '-o', $Output)
+    Invoke-Krc -Arguments $arguments
+}
+
+function New-Image([string]$Output, [string]$Base, [string[]]$Inputs, [switch]$Flat,
+                   [string]$Map = '', [string]$Sym = '', [string]$Entry = '') {
+    $arguments = @('image', '--target=kr32', "--base=$Base")
+    if ($Entry) { $arguments += "--entry=$Entry" }
+    if ($Flat) { $arguments += '--flat' }
+    if ($Map) { $arguments += "--map=$Map" }
+    if ($Sym) { $arguments += "--sym=$Sym" }
+    $arguments += $Inputs
+    $arguments += @('-o', $Output)
+    Invoke-Krc -Arguments $arguments
+}
+
+# --- kernel C sources -------------------------------------------------------
+$kernelNames = @('main', 'console', 'fb', 'shell', 'timer', 'traps', 'user', 'memory',
+                 'process', 'syscall', 'gfx', 'input')
+$kernelObjects = @()
+foreach ($name in $kernelNames) {
+    $object = Join-Path $build "kernel_$name.kro"
+    Compile-Guest (Join-Path $here "kernel\$name.c") $object
+    $kernelObjects += $object
+}
+
+# --- user programs ----------------------------------------------------------
+$userCrt = Join-Path $here 'libc\crt0.S'
+$userSyscall = Join-Path $here 'libc\syscall.S'
+$userGfx = Join-Path $build 'user_gfx.kro'
+Compile-Guest (Join-Path $here 'libc\gfx.c') $userGfx
+
+$userPrograms = [ordered]@{
+    'init'     = 'init'
+    'fault'    = 'fault'
+    'wx'       = 'wx'
+    'gfxdemo'  = 'gfxdemo'
+    'gfxcheck' = 'gfxcheck'
+    'shutdown' = 'shutdown'
+    'readline' = 'readline'
+}
+$userImages = [ordered]@{}
+foreach ($entry in $userPrograms.GetEnumerator()) {
+    $object = Join-Path $build "user_$($entry.Key).kro"
+    Compile-Guest (Join-Path $here "user\$($entry.Value).c") $object
+    $image = Join-Path $build "$($entry.Key).bin"
+    New-Image -Output $image -Base $userBase -Flat -Inputs @($userCrt, $object, $userSyscall, $userGfx)
+    $userImages[$entry.Key] = $image
+}
+
+# --- initrd -----------------------------------------------------------------
 $initrd = Join-Path $build 'initrd.bin'
 $initrdAssembly = Join-Path $build 'initrd.s'
-$initrdObject = Join-Path $build 'initrd.o'
-$entryObject = Join-Path $build 'entry.o'
-$kernel = Join-Path $build 'kernel.bin'
-$kernelK32 = Join-Path $build 'kernel.k32'
-$kernelMap = Join-Path $build 'kernel.map'
-$kernelSym = Join-Path $build 'kernel.sym'
-$kernelMeta = Join-Path $build 'kernel.meta'
-
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'bios\entry.S'), '--object', '-o', $biosObject)
-Invoke-Kr32 -Arguments @('ld', $biosObject, '--flat', '--base', $biosBase, '--sym', $biosSym, '-o', $bios)
-Invoke-Kr32 -Arguments @('ld', $biosObject, '--base', $biosBase, '-o', $biosK32)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\main.c'), '--source-id', '1', $Opt, '-S', '-o', $kernelAssembly)
-Invoke-Kr32 -Arguments @('as', $kernelAssembly, '--object', '-o', $kernelObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\console.c'), '--source-id', '2', $Opt, '-S', '-o', $consoleAssembly)
-Invoke-Kr32 -Arguments @('as', $consoleAssembly, '--object', '-o', $consoleObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\fb.c'), '--source-id', '10', $Opt, '-S', '-o', $fbAssembly)
-Invoke-Kr32 -Arguments @('as', $fbAssembly, '--object', '-o', $fbObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\shell.c'), '--source-id', '3', $Opt, '-S', '-o', $shellAssembly)
-Invoke-Kr32 -Arguments @('as', $shellAssembly, '--object', '-o', $shellObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\timer.c'), '--source-id', '4', $Opt, '-S', '-o', $timerAssembly)
-Invoke-Kr32 -Arguments @('as', $timerAssembly, '--object', '-o', $timerObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\traps.c'), '--source-id', '5', $Opt, '-S', '-o', $trapsAssembly)
-Invoke-Kr32 -Arguments @('as', $trapsAssembly, '--object', '-o', $trapsObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\traps-asm.S'), '--object', '-o', $trapStubsObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\fast.S'), '--object', '-o', $fastObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\user.c'), '--source-id', '6', $Opt, '-S', '-o', $userAssembly)
-Invoke-Kr32 -Arguments @('as', $userAssembly, '--object', '-o', $userObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\memory.c'), '--source-id', '9', $Opt, '-S', '-o', $memoryAssembly)
-Invoke-Kr32 -Arguments @('as', $memoryAssembly, '--object', '-o', $memoryObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\process.c'), '--source-id', '8', $Opt, '-S', '-o', $processAssembly)
-Invoke-Kr32 -Arguments @('as', $processAssembly, '--object', '-o', $processObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\syscall.c'), '--source-id', '7', $Opt, '-S', '-o', $syscallAssembly)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\gfx.c'), '--source-id', '12', $Opt, '-S', '-o', $gfxAssembly)
-Invoke-Kr32 -Arguments @('as', $gfxAssembly, '--object', '-o', $gfxObject)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'kernel\input.c'), '--source-id', '13', $Opt, '-S', '-o', $inputAssembly)
-Invoke-Kr32 -Arguments @('as', $inputAssembly, '--object', '-o', $inputObject)
-Invoke-Kr32 -Arguments @('as', $syscallAssembly, '--object', '-o', $syscallObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'kernel\user-asm.S'), '--object', '-o', $userBridgeObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'boot\entry.S'), '--object', '-o', $entryObject)
-
-# Build the first user program.
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\init.c'), $Opt, '-S', '-o', $userInitAssembly)
-Invoke-Kr32 -Arguments @('as', $userInitAssembly, '--object', '-o', $userInitObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\crt0.S'), '--object', '-o', $userCrtObject)
-Invoke-Kr32 -Arguments @('as', (Join-Path $here 'libc\syscall.S'), '--object', '-o', $userSyscallObject)
-$userGfxAssembly = Join-Path $build 'user_gfx.s'
-$userGfxObject = Join-Path $build 'user_gfx.o'
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'libc\gfx.c'), $Opt, '-S', '-o', $userGfxAssembly)
-Invoke-Kr32 -Arguments @('as', $userGfxAssembly, '--object', '-o', $userGfxObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userInitObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userImage)
-
-$userFaultAssembly = Join-Path $build 'user_fault.s'
-$userFaultObject = Join-Path $build 'user_fault.o'
-$userFaultImage = Join-Path $build 'fault.bin'
-$userWxAssembly = Join-Path $build 'user_wx.s'
-$userWxObject = Join-Path $build 'user_wx.o'
-$userWxImage = Join-Path $build 'wx.bin'
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\fault.c'), $Opt, '-S', '-o', $userFaultAssembly)
-Invoke-Kr32 -Arguments @('as', $userFaultAssembly, '--object', '-o', $userFaultObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userFaultObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userFaultImage)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\wx.c'), $Opt, '-S', '-o', $userWxAssembly)
-Invoke-Kr32 -Arguments @('as', $userWxAssembly, '--object', '-o', $userWxObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userWxObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userWxImage)
-$userGfxDemoAssembly = Join-Path $build 'user_gfxdemo.s'
-$userGfxDemoObject = Join-Path $build 'user_gfxdemo.o'
-$userGfxDemoImage = Join-Path $build 'gfxdemo.bin'
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\gfxdemo.c'), $Opt, '-S', '-o', $userGfxDemoAssembly)
-Invoke-Kr32 -Arguments @('as', $userGfxDemoAssembly, '--object', '-o', $userGfxDemoObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userGfxDemoObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userGfxDemoImage)
-$userGfxCheckAssembly = Join-Path $build 'user_gfxcheck.s'
-$userGfxCheckObject = Join-Path $build 'user_gfxcheck.o'
-$userGfxCheckImage = Join-Path $build 'gfxcheck.bin'
-$userShutdownAssembly = Join-Path $build 'user_shutdown.s'
-$userShutdownObject = Join-Path $build 'user_shutdown.o'
-$userShutdownImage = Join-Path $build 'shutdown.bin'
-$userReadlineAssembly = Join-Path $build 'user_readline.s'
-$userReadlineObject = Join-Path $build 'user_readline.o'
-$userReadlineImage = Join-Path $build 'readline.bin'
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\readline.c'), $Opt, '-S', '-o', $userReadlineAssembly)
-Invoke-Kr32 -Arguments @('as', $userReadlineAssembly, '--object', '-o', $userReadlineObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userReadlineObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userReadlineImage)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\shutdown.c'), $Opt, '-S', '-o', $userShutdownAssembly)
-Invoke-Kr32 -Arguments @('as', $userShutdownAssembly, '--object', '-o', $userShutdownObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userShutdownObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userShutdownImage)
-Invoke-Kr32 -Arguments @('cc', (Join-Path $here 'user\gfxcheck.c'), $Opt, '-S', '-o', $userGfxCheckAssembly)
-Invoke-Kr32 -Arguments @('as', $userGfxCheckAssembly, '--object', '-o', $userGfxCheckObject)
-Invoke-Kr32 -Arguments @('ld', $userCrtObject, $userGfxCheckObject, $userSyscallObject, $userGfxObject,
-                        '--flat', '--base', $userBase, '-o', $userGfxCheckImage)
-
-# Build the K32I initrd with init and fault entries.
-$userBytes = [System.IO.File]::ReadAllBytes($userImage)
-$faultBytes = [System.IO.File]::ReadAllBytes($userFaultImage)
-$wxBytes = [System.IO.File]::ReadAllBytes($userWxImage)
-$gfxDemoBytes = [System.IO.File]::ReadAllBytes($userGfxDemoImage)
-$gfxCheckBytes = [System.IO.File]::ReadAllBytes($userGfxCheckImage)
-$shutdownBytes = [System.IO.File]::ReadAllBytes($userShutdownImage)
-$readlineBytes = [System.IO.File]::ReadAllBytes($userReadlineImage)
 $initrdMagic = [uint32]0x4932334B
 $initrdVersion = [uint32]1
 $initrdHeaderSize = 12
@@ -207,31 +131,31 @@ $initrdEntryOffsetOffset = 32
 $initrdEntryOffsetSize = 36
 $initrdEntryOffsetEntry = 40
 $userCodeBase = [uint32]$userBase
-$initrdEntryCount = 7
+$initrdNames = @($userImages.Keys)
+$initrdEntryCount = $initrdNames.Count
+
+$payloads = @()
+foreach ($name in $initrdNames) { $payloads += , [System.IO.File]::ReadAllBytes($userImages[$name]) }
 $payloadOffset = $initrdHeaderSize + $initrdEntryCount * $initrdEntrySize
-$initrdBytes = New-Object byte[] ($payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length + $shutdownBytes.Length + $readlineBytes.Length)
+$total = $payloadOffset
+foreach ($payload in $payloads) { $total += $payload.Length }
+$initrdBytes = New-Object byte[] $total
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdMagic), 0, $initrdBytes, 0, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes($initrdVersion), 0, $initrdBytes, 4, 4)
 [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$initrdEntryCount), 0, $initrdBytes, 8, 4)
-$entries = @(
-    @{ Name = 'init'; Offset = $payloadOffset; Size = $userBytes.Length; Bytes = $userBytes },
-    @{ Name = 'fault'; Offset = $payloadOffset + $userBytes.Length; Size = $faultBytes.Length; Bytes = $faultBytes },
-    @{ Name = 'wx'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length; Size = $wxBytes.Length; Bytes = $wxBytes },
-    @{ Name = 'gfxdemo'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length; Size = $gfxDemoBytes.Length; Bytes = $gfxDemoBytes },
-    @{ Name = 'gfxcheck'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length; Size = $gfxCheckBytes.Length; Bytes = $gfxCheckBytes },
-    @{ Name = 'shutdown'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length; Size = $shutdownBytes.Length; Bytes = $shutdownBytes },
-    @{ Name = 'readline'; Offset = $payloadOffset + $userBytes.Length + $faultBytes.Length + $wxBytes.Length + $gfxDemoBytes.Length + $gfxCheckBytes.Length + $shutdownBytes.Length; Size = $readlineBytes.Length; Bytes = $readlineBytes }
-)
+$offset = $payloadOffset
 for ($index = 0; $index -lt $initrdEntryCount; ++$index) {
     $entryOffset = $initrdHeaderSize + $index * $initrdEntrySize
-    $nameBytes = [System.Text.Encoding]::ASCII.GetBytes($entries[$index].Name)
+    $nameBytes = [System.Text.Encoding]::ASCII.GetBytes($initrdNames[$index])
     [System.Array]::Copy($nameBytes, 0, $initrdBytes, $entryOffset, $nameBytes.Length)
-    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$entries[$index].Offset), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetOffset, 4)
-    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$entries[$index].Size), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetSize, 4)
+    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$offset), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetOffset, 4)
+    [System.Array]::Copy([System.BitConverter]::GetBytes([uint32]$payloads[$index].Length), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetSize, 4)
     [System.Array]::Copy([System.BitConverter]::GetBytes($userCodeBase), 0, $initrdBytes, $entryOffset + $initrdEntryOffsetEntry, 4)
-    [System.Array]::Copy($entries[$index].Bytes, 0, $initrdBytes, $entries[$index].Offset, $entries[$index].Size)
+    [System.Array]::Copy($payloads[$index], 0, $initrdBytes, $offset, $payloads[$index].Length)
+    $offset += $payloads[$index].Length
 }
 [System.IO.File]::WriteAllBytes($initrd, $initrdBytes)
+
 $initrdText = New-Object System.Text.StringBuilder
 [void]$initrdText.AppendLine('.section .rodata')
 [void]$initrdText.AppendLine('.global __initrd_start')
@@ -239,27 +163,39 @@ $initrdText = New-Object System.Text.StringBuilder
 for ($index = 0; $index -lt $initrdBytes.Length; $index += 16) {
     $count = [Math]::Min(16, $initrdBytes.Length - $index)
     $parts = @()
-    for ($offset = 0; $offset -lt $count; ++$offset) {
-        $parts += ('0x{0:X2}' -f $initrdBytes[$index + $offset])
+    for ($step = 0; $step -lt $count; ++$step) {
+        $parts += ('0x{0:X2}' -f $initrdBytes[$index + $step])
     }
     [void]$initrdText.AppendLine('.byte ' + ($parts -join ', '))
 }
 [void]$initrdText.AppendLine('.global __initrd_end')
 [void]$initrdText.AppendLine('__initrd_end:')
 Set-Content -LiteralPath $initrdAssembly -Value $initrdText.ToString() -NoNewline -Encoding ascii
-Invoke-Kr32 -Arguments @('as', $initrdAssembly, '--object', '-o', $initrdObject)
 
-Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $shellObject,
-                        $timerObject, $trapsObject, $trapStubsObject, $fastObject,
-                        $userObject, $syscallObject, $gfxObject, $inputObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
-                        '--flat', '--base', $kernelBase, '--map', $kernelMap,
-                        '--sym', $kernelSym, '-o', $kernel)
-Invoke-Kr32 -Arguments @('ld', $entryObject, $kernelObject, $consoleObject, $fbObject, $shellObject,
-                        $timerObject, $trapsObject, $trapStubsObject, $fastObject,
-                        $userObject, $syscallObject, $gfxObject, $inputObject, $processObject, $memoryObject, $userBridgeObject, $initrdObject,
-                        '--base', $kernelBase, '-o', $kernelK32)
+# --- bios -------------------------------------------------------------------
+$biosEntry = Join-Path $here 'bios\entry.S'
+$bios = Join-Path $build 'bios.bin'
+$biosK32 = Join-Path $build 'bios.k32'
+$biosSym = Join-Path $build 'bios.sym'
+New-Image -Output $bios -Base $biosBase -Flat -Inputs @($biosEntry) -Sym $biosSym -Entry bios_entry
+New-Image -Output $biosK32 -Base $biosBase -Inputs @($biosEntry) -Entry bios_entry
 
-# Generate kernel.meta from the linker map and kernel image.
+# --- kernel -----------------------------------------------------------------
+$kernelInputs = @(Join-Path $here 'boot\entry.S') + $kernelObjects + @(
+    (Join-Path $here 'kernel\traps-asm.S'),
+    (Join-Path $here 'kernel\fast.S'),
+    (Join-Path $here 'kernel\user-asm.S'),
+    $initrdAssembly
+)
+$kernel = Join-Path $build 'kernel.bin'
+$kernelK32 = Join-Path $build 'kernel.k32'
+$kernelMap = Join-Path $build 'kernel.map'
+$kernelSym = Join-Path $build 'kernel.sym'
+New-Image -Output $kernel -Base $kernelBase -Flat -Inputs $kernelInputs -Map $kernelMap -Sym $kernelSym
+New-Image -Output $kernelK32 -Base $kernelBase -Inputs $kernelInputs
+
+# --- kernel.meta ------------------------------------------------------------
+$kernelMeta = Join-Path $build 'kernel.meta'
 $mapLines = Get-Content -LiteralPath $kernelMap
 $startLine = $mapLines | Where-Object { $_ -match '^\s*__initrd_start\s+(0x[0-9A-Fa-f]+)' } | Select-Object -First 1
 $endLine = $mapLines | Where-Object { $_ -match '^\s*__initrd_end\s+(0x[0-9A-Fa-f]+)' } | Select-Object -First 1
@@ -295,8 +231,12 @@ if ($startLine -and $endLine) {
                              $metaBytes, $index * 4, 4)
     }
     [System.IO.File]::WriteAllBytes($kernelMeta, $metaBytes)
+} else {
+    Write-Warning 'kernel.meta not written: the map does not name __initrd_start and __initrd_end'
 }
 
-Write-Host "KR32OS M4 built:"
+Write-Host 'KR32OS M4 built with the KRCompiler toolchain:'
 Write-Host "  $bios"
+Write-Host "  $biosK32"
 Write-Host "  $kernel"
+Write-Host "  $kernelK32"
