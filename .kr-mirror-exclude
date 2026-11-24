@@ -1,0 +1,2 @@
+# SDL2 is fetched into third_party and is large; the mirror does not carry it.
+third_party/
