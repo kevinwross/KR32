@@ -6,7 +6,7 @@
 # Same rule as scripts/run-gate.ps1: an Arm64 machine runs four jobs, an x64
 # machine 80% of its logical processors.
 set -e
-preset="${1:-linux-gcc}"
+preset="${1:-linux-gcc-debug}"
 # NUMBER_OF_PROCESSORS is set by Windows and by CI runners; nproc is the fallback.
 cores="${NUMBER_OF_PROCESSORS:-$(nproc)}"
 case "$(uname -m)" in

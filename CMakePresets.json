@@ -1,14 +1,14 @@
 {
   "version": 6,
   "cmakeMinimumRequired": {
-    "major": 3,
     "minor": 25,
+    "major": 3,
     "patch": 0
   },
   "configurePresets": [
     {
-      "name": "windows-msvc",
-      "displayName": "Windows MSVC (Visual Studio 2026)",
+      "name": "windows-msvc-debug",
+      "displayName": "Windows MSVC Debug (Visual Studio 2026)",
       "generator": "Visual Studio 18 2026",
       "architecture": "x64",
       "binaryDir": "${sourceDir}/build/windows-msvc",
@@ -19,31 +19,22 @@
       }
     },
     {
-      "name": "windows-ninja",
-      "displayName": "Windows Ninja Debug",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/windows-ninja",
+      "name": "windows-msvc-release",
+      "displayName": "Windows MSVC Release (Visual Studio 2026)",
+      "generator": "Visual Studio 18 2026",
+      "architecture": "x64",
+      "binaryDir": "${sourceDir}/build/windows-msvc-release",
       "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
         "KR32_BUILD_UI": "ON",
         "KR32_BUILD_TESTS": "ON",
         "SDL2_DIR": "${sourceDir}/third_party/SDL2/cmake"
       }
     },
     {
-      "name": "windows-ninja-release",
-      "displayName": "Windows Ninja Release",
-      "inherits": "windows-ninja",
-      "binaryDir": "${sourceDir}/build/windows-ninja-release",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Release"
-      }
-    },
-    {
-      "name": "linux-gcc",
+      "name": "linux-gcc-debug",
       "displayName": "Linux GCC Debug",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/linux-gcc",
+      "binaryDir": "${sourceDir}/build/linux-gcc-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "g++",
@@ -52,10 +43,34 @@
       }
     },
     {
-      "name": "linux-clang",
-      "displayName": "Linux Clang Debug",
+      "name": "linux-gcc-release",
+      "displayName": "Linux GCC Release",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/linux-clang",
+      "binaryDir": "${sourceDir}/build/linux-gcc-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++",
+        "KR32_BUILD_UI": "ON",
+        "KR32_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "linux-arm64-release",
+      "displayName": "Linux ARM64 GCC Release",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-arm64-release",
+      "cacheVariables": {
+        "CMAKE_BUILD_TYPE": "Release",
+        "CMAKE_CXX_COMPILER": "g++",
+        "KR32_BUILD_UI": "ON",
+        "KR32_BUILD_TESTS": "ON"
+      }
+    },
+    {
+      "name": "linux-clang-debug",
+      "displayName": "Linux Clang Debug (extra)",
+      "generator": "Ninja",
+      "binaryDir": "${sourceDir}/build/linux-clang-debug",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++",
@@ -64,22 +79,10 @@
       }
     },
     {
-      "name": "linux-arm64-gcc",
-      "displayName": "Linux ARM64 GCC Debug",
+      "name": "linux-sanitize",
+      "displayName": "Linux Clang ASan + UBSan (extra, headless)",
       "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/linux-arm64-gcc",
-      "cacheVariables": {
-        "CMAKE_BUILD_TYPE": "Debug",
-        "CMAKE_CXX_COMPILER": "g++",
-        "KR32_BUILD_UI": "ON",
-        "KR32_BUILD_TESTS": "ON"
-      }
-    },
-    {
-      "name": "linux-asan",
-      "displayName": "Linux Clang ASan + UBSan (headless)",
-      "generator": "Ninja",
-      "binaryDir": "${sourceDir}/build/linux-asan",
+      "binaryDir": "${sourceDir}/build/linux-sanitize",
       "cacheVariables": {
         "CMAKE_BUILD_TYPE": "Debug",
         "CMAKE_CXX_COMPILER": "clang++",
@@ -92,43 +95,39 @@
   "buildPresets": [
     {
       "name": "windows-msvc-debug",
-      "configurePreset": "windows-msvc",
+      "configurePreset": "windows-msvc-debug",
       "configuration": "Debug"
     },
     {
       "name": "windows-msvc-release",
-      "configurePreset": "windows-msvc",
+      "configurePreset": "windows-msvc-release",
       "configuration": "Release"
     },
     {
-      "name": "windows-ninja",
-      "configurePreset": "windows-ninja"
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc-debug"
     },
     {
-      "name": "windows-ninja-release",
-      "configurePreset": "windows-ninja-release"
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc-release"
     },
     {
-      "name": "linux-gcc",
-      "configurePreset": "linux-gcc"
+      "name": "linux-arm64-release",
+      "configurePreset": "linux-arm64-release"
     },
     {
-      "name": "linux-clang",
-      "configurePreset": "linux-clang"
+      "name": "linux-clang-debug",
+      "configurePreset": "linux-clang-debug"
     },
     {
-      "name": "linux-arm64-gcc",
-      "configurePreset": "linux-arm64-gcc"
-    },
-    {
-      "name": "linux-asan",
-      "configurePreset": "linux-asan"
+      "name": "linux-sanitize",
+      "configurePreset": "linux-sanitize"
     }
   ],
   "testPresets": [
     {
       "name": "windows-msvc-debug",
-      "configurePreset": "windows-msvc",
+      "configurePreset": "windows-msvc-debug",
       "configuration": "Debug",
       "output": {
         "outputOnFailure": true
@@ -139,7 +138,7 @@
     },
     {
       "name": "windows-msvc-release",
-      "configurePreset": "windows-msvc",
+      "configurePreset": "windows-msvc-release",
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
@@ -149,8 +148,8 @@
       }
     },
     {
-      "name": "windows-ninja",
-      "configurePreset": "windows-ninja",
+      "name": "linux-gcc-debug",
+      "configurePreset": "linux-gcc-debug",
       "output": {
         "outputOnFailure": true
       },
@@ -159,8 +158,8 @@
       }
     },
     {
-      "name": "windows-ninja-release",
-      "configurePreset": "windows-ninja-release",
+      "name": "linux-gcc-release",
+      "configurePreset": "linux-gcc-release",
       "output": {
         "outputOnFailure": true
       },
@@ -169,8 +168,8 @@
       }
     },
     {
-      "name": "linux-gcc",
-      "configurePreset": "linux-gcc",
+      "name": "linux-arm64-release",
+      "configurePreset": "linux-arm64-release",
       "output": {
         "outputOnFailure": true
       },
@@ -179,8 +178,8 @@
       }
     },
     {
-      "name": "linux-clang",
-      "configurePreset": "linux-clang",
+      "name": "linux-clang-debug",
+      "configurePreset": "linux-clang-debug",
       "output": {
         "outputOnFailure": true
       },
@@ -189,18 +188,8 @@
       }
     },
     {
-      "name": "linux-arm64-gcc",
-      "configurePreset": "linux-arm64-gcc",
-      "output": {
-        "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
-      }
-    },
-    {
-      "name": "linux-asan",
-      "configurePreset": "linux-asan",
+      "name": "linux-sanitize",
+      "configurePreset": "linux-sanitize",
       "output": {
         "outputOnFailure": true
       },
