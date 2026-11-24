@@ -89,9 +89,17 @@ bool load_program(const std::string& path,
     return read_file(path, bytes, error);
 }
 
+// G3: the file's own header decides. A kr32 container begins with "K32\0" --
+// name that says otherwise is a name, not evidence. Reading the first bytes also
+// means a raw image with any extension loads, and a container with any extension
+// loads, which is what the header rule is for.
 bool is_container(const std::string& path) {
-    const std::size_t dot = path.find_last_of('.');
-    return dot != std::string::npos && lower(path.substr(dot + 1)) == "k32";
+    std::ifstream stream(path, std::ios::binary);
+    if (!stream) return false;
+    char magic[4] = {0, 0, 0, 0};
+    stream.read(magic, sizeof(magic));
+    return stream.gcount() == static_cast<std::streamsize>(sizeof(magic)) &&
+           magic[0] == 'K' && magic[1] == '3' && magic[2] == '2' && magic[3] == '\0';
 }
 
 

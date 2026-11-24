@@ -166,7 +166,7 @@ inline bool resolve(std::string_view argv0,
         char magic[4] = {0, 0, 0, 0};
         stream.read(magic, sizeof(magic));
         return stream.gcount() == static_cast<std::streamsize>(sizeof(magic)) &&
-               magic[0] == 'K' && magic[1] == 'R' && magic[2] == 'O' && magic[3] == '\0';
+               magic[0] == 'K' && magic[1] == '3' && magic[2] == '2' && magic[3] == '\0';
     };
     // With no kernel file to read -- the embedded OS -- there is no header to
     // decide from, and the name is the only information there is.
