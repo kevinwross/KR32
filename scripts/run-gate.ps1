@@ -8,7 +8,9 @@
 # execution.jobs is only a fallback for a bare `ctest --preset`.
 param(
     [string]$Preset = "windows-msvc-debug",
-    [switch]$NoTests
+    [string]$Krc = '',
+    [string]$Krld = '',
+    [switch]$SkipTests
 )
 # J5: ask the doctor first, so a missing tool fails with a sentence naming the
 # tool and the repository instead of a build error. The doctor lives in the
@@ -59,7 +61,7 @@ if ($LASTEXITCODE -ne 0) {
     exit $LASTEXITCODE
 }
 Write-Host ("gate: build {0:0.0}s" -f $clock.Elapsed.TotalSeconds)
-if ($NoTests) { exit 0 }
+if ($SkipTests) { exit 0 }
 
 $clock.Restart()
 & $ctest --preset $Preset -j $jobs
