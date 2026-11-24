@@ -75,7 +75,7 @@ python3 "$here/tools/mkinitrd.py" "$build/initrd.bin" "$build/initrd.s" \
 
 # --- bios -------------------------------------------------------------------
 image "$build/bios.bin" "$bios_base" --flat --entry=bios_entry --sym="$build/bios.sym" "$here/bios/entry.S"
-image "$build/bios.k32" "$bios_base" --entry=bios_entry "$here/bios/entry.S"
+image "$build/bios.kr32" "$bios_base" --entry=bios_entry "$here/bios/entry.S"
 
 # --- kernel -----------------------------------------------------------------
 kernel_inputs=(
@@ -87,12 +87,12 @@ kernel_inputs=(
     "$build/initrd.s"
 )
 image "$build/kernel.bin" "$kernel_base" --flat --map="$build/kernel.map" --sym="$build/kernel.sym" "${kernel_inputs[@]}"
-image "$build/kernel.k32" "$kernel_base" "${kernel_inputs[@]}"
+image "$build/kernel.kr32" "$kernel_base" "${kernel_inputs[@]}"
 
 python3 "$here/tools/mkmeta.py" "$build/kernel.bin" "$build/kernel.map" "$build/kernel.meta"
 
 echo "KR32OS M4 built with the KRCompiler toolchain:"
 echo "  $build/bios.bin"
-echo "  $build/bios.k32"
+echo "  $build/bios.kr32"
 echo "  $build/kernel.bin"
-echo "  $build/kernel.k32"
+echo "  $build/kernel.kr32"

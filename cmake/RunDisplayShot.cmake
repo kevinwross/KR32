@@ -5,7 +5,7 @@ if(NOT DEFINED KR32 OR NOT DEFINED EXAMPLES OR NOT DEFINED WORK)
 endif()
 
 file(MAKE_DIRECTORY "${WORK}")
-set(image "${WORK}/color-bars.k32")
+set(image "${WORK}/color-bars.kr32")
 
 execute_process(
     COMMAND "${KR32}" build "${EXAMPLES}/color-bars.asm" -o "${image}"

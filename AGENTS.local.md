@@ -70,7 +70,7 @@ Target-specific notes:
 ## Architecture boundaries
 
 - `src/platform` is the only OS/SDL boundary. `src/ui` must not include OS or SDL headers; `tests/boundary` enforces this.
-- The installed krc toolchain compiles guest C/C++, and the `kr32` executable loads, runs, disassembles and debugs the resulting `.k32` images. There is no in-tree compiler, assembler, linker or runtime to keep in step.
+- The installed krc toolchain compiles guest C/C++, and the `kr32` executable loads, runs, disassembles and debugs the resulting `.kr32` images. There is no in-tree compiler, assembler, linker or runtime to keep in step.
 
 ## Environment
 

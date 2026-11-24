@@ -108,29 +108,29 @@ adoption branch and is no longer polled.
 
 ## Commands
 
-The `kr32` executable is a runner and debugger. It loads `.k32` images; it does
+The `kr32` executable is a runner and debugger. It loads `.kr32` images; it does
 not assemble, link or compile them. The window's **Build** compiles a `.c` or
 `.cpp` source with krc, and the same toolchain builds guest programs outside the
 window.
 
 ```text
 kr32 dis <image> [--base <addr>] [--start <addr>] [--max-words <n>]
-kr32 vm <file.k32> [--max-steps <n>] [--trace] [--stats] [--arg <value>] [--input <text>]
-kr32 run <file.k32>
-kr32 size <file.k32>
-kr32 debug <file.k32>
+kr32 vm <file.kr32> [--max-steps <n>] [--trace] [--stats] [--arg <value>] [--input <text>]
+kr32 run <file.kr32>
+kr32 size <file.kr32>
+kr32 debug <file.kr32>
 kr32 gui <source-or-image> [--headless] [--screenshot <path>]
 kr32 gui --os --embedded --headless --screenshot os-ui.ppm
-kr32 os [kernel.k32] --bios <bios.k32> [--serial-input <text>]
+kr32 os [kernel.kr32] --bios <bios.kr32> [--serial-input <text>]
 kr32 os --embedded
 kr32 shell
-kr32 dap --stdio <image.k32>
+kr32 dap --stdio <image.kr32>
 kr32 version
 kr32 help
 kr32 --smoke-ui
 ```
 
-`vm` runs a `.k32`; `run` is its alias. `size` reports sections and `debug`
+`vm` runs a `.kr32`; `run` is its alias. `size` reports sections and `debug`
 dumps the `.debug_info` records. `gui` opens the source/disassembly debugger or
 renders a headless PPM screenshot. `os` boots a KR32OS kernel with a BIOS and
 resolves the default artifacts from `KR32OS_BIN`, `KR32OS_BIOS`, or the embedded
@@ -142,7 +142,7 @@ fixtures the tests use.
 ```text
 include/kr32/      public headers
 src/core/          ISA encoding and CPU/machine
-src/container/     .k32 object/image format
+src/container/     .kr32 object/image format
 src/dis/           disassembler
 src/debug/         debug information and DebugSession
 src/vm/            runner and host services

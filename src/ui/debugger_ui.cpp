@@ -238,7 +238,7 @@ bool read_binary(const std::string& path, std::vector<std::uint8_t>& bytes,
     return true;
 }
 
-// The krc path leaves the image opaque: the facade returns a .k32 the real
+// The krc path leaves the image opaque: the facade returns a .kr32 the real
 // loader parses, and the runtime is the target's own staged pair rather than
 // src/cc's assembly (which needs directives and instructions krc's assembler
 // does not implement).
@@ -897,7 +897,7 @@ bool DebuggerUI::load_os_memory(const std::vector<std::uint8_t>& kernel,
     std::uint32_t kernel_size = static_cast<std::uint32_t>(kernel.size());
     if (kernel_container || bios_container) {
         if (!kernel_container || !bios_container) {
-            error = "kernel and BIOS must both be .k32 or both be raw .bin";
+            error = "kernel and BIOS must both be .kr32 or both be raw .bin";
             return false;
         }
         container::Image kernel_image;
@@ -3924,7 +3924,7 @@ void DebuggerUI::render(Canvas& canvas) {
     draw_toolbar(canvas);
     if (!loaded_) {
         canvas.text(40, 100, "KR32 WINDOWED DEBUGGER", kAccent, FontRole::UiBold);
-        canvas.text(40, 140, "usage: kr32 gui <image.k32>", kText, FontRole::Mono);
+        canvas.text(40, 140, "usage: kr32 gui <image.kr32>", kText, FontRole::Mono);
         canvas.text(40, 160, "F5 run  F10 over  F11 step  shift+F11 out  F9 breakpoint",
                     kDim, FontRole::MonoSmall);
         draw_error(canvas);

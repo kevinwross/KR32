@@ -4,7 +4,7 @@ Rebuilds KR32OS with the KRCompiler toolchain, copies the two container images
 into the host resources, and relinks kr32 with them embedded.
 
 This is the explicit "update the BIOS/kernel" step. Normal kr32 builds only
-consume the checked-in .k32 files under src/resources/os, and the ctest row
+consume the checked-in .kr32 files under src/resources/os, and the ctest row
 kr32_os_images_match_source fails when they no longer match a rebuild.
 
 The old version of this script drove `kr32 cc`, `kr32 as` and `kr32 ld` through
@@ -67,8 +67,8 @@ if ($LASTEXITCODE -ne 0) {
 $source = Join-Path $root 'kr32os\build\windows'
 $destination = Join-Path $root 'src\resources\os\windows'
 New-Item -ItemType Directory -Force -Path $destination | Out-Null
-Copy-Item (Join-Path $source 'bios.k32') (Join-Path $destination 'bios.k32') -Force
-Copy-Item (Join-Path $source 'kernel.k32') (Join-Path $destination 'kernel.k32') -Force
+Copy-Item (Join-Path $source 'bios.kr32') (Join-Path $destination 'bios.kr32') -Force
+Copy-Item (Join-Path $source 'kernel.kr32') (Join-Path $destination 'kernel.kr32') -Force
 
 if (-not $SkipRelink) {
     if (-not $CMake) {

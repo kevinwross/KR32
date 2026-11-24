@@ -20,7 +20,7 @@ enum class FileDialogStatus {
 struct FileDialogOptions {
     FileDialogKind kind = FileDialogKind::Open;
     std::string title;
-    std::string filter;          // Semicolon-separated patterns, e.g. *.k32;*.c
+    std::string filter;          // Semicolon-separated patterns, e.g. *.kr32;*.c
     std::string initial_path;
     std::string default_extension;
     bool must_exist = true;

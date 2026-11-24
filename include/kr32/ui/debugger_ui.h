@@ -157,7 +157,7 @@ private:
     bool loaded_ = false;
     bool quit_ = false;
     std::string path_;
-    std::string status_ = "load a .k32 image";
+    std::string status_ = "load a .kr32 image";
     std::string error_;
     std::vector<std::string> source_lines_;
     std::map<int, std::vector<std::string>> source_cache_;

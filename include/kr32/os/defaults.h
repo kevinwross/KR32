@@ -124,7 +124,7 @@ inline bool resolve(std::string_view argv0,
         detail::add_candidate(candidates, executable / "kr32os.bin");
         detail::add_candidate(candidates, current / "kr32os" / "build" /
                                               detail::platform_directory() /
-                                              "kernel.k32");
+                                              "kernel.kr32");
         detail::add_candidate(candidates, current / "kr32os" / "build" /
                                               detail::platform_directory() /
                                               "kernel.bin");
@@ -172,19 +172,19 @@ inline bool resolve(std::string_view argv0,
     // decide from, and the name is the only information there is.
     const bool kernel_is_container =
         detail::is_file(kernel_path) ? starts_with_kro_magic(kernel_path)
-                                     : kernel_path.extension() == ".k32";
+                                     : kernel_path.extension() == ".kr32";
     detail::add_candidate(
         bios_candidates,
         kernel_path.parent_path() /
-            (kernel_is_container ? "bios.k32" : "bios.bin"));
+            (kernel_is_container ? "bios.kr32" : "bios.bin"));
     detail::add_candidate(
         bios_candidates,
         kernel_path.parent_path() /
-            (kernel_is_container ? "bios.bin" : "bios.k32"));
+            (kernel_is_container ? "bios.bin" : "bios.kr32"));
     detail::add_candidate(bios_candidates, executable / "bios.bin");
     detail::add_candidate(bios_candidates, current / "kr32os" / "build" /
                                                detail::platform_directory() /
-                                               "bios.k32");
+                                               "bios.kr32");
     detail::add_candidate(bios_candidates, current / "kr32os" / "build" /
                                                detail::platform_directory() /
                                                "bios.bin");

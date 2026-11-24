@@ -175,7 +175,7 @@ Set-Content -LiteralPath $initrdAssembly -Value $initrdText.ToString() -NoNewlin
 # --- bios -------------------------------------------------------------------
 $biosEntry = Join-Path $here 'bios\entry.S'
 $bios = Join-Path $build 'bios.bin'
-$biosK32 = Join-Path $build 'bios.k32'
+$biosK32 = Join-Path $build 'bios.kr32'
 $biosSym = Join-Path $build 'bios.sym'
 New-Image -Output $bios -Base $biosBase -Flat -Inputs @($biosEntry) -Sym $biosSym -Entry bios_entry
 New-Image -Output $biosK32 -Base $biosBase -Inputs @($biosEntry) -Entry bios_entry
@@ -188,7 +188,7 @@ $kernelInputs = @(Join-Path $here 'boot\entry.S') + $kernelObjects + @(
     $initrdAssembly
 )
 $kernel = Join-Path $build 'kernel.bin'
-$kernelK32 = Join-Path $build 'kernel.k32'
+$kernelK32 = Join-Path $build 'kernel.kr32'
 $kernelMap = Join-Path $build 'kernel.map'
 $kernelSym = Join-Path $build 'kernel.sym'
 New-Image -Output $kernel -Base $kernelBase -Flat -Inputs $kernelInputs -Map $kernelMap -Sym $kernelSym

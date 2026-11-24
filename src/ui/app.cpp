@@ -96,7 +96,7 @@ int run(int argc, char** argv) {    std::string image_path;
             continue;
         }
         if (argument == "--help" || argument == "-h") {
-            std::printf("Usage: kr32 gui <image.k32> [--headless] [--screenshot out.ppm]\n"
+            std::printf("Usage: kr32 gui <image.kr32> [--headless] [--screenshot out.ppm]\n"
                         "       kr32 gui --os [kernel.bin] [--bios bios.bin] "
                         "[--embedded] [--headless] [--screenshot out.ppm]\n");
             return 0;
@@ -455,7 +455,7 @@ int run_display(int argc, char** argv) {
         }
         if (argument == "--help" || argument == "-h") {
             std::printf(
-                "Usage: kr32 display <image.k32> [--screen-shot out.ppm] [--steps N]\n"
+                "Usage: kr32 display <image.kr32> [--screen-shot out.ppm] [--steps N]\n"
                 "       kr32 display --os [kernel.bin] [--bios bios.bin] [--embedded]\n"
                 "                         [--screen-shot out.ppm]\n"
                 "Keys: Esc quits, F2 cycles 1x/2x/3x zoom.\n");

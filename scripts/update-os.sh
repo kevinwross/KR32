@@ -3,7 +3,7 @@
 # into the host resources, and relinks kr32 with them embedded.
 #
 # This is the explicit "update the BIOS/kernel" step. Normal kr32 builds only
-# consume the checked-in .k32 files under src/resources/os, and the ctest row
+# consume the checked-in .kr32 files under src/resources/os, and the ctest row
 # kr32_os_images_match_source fails when they no longer match a rebuild.
 #
 #   KRC=/path/to/krc bash scripts/update-os.sh [preset]
@@ -41,8 +41,8 @@ KRC="$KRC" bash "$root/kr32os/build.sh"
 source="$root/kr32os/build/linux"
 destination="$root/src/resources/os/linux"
 mkdir -p "$destination"
-cp "$source/bios.k32" "$destination/bios.k32"
-cp "$source/kernel.k32" "$destination/kernel.k32"
+cp "$source/bios.kr32" "$destination/bios.kr32"
+cp "$source/kernel.kr32" "$destination/kernel.kr32"
 
 cmake --build --preset "$preset" --target kr32 >/dev/null
 

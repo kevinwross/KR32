@@ -4,7 +4,7 @@ endif()
 
 set(_main "${BINARY_DIR}/link-main.o")
 set(_func "${BINARY_DIR}/link-func.o")
-set(_image "${BINARY_DIR}/link-smoke.k32")
+set(_image "${BINARY_DIR}/link-smoke.kr32")
 
 foreach(_pair "examples/link-main.s;${_main}" "examples/link-func.s;${_func}")
     list(GET _pair 0 _source)

@@ -21,7 +21,7 @@ notes:
 - User faults terminate the process with status 139 instead of panicking the
   kernel.
 - The OS build emits `.sym` sidecars for the raw `.bin` images and optional
-  `.k32` containers. `gui --os` loads the sidecar for source-line debugging;
+  `.kr32` containers. `gui --os` loads the sidecar for source-line debugging;
   assembly line records are emitted by `.file` directives in the assembly
   sources.
 
@@ -624,10 +624,10 @@ kr32 gui --os
 ```
 
 The default kernel is resolved from `KR32OS_BIN`, then `kr32os.bin` next to the
-executable, then `kr32os/build/<platform>/kernel.k32` or `kernel.bin` in the
+executable, then `kr32os/build/<platform>/kernel.kr32` or `kernel.bin` in the
 current directory, then an installed `share/kr32` directory, and finally the
 embedded kernel/BIOS pair compiled into `kr32`. The BIOS defaults to
-`KR32OS_BIOS`, the kernel's sibling `bios.k32`/`bios.bin`, or the same
+`KR32OS_BIOS`, the kernel's sibling `bios.kr32`/`bios.bin`, or the same
 locations.
 
 ## Follow-up design questions

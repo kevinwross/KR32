@@ -182,7 +182,7 @@ container, debug format, and ABI are designed for C++ from the start.
 | M1 | Machine core, assembler, disassembler | integer program runs headless |
 | M2 | Privilege, exceptions, MMU, boot, multicore hooks | user mode, faults, paging, BIOS |
 | M2b | FP and M extension | FP and matrix demos pass |
-| M3 | Container, linker, `build` | `.k32` objects/linker, `kr32 build` runs |
+| M3 | Container, linker, `build` | `.kr32` objects/linker, `kr32 build` runs |
 | M4 | Simple C compiler and minimal runtime | C hello world runs |
 | M5 | Debug information, `DebugSession`, CLI debugger | source-level model works |
 | M6 | Windowed debugger | KR16 UI adapted to SDL2; debug a C program |
@@ -362,7 +362,7 @@ strided loads, assembler/disassembler support, and demos are in place.
 
 ### M3 — Container, linker, build pipeline
 
-**Goal:** relocatable objects, a linker, a `.k32` image, and `kr32 build`.
+**Goal:** relocatable objects, a linker, a `.kr32` image, and `kr32 build`.
 
 **Status:** complete 2026-11-02. The object assembler currently covers the
 integer instruction subset used by the M3 pipeline; FP/M and the full C-directed
@@ -752,7 +752,7 @@ closed 2026-11-02.
 - [x] `platform::Window::present_surface(vram, width, height, stride, scale)`
       with integer zoom, sharing the window and event loop with the Canvas
       path.
-- [x] `kr32 display [image.k32]` and `kr32 display --os`: step in slices,
+- [x] `kr32 display [image.kr32]` and `kr32 display --os`: step in slices,
       present when `FRAME` changes, `Esc` quits, `F2` cycles zoom, and a halted
       guest keeps the last frame.
 - [x] `--screen-shot X.ppm` writes only the committed frame.
@@ -1142,10 +1142,10 @@ Newest entries at the bottom. Use the local time zone.
       11 CTest cases including both FP/matrix demos; Windows MSVC Debug/Release
       and Ninja; WSL GCC/Clang/ASan.
 - **2026-11-02 01:27 -08:00** — Tagged `m2b`.
-- **2026-11-02 01:37 -08:00** — M3 implemented: `.k32` container with CRC,
+- **2026-11-02 01:37 -08:00** — M3 implemented: `.kr32` container with CRC,
       sections, symbols, relocations, and debug sections; object assembler;
       linker with section merging, symbol resolution, map, strip, and runtime
-      symbols; `as --object`, `ld`, `size`, `build`, and `.k32` VM loading.
+      symbols; `as --object`, `ld`, `size`, `build`, and `.kr32` VM loading.
 - **2026-11-02 01:37 -08:00** — M3 gate passed: 74 unit cases / 4033 assertions,
       13 CTest cases including `build_hello` and two-object `link_smoke`;
       Windows MSVC Debug/Release and Ninja; WSL GCC/Clang/ASan.
@@ -1368,7 +1368,7 @@ Newest entries at the bottom. Use the local time zone.
       ISA/object-assembler/disassembler support for `0x62`; and tests/docs.
 - **2026-11-02 12:11 -08:00** — Fixed the GUI LOAD button: it now opens the
       platform file picker (Windows `GetOpenFileName`, Linux zenity/kdialog)
-      and loads the selected `.k32` or `.c` file. Previously LOAD and BUILD both
+      and loads the selected `.kr32` or `.c` file. Previously LOAD and BUILD both
       called `restart()`.
 - **2026-11-02 12:15 -08:00** — Completed M9.5. Added class layout (base at
       offset zero, natural member alignment, empty classes, FP members), `this`
@@ -2045,7 +2045,7 @@ Newest entries at the bottom. Use the local time zone.
       initrd fault/W^X test programs, user-fault containment (exit 139), and
       immediate reaping. Windows unit suite 353/353.
 - **2026-11-04 13:33 -08:00** — OS source debugging: link `.sym` sidecars
-      (CRC-checked), `.k32` OS images, source-id assignment for C objects,
+      (CRC-checked), `.kr32` OS images, source-id assignment for C objects,
       assembly `.file` line records for BIOS/boot/stubs, and automatic source
       following for assembly and C. `gui --os` now loads `.bin` plus its
       sibling `.sym`; both raw and container OS images are supported.
@@ -3072,7 +3072,7 @@ Newest entries at the bottom. Use the local time zone.
       helpers in `tests/cxx/cxx_test_support.h` and
       `tests/unit/cc_test_support.h` trip GCC's `-Wunused-function` under
       `-Werror`. Marked them `[[maybe_unused]]`. Regenerated the Linux OS images
-      with `scripts/update-os.sh` (`kernel.k32` 131,924 bytes) and copied them
+      with `scripts/update-os.sh` (`kernel.kr32` 131,924 bytes) and copied them
       into the tree. Windows gate re-run after the fix: 83/83 passed, 714.02 s.
 
 - **2026-11-12 21:33 -08:00** — M10 gate closed. With `ninja`, `pkg-config`, and
@@ -3130,7 +3130,7 @@ Newest entries at the bottom. Use the local time zone.
       `cnt/4` words, then finishes the remaining 0-3 bytes with `STORE8`.
       `console.c`'s `fill_surface` now calls `fast_WordFill`, and both build
       scripts assemble and link `fast.o`. Boot plus `exit` dropped from 8,933,156
-      to 3,173,163 ticks; the embedded images were regenerated (kernel.k32
+      to 3,173,163 ticks; the embedded images were regenerated (kernel.kr32
       132,736 bytes). `unit_test_fast` assembles `fast.S`, links it with a C
       driver, runs it, and checks word order, byte replication, the 0-3 byte tail,
       and zero-length calls.
@@ -4112,7 +4112,7 @@ Newest entries at the bottom. Use the local time zone.
       Refreshing the embedded OS images was required: `run_os_embedded` failed
       with `unknown command: exit 0` because `kr32.exe` carried the previous
       kernel. `scripts/update-os.ps1 -CMake <path>` and `scripts/update-os.sh`
-      regenerated `src/resources/os/{windows,linux}/{bios,kernel}.k32`. My first
+      regenerated `src/resources/os/{windows,linux}/{bios,kernel}.kr32`. My first
       attempt at the script edit also broke `--serial-input` into
       `---serial-input` in two scripts, which the boot and embedded tests caught
       immediately. All eleven parts (95 tests) and 95/95 WSL pass.
@@ -4255,7 +4255,7 @@ Newest entries at the bottom. Use the local time zone.
       `is_function_label`, which also matches a user label inside a function, so
       ranges ended early and two functions could report the same span.
 
-      Open question before this is trustworthy: `kr32 debug kernel.k32` shows 64
+      Open question before this is trustworthy: `kr32 debug kernel.kr32` shows 64
       locations, and at least one function reports two disjoint ranges for
       different variables, which suggests a range is still wrong. The debug,
       C front-end, and optimizer suites pass (297, 636, and 165 assertions), but
@@ -4267,7 +4267,7 @@ Newest entries at the bottom. Use the local time zone.
       passes record, so 42 of 59 records landed outside their own function. The
       records are now anchored on the labels the front end already writes in its
       `F` record, `<name>` and its end label, which are exact by construction and
-      never move. `kr32 debug kernel.k32` reports 70 locations with **none**
+      never move. `kr32 debug kernel.kr32` reports 70 locations with **none**
       outside its function's bounds, and the reported case reads
       `P run_named entry R9 0x21c70-0x220dc`, the function's own span.
 
@@ -4303,7 +4303,7 @@ Newest entries at the bottom. Use the local time zone.
       into the debug section and no index survives a pass, which removes the whole
       class of failure that produced 42 out-of-range records this morning.
 
-      `kr32 debug kernel.k32` now reports 73 locations - 70 whole-function and 3
+      `kr32 debug kernel.kr32` now reports 73 locations - 70 whole-function and 3
       span - with none outside its function's bounds. A second test compiles a
       function whose local dies before a call, asserts the record names a range
       narrower than the function and inside it, and would have caught the earlier
@@ -4331,7 +4331,7 @@ Newest entries at the bottom. Use the local time zone.
       `initrd_entry` while the row still shows `register: R9`.
 
       The embedded images were rebuilt from scratch for both platforms:
-      `kernel.k32` grew by about 4 KB of debug text because the shipped build is
+      `kernel.kr32` grew by about 4 KB of debug text because the shipped build is
       optimized and now carries 73 location records. All eleven parts (96 tests)
       and 96/96 WSL pass; Debug and Release both built.
 
@@ -5021,7 +5021,7 @@ Newest entries at the bottom. Use the local time zone.
       - Right-click on a variable row opens the inspector; the gutter-menu paragraph
         now says so.
       - OS boots were documented as loading `kernel.sym`/`bios.sym` sidecars. The
-        debugger reads the `.debug_info` section of the kernel and BIOS `.k32`
+        debugger reads the `.debug_info` section of the kernel and BIOS `.kr32`
         images and merges them; no `.sym` reference remains in the CLI or the UI.
       - "A cooperative pause of a running guest is not implemented" contradicted
         `F6 BREAK`, which stops a continuous run. Replaced with a real limit: the

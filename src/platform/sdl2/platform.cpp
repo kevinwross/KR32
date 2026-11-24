@@ -350,7 +350,7 @@ std::string clipboard_text() {
 
 namespace {
 
-constexpr const char* kDefaultFilter = "*.k32;*.c;*.cpp;*.cc;*.cxx";
+constexpr const char* kDefaultFilter = "*.kr32;*.c;*.cpp;*.cc;*.cxx";
 
 #ifdef _WIN32
 std::wstring widen(const std::string& text) {

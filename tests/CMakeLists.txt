@@ -107,83 +107,83 @@ set_tests_properties(cli_help PROPERTIES
     PASS_REGULAR_EXPRESSION "Usage:")
 
 add_test(NAME run_c_hello
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.kr32)
 set_tests_properties(run_c_hello PROPERTIES
     PASS_REGULAR_EXPRESSION "Hello, KR32!")
 
 add_test(NAME run_cxx_demo
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_cxx.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_cxx.kr32)
 set_tests_properties(run_cxx_demo PROPERTIES PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
 add_test(NAME run_cxx_libc
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/cxx_libc.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/cxx_libc.kr32)
 set_tests_properties(run_cxx_libc PROPERTIES
     PASS_REGULAR_EXPRESSION "C\\+\\+ via C libc: shared libc")
 
 add_test(NAME run_cxx_matrix
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/matrix_cxx.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/matrix_cxx.kr32)
 set_tests_properties(run_cxx_matrix PROPERTIES
     PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
 add_test(NAME run_cxx_balanced_tree
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/balanced_tree_cxx.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/balanced_tree_cxx.kr32)
 set_tests_properties(run_cxx_balanced_tree PROPERTIES
     PASS_REGULAR_EXPRESSION "Engineers in sorted order \\(30\\)")
 
 add_test(NAME run_cxx_tls
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/cxx_tls.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/cxx_tls.kr32)
 set_tests_properties(run_cxx_tls PROPERTIES
     PASS_REGULAR_EXPRESSION "HALTED exit=42")
 
 add_test(NAME build_c_hello
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.kr32)
 set_tests_properties(build_c_hello PROPERTIES PASS_REGULAR_EXPRESSION "Hello, KR32!")
 
 add_test(NAME build_c_types
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/types_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/types_c.kr32)
 set_tests_properties(build_c_types PROPERTIES
     PASS_REGULAR_EXPRESSION "unsigned int 10 squared = 100")
 
 add_test(NAME run_c_floats_variadic
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/floats_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/floats_c.kr32)
 set_tests_properties(run_c_floats_variadic PROPERTIES
     PASS_REGULAR_EXPRESSION "fpCrazyTown result = -20.142857")
 
 add_test(NAME build_c_varargs
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/varargs_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/varargs_c.kr32)
 set_tests_properties(build_c_varargs PROPERTIES
     PASS_REGULAR_EXPRESSION "mixed varargs 4 \\+ 2.5 \\+ 1.25 = 7")
 
 add_test(NAME build_c_libc
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/libc_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/libc_c.kr32)
 set_tests_properties(build_c_libc PROPERTIES PASS_REGULAR_EXPRESSION "heap walk=0")
 
 add_test(NAME build_c_strings
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/strings_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/strings_c.kr32)
 set_tests_properties(build_c_strings PROPERTIES
     PASS_REGULAR_EXPRESSION "memmove: ababcd")
 
 add_test(NAME build_c_binarytree
-    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/binarytree_c.k32)
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/binarytree_c.kr32)
 set_tests_properties(build_c_binarytree PROPERTIES
     PASS_REGULAR_EXPRESSION "AVL tree of engineers \\(height 6, 30 names\\)")
 
 add_test(NAME debug_dump
-    COMMAND $<TARGET_FILE:kr32> debug ${KR32_TEST_IMAGE_DIR}/hello_c.k32)
+    COMMAND $<TARGET_FILE:kr32> debug ${KR32_TEST_IMAGE_DIR}/hello_c.kr32)
 set_tests_properties(debug_dump PROPERTIES
     PASS_REGULAR_EXPRESSION "function main")
 
 add_test(NAME host_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
-        -DIMAGE=${KR32_TEST_IMAGE_DIR}/fileio_c.k32
+        -DIMAGE=${KR32_TEST_IMAGE_DIR}/fileio_c.kr32
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunHostSmoke.cmake)
 
 add_test(NAME dap_smoke
     COMMAND ${CMAKE_COMMAND}
         -DKR32=$<TARGET_FILE:kr32>
-        -DIMAGE=${KR32_TEST_IMAGE_DIR}/hello_c.k32
+        -DIMAGE=${KR32_TEST_IMAGE_DIR}/hello_c.kr32
         -DBINARY_DIR=${CMAKE_BINARY_DIR}
         -P ${CMAKE_SOURCE_DIR}/cmake/RunDapSmoke.cmake)
 
@@ -203,8 +203,8 @@ else()
 endif()
 add_test(NAME run_os_fixture
     COMMAND $<TARGET_FILE:kr32> os
-            "${KR32_OS_FIXTURE_DIR}/kernel.k32"
-            --bios "${KR32_OS_FIXTURE_DIR}/bios.k32"
+            "${KR32_OS_FIXTURE_DIR}/kernel.kr32"
+            --bios "${KR32_OS_FIXTURE_DIR}/bios.kr32"
             --max-steps 12000000 --serial-input "exit 0\n")
 set_tests_properties(run_os_fixture PROPERTIES
     LABELS "integration"
@@ -228,7 +228,7 @@ if(KR32_BUILD_UI)
 
     add_test(NAME ui_headless
         COMMAND $<TARGET_FILE:kr32> gui --headless
-            ${KR32_TEST_IMAGE_DIR}/hello_c.k32
+            ${KR32_TEST_IMAGE_DIR}/hello_c.kr32
             --screenshot ${CMAKE_BINARY_DIR}/hello-ui.ppm)
     set_tests_properties(ui_headless PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")
@@ -248,8 +248,8 @@ if(KR32_BUILD_UI)
 
     add_test(NAME ui_headless_os_files
         COMMAND $<TARGET_FILE:kr32> gui --os
-            "${KR32_OS_FIXTURE_DIR}/kernel.k32"
-            --bios "${KR32_OS_FIXTURE_DIR}/bios.k32" --headless
+            "${KR32_OS_FIXTURE_DIR}/kernel.kr32"
+            --bios "${KR32_OS_FIXTURE_DIR}/bios.kr32" --headless
             --screenshot ${CMAKE_BINARY_DIR}/os-ui-files.ppm)
     set_tests_properties(ui_headless_os_files PROPERTIES
         PASS_REGULAR_EXPRESSION "ui-render")

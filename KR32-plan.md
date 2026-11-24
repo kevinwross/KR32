@@ -636,7 +636,7 @@ KR32/
   include/kr32/           public engine headers
   src/
     core/                 CPU, machine, MMU, devices
-    asm/ link/ container/ assembler, linker, .k32 format
+    asm/ link/ container/ assembler, linker, .kr32 format
     cc/ cxx/              C and C++ compilers
     dis/ debug/           disassembler, debug info, DebugSession
     vm/ dap/              runner, host services, DAP
@@ -662,7 +662,7 @@ layer starts from KR16's portable `src/ui`; its SDL backend is ported to SDL2.
 | Emulator core | Yes | Deterministic, spec-derived |
 | Assembler | Yes | Core subset first, then full ISA |
 | Linker | Yes, after M2 | Sections, symbols, relocations, map |
-| Container | Yes, after M2 | `.k32` objects and images; debug sections |
+| Container | Yes, after M2 | `.kr32` objects and images; debug sections |
 | Disassembler | Yes | Contiguous range; symbols and lines |
 | Debug model | Yes | `DebugSession` shared by GUI, DAP, CLI, tests |
 | CLI | Yes | `as`, `ld`, `build`, `cc`, `cxx`, `vm`, `dis`, `size`, `debug`, `dap`, `shell` |
@@ -699,7 +699,7 @@ the platform backend presents as an SDL texture, which keeps the UI testable
 offscreen. Text reuses KR16's embedded font atlas. ImGui is not used.
 
 **Toolchain.** Raw `.rom` images are enough for the first milestones. A 32-bit
-`.k32` container (sections, symbols, relocations, debug) and a linker follow
+`.kr32` container (sections, symbols, relocations, debug) and a linker follow
 before the GUI needs variables and call stacks. `kr32 build` runs the full
 pipeline: source → assembly → object → link → image → run.
 
@@ -774,7 +774,7 @@ Rows marked **Decided** carry the date and rationale; everything else is open.
 | D54 | App scope | Decided 2026-11-02 | Windowed debugger primary; machine console included |
 | D55 | Executable model | Decided 2026-11-02 | One `kr32` binary; UI optional at build; no separate app |
 | D56 | Debug surface | Decided 2026-11-02 | Native GUI debugger primary; DAP secondary |
-| D57 | Container/linker timing | Decided 2026-11-02 | Raw `.rom` first; `.k32` objects/linker before GUI variables |
+| D57 | Container/linker timing | Decided 2026-11-02 | Raw `.rom` first; `.kr32` objects/linker before GUI variables |
 | D58 | Debug info format | Decided 2026-11-02 | KR16-style sections: lines, vars, frames, types, globals, strings |
 | D59 | C++ compiler integration | Decided 2026-11-02 | `kr32_cxx` module linked into `kr32` when ready |
 | D60 | Shell | Decided 2026-11-02 | `kr32 shell` included |
@@ -826,7 +826,7 @@ The working sequence, task checklists, and test gates live in
 | M1 | Core emulator, assembler, disassembler | Golden vectors pass; demo program runs headless |
 | M2 | Exceptions, MMU, boot, multicore hooks | Faults, paging, BIOS, user mode, two cores |
 | M2b | FP and M extension | FP and matrix demos pass |
-| M3 | Container, linker, `build` | `.k32` objects/images; `kr32 build hello.s` runs |
+| M3 | Container, linker, `build` | `.kr32` objects/images; `kr32 build hello.s` runs |
 | M4 | Simple C compiler + minimal runtime | C subset builds and runs |
 | M5 | Debug info, `DebugSession`, CLI debugger | Lines, variables, frames; CLI inspect |
 | M6 | Windowed debugger | KR16 UI adapted to SDL2; debug a C program |

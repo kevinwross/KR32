@@ -32,7 +32,7 @@ endfunction()
 build_os("${SCRATCH}/first")
 build_os("${SCRATCH}/second")
 
-foreach(image bios.k32 kernel.k32)
+foreach(image bios.kr32 kernel.kr32)
     file(SHA256 "${SCRATCH}/first/${image}" first_hash)
     file(SHA256 "${SCRATCH}/second/${image}" second_hash)
     if(NOT first_hash STREQUAL second_hash)

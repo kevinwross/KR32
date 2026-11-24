@@ -61,7 +61,7 @@ struct HostOptions {
     std::uint64_t quota = 1024U * 1024U;
     std::vector<std::string> args;
     std::string input;
-    std::string dialog_filter = "*.k32;*.c;*.cpp;*.cc;*.cxx";
+    std::string dialog_filter = "*.kr32;*.c;*.cpp;*.cc;*.cxx";
     FileDialogCallback file_dialog;
     bool echo_console = true;
 };

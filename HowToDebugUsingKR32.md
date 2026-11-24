@@ -38,15 +38,15 @@ $KR32 = "C:\Users\kevin\source\repos\KR32\build\windows-msvc\Debug\kr32.exe"
 & $KR32 vm .\tests\hello.bin --base 0x00010000 --max-steps 5000000 --stats
 ```
 
-If your compiler emits a **KR32 `.k32` object**, link and run it:
+If your compiler emits a **KR32 `.kr32` object**, link and run it:
 
 ```powershell
 & $KR32 as .\tests\hello.s --object -o .\tests\hello.o
-& $KR32 ld .\tests\hello.o --base 0x00010000 -o .\tests\hello.k32
-& $KR32 vm .\tests\hello.k32
+& $KR32 ld .\tests\hello.o --base 0x00010000 -o .\tests\hello.kr32
+& $KR32 vm .\tests\hello.kr32
 ```
 
-For source-level DAP or GUI debugging, use a `.k32` **executable**. A raw
+For source-level DAP or GUI debugging, use a `.kr32` **executable**. A raw
 `.bin` cannot be loaded by `dap` or `gui`.
 
 ---
@@ -55,7 +55,7 @@ For source-level DAP or GUI debugging, use a `.k32` **executable**. A raw
 
 ### 2.1 What `vm` does with a raw file
 
-For a non-`.k32` file:
+For a non-`.kr32` file:
 
 1. read the entire file as bytes;
 2. load those bytes starting at `--base`;
@@ -80,8 +80,8 @@ base and instruction stream 4-byte aligned.
 | Alignment | stack top and argument block are 16-byte aligned |
 
 `--base` changes the load address and initial PC. It does not change the stack
-top. The standalone `vm` command identifies containers by the `.k32` **file
-extension**, not by magic; a raw image must not be named `.k32`.
+top. The standalone `vm` command identifies containers by the `.kr32` **file
+extension**, not by magic; a raw image must not be named `.kr32`.
 
 ```powershell
 & $KR32 vm .\hello.bin --base 0x00010000
@@ -316,7 +316,7 @@ The final register dump and `HALTED exit=N` line are appended to stdout.
 
 ---
 
-## 5. Turning a flat `.bin` into a `.k32` for DAP/GUI
+## 5. Turning a flat `.bin` into a `.kr32` for DAP/GUI
 
 `kr32 dap` and `kr32 gui` accept **KR32 container executables**, not raw flat
 files. If your compiler only emits a flat image, wrap it first.
@@ -346,7 +346,7 @@ Generate, assemble, and link:
 ```powershell
 python .\wrap_flat.py .\tests\program.bin .\tests\program_wrapped.S
 & $KR32 as .\tests\program_wrapped.S --object -o .\tests\program_wrapped.o
-& $KR32 ld .\tests\program_wrapped.o --base 0x00010000 -o .\tests\program.k32
+& $KR32 ld .\tests\program_wrapped.o --base 0x00010000 -o .\tests\program.kr32
 ```
 
 The `--base` passed to `ld` must match the address the flat binary was built
@@ -357,7 +357,7 @@ reconstruction of your linker's section layout.
 Verify the executable and entry with:
 
 ```powershell
-& $KR32 size .\tests\program.k32
+& $KR32 size .\tests\program.kr32
 & $KR32 dis .\tests\program.bin --base 0x00010000 --max-words 100
 ```
 
@@ -367,7 +367,7 @@ If your compiler can emit KR32 assembly or a KR32 object, avoid the wrapper:
 
 ```powershell
 & $KR32 as .\tests\program.s --object -o .\tests\program.o
-& $KR32 ld .\tests\program.o --base 0x00010000 -o .\tests\program.k32
+& $KR32 ld .\tests\program.o --base 0x00010000 -o .\tests\program.kr32
 ```
 
 This preserves `_start`, sections, symbols, and any `.file`/line debug records
@@ -379,14 +379,14 @@ you emit.
 
 ### 6.1 Start the adapter
 
-Both forms require a `.k32` executable:
+Both forms require a `.kr32` executable:
 
 ```powershell
 # DAP over stdin/stdout; stdout is reserved for DAP framing.
-& $KR32 dap --stdio .\tests\program.k32
+& $KR32 dap --stdio .\tests\program.kr32
 
 # DAP over loopback TCP.
-& $KR32 dap --port 4711 .\tests\program.k32
+& $KR32 dap --port 4711 .\tests\program.kr32
 ```
 
 The TCP form prints `DAP listening on 127.0.0.1:4711` to stdout, then serves
@@ -406,7 +406,7 @@ A DAP client library is strongly recommended.
 
 1. `initialize`
 2. `launch` with `arguments.program` (or `arguments.image`) pointing at the
-   `.k32`
+   `.kr32`
 3. `setBreakpoints` for source lines (optional)
 4. `configurationDone`
 5. `continue`, `next`, `stepIn`, `stepOut`, `stackTrace`, `scopes`,
@@ -430,7 +430,7 @@ Implemented:
 
 Important limitations:
 
-- **Raw `.bin` is not accepted by DAP.** Use a `.k32`.
+- **Raw `.bin` is not accepted by DAP.** Use a `.kr32`.
 - **Guest console output is not forwarded as a DAP `output` event.** The
   session captures it internally, but the DAP server does not emit it. Use
   the CLI to verify stdout.
@@ -439,18 +439,18 @@ Important limitations:
 - `setBreakpoints` matches by line number and does not filter by source path.
   Avoid duplicate line numbers across files, or emit one debug source per
   test image.
-- A wrapper-generated `.k32` has no source/function metadata. DAP can start at
+- A wrapper-generated `.kr32` has no source/function metadata. DAP can start at
   entry and step instructions, but source breakpoints and variables will not
   verify.
 - `stepOut` requires frame metadata; with no `F` records it falls back to a
   single instruction.
 
 For source-level DAP, emit KR32 debug records (`.file`, `L`, and `F` records)
-and produce the `.k32` with `kr32 as --object` + `kr32 ld`; `kr32 debug`
+and produce the `.kr32` with `kr32 as --object` + `kr32 ld`; `kr32 debug`
 prints the resulting source/function/line tables:
 
 ```powershell
-& $KR32 debug .\tests\program.k32
+& $KR32 debug .\tests\program.kr32
 ```
 
 The record format is documented in `docs/debug.md`; the container layout is in
@@ -466,7 +466,7 @@ After `initialize` and the `initialized` event:
   "type": "request",
   "command": "launch",
   "arguments": {
-    "program": "C:\\Users\\kevin\\source\\repos\\KR32\\tests\\program.k32"
+    "program": "C:\\Users\\kevin\\source\\repos\\KR32\\tests\\program.kr32"
   }
 }
 ```
@@ -478,10 +478,10 @@ client library.
 
 ## 7. GUI debugging (optional)
 
-The GUI also requires a `.k32`:
+The GUI also requires a `.kr32`:
 
 ```powershell
-& $KR32 gui .\tests\program.k32
+& $KR32 gui .\tests\program.kr32
 ```
 
 The GUI can set instruction breakpoints in the disassembly gutter and inspect
@@ -507,12 +507,12 @@ That is unrelated to a standalone compiler test binary.
 3. **Route output through `SYSCALL #33`.** There is no POSIX stdout descriptor.
 4. **Use `--max-steps` generously.** The default is only 1,000,000.
 5. **Add `--trace` only for short instruction-level failures.**
-6. **For DAP, produce `.k32`.** If the compiler can emit KR32 assembly with
+6. **For DAP, produce `.kr32`.** If the compiler can emit KR32 assembly with
    debug records, link it directly; otherwise use the flat wrapper for
    instruction-level debugging only.
 7. **Use the CLI for stdin/stdout assertions.** DAP has no guest-output event
    and no input injection.
-8. **Verify source metadata independently** with `kr32 debug image.k32` before
+8. **Verify source metadata independently** with `kr32 debug image.kr32` before
    blaming the DAP client.
 
 ---
@@ -526,9 +526,9 @@ That is unrelated to a standalone compiler test binary.
 | `FAULT ...` | bad opcode, alignment, or faulting load/store |
 | Guest prints nothing | output went through `write(1)` instead of `SYSCALL #33` |
 | `getchar` returns immediately at `-1` | no `--input` text, or input already consumed |
-| DAP says `not an executable` / container error | passed a raw `.bin` instead of `.k32` |
+| DAP says `not an executable` / container error | passed a raw `.bin` instead of `.kr32` |
 | DAP breakpoints unverified | no `L`/`F` debug records, or wrong line number |
-| Source pane has no lines | `.k32` lacks `.debug_info`; `kr32 debug` will show this |
+| Source pane has no lines | `.kr32` lacks `.debug_info`; `kr32 debug` will show this |
 | Address breakpoint needed | use GUI disassembly, or emit debug lines; DAP only sets source lines |
 
 For the low-level syscall and sandbox details, see `docs/host.md`. For the

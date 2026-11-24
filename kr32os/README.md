@@ -38,7 +38,7 @@ are compiled with `-O1` by default; set `KR32OS_OPT` (or pass `-Opt` to
 
 Windows writes to `kr32os/build/windows`; WSL/Linux writes to
 `kr32os/build/linux`. Keeping them separate prevents a Linux test build from
-overwriting Windows `.k32` files and their Windows debug source paths. Both
+overwriting Windows `.kr32` files and their Windows debug source paths. Both
 scripts also accept `KR32OS_BUILD_DIR`; `build.ps1` additionally accepts
 `-Out <dir>`.
 
@@ -46,7 +46,7 @@ The build emits:
 
 - `bios.bin` / `kernel.bin` — boot images loaded at `0xFFFF_0000` and
   `0x0002_0000`;
-- `bios.k32` / `kernel.k32` — container images with debug information;
+- `bios.kr32` / `kernel.kr32` — container images with debug information;
 - `bios.sym` / `kernel.sym` — sibling symbol/debug sidecars for the `.bin`
   images.
 
@@ -58,10 +58,10 @@ is CRC-checked against the image. BIOS and entry-assembly line records are
 included as well, so stepping through `bios/entry.S` and `boot/entry.S` shows
 the assembly source pane.
 
-The `.k32` images are also accepted:
+The `.kr32` images are also accepted:
 
 ```text
-kr32 gui --os kr32os/build/windows/kernel.k32 --bios kr32os/build/windows/bios.k32
+kr32 gui --os kr32os/build/windows/kernel.kr32 --bios kr32os/build/windows/bios.kr32
 ```
 
 Run:
@@ -70,10 +70,10 @@ Run:
 kr32 os kr32os/build/windows/kernel.bin --bios kr32os/build/windows/bios.bin
 ```
 
-The `.k32` pair is accepted by `os` as well:
+The `.kr32` pair is accepted by `os` as well:
 
 ```text
-kr32 os kr32os/build/windows/kernel.k32 --bios kr32os/build/windows/bios.k32
+kr32 os kr32os/build/windows/kernel.kr32 --bios kr32os/build/windows/bios.kr32
 ```
 
 For a scripted session:

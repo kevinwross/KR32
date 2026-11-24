@@ -180,10 +180,10 @@ else()
     set(KR32_OS_PLATFORM "linux")
 endif()
 set(KR32_OS_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/os/${KR32_OS_PLATFORM}")
-if(KR32_EMBED_OS AND NOT EXISTS "${KR32_OS_RESOURCE_DIR}/kernel.k32")
+if(KR32_EMBED_OS AND NOT EXISTS "${KR32_OS_RESOURCE_DIR}/kernel.kr32")
     message(FATAL_ERROR
         "No embedded KR32OS images for ${KR32_OS_PLATFORM}: "
-        "${KR32_OS_RESOURCE_DIR}/kernel.k32 is missing. "
+        "${KR32_OS_RESOURCE_DIR}/kernel.kr32 is missing. "
         "Run scripts/update-os.ps1 or scripts/update-os.sh.")
 endif()
 set(KR32_EMBEDDED_OS_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/os")
@@ -205,11 +205,11 @@ set(KR32_EMBED_OS_ARGS --output "${KR32_EMBEDDED_OS_SOURCE}")
 set(KR32_EMBED_OS_DEPENDS kr32_embed_os)
 if(KR32_EMBED_OS)
     list(APPEND KR32_EMBED_OS_ARGS
-        --bios "${KR32_OS_RESOURCE_DIR}/bios.k32"
-        --kernel "${KR32_OS_RESOURCE_DIR}/kernel.k32")
+        --bios "${KR32_OS_RESOURCE_DIR}/bios.kr32"
+        --kernel "${KR32_OS_RESOURCE_DIR}/kernel.kr32")
     list(APPEND KR32_EMBED_OS_DEPENDS
-        "${KR32_OS_RESOURCE_DIR}/bios.k32"
-        "${KR32_OS_RESOURCE_DIR}/kernel.k32")
+        "${KR32_OS_RESOURCE_DIR}/bios.kr32"
+        "${KR32_OS_RESOURCE_DIR}/kernel.kr32")
 else()
     list(APPEND KR32_EMBED_OS_ARGS --empty)
 endif()
@@ -240,7 +240,7 @@ if(KR32_BUILD_TESTS)
     add_custom_target(kr32_test_images ALL
         COMMENT "Building the krc test images")
     function(kr32_add_test_image name source cxx)
-        set(image "${KR32_TEST_IMAGE_DIR}/${name}.k32")
+        set(image "${KR32_TEST_IMAGE_DIR}/${name}.kr32")
         set(arguments --source "${source}" --output "${image}")
         if(cxx)
             list(APPEND arguments --cxx)
@@ -249,7 +249,7 @@ if(KR32_BUILD_TESTS)
             OUTPUT "${image}"
             COMMAND kr32_krc_image ${arguments}
             DEPENDS kr32_krc_image "${source}"
-            COMMENT "Building test image ${name}.k32"
+            COMMENT "Building test image ${name}.kr32"
             VERBATIM)
         add_custom_target("${name}_image" DEPENDS "${image}")
         add_dependencies(kr32_test_images "${name}_image")

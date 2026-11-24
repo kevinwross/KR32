@@ -1,7 +1,7 @@
 // KR32 matrix library example.
 //
 // Build and run:
-//   kr32 build examples/matrix.cpp -o build/matrix-cxx.k32 --run
+//   kr32 build examples/matrix.cpp -o build/matrix-cxx.kr32 --run
 //
 // The matrix functions are compiler intrinsics: calls lower to the MLOAD,
 // MMUL, MVEC, MTRANS, and MSTORE tile instructions. They are only available

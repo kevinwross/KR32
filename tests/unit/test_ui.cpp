@@ -34,7 +34,7 @@ std::string write_image(const std::string& path,
 }
 
 std::string build_ui_test_image() {
-    return write_image("kr32-ui-run.k32",
+    return write_image("kr32-ui-run.kr32",
                        test::build_krc_image("int main(void) { return 0; }\n",
                                              "ui-test.c"));
 }
@@ -53,7 +53,7 @@ std::string build_ui_two_source_image() {
     }
     std::vector<krc::toolchain::Source> units{
         {"ui-main.c", main_source}, {"ui-helper.c", helper_source}};
-    return write_image("kr32-ui-two-sources.k32",
+    return write_image("kr32-ui-two-sources.kr32",
                        test::build_krc_image(units));
 }
 

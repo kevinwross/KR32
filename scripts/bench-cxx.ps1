@@ -32,7 +32,7 @@ foreach ($relative in $sources) {
     foreach ($level in @("-O0", "-O1")) {
         $scratch = Join-Path $root "build/bench"
         New-Item -ItemType Directory -Force -Path $scratch | Out-Null
-        $image = Join-Path $scratch ($name + $level + ".k32")
+        $image = Join-Path $scratch ($name + $level + ".kr32")
         $output = (& $Kr32 build $source $level -o $image --run 2>&1) -join "`n"
         $match = [regex]::Match($output, "ticks=(\d+)")
         if ($match.Success) {

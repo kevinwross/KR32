@@ -327,10 +327,10 @@ void print_help() {
         "  version              print the version tuple\n"
         "  help                 print this help\n"
         "  dis <image>          disassemble a raw image\n"
-        "  vm <file>            load and run a .k32 image\n"
+        "  vm <file>            load and run a .kr32 image\n"
         "  run <file>           alias for vm\n"
-        "  os [kernel.k32]      boot KR32OS with the default BIOS\n"
-        "  size <file>          print .k32 section sizes\n"
+        "  os [kernel.kr32]      boot KR32OS with the default BIOS\n"
+        "  size <file>          print .kr32 section sizes\n"
         "  debug <file>         dump debug information (M5)\n"
         "  dap <file>           Debug Adapter Protocol server (stdio or --port)\n"
         "  shell                interactive command shell\n"
@@ -419,7 +419,7 @@ int command_dis(int argc, char** argv) {
 
 int command_size(int argc, char** argv) {
     if (argc != 3) {
-        std::printf("Usage: kr32 size <image.k32>\n");
+        std::printf("Usage: kr32 size <image.kr32>\n");
         return 2;
     }
     container::Image image;
@@ -440,7 +440,7 @@ int command_size(int argc, char** argv) {
 
 int command_debug(int argc, char** argv) {
     if (argc != 3) {
-        std::printf("Usage: kr32 debug <image.k32>\n");
+        std::printf("Usage: kr32 debug <image.kr32>\n");
         return 2;
     }
     container::Image image;
@@ -467,7 +467,7 @@ int command_dap(int argc, char** argv) {
     for (int index = 2; index < argc; ++index) {
         const std::string_view argument(argv[index]);
         if (argument == "--help" || argument == "-h") {
-            std::printf("Usage: kr32 dap [<image.k32>] [--port <n>] [--stdio]\n");
+            std::printf("Usage: kr32 dap [<image.kr32>] [--port <n>] [--stdio]\n");
             return 0;
         }
         if (argument == "--stdio") {
@@ -676,7 +676,7 @@ int command_vm(int argc, char** argv) {
         std::uint32_t kernel_size = static_cast<std::uint32_t>(kernel.size());
         if (kernel_container || bios_container) {
             if (!kernel_container || !bios_container) {
-                std::fprintf(stderr, "kr32 os: kernel and BIOS must both be .k32 "
+                std::fprintf(stderr, "kr32 os: kernel and BIOS must both be .kr32 "
                                      "or both be raw .bin\n");
                 return 1;
             }
@@ -705,7 +705,7 @@ int command_vm(int argc, char** argv) {
                 return true;
             };
             if (!load_sections(kernel_image) || !load_sections(bios_image)) {
-                std::fprintf(stderr, "kr32 os: .k32 sections do not fit\n");
+                std::fprintf(stderr, "kr32 os: .kr32 sections do not fit\n");
                 return 1;
             }
             kernel_size = 0;

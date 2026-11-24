@@ -40,8 +40,8 @@ endif()
 set(_shot "${WORK}/${PROGRAM}.ppm")
 file(REMOVE "${_shot}")
 execute_process(
-    COMMAND "${KR32}" display --os "${_osdir}/kernel.k32"
-            --bios "${_osdir}/bios.k32" --serial-input "run ${PROGRAM}\n"
+    COMMAND "${KR32}" display --os "${_osdir}/kernel.kr32"
+            --bios "${_osdir}/bios.kr32" --serial-input "run ${PROGRAM}\n"
             --steps ${STEPS} --screen-shot "${_shot}"
     RESULT_VARIABLE _run_result
     OUTPUT_VARIABLE _output

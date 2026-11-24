@@ -312,7 +312,7 @@ Tasks:
 - [x] Implement `crt0.S`, syscall wrappers, and minimal user `init`.
 - [x] Generate and embed the `K32I` initrd.
 - [x] Generate/read `kernel.meta`.
-- [x] Generate CRC-checked `.sym` sidecars and optional `.k32` images for
+- [x] Generate CRC-checked `.sym` sidecars and optional `.kr32` images for
       source-level OS debugging.
 - [x] Implement process table (256 entries), PID allocation, zombie exit.
 - [x] Implement syscalls: exit, write, read, yield, getpid, brk.
