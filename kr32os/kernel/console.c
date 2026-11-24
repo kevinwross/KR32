@@ -55,6 +55,17 @@ void console_write(const char *text) {
     }
 }
 
+// A hex writer, because console_write_uint writes decimal and a panic line that
+// prefixes a decimal number with 0x names an address that was never executed --
+// which is exactly what sent one investigation after a "wild jump" at 0x150632,
+// a value that is really 0x00024C68.
+void console_write_hex(unsigned int value) {
+    static const char digits[] = "0123456789ABCDEF";
+    console_write("0x");
+    for (int shift = 28; shift >= 0; shift -= 4) {
+        console_putc(digits[(value >> shift) & 0xFU]);
+    }
+}
 void console_write_uint(unsigned int value) {
     char buffer[16];
     int length = 0;

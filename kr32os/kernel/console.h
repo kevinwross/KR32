@@ -7,6 +7,7 @@ int console_init(void);
 void console_putc(char character);
 void console_write(const char *text);
 void console_write_uint(unsigned int value);
+void console_write_hex(unsigned int value);
 int console_getc(void);
 void console_clear(void);
 

@@ -105,3 +105,11 @@ trap_timer:
     POPR
     POP R0
     IRET
+
+    ; CR9 holds the fault address. A page fault's victim PC says where the
+    ; instruction was; only FAR says what it touched, which is the difference
+    ; between "the code went somewhere odd" and "the code read somewhere odd".
+    .global kernel_read_far
+kernel_read_far:
+    RDCR R0, CR9
+    RET
