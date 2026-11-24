@@ -166,6 +166,10 @@ struct DebugInstruments {
     // stack pointer is the fault this defect actually has, and the trap frame shows
     // it only after the frame has already been built with it.
     bool trace_sp = false;
+    // Print every delivered fault with the instruction that caused it and the
+    // address it touched. The guest can only report what its own handler prints,
+    // and a handler that reads the wrong slot has already misled this hunt twice.
+    bool trace_fault = false;
     std::vector<std::uint32_t> page_before;
     bool frame_pointer = false;
 };
@@ -240,6 +244,15 @@ int run_machine(core::Machine& machine,
         }
         const std::uint32_t debug_sp_before = machine.sp();
         const core::StepResult result = machine.step();
+        // An interrupt uses the same delivery path and reports itself as a
+        // SoftwareInterrupt with the interrupted PC as its address; printing those
+        // as faults made a healthy boot look like a fault storm.
+        if (g_debug.trace_fault && result.kind == core::StepResult::Kind::FaultDelivered &&
+            result.fault.kind != core::FaultKind::SoftwareInterrupt) {
+            std::printf("fault pc=0x%08X vector=%u address=0x%08X code=0x%08X\n",
+                        debug_pc, result.fault.vector, result.fault.address,
+                        result.fault.code);
+        }
         if (g_debug.trace_sp && machine.sp() != debug_sp_before &&
             machine.sp() >= 0x01000000U) {
             std::printf("sp-lost at pc=0x%08X: 0x%08X -> 0x%08X\n", debug_pc,
@@ -621,6 +634,10 @@ int command_vm(int argc, char** argv) {
         }
         if (argument == "--trace-sp") {
             g_debug.trace_sp = true;
+            continue;
+        }
+        if (argument == "--trace-fault") {
+            g_debug.trace_fault = true;
             continue;
         }
         if (argument == "--watch-fp") {
