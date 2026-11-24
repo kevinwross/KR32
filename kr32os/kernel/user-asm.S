@@ -1,4 +1,6 @@
 .file "kr32os/kernel/user-asm.S"
+.extern sys_write
+.extern __initrd_start
 
 .equ VECTOR_TABLE_BASE, 0x00050000
 .equ SYSCALL_FIRST_VECTOR, 32

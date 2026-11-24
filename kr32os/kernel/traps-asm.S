@@ -1,4 +1,6 @@
 .file "kr32os/kernel/traps-asm.S"
+.extern timer_tick
+.extern trap_dispatch
 
 .equ VECTOR_TABLE_BASE, 0x00050000
 .equ VECTOR_INVALID_OPCODE, 4
