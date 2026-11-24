@@ -20,6 +20,7 @@
 #include <string_view>
 #include <vector>
 
+#include "krc/listing.h"
 #include "krc/toolchain.h"
 
 #include "kr32/core/devices.h"
@@ -299,33 +300,23 @@ bool krc_runtime_objects(std::vector<krc::toolchain::Object>& objects,
     return true;
 }
 
-// Renders KR32's assembler listing shape (address, encoded words, statement)
-// from the rows the facade returned for the user object.
+// P6/H4: one listing format, shared with the compiler. This used to render its
+// own shape -- `addr: bytes  text` -- which is why a reader of kr32's listing and
+// a reader of krc's saw two dialects for the same machine.
 bool write_krc_listing(const std::string& path,
                        const std::vector<krc::toolchain::ListingRow>& rows,
                        std::string& error) {
     const std::string listing_path = path + ".lst";
+    krc::listing::Document document;
+    document.title = path;
+    document.target = "kr32";
+    document.word_bytes = 4;
     std::ofstream output(listing_path, std::ios::binary);
     if (!output) {
         error = "cannot write listing " + listing_path;
         return false;
     }
-    for (const krc::toolchain::ListingRow& row : rows) {
-        std::ostringstream bytes;
-        bytes << std::hex << std::nouppercase << std::setfill('0');
-        for (std::size_t index = 0; index < row.bytes.size(); index += 4) {
-            if (index != 0) {
-                bytes << ' ';
-            }
-            for (std::size_t byte = index;
-                 byte < index + 4 && byte < row.bytes.size(); ++byte) {
-                bytes << std::setw(2) << static_cast<unsigned>(row.bytes[byte]);
-            }
-        }
-        output << std::hex << std::nouppercase << std::setfill('0') << std::setw(8)
-               << row.address << ": " << std::setfill(' ') << std::left
-               << std::setw(19) << bytes.str() << std::right << row.text << '\n';
-    }
+    output << krc::listing::render(rows, {}, {}, document);
     if (!output) {
         error = "cannot write listing " + listing_path;
         return false;

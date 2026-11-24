@@ -320,8 +320,16 @@ TEST_CASE("the window writes an assembler listing when the setting asks") {
     const std::string contents((std::istreambuf_iterator<char>(listing)),
                                std::istreambuf_iterator<char>());
     CHECK(contents.find("main:") != std::string::npos);
-    // The listing is rendered from the facade rows.
-    CHECK(contents.find(": ") != std::string::npos);
+    // H4: the listing is the shared renderer's document, not kr32's old
+    // `addr: bytes  text` shape. The colon was part of that private layout, so the
+    // assertion moves to what the shared format guarantees: a header naming the
+    // target and a statement row whose address column starts the line.
+    CHECK(contents.find("; krc listing") != std::string::npos);
+    CHECK(contents.find("; target kr32") != std::string::npos);
+    // The rows carry the linked address: kr32's images are based at 0x10000, so
+    // the first statement's line starts with 0001 rather than 0000.
+    CHECK(contents.find("\n; .text") != std::string::npos);
+    CHECK(contents.find("\n0001") != std::string::npos);
     listing.close();
     std::filesystem::remove(listing_path);
     std::filesystem::remove(source_path);
