@@ -200,7 +200,11 @@ int run_machine(core::Machine& machine,
             }
         }
         const std::uint32_t debug_pc = machine.pc();
-        const std::uint32_t debug_fp_before = machine.reg(13);
+        // kr32's frame pointer is R7 (docs/abi.md:105: "R7 | Frame pointer
+        // (callee-saved)"), not R13. Watching R13 here printed a counter climbing
+        // one per call and looked like a drifting frame, which is the kind of
+        // confident false answer an instrument must not give.
+        const std::uint32_t debug_fp_before = machine.reg(7);
         std::uint32_t debug_watched_before = 0;
         if (g_debug.watch) {
             (void)machine.read32(g_debug.watch_address, debug_watched_before);
@@ -234,9 +238,9 @@ int run_machine(core::Machine& machine,
                 }
             }
         }
-        if (g_debug.frame_pointer && machine.reg(13) != debug_fp_before) {
+        if (g_debug.frame_pointer && machine.reg(7) != debug_fp_before) {
             std::printf("fp 0x%08X -> 0x%08X at pc=0x%08X\n", debug_fp_before,
-                        machine.reg(13), debug_pc);
+                        machine.reg(7), debug_pc);
         }
         if (devices != nullptr) {
             const std::string serial_output = devices->serial().take_output();
