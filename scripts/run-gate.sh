@@ -60,6 +60,12 @@ case "${preset}" in
         ;;
 esac
 echo "gate: ${preset} on $(uname -m), $(nproc) logical processors -> ${jobs} jobs"
+# A fresh mirror has no build directory, and the gate used to fail with "not a
+# directory" rather than configuring one. Configure only when it is missing, so an
+# existing tree keeps its cache and an empty one is created.
+if [ ! -d "build/${preset}" ]; then
+    cmake --preset "${preset}"
+fi
 start=$(date +%s)
 cmake --build --preset "${preset}" -j "${jobs}"
 echo "gate: build $(( $(date +%s) - start ))s"
