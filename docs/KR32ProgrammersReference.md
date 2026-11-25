@@ -209,7 +209,7 @@ delivery disabled, which the CLI does not do.
 | `--os [kernel]` | boot the OS path (§2.5) |
 | `--embedded` | with `--os`, use the images built into `kr32.exe` |
 | `--ram-size <bytes>` | RAM size, default `0x0800_0000` (128 MiB) |
-| `--max-steps <n>` | instruction budget, default `1_000_000` |
+| `--max-steps <n>` | instruction budget, default `1_000_000`; `0` runs until the machine stops |
 | `--trace` | print `0xPC: 0xWORD` before each instruction |
 | `--stats` | print the tick count after `HALTED` |
 | `--fs-root <dir>` | sandbox root for guest file paths |

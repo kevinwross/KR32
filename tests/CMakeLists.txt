@@ -111,6 +111,13 @@ add_test(NAME run_c_hello
 set_tests_properties(run_c_hello PROPERTIES
     PASS_REGULAR_EXPRESSION "Hello, KR32!")
 
+# A zero budget is unlimited, so this run reaches the guest's halt instead of
+# stopping before the first instruction.
+add_test(NAME run_c_hello_zero_budget
+    COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_c.kr32 --max-steps 0)
+set_tests_properties(run_c_hello_zero_budget PROPERTIES
+    PASS_REGULAR_EXPRESSION "HALTED exit=0")
+
 add_test(NAME run_cxx_demo
     COMMAND $<TARGET_FILE:kr32> vm ${KR32_TEST_IMAGE_DIR}/hello_cxx.kr32)
 set_tests_properties(run_cxx_demo PROPERTIES PASS_REGULAR_EXPRESSION "HALTED exit=42")

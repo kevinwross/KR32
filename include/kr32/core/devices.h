@@ -149,6 +149,11 @@ public:
 
     [[nodiscard]] bool push_input(std::uint8_t byte);
     void push_input(std::string_view text);
+    // Called when the guest reads DATA and the receive queue is empty. The
+    // callback may push a line; it must not re-enter the device.
+    void set_input_refill(std::function<void()> refill) {
+        input_refill_ = std::move(refill);
+    }
     [[nodiscard]] std::size_t available() const { return rx_.size(); }
     [[nodiscard]] bool peek(std::uint8_t& byte) const;
     [[nodiscard]] std::string take_output();
@@ -159,6 +164,7 @@ private:
     std::deque<std::uint8_t> rx_;
     std::string output_;
     bool overrun_ = false;
+    std::function<void()> input_refill_;
 };
 
 class KeyboardDevice final : public Device {

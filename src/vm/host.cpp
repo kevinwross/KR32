@@ -5,6 +5,7 @@
 #include <cstdio>
 #include <filesystem>
 #include <fstream>
+#include <iostream>
 #include <system_error>
 #include <utility>
 #include <vector>
@@ -312,6 +313,14 @@ bool Host::handle(core::Machine& machine, std::uint32_t vector) {
         return true;
     }
     case syscall::GetChar: {
+        if (input_.empty() && options_.console) {
+            // A line, read only when the guest asks: execution blocks where a
+            // terminal would wait rather than spinning on an empty queue.
+            std::string line;
+            if (std::getline(std::cin, line)) {
+                input_ = line + "\n";
+            }
+        }
         if (input_.empty()) {
             machine.set_reg(0, kErrorIo);
         } else {

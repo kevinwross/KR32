@@ -181,6 +181,9 @@ void ConsoleDevice::reset() {
 bool SerialDevice::read(std::uint32_t offset, std::uint32_t& value) {
     switch (offset) {
     case Data:
+        if (rx_.empty() && input_refill_) {
+            input_refill_();
+        }
         if (rx_.empty()) {
             value = 0;
             return true;

@@ -64,6 +64,10 @@ struct HostOptions {
     std::string dialog_filter = "*.kr32;*.c;*.cpp;*.cc;*.cxx";
     FileDialogCallback file_dialog;
     bool echo_console = true;
+    // Read a line from stdin when the guest asks for a character and the scripted
+    // input is exhausted. The console is then interactive; stderr stays the
+    // host's diagnostics stream.
+    bool console = false;
 };
 
 class Host {

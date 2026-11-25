@@ -5097,6 +5097,18 @@ Newest entries at the bottom. Use the local time zone.
       until the tree was deleted. Windows toolchain on this host resolved to MSVC
       14.52.37025 with Windows SDK 10.0.26100.0.
 
+- **2026-11-24 22:38 -08:00** — `--max-steps 0` now means no instruction budget
+      instead of zero instructions. `run_machine` tests `unlimited = max_steps == 0`
+      in the step-loop bound and suppresses the `LIMIT` trailer for that run; the
+      `vm` and `os` help say `0 = no limit`, and the programmer's reference's
+      option table says the same. New CTest `run_c_hello_zero_budget` runs
+      `hello_c.kr32` with `--max-steps 0` and requires `HALTED exit=0`, which the
+      old behavior could not produce. Verified: `windows-msvc-debug` builds clean;
+      the full Windows suite is 43/43, including `run_c_hello_zero_budget`. WSL was
+      not run for this change.
+
+- **2026-11-25 00:17 -08:00** — `--console` makes stdin and stdout the guest console. `HostOptions` gained `console`; the host-service `getchar` reads a line from `std::cin` when the scripted input is exhausted, and `putchar` already echoes to stdout. For `vm --os`, `SerialDevice` gained `set_input_refill`, called when the kernel reads an empty DATA register, so the serial tty blocks where a terminal would wait; serial output already drains to stdout per step. In console mode the register dump, `FAULT`, `LIMIT`, and `HALTED` lines go to stderr so stdout is the guest stream. A KR32 guest echoing a line through `getchar`/`putchar` produced it unchanged and exited 0. Verified: `windows-msvc-debug` builds clean; the full Windows suite is 43/43.
+
 ## 10. Updating this file
 
 - Update checklists after every session; mark tasks `[x]` as they finish.

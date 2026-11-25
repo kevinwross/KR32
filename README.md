@@ -130,6 +130,8 @@ kr32 help
 kr32 --smoke-ui
 ```
 
+`--max-steps 0` runs until the guest halts.
+
 `vm` runs a `.kr32`; `run` is its alias. `size` reports sections and `debug`
 dumps the `.debug_info` records. `gui` opens the source/disassembly debugger or
 renders a headless PPM screenshot. `os` boots a KR32OS kernel with a BIOS and
