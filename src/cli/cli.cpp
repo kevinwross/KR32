@@ -97,7 +97,7 @@ bool is_container(const std::string& path) {
 
 
 std::string fault_name(core::FaultKind kind);
-void print_machine(const core::Machine& machine);
+void print_machine(const core::Machine& machine, std::FILE* out);
 
 bool read_container_file(const std::string& path,
                          container::Image& image,
@@ -182,7 +182,8 @@ int run_machine(core::Machine& machine,
                 bool stats,
                 const vm::HostOptions& host_options = {},
                 bool setup_arguments = true,
-                core::DeviceBus* devices = nullptr) {
+                core::DeviceBus* devices = nullptr,
+                bool console = false) {
     if (setup_arguments) {
         std::string argument_error;
         if (!machine.setup_arguments(host_options.args, "program", argument_error)) {
@@ -193,8 +194,11 @@ int run_machine(core::Machine& machine,
     vm::Host host(host_options);
     host.install(machine);
 
+    // A zero budget is the "run until the machine stops" request. The step
+    // counter is only a loop bound, so it does not need to be capped here.
+    const bool unlimited = max_steps == 0;
     bool halted = false;
-    for (std::uint64_t step = 0; step < max_steps; ++step) {
+    for (std::uint64_t step = 0; unlimited || step < max_steps; ++step) {
         if (trace) {
             std::uint32_t word = 0;
             if (machine.read32(machine.pc(), word)) {
@@ -321,21 +325,22 @@ int run_machine(core::Machine& machine,
             halted = true;
             break;
         }
-        std::printf("FAULT %s PC=0x%08X address=0x%08X code=0x%X\n",
-                    fault_name(result.fault.kind).c_str(),
-                    machine.pc(), result.fault.address, result.fault.code);
-        print_machine(machine);
+        std::fprintf(console ? stderr : stdout,
+                     "FAULT %s PC=0x%08X address=0x%08X code=0x%X\n",
+                     fault_name(result.fault.kind).c_str(),
+                     machine.pc(), result.fault.address, result.fault.code);
+        print_machine(machine, console ? stderr : stdout);
         return 1;
     }
 
-    if (!halted) {
-        std::printf("LIMIT after %llu steps\n",
-                    static_cast<unsigned long long>(max_steps));
-        print_machine(machine);
+    if (!halted && !unlimited) {
+        std::fprintf(console ? stderr : stdout, "LIMIT after %llu steps\n",
+                     static_cast<unsigned long long>(max_steps));
+        print_machine(machine, console ? stderr : stdout);
         return 1;
     }
 
-    print_machine(machine);
+    print_machine(machine, console ? stderr : stdout);
     const int exit_code = machine.exit_code_set()
                               ? static_cast<int>(machine.exit_code() & 0xFFU)
                               : static_cast<int>(machine.reg(0) & 0xFFU);
@@ -345,7 +350,7 @@ int run_machine(core::Machine& machine,
             std::printf("  pc=0x%08X\n", address);
         }
     }
-    std::printf("HALTED exit=%d\n", exit_code);
+    std::fprintf(console ? stderr : stdout, "HALTED exit=%d\n", exit_code);
     if (stats) {
         std::printf("ticks=%llu\n", static_cast<unsigned long long>(machine.ticks()));
     }
@@ -368,17 +373,18 @@ std::string fault_name(core::FaultKind kind) {
     return "unknown";
 }
 
-void print_machine(const core::Machine& machine) {
-    std::printf(
+void print_machine(const core::Machine& machine, std::FILE* out) {
+    std::fprintf(
+        out,
         "R0=%u R1=%u R2=%u R3=%u R4=%u R5=%u R6=%u R7=%u\n"
         "R8=%u R9=%u R10=%u R11=%u R12=%u R13=%u R14=%u R15=%u\n",
         machine.reg(0), machine.reg(1), machine.reg(2), machine.reg(3),
         machine.reg(4), machine.reg(5), machine.reg(6), machine.reg(7),
         machine.reg(8), machine.reg(9), machine.reg(10), machine.reg(11),
         machine.reg(12), machine.reg(13), machine.reg(14), machine.reg(15));
-    std::printf("PC=0x%08X SP=0x%08X FLAGS=0x%08X ticks=%llu\n",
-                machine.pc(), machine.sp(), machine.flags(),
-                static_cast<unsigned long long>(machine.ticks()));
+    std::fprintf(out, "PC=0x%08X SP=0x%08X FLAGS=0x%08X ticks=%llu\n",
+                 machine.pc(), machine.sp(), machine.flags(),
+                 static_cast<unsigned long long>(machine.ticks()));
 }
 
 void print_version() {
@@ -410,10 +416,12 @@ void print_help() {
 #endif
         "\n"
         "Options for dis: --base <addr> --start <addr> --max-words <n>\n"
-        "Options for vm:  --base <addr> --max-steps <n> --ram-size <n> --trace --stats "
-        "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n"
-        "Options for os:  --embedded --bios <rom> --max-steps <n> --ram-size <n> --trace --stats "
-        "--fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text>\n");
+        "Options for vm:  --base <addr> --max-steps <n> (0 = no limit) --ram-size <n> "
+        "--trace --stats --fs-root <dir> --read-only --quota <bytes> --arg <value> --input <text> "
+        "--inputfile <path> --console\n"
+        "Options for os:  --embedded --bios <rom> --max-steps <n> (0 = no limit) "
+        "--ram-size <n> --trace --stats --fs-root <dir> --read-only --quota <bytes> "
+        "--arg <value> --input <text> --inputfile <path> --console\n");
 }
 
 void print_dis_usage() {
@@ -424,7 +432,7 @@ void print_vm_usage() {
     std::printf("Usage: kr32 vm <file> [--bios <rom>] [--os [kernel.bin]] [--embedded] [--base <addr>] "
                 "[--max-steps <n>] [--ram-size <n>] [--trace] [--stats] "
                 "[--fs-root <dir>] [--read-only] [--quota <bytes>] [--arg <value>] "
-                "[--input <text>]\n");
+                "[--input <text>] [--inputfile <path>] [--console]\n");
 }
 
 int command_dis(int argc, char** argv) {
@@ -577,6 +585,7 @@ int command_vm(int argc, char** argv) {
     bool os_mode = false;
     bool embedded_images = false;
     std::string serial_input;
+    bool console_mode = false;
     vm::HostOptions host_options;
 #ifdef KR32_HAS_UI
     host_options.file_dialog = platform_file_dialog();
@@ -652,8 +661,13 @@ int command_vm(int argc, char** argv) {
             host_options.read_only = true;
             continue;
         }
+        if (argument == "--console") {
+            console_mode = true;
+            continue;
+        }
         if (argument == "--fs-root" || argument == "--quota" || argument == "--arg" ||
-            argument == "--input" || argument == "--serial-input") {
+            argument == "--input" || argument == "--inputfile" ||
+            argument == "--serial-input") {
             if (index + 1 >= argc) {
                 std::fprintf(stderr, "kr32 vm: %.*s needs a value\n",
                              static_cast<int>(argument.size()), argument.data());
@@ -662,6 +676,18 @@ int command_vm(int argc, char** argv) {
             const std::string value = argv[++index];
             if (argument == "--fs-root") host_options.fs_root = value;
             if (argument == "--input") host_options.input = value;
+            if (argument == "--inputfile") {
+                std::vector<std::uint8_t> bytes;
+                std::string error;
+                if (!read_file(value, bytes, error)) {
+                    std::fprintf(stderr, "kr32 vm: --inputfile: %s\n", error.c_str());
+                    return 1;
+                }
+                host_options.input.assign(bytes.begin(), bytes.end());
+                // The file is a script; once it is consumed, the guest reads
+                // stdin like --console so an interactive session can continue.
+                host_options.console = true;
+            }
             if (argument == "--serial-input") serial_input = value;
             if (argument == "--arg") host_options.args.push_back(value);
             if (argument == "--quota") {
@@ -839,6 +865,16 @@ int command_vm(int argc, char** argv) {
         core::DeviceBus devices;
         devices.attach_machine(machine);
         machine.attach_devices(&devices);
+        if (console_mode) {
+            // The serial tty asks for a line when the kernel reads an empty DATA
+            // register, so the run blocks where a terminal would wait.
+            devices.serial().set_input_refill([&devices] {
+                std::string line;
+                if (std::getline(std::cin, line)) {
+                    devices.serial().push_input(line + "\n");
+                }
+            });
+        }
         devices.serial().push_input(serial_input);
         if (paths.embedded) {
             std::printf("os: embedded kernel (%.*s)\nbios: embedded (%.*s)\n",
@@ -850,13 +886,14 @@ int command_vm(int argc, char** argv) {
             std::printf("os: %s\nbios: %s\n", paths.kernel.c_str(), paths.bios.c_str());
         }
         return run_machine(machine, max_steps, trace, stats, host_options, true,
-                           &devices);
+                           &devices, console_mode);
     }
 
     if (program.empty()) {
         print_vm_usage();
         return 2;
     }
+    host_options.console = console_mode;
 
     core::Machine machine(core::Machine::Options{ram_size});
     std::string error;
@@ -897,7 +934,7 @@ int command_vm(int argc, char** argv) {
     }
 
     return run_machine(machine, max_steps, trace, stats, host_options,
-                       bios.empty());
+                       bios.empty(), nullptr, console_mode);
 }
 
 int command_os(int argc, char** argv) {
