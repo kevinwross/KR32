@@ -54,6 +54,24 @@ if (-not (Test-Path $cmake)) {
     $ctest = "ctest"
 }
 
+# The gate configures its own tree. Building a preset assumes someone else ran the
+# configure with the right prefix and options, and a clean checkout then fails with
+# "is not a directory" -- the message names the symptom, not the missing step.
+$configure = @('--preset', $Preset)
+$prefix = if ($env:KRG_PREFIX) { $env:KRG_PREFIX } else { Join-Path (Split-Path -Parent (Split-Path -Parent $PSScriptRoot)) 'build/family-prefix' }
+if (Test-Path $prefix) {
+    $configure += "-DCMAKE_PREFIX_PATH=$prefix"
+    $prefixKrc = Join-Path $prefix 'bin/krc.exe'
+    $prefixKrld = Join-Path $prefix 'bin/krld.exe'
+    if (Test-Path $prefixKrc) {
+        $configure += "-DKRG_KRC=$prefixKrc"
+        $configure += '-DKR32_BUILD_OS_IMAGES=ON'
+    }
+    if (Test-Path $prefixKrld) { $configure += "-DKRG_KRLD=$prefixKrld" }
+}
+& $cmake @configure
+if ($LASTEXITCODE -ne 0) { Write-Host 'gate: configure failed'; exit $LASTEXITCODE }
+
 $clock = [System.Diagnostics.Stopwatch]::StartNew()
 & $cmake --build --preset $Preset -j $jobs
 if ($LASTEXITCODE -ne 0) {
