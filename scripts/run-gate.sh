@@ -50,10 +50,10 @@ if [ -n "${FAMILY_JOBS:-}" ]; then
     echo "gate: ${FAMILY_JOBS} jobs from the family gate"
 fi
 # GCC 15 in the WSL image intermittently segfaults while garbage-collecting, so
-# x86_64 stays at two jobs whatever the core count; an ARM64 host takes the count.
+# x86_64 stays at eight jobs whatever the core count; an ARM64 host takes the count.
 if [ "$(uname -m)" = "x86_64" ]; then
-    jobs="${FAMILY_JOBS:-2}"
-    [ "$jobs" -gt 2 ] && jobs=2
+    jobs="${FAMILY_JOBS:-8}"
+    [ "$jobs" -gt 8 ] && jobs=8
 else
     jobs="${FAMILY_JOBS:-$cores}"
 fi
