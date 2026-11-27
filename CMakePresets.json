@@ -138,9 +138,6 @@
       "configuration": "Debug",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     },
     {
@@ -149,9 +146,6 @@
       "configuration": "Release",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     },
     {
@@ -159,9 +153,6 @@
       "configurePreset": "linux-gcc-debug",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     },
     {
@@ -169,9 +160,6 @@
       "configurePreset": "linux-gcc-release",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     },
     {
@@ -179,9 +167,6 @@
       "configurePreset": "linux-arm64-release",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     },
     {
@@ -189,9 +174,6 @@
       "configurePreset": "linux-clang-debug",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     },
     {
@@ -199,9 +181,6 @@
       "configurePreset": "linux-sanitize",
       "output": {
         "outputOnFailure": true
-      },
-      "execution": {
-        "jobs": 4
       }
     }
   ]

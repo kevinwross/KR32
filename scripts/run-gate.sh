@@ -45,15 +45,18 @@ case "$root" in
 esac
 # NUMBER_OF_PROCESSORS is set by Windows and by CI runners; nproc is the fallback.
 cores="${NUMBER_OF_PROCESSORS:-$(nproc)}"
-# A share handed down by the family gate wins over this script's own sizing.
+# A share handed down by the family gate is used below, clamped by the x86_64 cap.
 if [ -n "${FAMILY_JOBS:-}" ]; then
     echo "gate: ${FAMILY_JOBS} jobs from the family gate"
-    exec_jobs="${FAMILY_JOBS}"
 fi
-case "$(uname -m)" in
-    aarch64|arm64) jobs=4 ;;
-    *) jobs=$(( cores * 8 / 10 )); [ "$jobs" -lt 1 ] && jobs=1 ;;
-esac
+# GCC 15 in the WSL image intermittently segfaults while garbage-collecting, so
+# x86_64 stays at two jobs whatever the core count; an ARM64 host takes the count.
+if [ "$(uname -m)" = "x86_64" ]; then
+    jobs="${FAMILY_JOBS:-2}"
+    [ "$jobs" -gt 2 ] && jobs=2
+else
+    jobs="${FAMILY_JOBS:-$cores}"
+fi
 # The sanitizer gate is CPU-bound with a 600 s per-test watchdog, so it keeps the
 # four-job cap whatever the core count.
 case "${preset}" in
@@ -64,12 +67,14 @@ case "${preset}" in
         fi
         ;;
 esac
-if [ -n "${exec_jobs:-}" ]; then jobs="${exec_jobs}"; fi
 echo "gate: ${preset} on $(uname -m), $(nproc) logical processors -> ${jobs} jobs"
 # A fresh mirror has no build directory, and the gate used to fail with "not a
 # directory" rather than configuring one. Configure only when it is missing, so an
 # existing tree keeps its cache and an empty one is created.
-if [ ! -d "build/${preset}" ]; then
+# Configure when the tree holds no build.ninja, not when the directory is absent:
+# a configure that failed halfway leaves the directory behind, and the next run
+# then built a tree that was never generated.
+if [ ! -f "build/${preset}/build.ninja" ]; then
     cmake --preset "${preset}"
 fi
 start=$(date +%s)

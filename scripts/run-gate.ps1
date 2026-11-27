@@ -33,11 +33,9 @@ if ($env:NUMBER_OF_PROCESSORS) {
 if ($cores -lt 1) {
     $cores = [Environment]::ProcessorCount
 }
-if ($architecture -eq "ARM64") {
-    $jobs = 4
-} else {
-    $jobs = [Math]::Max(1, [Math]::Floor($cores * 0.8))
-}
+# Jobs follow the processor count, unless the family gate divided the machine
+# among several repositories.
+$jobs = if ($env:FAMILY_JOBS) { [Math]::Max(1, [int]$env:FAMILY_JOBS) } else { [Math]::Max(1, $cores) }
 # The sanitizer gate is CPU-bound and has a 600 s per-test watchdog: eight jobs
 # oversubscribe a small machine and its codegen buckets cross it. Cap that preset
 # regardless of the core count.
