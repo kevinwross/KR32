@@ -40,9 +40,14 @@ std::string build_ui_test_image() {
 }
 
 std::string build_ui_two_source_image() {
+    // Two lines, so a line step from the definition stays inside this file: a
+    // single-line main returns to the runtime on the first step, and the picker
+    // then follows execution out of ui-main.c.
     const std::string main_source =
         "int helper(void);\n"
-        "int main(void) { return helper(); }\n";
+        "int main(void) {\n"
+        "    return helper();\n"
+        "}\n";
     const std::string helper_source =
         "int helper(void) { return 0; }\n";
     {
@@ -183,9 +188,11 @@ TEST_CASE("a C source compiles through the window and steps") {
     const debug::Line* line = session.line_at(session.machine().pc());
     REQUIRE(line != nullptr);
     CHECK(session.call_stack().size() >= 1);
-    // The krc-built image stops at main's first statement and the local it
-    // computes reads back.
-    CHECK(line->line == 2);
+    // ADR 0061 puts a record on each function's definition line, so the image
+    // stops on line 1 rather than on the first statement. Two steps then execute
+    // the assignment on line 2 and land on the return.
+    CHECK(line->line == 1);
+    debugger.step_line_over();
     debugger.step_line_over();
     std::uint32_t total = 0;
     REQUIRE_MESSAGE(session.read_variable("total", total, error), error.c_str());
