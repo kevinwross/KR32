@@ -1,10 +1,10 @@
 # Rebuilds the two embedded OS images with the compiler and compares them with the
-# copies under src/resources/os, so a hand edit to a committed image fails the row.
+# copy the build embedded, so a hand edit to the image cannot pass the row.
 #
 #   cmake -DKRC=<krc.exe> -DROOT=<kr32 tree> -DSCRATCH=<dir> [-DOS_DIR=<dir>] -P CheckOsImages.cmake
 #
 # The images are built twice as well: a build that is not reproducible cannot be
-# compared with a committed copy in a way a reader can trust, so the row says which
+# compared with the copy the build embedded in a way a reader can trust, so the row says which
 # of the two properties failed. Windows drives kr32os/build.ps1, other hosts drive
 # kr32os/build.sh, because the two hosts carry their own images -- the compiler
 # embeds source paths in the debug sections.
@@ -65,17 +65,17 @@ foreach(image bios.kr32 kernel.kr32)
         continue()
     endif()
     if(NOT EXISTS "${OS_DIR}/${image}")
-        message(SEND_ERROR "the committed image ${OS_DIR}/${image} is missing")
+        message(SEND_ERROR "the image the build embedded, ${OS_DIR}/${image}, is missing")
         math(EXPR failures "${failures} + 1")
         continue()
     endif()
-    file(SHA256 "${OS_DIR}/${image}" committed_hash)
-    if(NOT first_hash STREQUAL committed_hash)
+    file(SHA256 "${OS_DIR}/${image}" embedded_hash)
+    if(NOT first_hash STREQUAL embedded_hash)
         file(SIZE "${SCRATCH}/first/${image}" built_size)
-        file(SIZE "${OS_DIR}/${image}" committed_size)
-        message(SEND_ERROR "${image} differs from the committed image
+        file(SIZE "${OS_DIR}/${image}" embedded_size)
+        message(SEND_ERROR "${image} differs from the image the build embedded
   rebuilt   ${built_size} bytes ${first_hash}
-  committed ${committed_size} bytes ${committed_hash}")
+  embedded  ${embedded_size} bytes ${embedded_hash}")
         math(EXPR failures "${failures} + 1")
     endif()
 endforeach()
@@ -83,4 +83,4 @@ endforeach()
 if(failures GREATER 0)
     message(FATAL_ERROR "${failures} of 2 OS images failed their checks")
 endif()
-message(STATUS "the compiler's OS images are reproducible and equal to the committed ones")
+message(STATUS "the compiler's OS images are reproducible and equal to the ones the build embedded")

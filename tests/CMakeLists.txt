@@ -202,12 +202,8 @@ if(KR32_EMBED_OS)
             -P ${CMAKE_SOURCE_DIR}/cmake/RunOsEmbedded.cmake)
 endif()
 
-# The OS images are the shipped prebuilt pair, not a build of kr32os.
-if(WIN32)
-    set(KR32_OS_FIXTURE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/windows")
-else()
-    set(KR32_OS_FIXTURE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/linux")
-endif()
+# The OS images are this build's own output, not a shipped pair.
+set(KR32_OS_FIXTURE_DIR "${KR32_OS_IMAGE_DIR}")
 add_test(NAME run_os_fixture
     COMMAND $<TARGET_FILE:kr32> os
             "${KR32_OS_FIXTURE_DIR}/kernel.kr32"
@@ -272,23 +268,16 @@ add_custom_target(check
     COMMAND ${CMAKE_CTEST_COMMAND} --test-dir ${CMAKE_BINARY_DIR} -C $<CONFIG> --output-on-failure -j${KR32_TEST_JOBS}
     DEPENDS kr32 kr32_tests
     USES_TERMINAL)
-# The embedded OS images are build output: this row rebuilds them with the
-# compiler and compares, so a hand edit or an address-moving change fails here.
-# Registered only when the gate names a compiler, because a row that silently
-# vanishes is worse than one that says it was not asked for.
-if(KR32_BUILD_OS_IMAGES)
-    # The two hosts carry their own images: the compiler embeds source paths in the
-    # debug sections, so a Windows build and a WSL build of the same source differ.
-    if(WIN32)
-        set(KR32_OS_IMAGE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/windows")
-    else()
-        set(KR32_OS_IMAGE_DIR "${CMAKE_SOURCE_DIR}/src/resources/os/linux")
-    endif()
+# The embedded OS images are build output. This row rebuilds them twice from the
+# same sources and requires both builds, and the copy the VM embedded, to be
+# identical: a nondeterministic OS build fails here rather than silently varying
+# the kernel the VM carries.
+if(KR32_CHECK_OS_IMAGES AND KR32_EMBED_OS)
     add_test(NAME kr32_os_images_match_source
         COMMAND ${CMAKE_COMMAND}
             -DKRC=${KRG_KRC}
             -DROOT=${CMAKE_SOURCE_DIR}
-            -DSCRATCH=${CMAKE_BINARY_DIR}/os-images
+            -DSCRATCH=${CMAKE_BINARY_DIR}/os-repro
             -DOS_DIR=${KR32_OS_IMAGE_DIR}
             -P ${CMAKE_SOURCE_DIR}/cmake/CheckOsImages.cmake)
 endif()

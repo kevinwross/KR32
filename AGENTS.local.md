@@ -30,12 +30,11 @@ Add entries here rather than editing the managed blocks in `AGENTS.md`; an edit 
 
 ## The OS images
 
-`src/resources/os/<host>/{bios,kernel}.kr32` are the compiler's own output, not a fixture. `kr32_os_images_match_source` rebuilds them with `krc` and compares hashes, so editing one by hand fails that row; the presets set `KR32_BUILD_OS_IMAGES=ON`, which is what registers it. To regenerate them after a compiler change:
+`bios.kr32` and `kernel.kr32` are build products, not fixtures, and nothing under `src/resources/os` is committed. The configure resolves `krc` through `cmake/KrGuest.cmake`, and a custom command runs `kr32os/build.ps1` (Windows) or `kr32os/build.sh` (Linux) into `build/<preset>/os-images`; `tools/embed_os` then turns the pair into `generated/os/embedded_os.cpp`. The images are per host because the compiler embeds source paths in the debug sections.
 
-    pwsh -File kr32os/build.ps1 -Krc <krc.exe>
-    copy kr32os/build/windows/{bios,kernel}.kr32 src/resources/os/windows/
+`kr32_os_images_match_source` (on by default, `KR32_CHECK_OS_IMAGES`) rebuilds them twice and requires both builds, and the copy the VM embedded, to match byte for byte, so a nondeterministic OS build fails there rather than varying the embedded kernel.
 
-The build is incremental and caches `user_*.kro` in the output directory, so delete that directory when the compiler changes or stale objects will be packed into the image.
+Each regeneration starts from an empty directory: the script caches `user_*.kro` in its output, and a rerun after a compiler change would otherwise pack stale objects.
 
 ## Commit and test cadence
 

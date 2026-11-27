@@ -11,13 +11,13 @@ option(KR32_SANITIZE "Enable AddressSanitizer and UndefinedBehaviorSanitizer" OF
 # The installed krc package is the compiler: the window's BUILD and the test
 # images both use it, and the package owns the target sysroot and runtime.
 find_package(krc-toolchain CONFIG REQUIRED)
-# The OS images under src/resources/os are built by the compiler, so the row
-# that rebuilds them needs krc. Asking for that is explicit: with the option ON
-# the compiler is required and its absence stops the configure, and with it OFF
-# no row is registered and the configure says so. kr32 itself links the package
-# above; this is only about the executable the OS build drives.
-option(KR32_BUILD_OS_IMAGES "Rebuild the embedded OS images with krc (needs krc)" OFF)
-set(KRG_KRC "" CACHE FILEPATH "krc executable used to rebuild the OS images")
+# The OS images are a build product: kr32os/build.ps1 (or build.sh) compiles the
+# guest OS with krc and links the two containers, and tools/embed_os turns them
+# into generated/os/embedded_os.cpp. They are built in this tree rather than
+# committed because the compiler embeds source paths in the debug sections, so
+# the Windows and Linux copies of the same source differ byte for byte.
+option(KR32_CHECK_OS_IMAGES "Rebuild the OS images and require reproducible bytes" ON)
+set(KRG_KRC "" CACHE FILEPATH "krc executable used to build the OS images")
 set(KRG_KRLD "" CACHE FILEPATH "krld executable (resolved with krc)")
 # The family's toolchain option, spelled the same in every tree. This repository
 # has one path -- the compiler -- so the value set is one long; `builtin` exists
@@ -32,10 +32,8 @@ if(NOT KRG_TOOLCHAIN STREQUAL "krc")
     "its own compiler")
 endif()
 include("${CMAKE_CURRENT_SOURCE_DIR}/cmake/KrGuest.cmake")
-if(KR32_BUILD_OS_IMAGES)
+if(KR32_EMBED_OS)
     krguest_find_toolchain()
-else()
-    message(STATUS "OS image rebuild is off: pass -DKR32_BUILD_OS_IMAGES=ON to check src/resources/os")
 endif()
 if(NOT KRC_SYSROOT)
     message(FATAL_ERROR
@@ -172,19 +170,54 @@ if(WIN32)
     target_link_libraries(kr32_dap PUBLIC ws2_32)
 endif()
 
-if(WIN32)
-    set(KR32_OS_PLATFORM "windows")
-elseif(APPLE)
-    set(KR32_OS_PLATFORM "macos")
-else()
-    set(KR32_OS_PLATFORM "linux")
-endif()
-set(KR32_OS_RESOURCE_DIR "${CMAKE_CURRENT_SOURCE_DIR}/src/resources/os/${KR32_OS_PLATFORM}")
-if(KR32_EMBED_OS AND NOT EXISTS "${KR32_OS_RESOURCE_DIR}/kernel.kr32")
-    message(FATAL_ERROR
-        "No embedded KR32OS images for ${KR32_OS_PLATFORM}: "
-        "${KR32_OS_RESOURCE_DIR}/kernel.kr32 is missing. "
-        "Run scripts/update-os.ps1 or scripts/update-os.sh.")
+
+set(KR32_OS_IMAGE_DIR "${CMAKE_CURRENT_BINARY_DIR}/os-images")
+if(KR32_EMBED_OS)
+    # Everything the OS build reads, so editing a kernel source or the build
+    # script regenerates the images rather than packing a stale one.
+    file(GLOB_RECURSE KR32_OS_SOURCES CONFIGURE_DEPENDS
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.c"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.h"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.s"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.S"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.py"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.ps1"
+        "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/*.sh")
+    set(KR32_OS_IMAGES
+        "${KR32_OS_IMAGE_DIR}/bios.kr32"
+        "${KR32_OS_IMAGE_DIR}/kernel.kr32")
+    # Each regeneration starts from an empty directory: the script caches
+    # user_*.kro in its output, and a rerun after a compiler change would
+    # otherwise pack stale objects into the image.
+    if(WIN32)
+        find_program(KR32_PWSH NAMES pwsh powershell)
+        if(NOT KR32_PWSH)
+            message(FATAL_ERROR
+                "no PowerShell was found to run kr32os/build.ps1, which builds the "
+                "embedded OS images with ${KRG_KRC}")
+        endif()
+        add_custom_command(
+            OUTPUT ${KR32_OS_IMAGES}
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${KR32_OS_IMAGE_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${KR32_OS_IMAGE_DIR}"
+            COMMAND "${KR32_PWSH}" -NoProfile -ExecutionPolicy Bypass
+                    -File "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/build.ps1"
+                    -Krc "${KRG_KRC}" -Out "${KR32_OS_IMAGE_DIR}"
+            DEPENDS ${KR32_OS_SOURCES} "${KRG_KRC}"
+            COMMENT "Building KR32OS images with ${KRG_KRC}"
+            VERBATIM)
+    else()
+        add_custom_command(
+            OUTPUT ${KR32_OS_IMAGES}
+            COMMAND ${CMAKE_COMMAND} -E rm -rf "${KR32_OS_IMAGE_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E make_directory "${KR32_OS_IMAGE_DIR}"
+            COMMAND ${CMAKE_COMMAND} -E env
+                    "KRC=${KRG_KRC}" "KR32OS_BUILD_DIR=${KR32_OS_IMAGE_DIR}"
+                    bash "${CMAKE_CURRENT_SOURCE_DIR}/kr32os/build.sh"
+            DEPENDS ${KR32_OS_SOURCES} "${KRG_KRC}"
+            COMMENT "Building KR32OS images with ${KRG_KRC}"
+            VERBATIM)
+    endif()
 endif()
 set(KR32_EMBEDDED_OS_DIR "${CMAKE_CURRENT_BINARY_DIR}/generated/os")
 set(KR32_EMBEDDED_OS_SOURCE "${KR32_EMBEDDED_OS_DIR}/embedded_os.cpp")
@@ -205,11 +238,9 @@ set(KR32_EMBED_OS_ARGS --output "${KR32_EMBEDDED_OS_SOURCE}")
 set(KR32_EMBED_OS_DEPENDS kr32_embed_os)
 if(KR32_EMBED_OS)
     list(APPEND KR32_EMBED_OS_ARGS
-        --bios "${KR32_OS_RESOURCE_DIR}/bios.kr32"
-        --kernel "${KR32_OS_RESOURCE_DIR}/kernel.kr32")
-    list(APPEND KR32_EMBED_OS_DEPENDS
-        "${KR32_OS_RESOURCE_DIR}/bios.kr32"
-        "${KR32_OS_RESOURCE_DIR}/kernel.kr32")
+        --bios "${KR32_OS_IMAGE_DIR}/bios.kr32"
+        --kernel "${KR32_OS_IMAGE_DIR}/kernel.kr32")
+    list(APPEND KR32_EMBED_OS_DEPENDS ${KR32_OS_IMAGES})
 else()
     list(APPEND KR32_EMBED_OS_ARGS --empty)
 endif()

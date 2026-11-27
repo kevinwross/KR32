@@ -7,8 +7,8 @@
 # assembles a non-object input. The old script drove `kr32 cc`, `kr32 as` and
 # `kr32 ld`; those verbs no longer exist, which is why this file exists.
 #
-# Windows writes to kr32os/build/windows; scripts/update-os.ps1 copies the two
-# container images into src/resources/os/windows and relinks kr32.
+# Windows writes to kr32os/build/windows. The kr32 build runs this script itself
+# into its own build tree; nothing is copied into the source tree any more.
 param(
     [string]$Krc = "",
     [string]$Out = "",

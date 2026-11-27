@@ -65,7 +65,7 @@ if (Test-Path $prefix) {
     $prefixKrld = Join-Path $prefix 'bin/krld.exe'
     if (Test-Path $prefixKrc) {
         $configure += "-DKRG_KRC=$prefixKrc"
-        $configure += '-DKR32_BUILD_OS_IMAGES=ON'
+        $configure += '-DKR32_CHECK_OS_IMAGES=ON'
     }
     if (Test-Path $prefixKrld) { $configure += "-DKRG_KRLD=$prefixKrld" }
 }
