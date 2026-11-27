@@ -42,7 +42,20 @@ foreach(_index RANGE ${_last})
 endforeach()
 
 # Anything in a covered directory that the manifest does not name is a file whose
-# origin nobody recorded.
+# origin nobody recorded -- unless the manifest lists it under `ignore`. That list
+# exists for a dependency fetched into the source tree and ignored by git: the
+# SDL2 SDK the UI links against has no checked-in origin to attest. It is named
+# explicitly rather than inferred, so a new unchecked-in tree is a visible
+# decision in the manifest rather than a silent exemption.
+set(_ignores "")
+string(JSON _ignore_count ERROR_VARIABLE _ignore_error LENGTH "${_json}" ignore)
+if(NOT _ignore_error)
+    math(EXPR _ignore_last "${_ignore_count} - 1")
+    foreach(_index RANGE ${_ignore_last})
+        string(JSON _ignore GET "${_json}" ignore ${_index})
+        list(APPEND _ignores "${_ignore}")
+    endforeach()
+endif()
 string(JSON _dirs ERROR_VARIABLE _dirs_error LENGTH "${_json}" directories)
 if(NOT _dirs_error)
     math(EXPR _dir_last "${_dirs} - 1")
@@ -51,6 +64,17 @@ if(NOT _dirs_error)
         file(GLOB_RECURSE _present RELATIVE "${ROOT}" "${ROOT}/${_dir}/*")
         foreach(_file IN LISTS _present)
             if("${_file}" STREQUAL "third_party/provenance.json")
+                continue()
+            endif()
+            set(_ignored FALSE)
+            foreach(_ignore IN LISTS _ignores)
+                string(FIND "${_file}" "${_ignore}" _at)
+                if(_at EQUAL 0)
+                    set(_ignored TRUE)
+                    break()
+                endif()
+            endforeach()
+            if(_ignored)
                 continue()
             endif()
             list(FIND _listed "${_file}" _known)

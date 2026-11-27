@@ -3,6 +3,9 @@
   "directories": [
     "third_party"
   ],
+  "ignore": [
+    "third_party/SDL2/"
+  ],
   "entries": [
     {
       "path": "third_party/doctest.h",
@@ -31,7 +34,7 @@
     },
     {
       "path": "third_party/README.md",
-      "sha256": "92c1de9821aaedf49703ccf73c7ae5bcc2ef799d909a5f0d19e3e91c12da0dd5",
+      "sha256": "8d017ca1e4999c92d8bb1b18f31c32a77f031ab67667f0a40efc23f230cfb91c",
       "source": "recorded in this repository; origin not written down"
     },
     {

@@ -21,6 +21,8 @@ committed.
   adds the include directory; on Linux the same include works because
   pkg-config adds `-I/usr/include/SDL2`.
 - License: zlib. See `third_party/SDL2/LICENSE.txt`.
+- The provenance manifest does not attest this tree: `provenance.json` names it
+  under `ignore`, because a fetched SDK has no checked-in origin to record.
 - The DLL must be next to the executable at run time; the CMake build will copy
   it in a post-build step.
 
